@@ -1,0 +1,54 @@
+{
+  "name": "@pos/database",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloud PostgreSQL schema, migrations, Prisma client and development seed",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "prisma"
+  ],
+  "scripts": {
+    "generate": "prisma generate",
+    "build": "prisma generate && tsup",
+    "dev": "tsup --watch",
+    "typecheck": "prisma generate && tsc --noEmit",
+    "lint": "eslint .",
+    "test": "prisma generate && vitest run",
+    "migrate:dev": "dotenv -e ../../.env -- prisma migrate dev",
+    "migrate:create": "dotenv -e ../../.env -- prisma migrate dev --create-only",
+    "migrate:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
+    "migrate:reset": "dotenv -e ../../.env -- prisma migrate reset --force",
+    "migrate:status": "dotenv -e ../../.env -- prisma migrate status",
+    "seed": "dotenv -e ../../.env -- tsx src/seed.ts"
+  },
+  "dependencies": {
+    "@node-rs/argon2": "2.2.2",
+    "@pos/shared-types": "workspace:*",
+    "@prisma/client": "6.19.3"
+  },
+  "devDependencies": {
+    "@pos/domain": "workspace:*",
+    "@types/node": "22.20.5",
+    "dotenv-cli": "11.0.0",
+    "prisma": "6.19.3",
+    "tsup": "8.5.1",
+    "tsx": "4.23.15",
+    "vitest": "3.2.7"
+  }
+}

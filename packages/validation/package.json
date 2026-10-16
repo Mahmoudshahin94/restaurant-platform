@@ -1,0 +1,41 @@
+{
+  "name": "@pos/validation",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Zod schemas that define every API contract",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@pos/domain": "workspace:*",
+    "@pos/shared-types": "workspace:*",
+    "zod": "4.1.13"
+  },
+  "devDependencies": {
+    "tsup": "8.5.1",
+    "vitest": "3.2.7"
+  }
+}

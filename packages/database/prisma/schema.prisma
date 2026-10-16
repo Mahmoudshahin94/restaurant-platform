@@ -1,0 +1,490 @@
+// Cloud PostgreSQL schema. Conventions (see docs/domain-model.md):
+//  - IDs are UUIDv7 (`uuid(7)` here, `newId()` from @pos/domain on offline nodes).
+//  - Timestamps are timestamptz, always UTC; presentation converts to the location timezone.
+//  - Money is integer minor units of the restaurant currency; rates are integer basis points.
+//  - Tables and columns are snake_case; Prisma fields are camelCase.
+//  - Enum values mirror @pos/shared-types (enforced by src/enums.contract.test.ts).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Locale {
+  en
+  ar
+
+  @@map("locale")
+}
+
+enum OnlineOrderingState {
+  OPEN
+  PAUSED
+  CLOSED
+  OFFLINE
+
+  @@map("online_ordering_state")
+}
+
+enum DeviceType {
+  POS
+  KDS
+  PRINTER
+  KITCHEN_DISPLAY
+  CUSTOMER_DISPLAY
+  GATEWAY
+
+  @@map("device_type")
+}
+
+enum DeviceStatus {
+  PENDING
+  ACTIVE
+  DISABLED
+
+  @@map("device_status")
+}
+
+enum ActorType {
+  USER
+  EMPLOYEE
+  DEVICE
+  CUSTOMER
+  SYSTEM
+
+  @@map("actor_type")
+}
+
+enum ActionSource {
+  POS
+  KDS
+  WEBSITE
+  ADMIN
+  HUB
+  SYSTEM
+
+  @@map("action_source")
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy
+// ---------------------------------------------------------------------------
+
+model Restaurant {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  slug          String   @unique
+  nameEn        String   @map("name_en")
+  nameAr        String   @map("name_ar")
+  /// ISO 4217. Immutable after provisioning: all amounts are stored in its minor units.
+  currencyCode  String   @map("currency_code") @db.Char(3)
+  defaultLocale Locale   @default(en) @map("default_locale")
+  /// IANA timezone used for restaurant-level reporting.
+  timezone      String
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  locations       Location[]
+  users           User[]
+  roles           Role[]
+  employees       Employee[]
+  devices         Device[]
+  categories      Category[]
+  products        Product[]
+  modifierGroups  ModifierGroup[]
+  kitchenStations KitchenStation[]
+
+  @@map("restaurants")
+}
+
+model Location {
+  id                  String              @id @default(uuid(7)) @db.Uuid
+  restaurantId        String              @map("restaurant_id") @db.Uuid
+  /// Short code, unique within the restaurant; prefix of locally generated order numbers.
+  code                String
+  nameEn              String              @map("name_en")
+  nameAr              String              @map("name_ar")
+  timezone            String
+  /// Whether menu prices at this location already include tax.
+  taxInclusive        Boolean             @map("tax_inclusive")
+  onlineOrderingState OnlineOrderingState @default(CLOSED) @map("online_ordering_state")
+  addressLine         String?             @map("address_line")
+  phone               String?
+  isActive            Boolean             @default(true) @map("is_active")
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  restaurant       Restaurant        @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  userRoles        UserRole[]
+  employees        Employee[]
+  devices          Device[]
+  locationProducts LocationProduct[]
+
+  @@unique([restaurantId, code])
+  @@index([restaurantId])
+  @@map("locations")
+}
+
+// ---------------------------------------------------------------------------
+// Identity & access
+// ---------------------------------------------------------------------------
+
+model User {
+  id              String    @id @default(uuid(7)) @db.Uuid
+  restaurantId    String    @map("restaurant_id") @db.Uuid
+  /// Stored lowercase; globally unique so login needs no tenant selector.
+  email           String    @unique
+  /// argon2id hash. Never logged, never returned by the API.
+  passwordHash    String    @map("password_hash")
+  displayName     String    @map("display_name")
+  preferredLocale Locale    @default(en) @map("preferred_locale")
+  isActive        Boolean   @default(true) @map("is_active")
+  lastLoginAt     DateTime? @map("last_login_at") @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  restaurant    Restaurant     @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  roles         UserRole[]
+  refreshTokens RefreshToken[]
+  employee      Employee?
+
+  @@index([restaurantId])
+  @@map("users")
+}
+
+/// Permission keys are defined in code (@pos/shared-types PERMISSIONS) and upserted into this
+/// table by `syncPermissionCatalog`, so role assignments are referentially valid.
+model Permission {
+  key       String           @id
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  roles     RolePermission[]
+
+  @@map("permissions")
+}
+
+model Role {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  restaurantId String   @map("restaurant_id") @db.Uuid
+  name         String
+  description  String?
+  /// System roles (e.g. Owner) cannot be deleted or stripped of permissions.
+  isSystem     Boolean  @default(false) @map("is_system")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  restaurant  Restaurant       @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  permissions RolePermission[]
+  users       UserRole[]
+
+  @@unique([restaurantId, name])
+  @@map("roles")
+}
+
+model RolePermission {
+  roleId        String @map("role_id") @db.Uuid
+  permissionKey String @map("permission_key")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionKey], references: [key], onDelete: Restrict)
+
+  @@id([roleId, permissionKey])
+  @@map("role_permissions")
+}
+
+/// Grants a role to a user, restaurant-wide (`locationId` null) or for one location.
+/// Uniqueness of (user, role, location) is enforced by the application service because
+/// PostgreSQL treats NULL location ids as distinct.
+model UserRole {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  roleId     String   @map("role_id") @db.Uuid
+  locationId String?  @map("location_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  location Location? @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_roles")
+}
+
+/// Rotating refresh tokens. Only a SHA-256 hash is stored. Tokens of one login share a
+/// `familyId`; presenting an already-rotated token revokes the whole family (reuse detection).
+model RefreshToken {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  familyId     String    @map("family_id") @db.Uuid
+  tokenHash    String    @unique @map("token_hash")
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamptz(3)
+  replacedById String?   @map("replaced_by_id") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([familyId])
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+/// Restaurant staff who operate the POS/KDS. May be linked to a User for back-office access.
+/// POS PIN login (Phase 2) verifies `pinHash` on the location hub after it is synced down.
+model Employee {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  restaurantId   String   @map("restaurant_id") @db.Uuid
+  homeLocationId String?  @map("home_location_id") @db.Uuid
+  userId         String?  @unique @map("user_id") @db.Uuid
+  employeeCode   String   @map("employee_code")
+  displayName    String   @map("display_name")
+  /// argon2id hash of the POS PIN.
+  pinHash        String?  @map("pin_hash")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  homeLocation Location?  @relation(fields: [homeLocationId], references: [id], onDelete: SetNull)
+  user         User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([restaurantId, employeeCode])
+  @@map("employees")
+}
+
+// ---------------------------------------------------------------------------
+// Devices
+// ---------------------------------------------------------------------------
+
+model Device {
+  id             String       @id @default(uuid(7)) @db.Uuid
+  restaurantId   String       @map("restaurant_id") @db.Uuid
+  locationId     String       @map("location_id") @db.Uuid
+  name           String
+  type           DeviceType
+  status         DeviceStatus @default(PENDING)
+  /// Hash of the device credential issued at registration (Phase 5).
+  credentialHash String?      @map("credential_hash")
+  lastSeenAt     DateTime?    @map("last_seen_at") @db.Timestamptz(3)
+  /// Non-secret descriptive data: app version, OS, printer model, IP on the LAN.
+  metadata       Json         @default("{}")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  location   Location   @relation(fields: [locationId], references: [id], onDelete: Restrict)
+
+  @@index([locationId])
+  @@map("devices")
+}
+
+// ---------------------------------------------------------------------------
+// Audit
+// ---------------------------------------------------------------------------
+
+/// Append-only. `metadata` is redacted of secrets before insert (AuditService).
+model AuditLog {
+  id           String        @id @default(uuid(7)) @db.Uuid
+  restaurantId String?       @map("restaurant_id") @db.Uuid
+  locationId   String?       @map("location_id") @db.Uuid
+  actorType    ActorType     @map("actor_type")
+  actorId      String?       @map("actor_id") @db.Uuid
+  source       ActionSource?
+  action       String
+  entityType   String        @map("entity_type")
+  entityId     String?       @map("entity_id")
+  metadata     Json          @default("{}")
+  requestId    String?       @map("request_id")
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([restaurantId, createdAt])
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Catalog (menu). Restaurant-level definitions; per-location availability and price overrides
+// live in LocationProduct. Rows are archived (archived_at), never deleted, because historical
+// orders and sync operations reference them.
+// ---------------------------------------------------------------------------
+
+model Category {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  restaurantId  String    @map("restaurant_id") @db.Uuid
+  nameEn        String    @map("name_en")
+  nameAr        String    @map("name_ar")
+  descriptionEn String?   @map("description_en")
+  descriptionAr String?   @map("description_ar")
+  sortOrder     Int       @default(0) @map("sort_order")
+  archivedAt    DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  products   Product[]
+
+  @@index([restaurantId, sortOrder])
+  @@map("categories")
+}
+
+model Product {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  restaurantId  String    @map("restaurant_id") @db.Uuid
+  categoryId    String    @map("category_id") @db.Uuid
+  /// Optional stock-keeping code, unique within the restaurant when present.
+  sku           String?
+  nameEn        String    @map("name_en")
+  nameAr        String    @map("name_ar")
+  descriptionEn String?   @map("description_en")
+  descriptionAr String?   @map("description_ar")
+  /// Minor units. When the product has variants, the chosen variant's price is used instead.
+  price         Int
+  sortOrder     Int       @default(0) @map("sort_order")
+  archivedAt    DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  restaurant       Restaurant             @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  category         Category               @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  variants         ProductVariant[]
+  modifierGroups   ProductModifierGroup[]
+  stations         ProductStation[]
+  locationSettings LocationProduct[]
+
+  @@unique([restaurantId, sku])
+  @@index([restaurantId, categoryId, sortOrder])
+  @@map("products")
+}
+
+model ProductVariant {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  productId  String    @map("product_id") @db.Uuid
+  nameEn     String    @map("name_en")
+  nameAr     String    @map("name_ar")
+  /// Absolute price in minor units (not a delta).
+  price      Int
+  sortOrder  Int       @default(0) @map("sort_order")
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([productId])
+  @@map("product_variants")
+}
+
+model ModifierGroup {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  restaurantId String    @map("restaurant_id") @db.Uuid
+  nameEn       String    @map("name_en")
+  nameAr       String    @map("name_ar")
+  /// Minimum number of modifiers the customer must choose (0 = optional group).
+  minSelect    Int       @default(0) @map("min_select")
+  /// Maximum number of modifiers; null = unlimited.
+  maxSelect    Int?      @map("max_select")
+  sortOrder    Int       @default(0) @map("sort_order")
+  archivedAt   DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  restaurant Restaurant             @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  modifiers  Modifier[]
+  products   ProductModifierGroup[]
+
+  @@index([restaurantId])
+  @@map("modifier_groups")
+}
+
+model Modifier {
+  id              String    @id @default(uuid(7)) @db.Uuid
+  modifierGroupId String    @map("modifier_group_id") @db.Uuid
+  nameEn          String    @map("name_en")
+  nameAr          String    @map("name_ar")
+  /// Added to the item's unit price, minor units (0 for free options).
+  priceDelta      Int       @default(0) @map("price_delta")
+  /// Pre-selected in ordering UIs.
+  isDefault       Boolean   @default(false) @map("is_default")
+  sortOrder       Int       @default(0) @map("sort_order")
+  archivedAt      DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  group ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Restrict)
+
+  @@index([modifierGroupId])
+  @@map("modifiers")
+}
+
+/// Attaches a modifier group to a product, optionally overriding the group's min/max.
+model ProductModifierGroup {
+  productId       String @map("product_id") @db.Uuid
+  modifierGroupId String @map("modifier_group_id") @db.Uuid
+  sortOrder       Int    @default(0) @map("sort_order")
+  minSelect       Int?   @map("min_select")
+  maxSelect       Int?   @map("max_select")
+
+  product Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  group   ModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Restrict)
+
+  @@id([productId, modifierGroupId])
+  @@map("product_modifier_groups")
+}
+
+/// Kitchen stations (Kitchen, Grill, Fryer, Bar, Dessert, ...) are defined per restaurant; each
+/// location's KDS screens subscribe to the stations they serve.
+model KitchenStation {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  restaurantId String    @map("restaurant_id") @db.Uuid
+  /// Short code, unique within the restaurant, e.g. GRILL.
+  code         String
+  nameEn       String    @map("name_en")
+  nameAr       String    @map("name_ar")
+  sortOrder    Int       @default(0) @map("sort_order")
+  archivedAt   DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  restaurant Restaurant       @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  products   ProductStation[]
+
+  @@unique([restaurantId, code])
+  @@map("kitchen_stations")
+}
+
+/// An order item is routed to every station its product is assigned to.
+model ProductStation {
+  productId        String @map("product_id") @db.Uuid
+  kitchenStationId String @map("kitchen_station_id") @db.Uuid
+
+  product Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  station KitchenStation @relation(fields: [kitchenStationId], references: [id], onDelete: Restrict)
+
+  @@id([productId, kitchenStationId])
+  @@map("product_stations")
+}
+
+/// Per-location product settings. A missing row means: available, base price.
+model LocationProduct {
+  locationId    String   @map("location_id") @db.Uuid
+  productId     String   @map("product_id") @db.Uuid
+  /// The "86" switch: false hides the product from ordering at this location.
+  isAvailable   Boolean  @default(true) @map("is_available")
+  /// Replaces the product base price at this location (minor units). Only for products
+  /// without variants.
+  priceOverride Int?     @map("price_override")
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@id([locationId, productId])
+  @@map("location_products")
+}

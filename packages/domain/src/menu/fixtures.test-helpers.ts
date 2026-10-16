@@ -1,0 +1,161 @@
+import type { Catalog } from './types';
+
+const n = (en: string) => ({ nameEn: en, nameAr: `${en} (ar)` });
+const d = { descriptionEn: null, descriptionAr: null };
+const live = { archivedAt: null };
+
+/** Burger (Kitchen + Grill, doneness required, up to 2 extras), Fries (Fryer), Cola (Bar, sizes). */
+export function sampleCatalog(): Catalog {
+  return {
+    categories: [
+      { id: 'cat-drinks', ...n('Drinks'), ...d, sortOrder: 2, ...live },
+      { id: 'cat-mains', ...n('Mains'), ...d, sortOrder: 1, ...live },
+      { id: 'cat-empty', ...n('Empty'), ...d, sortOrder: 3, ...live },
+      { id: 'cat-old', ...n('Old'), ...d, sortOrder: 0, archivedAt: new Date() },
+    ],
+    kitchenStations: [
+      { id: 'st-kitchen', code: 'KITCHEN', ...n('Kitchen'), sortOrder: 0, ...live },
+      { id: 'st-grill', code: 'GRILL', ...n('Grill'), sortOrder: 1, ...live },
+      { id: 'st-fryer', code: 'FRYER', ...n('Fryer'), sortOrder: 2, ...live },
+      { id: 'st-bar', code: 'BAR', ...n('Bar'), sortOrder: 3, ...live },
+      { id: 'st-closed', code: 'OLD', ...n('Old'), sortOrder: 4, archivedAt: new Date() },
+    ],
+    modifierGroups: [
+      {
+        id: 'grp-doneness',
+        ...n('Doneness'),
+        minSelect: 1,
+        maxSelect: 1,
+        sortOrder: 0,
+        ...live,
+        modifiers: [
+          {
+            id: 'mod-medium',
+            ...n('Medium'),
+            priceDelta: 0,
+            isDefault: true,
+            sortOrder: 1,
+            ...live,
+          },
+          {
+            id: 'mod-well',
+            ...n('Well done'),
+            priceDelta: 0,
+            isDefault: false,
+            sortOrder: 2,
+            ...live,
+          },
+        ],
+      },
+      {
+        id: 'grp-extras',
+        ...n('Extras'),
+        minSelect: 0,
+        maxSelect: 2,
+        sortOrder: 1,
+        ...live,
+        modifiers: [
+          {
+            id: 'mod-cheese',
+            ...n('Cheese'),
+            priceDelta: 300,
+            isDefault: false,
+            sortOrder: 1,
+            ...live,
+          },
+          {
+            id: 'mod-bacon',
+            ...n('Bacon'),
+            priceDelta: 500,
+            isDefault: false,
+            sortOrder: 2,
+            ...live,
+          },
+          { id: 'mod-egg', ...n('Egg'), priceDelta: 400, isDefault: false, sortOrder: 3, ...live },
+          {
+            id: 'mod-gone',
+            ...n('Truffle'),
+            priceDelta: 900,
+            isDefault: false,
+            sortOrder: 4,
+            archivedAt: new Date(),
+          },
+        ],
+      },
+    ],
+    products: [
+      {
+        id: 'prod-burger',
+        categoryId: 'cat-mains',
+        sku: 'BRG',
+        ...n('Burger'),
+        ...d,
+        price: 2500,
+        sortOrder: 1,
+        ...live,
+        variants: [],
+        modifierGroups: [
+          { modifierGroupId: 'grp-extras', sortOrder: 2, minSelect: null, maxSelect: null },
+          { modifierGroupId: 'grp-doneness', sortOrder: 1, minSelect: null, maxSelect: null },
+        ],
+        stationIds: ['st-kitchen', 'st-grill', 'st-closed'],
+      },
+      {
+        id: 'prod-fries',
+        categoryId: 'cat-mains',
+        sku: null,
+        ...n('Fries'),
+        ...d,
+        price: 900,
+        sortOrder: 2,
+        ...live,
+        variants: [],
+        modifierGroups: [],
+        stationIds: ['st-fryer'],
+      },
+      {
+        id: 'prod-cola',
+        categoryId: 'cat-drinks',
+        sku: null,
+        ...n('Cola'),
+        ...d,
+        price: 600,
+        sortOrder: 1,
+        ...live,
+        variants: [
+          { id: 'var-large', ...n('Large'), price: 800, sortOrder: 2, ...live },
+          { id: 'var-small', ...n('Small'), price: 600, sortOrder: 1, ...live },
+          { id: 'var-old', ...n('Jumbo'), price: 1000, sortOrder: 3, archivedAt: new Date() },
+        ],
+        modifierGroups: [],
+        stationIds: ['st-bar'],
+      },
+      {
+        id: 'prod-retired',
+        categoryId: 'cat-mains',
+        sku: null,
+        ...n('Retired'),
+        ...d,
+        price: 100,
+        sortOrder: 0,
+        archivedAt: new Date(),
+        variants: [],
+        modifierGroups: [],
+        stationIds: [],
+      },
+      {
+        id: 'prod-in-archived-cat',
+        categoryId: 'cat-old',
+        sku: null,
+        ...n('Hidden'),
+        ...d,
+        price: 100,
+        sortOrder: 0,
+        ...live,
+        variants: [],
+        modifierGroups: [],
+        stationIds: [],
+      },
+    ],
+  };
+}
