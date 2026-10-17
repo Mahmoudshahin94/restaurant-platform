@@ -15,8 +15,15 @@
       "nameAr": "الفرع الرئيسي",
       "timezone": "Asia/Riyadh",
       "taxInclusive": true,
-      "addressLine": null,
-      "phone": null
+      "addressLine": "King Fahd Road, Riyadh",
+      "phone": "+966 11 000 0000",
+      "online": {
+        "state": "OPEN",
+        "acceptMinutes": 10,
+        "pickupEnabled": true,
+        "deliveryEnabled": true,
+        "deliveryFee": 1000
+      }
     }
   ],
   "roles": [
@@ -362,6 +369,11 @@
       "type": "CARD",
       "nameEn": "Visa / Mastercard",
       "nameAr": "فيزا / ماستركارد"
+    },
+    {
+      "type": "ONLINE",
+      "nameEn": "Online card",
+      "nameAr": "بطاقة عبر الإنترنت"
     }
   ],
   "cashRegisters": {

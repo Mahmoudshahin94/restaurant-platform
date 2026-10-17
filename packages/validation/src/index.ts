@@ -9,3 +9,4 @@ export * from './kitchen';
 export * from './realtime';
 export * from './hub';
 export * from './sync';
+export * from './online-ordering';

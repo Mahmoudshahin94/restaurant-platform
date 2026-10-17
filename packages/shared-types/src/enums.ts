@@ -165,6 +165,37 @@ export const DeviceStatus = {
 export type DeviceStatus = ValueOf<typeof DeviceStatus>;
 
 /** Whether a location currently accepts website orders. Decided by the cloud, never by the browser. */
+/** How a website order reaches the customer. */
+export const FulfillmentType = {
+  PICKUP: 'PICKUP',
+  DELIVERY: 'DELIVERY',
+} as const;
+export type FulfillmentType = ValueOf<typeof FulfillmentType>;
+
+/**
+ * How a website customer pays. PAY_AT_PICKUP and CASH_ON_DELIVERY record nothing until the
+ * restaurant takes the money; ONLINE_CARD goes through the online payment provider at checkout.
+ */
+export const WebPaymentOption = {
+  PAY_AT_PICKUP: 'PAY_AT_PICKUP',
+  CASH_ON_DELIVERY: 'CASH_ON_DELIVERY',
+  ONLINE_CARD: 'ONLINE_CARD',
+} as const;
+export type WebPaymentOption = ValueOf<typeof WebPaymentOption>;
+
+/** Why a restaurant rejected a website order (stored as the cancel reason, shown to customers). */
+export const WebRejectReason = {
+  TOO_BUSY: 'TOO_BUSY',
+  ITEM_UNAVAILABLE: 'ITEM_UNAVAILABLE',
+  CLOSING_SOON: 'CLOSING_SOON',
+  DELIVERY_AREA: 'DELIVERY_AREA',
+  OTHER: 'OTHER',
+} as const;
+export type WebRejectReason = ValueOf<typeof WebRejectReason>;
+
+/** Cancel reason of a website order the restaurant did not accept in time. */
+export const WEB_ACCEPTANCE_TIMEOUT_REASON = 'ACCEPTANCE_TIMEOUT';
+
 export const OnlineOrderingState = {
   OPEN: 'OPEN',
   PAUSED: 'PAUSED',
@@ -214,6 +245,8 @@ export type SyncResultStatus = ValueOf<typeof SyncResultStatus>;
 export const ChangeTopic = {
   /** Configuration, catalog, floor or staff changed: refresh the location snapshot. */
   CONFIG: 'CONFIG',
+  /** A website order was created or changed in the cloud: fetch it (entityId = order id). */
+  ORDER: 'ORDER',
 } as const;
 export type ChangeTopic = ValueOf<typeof ChangeTopic>;
 

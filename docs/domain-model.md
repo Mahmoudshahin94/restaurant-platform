@@ -19,8 +19,9 @@ mirrors the operational subset.
 | Payments  | PaymentMethod, Payment                                                                                                            | ✅ Phase 3                         |
 | Cash      | Shift, CashRegister, CashTransaction                                                                                              | ✅ Phase 3                         |
 | Kitchen   | KitchenTicket, KitchenTicketItem                                                                                                  | ✅ Phase 4                         |
-| Sync      | SyncOperation, HubState (hub); ProcessedOperation, ChangeLog (cloud)                                                              | Hub ✅ Phase 5, cloud ⏳ Phase 6   |
-| Customers | Customer, Address                                                                                                                 | ⏳ Phase 7                         |
+| Sync      | SyncOperation, HubState, InboundOrder (hub); ProcessedOperation, ChangeLog (cloud)                                                | ✅ Phases 5–7                      |
+| Online    | WebOrderCounter (cloud); website fields on Order and Location                                                                     | ✅ Phase 7                         |
+| Customers | Customer, Address (accounts)                                                                                                      | ⏳ deferred (guest checkout only)  |
 | Inventory | InventoryItem, Recipe, StockMovement                                                                                              | ⏳ module boundary only            |
 
 ## ERD
@@ -91,8 +92,10 @@ erDiagram
 amount is in its minor units. `timezone` is used for restaurant-level reports.
 
 **Location**: a branch. `code` is unique per restaurant and prefixes hub-generated order numbers.
-`taxInclusive` says whether menu prices include tax. `onlineOrderingState` is one of
-`OPEN/PAUSED/CLOSED/OFFLINE`.
+`taxInclusive` says whether menu prices include tax. `onlineOrderingState` is the restaurant's
+online-ordering switch (`OPEN/PAUSED/CLOSED`; what customers see is derived, see Online ordering
+below), with `openingHours` (JSON weekly windows), `onlineAcceptMinutes`, `onlinePickupEnabled`,
+`onlineDeliveryEnabled` and `onlineDeliveryFee`.
 
 **User / Role / Permission / UserRole**: permission keys are defined in code
 (`@pos/shared-types` `PERMISSIONS`) and upserted into `permissions` at API start. Roles are
@@ -189,13 +192,27 @@ historical orders.
 - `Location.kdsWarnMinutes` / `kdsLateMinutes` (defaults 8 / 15): when tickets are flagged as
   getting late and late.
 
+**Online ordering** (Phase 7, [ADR 0013](adr/0013-online-ordering.md)):
+
+- Website orders are `Order` rows with channel `WEBSITE`, plus `fulfillmentType`
+  (`PICKUP`/`DELIVERY`; set exactly for website orders, a CHECK constraint), `deliveryAddress`
+  (JSON `{ line1, line2, city, notes }`, required for delivery), `customerEmail` and `acceptBy`
+  (the acceptance deadline). There is no customer account: name and phone are on the order.
+- `WebOrderCounter` (cloud only): the `W-NNN` sequence per location and business day.
+- Online card payments are `Payment` rows with method type `ONLINE` and no `shiftId` (allowed only
+  for `ONLINE` by a CHECK constraint); a void is a `REFUND` row.
+- Whether a branch takes orders is computed (`onlineOrderingStatus` in `@pos/domain`) from the
+  switch, the opening hours and the hub's heartbeat (`Device.lastSeenAt`).
+
 **Location hub** (Phase 5): the hub's SQLite database has the same models (generated schema,
 `prisma/hub/schema.prisma`, guarded by a contract test) plus two of its own:
 
 - `SyncOperation` (`sync_operations`): the outbox (see [sync.md](sync.md)): operation id, entity,
   operation type, full aggregate payload, entity version, status and retry bookkeeping.
 - `HubState` (`hub_state`): key/value state of the hub's cloud link (pairing and device
-  credential, last applied snapshot).
+  credential, last applied snapshot, change-feed cursor).
+- `InboundOrder` (`inbound_orders`, Phase 7): website orders received from the cloud with the cloud
+  version last stored; sent as `baseVersion` with the hub's first change (the hand-over).
 
 `Employee` rows carry the PIN hash used for hub sign-in; `Device` rows in the cloud hold the hub's
 credential hash.

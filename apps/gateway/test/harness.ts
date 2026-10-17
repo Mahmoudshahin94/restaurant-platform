@@ -8,6 +8,7 @@ import type {
   ChangeEntry,
   LocationSnapshot,
   SyncOperationResult,
+  SyncOrder,
   SyncPushRequest,
 } from '@pos/validation';
 import { createHub } from '../src/bootstrap';
@@ -35,17 +36,25 @@ export class FakeCloud {
   answer: (op: PushOperation) => Partial<SyncOperationResult> | null = () => null;
   /** The change feed; seq numbers are the array index + 1. */
   readonly changes: ChangeEntry[] = [];
+  /** Website orders the cloud serves at `/sync/orders/:id` (the ORDER topic). */
+  readonly orders = new Map<string, SyncOrder>();
   readonly credential = 'device-id.secret-value';
   private server: Server | null = null;
   url = '';
 
-  addChange(topic: ChangeEntry['topic'] = 'CONFIG'): void {
+  addChange(topic: ChangeEntry['topic'] = 'CONFIG', entityId: string | null = null): void {
     this.changes.push({
       seq: String(this.changes.length + 1),
       topic,
-      entityId: null,
+      entityId,
       createdAt: new Date().toISOString(),
     });
+  }
+
+  /** The cloud created or changed a website order: serve it and announce it on the feed. */
+  publishOrder(order: SyncOrder): void {
+    this.orders.set(order.id, order);
+    this.addChange('ORDER', order.id);
   }
 
   /** Operations of every push, flattened. */
@@ -63,6 +72,13 @@ export class FakeCloud {
         return void json(401, { code: 'UNAUTHENTICATED' });
       }
       if (this.mode === 'error') return void json(500, { code: 'INTERNAL_ERROR' });
+      const orderPath = /^\/api\/v1\/sync\/orders\/([^/]+)$/.exec(url.pathname);
+      if (orderPath) {
+        const order = this.orders.get(decodeURIComponent(orderPath[1] ?? ''));
+        if (order) json(200, order);
+        else json(404, { code: 'ORDER_NOT_FOUND' });
+        return;
+      }
       switch (url.pathname) {
         case '/api/v1/sync/snapshot': {
           const etag = `"${this.snapshot?.version ?? ''}"`;

@@ -6,6 +6,7 @@ import {
   KitchenModule,
   LocationsModule,
   MenuModule,
+  OnlineOrderingModule,
   OrdersModule,
   PaymentsModule,
   PricingConfigModule,
@@ -16,6 +17,7 @@ import {
 } from '@pos/server';
 import { DevicesModule } from './modules/devices/devices.module';
 import { SyncModule } from './modules/sync/sync.module';
+import { WebOrderChangeRecorder } from './modules/sync/web-order-change.recorder';
 
 /** The cloud API: the shared server modules on PostgreSQL, plus cloud-only administration. */
 @Module({})
@@ -30,6 +32,8 @@ export class AppModule {
           database: {
             client: { useFactory: () => new PrismaClient({ datasourceUrl: config.DATABASE_URL }) },
             dialect: 'postgres',
+            // Website orders the cloud creates or changes go on the change feed (ADR 0013).
+            changeRecorder: WebOrderChangeRecorder,
           },
         }),
         RestaurantsModule,
@@ -42,7 +46,8 @@ export class AppModule {
         ShiftsModule,
         ReportsModule,
         KitchenModule,
-        // Cloud-only: hub pairing and the hub link.
+        // Cloud-only: the customer website's ordering, hub pairing and the hub link.
+        OnlineOrderingModule,
         DevicesModule,
         SyncModule,
       ],

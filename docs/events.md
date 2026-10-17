@@ -22,9 +22,9 @@ payloads carry `{ ticketId, orderId, orderNumber, stationId, status, version }`.
 
 | Event                                              | Emitted when                                                     | Consumers                             | Since   |
 | -------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------- | ------- |
-| `order.created`                                    | Order created (POS or accepted web order)                        | POS, KDS                              | Phase 4 |
+| `order.created`                                    | Order created at the POS, or a website order received by the hub | POS (incoming-order prompt), KDS      | Phase 4 |
 | `order.updated`                                    | Status, items or payments changed, incl. derived PREPARING/READY | POS, KDS, customer status (via cloud) | Phase 4 |
-| `order.cancelled`                                  | Cancelled (with reason)                                          | POS, KDS                              | Phase 4 |
+| `order.cancelled`                                  | Cancelled (with reason), incl. by the cloud's acceptance timeout | POS, KDS                              | Phase 4 |
 | `order.payment_completed`                          | Balance reaches zero                                             | POS                                   | Phase 4 |
 | `kitchen.ticket_created`                           | Ticket sent to a station (or reopened by an edit)                | KDS (chimes)                          | Phase 4 |
 | `kitchen.ticket_started` / `_ready` / `_completed` | Kitchen action, or handover at the POS (`_completed`)            | KDS, POS                              | Phase 4 |
@@ -33,8 +33,14 @@ payloads carry `{ ticketId, orderId, orderNumber, stationId, status, version }`.
 | `sync.completed`                                   | The hub's push delivered operations (`processed`, `pending`)     | POS sync indicator and screen         | Phase 6 |
 | `sync.failed`                                      | The cloud refused operations (`failed`, `lastError`)             | POS sync indicator and screen         | Phase 6 |
 | `sync.status_changed`                              | The hub's indicator state changed (`state`, `pending`, `failed`) | POS sync indicator and screen         | Phase 6 |
-| `restaurant.status_changed`                        | Online ordering state changed                                    | POS, customer web                     | Phase 7 |
+| `restaurant.status_changed`                        | Online ordering state changed (typed; not emitted yet)           | — (the website polls)                 | Phase 7 |
 | `menu.updated`                                     | The hub applied a new configuration snapshot                     | POS, KDS, customer web                | Phase 5 |
+
+Website orders (Phase 7): the hub publishes `order.created` when it stores a website order from
+the cloud's change feed (status `PLACED`, channel `WEBSITE`), and `order.updated` /
+`order.cancelled` when the cloud changed it; the POS refreshes its incoming-orders prompt on any
+`order.*` event (polling every 15 s is the fallback). Customers have no socket: the order-status
+page polls `GET /orders/track` every 5 seconds until the order is final.
 
 ## Socket protocol (`GET /api/v1/realtime`, WebSocket)
 

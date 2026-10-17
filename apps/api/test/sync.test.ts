@@ -101,6 +101,9 @@ function orderRow(overrides: Partial<SyncOrder> = {}): SyncOrder {
     customerName: null,
     customerPhone: null,
     guestCount: 2,
+    customerEmail: null,
+    fulfillmentType: null,
+    deliveryAddress: null,
     notes: null,
     currencyCode: 'SAR',
     taxInclusive: true,
@@ -112,6 +115,7 @@ function orderRow(overrides: Partial<SyncOrder> = {}): SyncOrder {
     version: 1,
     createdById: tenant.cashier.id,
     placedAt: at,
+    acceptBy: null,
     completedAt: null,
     cancelledAt: null,
     cancelReason: null,
@@ -544,6 +548,7 @@ describe('POST /sync/push', () => {
       discounts: _d,
       statusHistory: _h,
       payments: _p,
+      deliveryAddress: _a,
       ...row
     } = cloudOrder;
     await prisma.order.create({ data: { ...row, businessDate: new Date(row.businessDate) } });

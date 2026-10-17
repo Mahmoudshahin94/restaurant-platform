@@ -25,3 +25,8 @@ export { PricingConfigModule } from './modules/pricing-config/pricing-config.mod
 export { ReportsModule } from './modules/reports/reports.module';
 export { RestaurantsModule } from './modules/restaurants/restaurants.module';
 export { ShiftsModule } from './modules/shifts/shifts.module';
+export { OnlineOrderingModule } from './modules/online-ordering/online-ordering.module';
+export { OnlinePaymentsService } from './modules/online-ordering/online-payments.service';
+export { WebOrdersService, ACCEPT_GRACE_MS } from './modules/online-ordering/web-orders.service';
+export { TrackingTokens } from './modules/online-ordering/tracking-token';
+export { KitchenDispatchService } from './modules/kitchen/kitchen-dispatch.service';

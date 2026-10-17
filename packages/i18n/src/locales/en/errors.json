@@ -44,6 +44,7 @@
   "SYNC_SCOPE_MISMATCH": "This change belongs to another restaurant or location.",
   "SYNC_DEPENDENCY_MISSING": "This change depends on data the cloud does not have yet.",
   "SYNC_UNAVAILABLE": "The cloud could not be reached. The change will be sent again automatically.",
+  "SYNC_SUPERSEDED": "The cloud decided on this order first; this change was not needed.",
   "DUPLICATE_OPERATION": "This operation was already processed.",
   "RESTAURANT_OFFLINE": "The restaurant is offline right now.",
   "ONLINE_ORDERING_DISABLED": "Online ordering is not available right now.",

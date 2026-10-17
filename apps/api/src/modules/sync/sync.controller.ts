@@ -4,6 +4,7 @@ import {
   Get,
   Headers,
   HttpCode,
+  Param,
   Post,
   Query,
   Req,
@@ -13,6 +14,8 @@ import {
 import { Public, ZodValidationPipe } from '@pos/server';
 import {
   type LocationSnapshot,
+  type SyncOrder,
+  idSchema,
   type SyncPullResponse,
   type SyncPushResponse,
   syncPullQuerySchema,
@@ -22,6 +25,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { z } from 'zod';
 import { type AuthenticatedDevice, DeviceGuard } from '../devices/device.guard';
 import { ChangeFeedService } from './change-feed.service';
+import { CloudOrdersService } from './cloud-orders.service';
 import { SnapshotService } from './snapshot.service';
 import { SyncPushService } from './sync-push.service';
 
@@ -39,6 +43,7 @@ export class SyncController {
     private readonly snapshots: SnapshotService,
     private readonly pushes: SyncPushService,
     private readonly feed: ChangeFeedService,
+    private readonly orders: CloudOrdersService,
   ) {}
 
   /** The hub's location configuration; `304` when the hub already has this version. */
@@ -83,5 +88,16 @@ export class SyncController {
       disconnected.abort();
     });
     return this.feed.pull(deviceOf(request), query, disconnected.signal);
+  }
+
+  /** A website order announced on the feed (`ORDER` topic), as an order aggregate. */
+  @Get('orders/:orderId')
+  order(
+    @Req() request: FastifyRequest,
+    @Param('orderId', new ZodValidationPipe(idSchema)) orderId: string,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<SyncOrder> {
+    void reply.header('cache-control', 'no-store');
+    return this.orders.aggregate(deviceOf(request), orderId);
   }
 }

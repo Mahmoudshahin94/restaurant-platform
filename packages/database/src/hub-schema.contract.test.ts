@@ -10,10 +10,10 @@ import { Prisma as HubPrisma } from '../generated/hub-client';
  * Prisma client where the services expect the cloud client. That is only sound while both clients
  * expose exactly the same models, fields, relations and enums — which this test enforces.
  */
-const HUB_ONLY_MODELS = new Set(['SyncOperation', 'HubState']);
+const HUB_ONLY_MODELS = new Set(['SyncOperation', 'HubState', 'InboundOrder']);
 const HUB_ONLY_ENUMS = new Set(['SyncOperationStatus']);
-/** Sync ledger and change feed exist only in the cloud (`/// @cloud-only`). */
-const CLOUD_ONLY_MODELS = new Set(['ProcessedOperation', 'ChangeLog']);
+/** Sync ledger, change feed and website order numbers exist only in the cloud (`/// @cloud-only`). */
+const CLOUD_ONLY_MODELS = new Set(['ProcessedOperation', 'ChangeLog', 'WebOrderCounter']);
 const CLOUD_ONLY_ENUMS = new Set(['ProcessedOperationStatus', 'ChangeTopic']);
 
 type Datamodel = typeof Prisma.dmmf.datamodel;

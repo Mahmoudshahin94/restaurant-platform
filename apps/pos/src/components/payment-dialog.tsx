@@ -62,7 +62,7 @@ export function quickTenders(cashDue: number, currency: string): number[] {
  */
 export function PaymentDialog({
   order: initial,
-  methods,
+  methods: allMethods,
   shiftId,
   cashRoundingIncrement,
   onPaid,
@@ -70,6 +70,8 @@ export function PaymentDialog({
   const { t } = useTranslation(['payments', 'orders', 'common']);
   const locale = useCurrentLocale();
   const errorText = useErrorText();
+  // Online payments happen on the customer website only, never at the till (ADR 0013).
+  const methods = useMemo(() => allMethods.filter((m) => m.type !== 'ONLINE'), [allMethods]);
   const currency = initial.currencyCode;
   const { format, toInput } = useMoneyFormat(currency);
   const [order, setOrder] = useState(initial);

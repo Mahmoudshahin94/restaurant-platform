@@ -30,6 +30,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@pos/kds", "dev"],
       "port": 5174
+    },
+    {
+      "name": "customer-web",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@pos/customer-web", "dev"],
+      "port": 5175
     }
   ]
 }

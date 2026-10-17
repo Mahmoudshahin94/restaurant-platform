@@ -22,6 +22,7 @@ import { usePreferences } from '../stores/preferences';
 import { FOCUS_SEARCH_EVENT } from './product-grid';
 import { PLACE_ORDER_EVENT } from './cart-panel';
 import { SyncIndicator } from './sync-indicator';
+import { WebOrdersPrompt } from './web-orders-prompt';
 
 const NAV = [
   { to: '/order', key: 'nav.order', icon: ShoppingBasket, shortcut: 'F2' },
@@ -173,7 +174,7 @@ export function PosShell() {
           </Button>
         </div>
       </header>
-      <main className="relative min-h-0 flex-1 p-3">
+      <main className="relative flex min-h-0 flex-1 flex-col p-3">
         {readyNotice ? (
           <div
             role="status"
@@ -183,7 +184,10 @@ export function PosShell() {
             {t('orders:kitchen.ready', { number: readyNotice })}
           </div>
         ) : null}
-        <Outlet />
+        <WebOrdersPrompt />
+        <div className="min-h-0 flex-1">
+          <Outlet />
+        </div>
       </main>
       <footer className="flex h-7 shrink-0 items-center justify-between border-t px-3 text-xs text-muted-foreground">
         <span className="flex items-center gap-4">

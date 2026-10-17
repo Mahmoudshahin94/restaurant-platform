@@ -187,6 +187,14 @@ guestCount, notes }`. The `id` is a client-generated UUID and the **idempotency 
 - **Audit:** `order.created`, `order.discount_applied`, `order.modified` (before/after totals),
   `order.status_changed`, `order.cancelled`.
 
+- **Website orders** (Phase 7) also expose `fulfillmentType`, `deliveryAddress`,
+  `customerEmail` and `acceptBy`. While `PLACED` they cannot be edited
+  (`409 INVALID_ORDER_STATE`, `reason: AWAITING_ACCEPTANCE`) and cannot be accepted after
+  `acceptBy` (`reason: ACCEPTANCE_EXPIRED`). Rejecting one (→ `CANCELLED` with a reason) is allowed
+  even when it was paid online: the cloud voids that payment. The decision is made at the
+  restaurant's hub: in the cloud, staff transitions of a waiting website order answer
+  `reason: DECIDED_AT_RESTAURANT` (the cloud's only decision is the acceptance timeout).
+
 ## Payments (Phase 3)
 
 | Method | Path                                                          | Permission                       |
@@ -212,8 +220,9 @@ guestCount, notes }`. The `id` is a client-generated UUID and the **idempotency 
   code, max 64 chars. Anything that looks like a card number (13–19 digits) is rejected
   (`422 VALIDATION_FAILED`, `reason: LOOKS_LIKE_CARD_NUMBER`) and never stored. `tendered` is
   rejected for non-cash methods.
-- **Online** methods go through the provider registry; until a gateway is configured they fail
-  with `reason: PROVIDER_NOT_CONFIGURED`.
+- **Online** methods go through the provider registry; at the till they fail with
+  `reason: PROVIDER_NOT_CONFIGURED` (the POS does not offer them). Online card payments happen on
+  the customer website only (below); they carry no shift (`shiftId: null`).
 - **Refund** takes `{ id, shiftId, amount, reason }` against one charge: at most what is left of
   it (`422 REFUND_NOT_ALLOWED`, `reason: EXCEEDS_REFUNDABLE | REASON_REQUIRED`). Cash refunds are
   paid out of the given shift's drawer. When a completed order is fully refunded it moves
@@ -292,6 +301,59 @@ guestCount, notes }`. The `id` is a client-generated UUID and the **idempotency 
 `GET /api/v1/realtime` upgrades to a WebSocket; see [events.md](events.md) for the protocol and
 event list.
 
+## Online ordering (Phase 7, cloud only)
+
+See [ADR 0013](adr/0013-online-ordering.md). Public endpoints need no token; they are rate limited.
+
+| Method | Path                              | Auth                           | Notes                                                                                           |
+| ------ | --------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------- |
+| GET    | `/public/restaurants/:slug`       | public                         | Restaurant and its active locations with ordering status                                        |
+| GET    | `/public/locations/:lid`          | public                         | One location (`PublicLocation`)                                                                 |
+| GET    | `/public/locations/:lid/menu`     | public                         | Published menu, `ETag` / `304` like the staff endpoint                                          |
+| POST   | `/orders`                         | public, own budget             | Place a website order (`CreateWebOrderRequest`)                                                 |
+| GET    | `/orders/track`                   | `x-tracking-token`, own budget | The customer's view of the order (`PublicOrder`)                                                |
+| GET    | `/locations/:lid/online-ordering` | `locations.view`               | Settings plus the live status and hub heartbeat                                                 |
+| PUT    | `/locations/:lid/online-ordering` | `online_ordering.manage`       | `{ state, openingHours, acceptMinutes, pickupEnabled, deliveryEnabled, deliveryFee }` (partial) |
+| GET    | `/sync/orders/:orderId`           | device credential              | A website order announced on the feed (outbox shape)                                            |
+
+- **Status** (`PublicLocation.status`): `{ state: OPEN|PAUSED|CLOSED|OFFLINE, reason }`, reason
+  one of `LOCATION_INACTIVE`, `SETTING_CLOSED`, `SETTING_PAUSED`, `OUTSIDE_HOURS`, `HUB_OFFLINE`,
+  or null when open. Opening hours are `[{ day: 0–6 (Sunday = 0), open: "HH:MM", close: "HH:MM" }]`
+  in the location timezone; a close at or before the open runs past midnight; no windows = no
+  restriction. A hub silent for `HUB_HEARTBEAT_STALE_SECONDS` (180) makes the location `OFFLINE`.
+- **Create** `{ id, locationId, fulfillment: PICKUP|DELIVERY, deliveryAddress: { line1, line2?,
+city?, notes? } (delivery only), customer: { name, phone, email? }, items[{ id, productId,
+variantId, modifierIds, quantity, notes }], notes, payment: { option: PAY_AT_PICKUP |
+CASH_ON_DELIVERY | ONLINE_CARD, cardToken (online card only) } }` → `201 { order: PublicOrder,
+trackingToken }`. Prices and totals sent by the browser are stripped and never read: the cloud
+  re-prices with the domain engine and adds the location's delivery fee. The order is `PLACED`,
+  channel `WEBSITE`, numbered `W-NNN` per location and day, with `acceptBy` = now + the location's
+  `acceptMinutes`. A resend of the same `id` and phone answers `200` with the same order and
+  token; another phone `409 CONFLICT` (`ID_IN_USE`).
+- **Errors:** `409 ONLINE_ORDERING_DISABLED` (`details: { state, reason }`, also
+  `reason: FULFILLMENT_UNAVAILABLE`), `503 RESTAURANT_OFFLINE`, `400 VALIDATION_FAILED`
+  (`PAYMENT_OPTION_MISMATCH`: pay at pickup goes with pickup, cash on delivery with delivery),
+  `422 PRODUCT_UNAVAILABLE` / `INVALID_MODIFIER_SELECTION` / … from the domain,
+  `422 PAYMENT_FAILED` (`CARD_DECLINED`, `PROVIDER_NOT_CONFIGURED`; no order is created).
+- **Online card** uses the payment provider; the only adapter is the documented mock
+  (`ONLINE_PAYMENT_PROVIDER=mock`, refused in production): `tok_mock_…` approves,
+  `tok_mock_decline…` declines; card numbers are never accepted. Rejection or timeout voids it as a
+  `REFUND` row (`reason: "VOID: …"`).
+- **Tracking token:** `<orderId>.<signature>` (HMAC with `TRACKING_TOKEN_SECRET`); unknown, forged
+  and missing tokens all answer `404 ORDER_NOT_FOUND`. `PublicOrder` carries status, payment
+  status and option, fulfillment and address, items with options, totals, `placedAt`, `acceptBy`,
+  `cancelReason` (`TOO_BUSY`, `ITEM_UNAVAILABLE`, `CLOSING_SOON`, `DELIVERY_AREA`,
+  `ACCEPTANCE_TIMEOUT`, or `OTHER` for staff free text) and the status `timeline`; no staff,
+  device or phone fields.
+- **Rate limits:** `WEB_ORDER_RATE_LIMIT_PER_MINUTE` (20) for `POST /orders` and
+  `TRACKING_RATE_LIMIT_PER_MINUTE` (120) for `/orders/track`, per client IP, separate from the
+  global budget.
+- **Timeout:** every `WEB_ORDER_TIMEOUT_SWEEP_SECONDS` (15) the cloud cancels website orders still
+  `PLACED` 30 s past `acceptBy` (system transition, reason `ACCEPTANCE_TIMEOUT`) and voids their
+  payment.
+- **Audit:** `order.created` (actor `CUSTOMER`), `order.cancelled` (actor `SYSTEM` for the
+  timeout), `online_ordering.updated`.
+
 ## Location hub (Phases 5–6)
 
 The hub (`apps/gateway`) serves the same API as the cloud to the POS and KDS on the restaurant LAN
@@ -339,13 +401,14 @@ a label (the order number), status, retry count, next retry, error code and mess
   `@pos/validation`): restaurant, its location, roles and grants, staff of this location (with
   password and PIN hashes), catalog, taxes, discounts, floor, payment methods, drawers. Rows of
   other locations are excluded. `ETag` = content version; `If-None-Match` answers `304`.
-- **Push** `{ operations: [≤ 50], outbox?: { pending, failed } }` → `{ results: [{ operationId,
+- **Push** `{ operations: [≤ 50, each optionally with baseVersion], outbox?: { pending, failed } }` → `{ results: [{ operationId,
 status: APPLIED|DUPLICATE|CONFLICT|REJECTED|RETRY, code, message }] }`, one per operation, in
   order. Each operation is applied exactly once (see [sync.md](sync.md#push)); a malformed one is
   `REJECTED` without failing the others. An empty or malformed envelope is `400`.
-- **Pull** `?cursor=<seq>&limit=1..500&wait=0..30` → `{ changes: [{ seq, topic, entityId,
-createdAt }], cursor, hasMore }`; without `cursor`, the head of the feed. With `wait` the request
-  is held until a change arrives (long poll).
+- **Pull** `?cursor=<seq>&limit=1..500&wait=0..30` → `{ changes: [{ seq, topic: CONFIG|ORDER,
+entityId, createdAt }], cursor, hasMore }`; without `cursor`, the head of the feed. With `wait`
+  the request is held until a change arrives (long poll). `ORDER` entries name a website order to
+  fetch from `/sync/orders/:orderId`.
 - **Issues:** operations the cloud refused from the location's hub (`CONFLICT`/`REJECTED`, newest
   first, up to 200), with error code, message and attempts.
 - **Audit:** `device.paired`, `device.disabled`.

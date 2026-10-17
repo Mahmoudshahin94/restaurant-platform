@@ -1,0 +1,20 @@
+@import 'tailwindcss';
+@import '@pos/ui/theme.css';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/noto-sans-arabic';
+
+@source '../../../packages/ui/src';
+@source '../../../packages/app-kit/src';
+
+html {
+  scroll-behavior: smooth;
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+/* Category anchors land below the sticky header. */
+[data-category-anchor] {
+  scroll-margin-top: 7.5rem;
+}

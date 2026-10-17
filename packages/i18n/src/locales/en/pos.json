@@ -130,5 +130,39 @@
       "COMPLETED": "Nothing was synchronized recently."
     },
     "notHub": "This terminal is connected to the cloud directly; there is nothing to synchronize."
+  },
+  "web": {
+    "banner_one": "{{count}} online order is waiting",
+    "banner_other": "{{count}} online orders are waiting",
+    "review": "Review",
+    "title": "Online order {{number}}",
+    "acceptWithin": "Accept within {{time}}",
+    "expired": "The time to accept has passed: the cloud cancels this order.",
+    "pickup": "Pickup",
+    "delivery": "Delivery",
+    "deliverTo": "Deliver to {{address}}",
+    "customer": "Customer",
+    "notes": "Order notes",
+    "paidOnline": "Paid online",
+    "payAtPickup": "Pays at pickup",
+    "cashOnDelivery": "Cash on delivery",
+    "accept": "Accept",
+    "reject": "Reject",
+    "later": "Later",
+    "accepted": "Order {{number}} accepted and sent to the kitchen.",
+    "rejected": "Order {{number}} rejected.",
+    "rejectTitle": "Reject order {{number}}?",
+    "rejectHint": "The customer sees the reason. An online payment is voided by the cloud.",
+    "reasonLabel": "Reason",
+    "reason": {
+      "TOO_BUSY": "Too busy right now",
+      "ITEM_UNAVAILABLE": "An item is not available",
+      "CLOSING_SOON": "Closing soon",
+      "DELIVERY_AREA": "Address outside the delivery area",
+      "OTHER": "Other reason"
+    },
+    "otherNote": "Describe the reason (for staff; the customer sees a general message)",
+    "confirmReject": "Reject order",
+    "noCancelPermission": "Rejecting needs the orders.cancel permission (a manager)."
   }
 }

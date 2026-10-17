@@ -39,6 +39,7 @@ export async function buildSnapshot() {
     t1: newId(),
     cash: newId(),
     card: newId(),
+    online: newId(),
     drawer: newId(),
   };
   const passwordHash = await hashSecret(PASSWORD);
@@ -183,6 +184,7 @@ export async function buildSnapshot() {
     paymentMethods: [
       { id: ids.cash, restaurantId, type: 'CASH', nameEn: 'Cash', nameAr: 'نقدًا' },
       { id: ids.card, restaurantId, type: 'CARD', nameEn: 'Mada', nameAr: 'مدى' },
+      { id: ids.online, restaurantId, type: 'ONLINE', nameEn: 'Online card', nameAr: 'بطاقة' },
     ],
     cashRegisters: [{ id: ids.drawer, locationId, nameEn: 'Drawer', nameAr: 'الدرج' }],
     orderCounters: [] as { locationId: string; businessDate: string; lastNumber: number }[],

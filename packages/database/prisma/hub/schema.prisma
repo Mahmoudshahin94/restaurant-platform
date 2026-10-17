@@ -66,6 +66,14 @@ enum OrderChannel {
   @@map("order_channel")
 }
 
+/// How a website order reaches the customer.
+enum FulfillmentType {
+  PICKUP
+  DELIVERY
+
+  @@map("fulfillment_type")
+}
+
 enum OrderStatus {
   DRAFT
   PLACED
@@ -220,7 +228,19 @@ model Location {
   timezone              String
   /// Whether menu prices at this location already include tax.
   taxInclusive          Boolean             @map("tax_inclusive")
+  /// Set by the restaurant (OPEN/PAUSED/CLOSED). What customers see also depends on the opening
+  /// hours and on the hub being online (domain `onlineOrderingStatus`).
   onlineOrderingState   OnlineOrderingState @default(CLOSED) @map("online_ordering_state")
+  /// Weekly opening hours for online orders: [{ day: 0-6 (Sunday = 0), open: "HH:MM",
+  /// close: "HH:MM" }] in the location timezone; a close at or before the open ends the next
+  /// day. Empty = no restriction.
+  openingHours          Json                @default("[]") @map("opening_hours")
+  /// Minutes the restaurant has to accept a website order before it is cancelled automatically.
+  onlineAcceptMinutes   Int                 @default(10) @map("online_accept_minutes")
+  onlinePickupEnabled   Boolean             @default(true) @map("online_pickup_enabled")
+  onlineDeliveryEnabled Boolean             @default(false) @map("online_delivery_enabled")
+  /// Delivery fee of website orders, minor units (untaxed).
+  onlineDeliveryFee     Int                 @default(0) @map("online_delivery_fee")
   /// Smallest coin for cash rounding in minor units (e.g. 5 = 0.05); null = no rounding.
   cashRoundingIncrement Int?                @map("cash_rounding_increment")
   /// Kitchen screen: tickets older than this many minutes are flagged, then flagged as late.
@@ -713,38 +733,45 @@ model DiningTable {
 // ---------------------------------------------------------------------------
 
 model Order {
-  id            String        @id @default(uuid(7))
-  restaurantId  String        @map("restaurant_id")
-  locationId    String        @map("location_id")
+  id              String           @id @default(uuid(7))
+  restaurantId    String           @map("restaurant_id")
+  locationId      String           @map("location_id")
   /// Human-readable, unique per location and business day, e.g. "MAIN-042".
-  orderNumber   String        @map("order_number")
-  businessDate  DateTime      @map("business_date")
-  channel       OrderChannel
-  status        OrderStatus
-  paymentStatus PaymentStatus @default(UNPAID) @map("payment_status")
-  source        ActionSource
-  tableId       String?       @map("table_id")
-  customerName  String?       @map("customer_name")
-  customerPhone String?       @map("customer_phone")
-  guestCount    Int?          @map("guest_count")
-  notes         String?
+  orderNumber     String           @map("order_number")
+  businessDate    DateTime         @map("business_date")
+  channel         OrderChannel
+  status          OrderStatus
+  paymentStatus   PaymentStatus    @default(UNPAID) @map("payment_status")
+  source          ActionSource
+  tableId         String?          @map("table_id")
+  customerName    String?          @map("customer_name")
+  customerPhone   String?          @map("customer_phone")
+  guestCount      Int?             @map("guest_count")
+  customerEmail   String?          @map("customer_email")
+  /// Website orders: pickup or delivery; null for orders taken by staff.
+  fulfillmentType FulfillmentType? @map("fulfillment_type")
+  /// Delivery orders: { line1, line2?, city?, notes? }.
+  deliveryAddress Json?            @map("delivery_address")
+  notes           String?
   /// Snapshots of the pricing context at the time of the last pricing.
-  currencyCode  String        @map("currency_code")
-  taxInclusive  Boolean       @map("tax_inclusive")
-  subtotal      Int
-  discountTotal Int           @map("discount_total")
-  taxTotal      Int           @map("tax_total")
-  feeTotal      Int           @map("fee_total")
-  total         Int
+  currencyCode    String           @map("currency_code")
+  taxInclusive    Boolean          @map("tax_inclusive")
+  subtotal        Int
+  discountTotal   Int              @map("discount_total")
+  taxTotal        Int              @map("tax_total")
+  feeTotal        Int              @map("fee_total")
+  total           Int
   /// Incremented on every change; clients send it back for optimistic concurrency.
-  version       Int           @default(1)
-  createdById   String?       @map("created_by_id")
-  placedAt      DateTime?     @map("placed_at")
-  completedAt   DateTime?     @map("completed_at")
-  cancelledAt   DateTime?     @map("cancelled_at")
-  cancelReason  String?       @map("cancel_reason")
-  createdAt     DateTime      @default(now()) @map("created_at")
-  updatedAt     DateTime      @updatedAt @map("updated_at")
+  version         Int              @default(1)
+  createdById     String?          @map("created_by_id")
+  placedAt        DateTime?        @map("placed_at")
+  /// Website orders: accept before this instant, or the cloud cancels the order (ADR 0013).
+  acceptBy        DateTime?        @map("accept_by")
+  completedAt     DateTime?        @map("completed_at")
+  cancelledAt     DateTime?        @map("cancelled_at")
+  cancelReason    String?          @map("cancel_reason")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
 
   restaurant    Restaurant           @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
   location      Location             @relation(fields: [locationId], references: [id], onDelete: Restrict)
@@ -908,7 +935,8 @@ model Payment {
   restaurantId       String                 @map("restaurant_id")
   locationId         String                 @map("location_id")
   orderId            String                 @map("order_id")
-  shiftId            String                 @map("shift_id")
+  /// The drawer's shift. Null only for ONLINE payments, which touch no drawer (database CHECK).
+  shiftId            String?                @map("shift_id")
   paymentMethodId    String                 @map("payment_method_id")
   /// Snapshot of the method type and names at the time of payment.
   methodType         PaymentMethodType      @map("method_type")
@@ -939,7 +967,7 @@ model Payment {
 
   location Location          @relation(fields: [locationId], references: [id], onDelete: Restrict)
   order    Order             @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  shift    Shift             @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+  shift    Shift?            @relation(fields: [shiftId], references: [id], onDelete: Restrict)
   method   PaymentMethod     @relation(fields: [paymentMethodId], references: [id], onDelete: Restrict)
   refundOf Payment?          @relation("PaymentRefunds", fields: [refundOfId], references: [id], onDelete: Restrict)
   refunds  Payment[]         @relation("PaymentRefunds")
@@ -1126,4 +1154,15 @@ model HubState {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("hub_state")
+}
+
+/// Website orders received from the cloud's change feed, with the cloud version the hub last
+/// stored. Until the hub's first change of such an order is accepted by the cloud, the cloud owns
+/// it; that first push names this version (`baseVersion`) so the cloud can hand it over (ADR 0013).
+model InboundOrder {
+  orderId      String   @id @map("order_id")
+  cloudVersion Int      @map("cloud_version")
+  receivedAt   DateTime @default(now()) @map("received_at")
+
+  @@map("inbound_orders")
 }

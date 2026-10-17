@@ -54,3 +54,16 @@ export function formatDateTime(
     timeZone,
   }).format(new Date(isoUtc));
 }
+
+/** The time of day of a UTC instant in the location's timezone (e.g. "14:30" / "2:30 PM"). */
+export function formatTime(
+  isoUtc: string,
+  timeZone: string,
+  locale: Locale,
+  options?: FormatOptions,
+): string {
+  return new Intl.DateTimeFormat(localeTag(locale, options), {
+    timeStyle: 'short',
+    timeZone,
+  }).format(new Date(isoUtc));
+}

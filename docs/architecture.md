@@ -3,8 +3,9 @@
 Restaurant platform: offline-first POS, Kitchen Display System (KDS), customer online ordering,
 admin portal, cloud API, and a per-restaurant location hub. Arabic and English with full RTL.
 
-> Status: Phases 0–2 (foundations, menu, POS order creation) are implemented. See the
-> [phase checklist](#10-development-phases) at the end.
+> Status: Phases 0–7 (foundations, menu, POS, payments, KDS, location hub, sync engine, customer
+> website and online ordering) are implemented. See the [phase checklist](#10-development-phases)
+> at the end.
 
 ## 1. Starting point
 
@@ -55,7 +56,7 @@ apps/
   gateway/        Location hub: SQLite, sync engine, LAN WS, printers (Phase 5–6)
   pos/            Tauri 2 + React point of sale                      (Phase 2: order entry)
   kds/            React kitchen display                              (Phase 4)
-  customer-web/   React customer ordering site                       (Phase 7)
+  customer-web/   React customer ordering site (cloud API only)       (Phase 7)
 packages/
   shared-types/   Enums, permission catalog, error codes, realtime event contracts
   validation/     Zod schemas — the API contract (types via z.infer)
@@ -171,17 +172,27 @@ The cloud is never in this path. Event names and payloads are typed in
 
 ## 9. Customer online ordering flow (Phase 7)
 
-1. Customer web → `POST /api/v1/orders`.
-2. The cloud checks the location's online-ordering state. `OPEN/PAUSED/CLOSED` comes from admin
-   settings and opening hours; `OFFLINE` applies when the hub heartbeat is stale.
+See [ADR 0013](adr/0013-online-ordering.md), [api.md](api.md#online-ordering-phase-7-cloud-only)
+and [sync.md](sync.md#website-orders-phase-7).
+
+1. Customer web → `POST /api/v1/orders` (choices only: products, options, quantities, contact,
+   pickup or delivery, payment option; idempotent by the browser-generated order id).
+2. The cloud checks the location's online-ordering state (`onlineOrderingStatus` in
+   `@pos/domain`): the restaurant's `OPEN/PAUSED/CLOSED`, then the opening hours, then `OFFLINE`
+   when the hub's heartbeat is older than 3 minutes. Refusals are `ONLINE_ORDERING_DISABLED` or
+   `RESTAURANT_OFFLINE`.
 3. The cloud validates products, modifiers and availability, then **recalculates** prices, tax,
-   discounts, fees and the total with the shared pricing engine. Browser totals are ignored.
-4. It creates the order (`PLACED`, owner = cloud) and a payment intent through the
-   `PaymentProvider` abstraction and appends to the change log, which the hub is long-polling.
-5. The hub pulls the order and the POS asks staff to accept or reject it. Accept → `CONFIRMED`,
-   which is pushed to the cloud, and tickets go to the KDS.
-6. The customer sees status changes by polling or SSE. An order still unaccepted after a
-   configurable timeout is auto-cancelled and its payment voided.
+   fees (delivery) and the total with the shared pricing engine. Browser totals are ignored.
+4. It charges an online card through the `PaymentProvider` (documented mock adapter only), then
+   creates the order (`PLACED`, channel `WEBSITE`, `W-NNN`, `acceptBy`; owner = cloud) and an
+   `ORDER` change-log entry in the same transaction. The customer gets a tracking token.
+5. The hub, long-polling the feed, fetches and stores the order; the POS opens an incoming-order
+   dialog. Accept → `CONFIRMED` (tickets go to the KDS) or reject → `CANCELLED` with a reason;
+   the hub's push carries `baseVersion` and hands the order over to the hub. A rejection voids the
+   online payment in the cloud.
+6. The customer's status page polls the cloud every 5 s. An order still unaccepted 30 s after
+   `acceptBy` is cancelled by the cloud and its payment voided; that decision wins over an
+   acceptance made offline.
 
 ## 10. Development phases
 
@@ -194,7 +205,7 @@ The cloud is never in this path. Event names and payloads are typed in
 | 4     | KDS app, kitchen tickets, station routing                                                                                                               | ✅ Done |
 | 5     | Location hub with SQLite, offline POS                                                                                                                   | ✅ Done |
 | 6     | Synchronization engine                                                                                                                                  | ✅ Done |
-| 7     | Customer website, online ordering availability                                                                                                          | ⏳      |
+| 7     | Customer website, online ordering availability                                                                                                          | ✅ Done |
 | 8     | Admin portal completion                                                                                                                                 | ⏳      |
 | 9     | Reporting                                                                                                                                               | ⏳      |
 | 10    | Hardening, full E2E suite                                                                                                                               | ⏳      |
@@ -369,6 +380,64 @@ pending`, `Sync error · 2 failed`) and a synchronization screen with "Sync now"
 - **Order numbers:** the snapshot carries the cloud's order counters of recent days, so a hub paired
   mid-day continues the cloud's numbering instead of reusing it.
 
+**Phase 7 verification (2026-10-17):** `turbo run build typecheck lint test --force` with 64/64
+tasks green, covering 464 unit, integration and component tests (API 146, domain 135, gateway 44,
+i18n 24, database 22, validation 20, POS 13, customer-web 12, api-client 11, server 10, receipts 8,
+KDS 7, app-kit 5, admin 5, ui 2), and 24 Playwright E2E tests (admin 3, POS 14, KDS 4,
+customer-web 3). New: the cloud's online-ordering suite (storefront and settings, CLOSED/PAUSED/
+outside-hours/stale-hub refusals, server re-pricing that ignores tampered browser totals with the
+delivery fee and `W-` numbers, domain validation, idempotent and racing resends, mock card capture
+and decline, tracking tokens including forgeries and the rate limit, `ORDER` feed entries scoped to
+the location and never echoing hub pushes, the hand-over on acceptance, the refused crossings (no or
+stale `baseVersion`, an edit while `PLACED`, a hub-invented website order, a late acceptance after
+the timeout), the void after a rejection, the timeout sweep with its grace period, and cloud staff
+refused on waiting website orders); the hub's website-order suite (storing feed orders with their
+event, keeping the cursor while the cloud is away, skipping 404s, refreshing the menu first,
+hand-over push with `baseVersion` and kitchen tickets, refusing edits and late acceptances,
+rejecting an online-paid order and merging the void, adopting the cloud's cancellation over an
+offline acceptance with `SYNC_SUPERSEDED`); a hub-migration upgrade test on a database holding
+orders, payments and cash; domain tests for opening hours (overnight windows, timezones), the
+ordering status, fees, options and acceptance rules; component tests for the product dialog,
+cart/preview, checkout payload, status page (EN/AR, errors) and the POS order details. The
+customer-web E2E suite runs the specification's acceptance steps 14–17 with cloud, hub, POS and
+website all running: an English pickup order accepted at the POS (kitchen ticket at the hub, the
+customer's page turns "Accepted"), an Arabic RTL delivery order paid by test card and rejected by
+a manager working in Arabic (the customer sees the reason and the voided payment), and a paused
+branch refusing checkout. Also `pnpm test:tools`, a clean `migrate status`, the hub schema check,
+and a manual run on the development stack (website order W-001 → dev hub within seconds → accepted
+at the POS → "تم القبول" on the customer's page).
+
+### Phase 7 decisions
+
+See [ADR 0013](adr/0013-online-ordering.md).
+
+- **The cloud creates website orders** (cloud-only `OnlineOrderingModule` in `@pos/server`) and
+  prices them with the shared engine; the browser sends choices only. They are `PLACED`, channel
+  `WEBSITE`, numbered `W-NNN` from a cloud-only counter, idempotent by the browser's order id.
+- **Ordering status** comes from the domain: the restaurant's switch, then opening hours (weekly
+  windows in the location timezone), then the hub heartbeat (stale after 3 minutes → `OFFLINE`).
+  Settings at `PUT /locations/:lid/online-ordering` (`online_ordering.manage`).
+- **ORDER topic:** the cloud's `ChangeRecorder` appends an entry for every cloud change of a
+  website order, in its transaction, under the feed's advisory lock; the hub fetches the order
+  aggregate (`GET /sync/orders/:id`) and stores it.
+- **Hand-over:** the hub's first push of a website order must be the restaurant's decision on
+  exactly the version the cloud handed out (`baseVersion`, hub table `inbound_orders`); otherwise
+  `SYNC_CONFLICT`. The hub refuses edits before acceptance and acceptances after the deadline.
+- **Timeout:** the cloud cancels unaccepted orders 30 s after `acceptBy` and voids their payment;
+  when the hub accepted offline meanwhile, the cloud's cancellation wins and the hub's change is
+  marked `SYNC_SUPERSEDED` (this closes the open question about the acceptance timeout).
+- **Payment:** pay at pickup / cash on delivery (nothing recorded until the POS takes the money);
+  online card only through the documented mock adapter, captured at checkout, drawer-less
+  (`payments.shift_id` nullable for `ONLINE` only), voided as an append-only `REFUND` row.
+- **Tracking token:** `<orderId>.<HMAC>`, nothing stored, sent in `x-tracking-token`; order
+  creation and tracking have their own rate limits; the status page polls every 5 s.
+- **Customer website** (`apps/customer-web`): guest checkout only; cart and language in
+  localStorage, the placed order's token in sessionStorage; EN/AR with RTL; one restaurant per
+  deployment (`VITE_RESTAURANT_SLUG`).
+- **POS:** a banner and an auto-opening dialog for each new website order (items, fulfillment,
+  address, payment, countdown), accept or reject with a reason preset; online tenders are no
+  longer offered at the till.
+
 Known gaps carried forward:
 
 - The admin UI does not yet expose per-product modifier min/max overrides. The API supports them
@@ -376,12 +445,11 @@ Known gaps carried forward:
 - **Resolving a sync conflict needs a person and a tool**: the POS shows refused changes and a
   manager can retry them, and the cloud lists them (`/sync/issues`), but there is no admin screen
   yet to inspect or fix the conflicting data (Phase 8). Hub audit-log rows are not uploaded yet
-  (Phase 10). Website orders join the change feed in Phase 7.
+  (Phase 10).
 - Shifts have no `version` column, so a shift changed in the cloud itself would not be detected as a
   conflict; nothing in the cloud edits hub shifts today.
 - The change feed's waiting requests poll PostgreSQL once a second each; `LISTEN/NOTIFY` should
   replace this before many hubs share one API instance.
-- The POS top bar overflows on screens narrower than about 1100 px (seen at 1024 px).
 - The POS keeps its refresh token in memory (sign in again after a restart); OS-keychain storage
   is still to do. Employees and PINs are provisioned by seed; their admin screen comes in Phase 8.
 - The hub runs as a separate Node process; packaging it as a Tauri sidecar for single-terminal
@@ -406,6 +474,24 @@ Known gaps carried forward:
 - KDS thresholds (`kdsWarnMinutes`/`kdsLateMinutes`) are set through the API; the admin screen
   for them comes in Phase 8. Prep-time reporting comes with reporting (Phase 9).
 - Restaurants are provisioned by seed only; there is no platform-operator UI yet.
+- **Online ordering (Phase 7):** no customer accounts, saved addresses, delivery zones or radius,
+  scheduled orders, promo codes or tips; customers (and support staff in the cloud) cannot cancel
+  a website order, only the restaurant (reject) or the acceptance timeout can; the delivery fee is flat and untaxed. The admin portal has
+  no online-ordering screen yet (switch, hours and options are set through the API; Phase 8).
+- Online card payments use the mock adapter only; a real gateway (authorize at checkout, capture
+  on acceptance, voids through an outbox instead of inside the database transaction) is still to
+  be integrated. A void the provider refuses is recorded as a `PENDING` refund for an operator.
+- The customer status page polls (5 s); there is no SSE or push notification, and no SMS/e-mail
+  confirmation. `restaurant.status_changed` is typed but not emitted; the website re-checks the
+  branch every 30 s.
+- The POS prompt has no sound and no printed ticket for new website orders; the KDS shows them only
+  once accepted.
+- A hub that stays offline keeps the website orders it already received; new ones are refused
+  (`RESTAURANT_OFFLINE`) after 3 minutes, and pending ones time out in the cloud.
+- The tracking token is part of the status page URL (`/track/<token>`): whoever has the link sees
+  the order. Tokens cannot be revoked one by one (rotating `TRACKING_TOKEN_SECRET` revokes all).
+- The timeout sweep runs in every API instance (the row lock keeps it correct, but several
+  instances would repeat the scan).
 
 ## Architectural decisions and open questions
 
@@ -440,13 +526,15 @@ Recorded as ADRs in [adr/](adr/):
 12. [0012](adr/0012-sync-engine.md): the sync engine: state-based push with coalescing and
     dependencies, exactly-once ledger, ownership by version history instead of timestamps,
     trigger-fed configuration change feed read by long polling.
+13. [0013](adr/0013-online-ordering.md): online ordering: cloud-created website orders priced by
+    the shared engine, the `ORDER` change feed, ownership hand-over on acceptance (`baseVersion`),
+    the acceptance timeout winning over a late acceptance, mock online card with append-only
+    voids, signed tracking tokens.
 
 Open items to revisit:
 
 - Customer privacy erasure vs. immutable financial records. The plan is to anonymize customer
   PII while keeping transactions.
-- The acceptance timeout for web orders when the hub goes offline after the cloud accepted the
-  order (Phase 7).
 - Country-specific receipt and e-invoicing rules (e.g. Saudi ZATCA QR). The receipt builder will
   expose an extension hook; there is no market-specific logic yet because the first market is
   undecided.

@@ -50,6 +50,22 @@ POS shows the same in its footer and on its synchronization screen (`/sync`).
 To try offline operation: stop the API, take orders on the POS (footer: "Offline · N pending"),
 start the API again and press "Sync now" on the synchronization screen (or wait up to a minute).
 
+Run the customer website (online ordering; it talks to the cloud API):
+
+```bash
+pnpm --filter @pos/customer-web dev        # http://localhost:5175 (proxies /api to :3000)
+```
+
+It sells for the restaurant in `VITE_RESTAURANT_SLUG` (default `demo-kitchen`, the seed). A
+branch takes orders only when online ordering is OPEN (the seed opens `MAIN` when it creates it;
+otherwise `PUT /api/v1/locations/:lid/online-ordering { "state": "OPEN" }` as the owner), it is
+within its opening hours, and **its hub is running** (a hub silent for 3 minutes makes the
+branch "Offline"). With `ONLINE_PAYMENT_PROVIDER=mock` (the `.env` example) the checkout offers a
+test card: "Approved" or "Declined" test tokens, no card details, no money. To try the whole flow:
+order on the website, watch the POS (signed in at the hub) announce it, accept or reject it, and
+watch the order page change within a few seconds. Unaccepted orders are cancelled after
+`onlineAcceptMinutes` (10).
+
 Run the POS:
 
 ```bash
@@ -97,6 +113,7 @@ add its origin (`tauri://localhost` on macOS/Linux, `http://tauri.localhost` on 
 createdb pos_kds_e2e            # once (admin suite; or set E2E_DATABASE_URL)
 createdb pos_kds_pos_e2e        # once (POS suite; or set POS_E2E_DATABASE_URL)
 createdb pos_kds_kds_e2e        # once (KDS suite; or set KDS_E2E_DATABASE_URL)
+createdb pos_kds_web_e2e        # once (customer website suite; or set WEB_E2E_DATABASE_URL)
 pnpm build                      # E2E runs the built API and hub
 pnpm test:e2e
 ```
@@ -105,8 +122,11 @@ The admin suite starts the cloud API (:3100) and the admin UI (:5180). The POS a
 like a restaurant: `tools/e2e/prepare-hub.mjs` prepares the app's `*_e2e` cloud database,
 starts the cloud API just long enough to pair a fresh hub and give it its snapshot, **stops the
 cloud**, and then the hub (POS :4110, KDS :4120) and the web UI (POS :1430, KDS :5190) start.
-Every POS and KDS test therefore runs without the cloud. `tools/e2e/prepare-db.mjs` refuses any
-database whose name does not end in `_e2e`.
+Every POS and KDS test therefore runs without the cloud. The customer-website suite runs
+everything at once: the cloud (:3130) stays up, `tools/e2e/pair-hub.mjs` pairs a hub (:4130) with
+it, and the POS (:1440, served by that hub) and the website (:5195) start; a website order then
+travels cloud → hub → POS and back. `tools/e2e/prepare-db.mjs` refuses any database whose name
+does not end in `_e2e`.
 Locally it uses the installed Google Chrome (`PLAYWRIGHT_CHANNEL`, default `chrome`). In CI, run
 `pnpm exec playwright install chromium` first.
 

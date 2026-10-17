@@ -1,4 +1,6 @@
 import {
+  type UpdateOnlineOrderingRequest,
+  onlineOrderingOverviewSchema,
   type HubSyncOperationsQuery,
   type PinLoginRequest,
   hubStatusSchema,
@@ -135,6 +137,18 @@ export function createApiClient(options: HttpClientOptions) {
         http.request('POST', `${API}/hub/sync/operations/${operationRowId}/retry`, {
           schema: hubStatusSchema,
           noRetry: true,
+        }),
+    },
+    onlineOrdering: {
+      /** The location's online-ordering settings and what customers see now (cloud only). */
+      get: (locationId: string) =>
+        http.request('GET', `${API}/locations/${locationId}/online-ordering`, {
+          schema: onlineOrderingOverviewSchema,
+        }),
+      update: (locationId: string, body: UpdateOnlineOrderingRequest) =>
+        http.request('PUT', `${API}/locations/${locationId}/online-ordering`, {
+          body,
+          schema: onlineOrderingOverviewSchema,
         }),
     },
     restaurants: {
