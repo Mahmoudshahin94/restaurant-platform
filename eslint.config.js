@@ -9,12 +9,16 @@ export default tseslint.config(
   {
     ignores: [
       '**/dist/**',
+      '**/.vite/**',
       '**/coverage/**',
       '**/node_modules/**',
       '**/generated/**',
       '**/playwright-report/**',
       '**/test-results/**',
       '**/*.config.{js,mjs,cjs,ts}',
+      // temp files Vite/tsup write beside configs while tests or builds run in parallel
+      '**/*.timestamp-*.mjs',
+      '**/*.bundled_*.{js,mjs,cjs}',
       '**/src-tauri/**',
       'tools/**',
     ],

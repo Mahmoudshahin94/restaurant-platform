@@ -20,7 +20,8 @@
     "db:deploy": "pnpm --filter @pos/database migrate:deploy",
     "db:seed": "pnpm --filter @pos/database seed",
     "db:reset": "pnpm --filter @pos/database migrate:reset",
-    "test:tools": "node --test tools/eslint-rules/"
+    "test:tools": "node --test \"tools/**/*.test.{js,mjs}\"",
+    "printer:sim": "node tools/printer-sim/server.mjs"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",

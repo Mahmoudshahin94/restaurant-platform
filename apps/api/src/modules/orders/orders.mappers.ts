@@ -1,5 +1,6 @@
-import type { Prisma } from '@pos/database';
-import type { Order } from '@pos/validation';
+import type { Payment as PaymentRow, Prisma } from '@pos/database';
+import { paymentTotals } from '@pos/domain';
+import type { Order, OrderPayment } from '@pos/validation';
 
 export const orderInclude = {
   items: { include: { modifiers: true }, orderBy: { sortOrder: 'asc' } },
@@ -7,6 +8,7 @@ export const orderInclude = {
   discounts: { orderBy: { createdAt: 'asc' } },
   statusHistory: { orderBy: { createdAt: 'asc' } },
   table: { select: { label: true } },
+  payments: { orderBy: { createdAt: 'asc' } },
 } satisfies Prisma.OrderInclude;
 
 export type OrderRow = Prisma.OrderGetPayload<{ include: typeof orderInclude }>;
@@ -14,7 +16,36 @@ export type OrderRow = Prisma.OrderGetPayload<{ include: typeof orderInclude }>;
 const iso = (d: Date) => d.toISOString();
 const isoOrNull = (d: Date | null) => (d ? d.toISOString() : null);
 
+export function toPaymentDto(p: PaymentRow): OrderPayment {
+  return {
+    id: p.id,
+    type: p.type,
+    status: p.status,
+    paymentMethodId: p.paymentMethodId,
+    methodType: p.methodType,
+    methodNameEn: p.methodNameEn,
+    methodNameAr: p.methodNameAr,
+    amount: p.amount,
+    tendered: p.tendered,
+    change: p.change,
+    roundingAdjustment: p.roundingAdjustment,
+    reference: p.reference,
+    refundOfId: p.refundOfId,
+    reason: p.reason,
+    shiftId: p.shiftId,
+    createdAt: p.createdAt.toISOString(),
+  };
+}
+
+/** Captured payment rows in the shape the domain payment rules use. */
+export function settledEntries(payments: readonly PaymentRow[]) {
+  return payments
+    .filter((p) => p.status === 'CAPTURED')
+    .map((p) => ({ id: p.id, type: p.type, amount: p.amount, refundOfId: p.refundOfId }));
+}
+
 export function toOrderDto(row: OrderRow): Order {
+  const totals = paymentTotals(row.total, settledEntries(row.payments));
   return {
     id: row.id,
     restaurantId: row.restaurantId,
@@ -89,6 +120,10 @@ export function toOrderDto(row: OrderRow): Order {
       value: d.value,
       amount: d.amount,
     })),
+    payments: row.payments.map(toPaymentDto),
+    paidTotal: totals.paid,
+    refundedTotal: totals.refunded,
+    balanceDue: totals.balanceDue,
     statusHistory: row.statusHistory.map((h) => ({
       fromStatus: h.fromStatus,
       toStatus: h.toStatus,

@@ -2,7 +2,15 @@ import { LanguageSwitcher, useCurrentLocale } from '@pos/app-kit';
 import { pickLocalized } from '@pos/i18n';
 import { Button, cn } from '@pos/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ClipboardList, Grid3x3, LogOut, MapPin, ShoppingBasket } from 'lucide-react';
+import {
+  ClipboardList,
+  Grid3x3,
+  LogOut,
+  MapPin,
+  Settings,
+  ShoppingBasket,
+  Wallet,
+} from 'lucide-react';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NavLink, Outlet, useNavigate } from 'react-router';
@@ -17,6 +25,7 @@ const NAV = [
   { to: '/order', key: 'nav.order', icon: ShoppingBasket, shortcut: 'F2' },
   { to: '/orders', key: 'nav.orders', icon: ClipboardList, shortcut: 'F4' },
   { to: '/tables', key: 'nav.tables', icon: Grid3x3, shortcut: 'F6' },
+  { to: '/shift', key: 'nav.shift', icon: Wallet, shortcut: 'F8' },
 ] as const;
 
 function isTyping(target: EventTarget | null): boolean {
@@ -101,6 +110,14 @@ export function PosShell() {
             </Button>
           ) : null}
           <LanguageSwitcher className="h-10 w-auto" onLocaleChange={setLocale} />
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={t('pos:nav.settings')}
+            onClick={() => void navigate('/settings')}
+          >
+            <Settings aria-hidden />
+          </Button>
           <span className="hidden text-sm text-muted-foreground md:inline">
             {user?.displayName}
           </span>

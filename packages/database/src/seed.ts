@@ -35,6 +35,9 @@ interface SeedFile {
     string,
     { nameEn: string; nameAr: string; tables: { label: string; seats: number }[] }[]
   >;
+  paymentMethods?: { type: 'CASH' | 'CARD' | 'ONLINE'; nameEn: string; nameAr: string }[];
+  /** Location code → cash drawers. */
+  cashRegisters?: Record<string, { nameEn: string; nameAr: string }[]>;
   users: {
     envPrefix: string;
     displayName: string;
@@ -147,6 +150,20 @@ async function seedConfiguration(
   }
   if (file.discounts && (await prisma.discount.count({ where: { restaurantId } })) === 0) {
     await prisma.discount.createMany({ data: file.discounts.map((d) => ({ ...d, restaurantId })) });
+  }
+  if (
+    file.paymentMethods &&
+    (await prisma.paymentMethod.count({ where: { restaurantId } })) === 0
+  ) {
+    await prisma.paymentMethod.createMany({
+      data: file.paymentMethods.map((m, i) => ({ ...m, restaurantId, sortOrder: i })),
+    });
+  }
+  for (const [code, registers] of Object.entries(file.cashRegisters ?? {})) {
+    const locationId = locationIds.get(code);
+    if (!locationId) throw new Error(`Unknown location ${code} in cashRegisters`);
+    if ((await prisma.cashRegister.count({ where: { locationId } })) > 0) continue;
+    await prisma.cashRegister.createMany({ data: registers.map((r) => ({ ...r, locationId })) });
   }
   for (const [code, sections] of Object.entries(file.floorPlans ?? {})) {
     const locationId = locationIds.get(code);

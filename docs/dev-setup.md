@@ -53,7 +53,8 @@ add its origin (`tauri://localhost` on macOS/Linux, `http://tauri.localhost` on 
 | `pnpm lint`                                  | ESLint (type-aware + i18n rule)                                 |
 | `pnpm test`                                  | Unit + integration tests (integration uses `TEST_DATABASE_URL`) |
 | `pnpm test:e2e`                              | Playwright end-to-end tests                                     |
-| `pnpm test:tools`                            | Tests for repository-local lint rules                           |
+| `pnpm test:tools`                            | Tests for repository tools (lint rule, printer decoder)         |
+| `pnpm printer:sim`                           | Simulated ESC/POS network printer on port 9100                  |
 | `pnpm db:migrate`                            | Create/apply a migration in development (`prisma migrate dev`)  |
 | `pnpm --filter @pos/database migrate:status` | Check for drift / pending migrations                            |
 
@@ -72,6 +73,16 @@ seeds it. The script refuses any database whose name does not end in `_e2e`. It 
 web UI (admin :5180, POS :1430).
 Locally it uses the installed Google Chrome (`PLAYWRIGHT_CHANNEL`, default `chrome`). In CI, run
 `pnpm exec playwright install chromium` first.
+
+## Receipt printers
+
+The POS prints to the browser's print dialog by default. Under **Settings** a terminal can switch
+to a network ESC/POS printer (host, port 9100–9109, 58 or 80 mm paper); network printing needs
+the Tauri shell, which sends the job over TCP.
+
+Without hardware, run `pnpm printer:sim` and point the POS at `127.0.0.1:9100`. The simulator
+decodes each raster job and saves the raw bytes (`.bin`) and the printed image (`.pbm`, open it
+with Preview) under `tools/printer-sim/out/`.
 
 ## Database migrations
 

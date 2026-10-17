@@ -8,12 +8,19 @@ import {
 } from '@pos/app-kit';
 import { findMenuProduct } from '@pos/domain';
 import { pickLocalized } from '@pos/i18n';
-import type { Discount, PublishedMenu, PublishedMenuProduct, TableSection } from '@pos/validation';
+import type {
+  Discount,
+  Order,
+  PublishedMenu,
+  PublishedMenuProduct,
+  TableSection,
+} from '@pos/validation';
 import { Alert, Button, Input, NativeSelect, cn } from '@pos/ui';
 import { Minus, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useOrderMutation } from '../lib/queries';
+import { OrderPaymentDialogs } from '../routes/orders-page';
 import { useCartQuote } from '../lib/quote';
 import { api, useSession } from '../lib/session';
 import { STAFF_CHANNELS, cartToRequest, useCart } from '../stores/cart';
@@ -29,7 +36,7 @@ interface CartPanelProps {
 }
 
 export function CartPanel({ locationId, menu, discounts, floor, onEditLine }: CartPanelProps) {
-  const { t } = useTranslation(['pos', 'orders', 'common']);
+  const { t } = useTranslation(['pos', 'orders', 'common', 'payments']);
   const locale = useCurrentLocale();
   const errorText = useErrorText();
   const { format } = useMoneyFormat(menu.currencyCode);
@@ -38,6 +45,8 @@ export function CartPanel({ locationId, menu, discounts, floor, onEditLine }: Ca
   const cart = useCart();
   const { quote, error: quoteError } = useCartQuote(menu, cart.lines, cart.discountIds, discounts);
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  const [placed, setPlaced] = useState<Order | null>(null);
+  const [paying, setPaying] = useState<'pay' | 'receipt' | null>(null);
 
   const submit = useOrderMutation(async () => {
     const body = cartToRequest(cart);
@@ -62,6 +71,7 @@ export function CartPanel({ locationId, menu, discounts, floor, onEditLine }: Ca
     try {
       const { order, edited } = await submit.mutateAsync(undefined);
       cart.clear();
+      setPlaced(order);
       setMessage({
         kind: 'ok',
         text: t(edited ? 'pos:cart.saved' : 'pos:cart.placed', { number: order.orderNumber }),
@@ -340,9 +350,36 @@ export function CartPanel({ locationId, menu, discounts, floor, onEditLine }: Ca
         />
         {quoteError ? <Alert variant="destructive">{errorText(quoteError)}</Alert> : null}
         {message ? (
-          <Alert variant={message.kind === 'error' ? 'destructive' : 'info'} aria-live="polite">
+          <Alert
+            variant={message.kind === 'error' ? 'destructive' : 'info'}
+            aria-live="polite"
+            action={
+              message.kind === 'ok' &&
+              placed &&
+              placed.balanceDue > 0 &&
+              canAt(locationId, 'payments.create') ? (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setPaying('pay');
+                  }}
+                >
+                  {t('payments:takePayment')}
+                </Button>
+              ) : null
+            }
+          >
             {message.text}
           </Alert>
+        ) : null}
+        {placed ? (
+          <OrderPaymentDialogs
+            order={placed}
+            dialog={paying}
+            setDialog={(d) => {
+              setPaying(d === 'pay' || d === 'receipt' ? d : null);
+            }}
+          />
         ) : null}
         <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-sm">
           <dt>{t('orders:totals.subtotal')}</dt>

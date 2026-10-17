@@ -4,3 +4,4 @@ export * from './tenancy';
 export * from './menu';
 export * from './orders';
 export * from './pricing-config';
+export * from './payments';

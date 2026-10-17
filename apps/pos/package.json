@@ -25,6 +25,7 @@
     "@pos/app-kit": "workspace:*",
     "@pos/domain": "workspace:*",
     "@pos/i18n": "workspace:*",
+    "@pos/receipts": "workspace:*",
     "@pos/shared-types": "workspace:*",
     "@pos/ui": "workspace:*",
     "@pos/validation": "workspace:*",

@@ -1,6 +1,16 @@
 import {
   type ListProductsQuery,
   type SetLocationProductRequest,
+  type CloseShiftRequest,
+  type CashMovementRequest,
+  type CreatePaymentRequest,
+  type OpenShiftRequest,
+  type RefundPaymentRequest,
+  cashRegisterSchema,
+  dailySummarySchema,
+  orderPaymentSchema,
+  paymentMethodSchema,
+  shiftSchema,
   type CreateOrderRequest,
   type CreateTableRequest,
   type CreateTableSectionRequest,
@@ -151,6 +161,69 @@ export function createApiClient(options: HttpClientOptions) {
       archiveTable: (locationId: string, tableId: string) =>
         http.request('POST', `${API}/locations/${locationId}/floor/tables/${tableId}/archive`, {
           schema: z.array(tableSectionSchema),
+        }),
+    },
+    payments: {
+      methods: (restaurantId: string) =>
+        http.request('GET', `${API}/restaurants/${restaurantId}/payment-methods`, {
+          schema: z.array(paymentMethodSchema),
+        }),
+      /** Idempotent on `body.id`: a retry returns the recorded payment, never a second charge. */
+      charge: (locationId: string, orderId: string, body: CreatePaymentRequest) =>
+        http.request('POST', `${API}/locations/${locationId}/orders/${orderId}/payments`, {
+          body,
+          schema: z.object({ payment: orderPaymentSchema, order: orderSchema }),
+        }),
+      refund: (
+        locationId: string,
+        orderId: string,
+        paymentId: string,
+        body: RefundPaymentRequest,
+      ) =>
+        http.request(
+          'POST',
+          `${API}/locations/${locationId}/orders/${orderId}/payments/${paymentId}/refunds`,
+          {
+            body,
+            schema: z.object({ payment: orderPaymentSchema, order: orderSchema }),
+          },
+        ),
+    },
+    shifts: {
+      registers: (locationId: string) =>
+        http.request('GET', `${API}/locations/${locationId}/cash-registers`, {
+          schema: z.array(cashRegisterSchema),
+        }),
+      list: (locationId: string, status?: 'OPEN' | 'CLOSED') =>
+        http.request('GET', `${API}/locations/${locationId}/shifts`, {
+          query: { status },
+          schema: z.array(shiftSchema),
+        }),
+      get: (locationId: string, shiftId: string) =>
+        http.request('GET', `${API}/locations/${locationId}/shifts/${shiftId}`, {
+          schema: shiftSchema,
+        }),
+      open: (locationId: string, body: OpenShiftRequest) =>
+        http.request('POST', `${API}/locations/${locationId}/shifts`, {
+          body,
+          schema: shiftSchema,
+        }),
+      cashMovement: (locationId: string, shiftId: string, body: CashMovementRequest) =>
+        http.request('POST', `${API}/locations/${locationId}/shifts/${shiftId}/cash-movements`, {
+          body,
+          schema: shiftSchema,
+        }),
+      close: (locationId: string, shiftId: string, body: CloseShiftRequest) =>
+        http.request('POST', `${API}/locations/${locationId}/shifts/${shiftId}/close`, {
+          body,
+          schema: shiftSchema,
+        }),
+    },
+    reports: {
+      dailySummary: (locationId: string, businessDate?: string) =>
+        http.request('GET', `${API}/locations/${locationId}/reports/daily-summary`, {
+          query: { businessDate },
+          schema: dailySummarySchema,
         }),
     },
     orders: {

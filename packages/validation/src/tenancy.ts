@@ -64,6 +64,7 @@ export const locationSchema = z.object({
   timezone: z.string(),
   taxInclusive: z.boolean(),
   onlineOrderingState: onlineOrderingStateSchema,
+  cashRoundingIncrement: z.int().nullable(),
   addressLine: z.string().nullable(),
   phone: z.string().nullable(),
   isActive: z.boolean(),
@@ -90,7 +91,11 @@ export type CreateLocationRequest = z.input<typeof createLocationSchema>;
 
 export const updateLocationSchema = createLocationSchema
   .omit({ code: true })
-  .extend({ isActive: z.boolean() })
+  .extend({
+    isActive: z.boolean(),
+    /** Smallest coin for cash rounding (minor units, e.g. 5 = 0.05); null turns rounding off. */
+    cashRoundingIncrement: z.int().min(1).max(10_000).nullable(),
+  })
   .partial()
   .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' });
 export type UpdateLocationRequest = z.infer<typeof updateLocationSchema>;

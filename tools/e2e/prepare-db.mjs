@@ -11,11 +11,12 @@ if (!/\/[^/?]*_e2e(\?|$)/.test(url)) {
 }
 const cwd = resolve(import.meta.dirname, '../../packages/database');
 execSync('pnpm exec prisma migrate deploy', { cwd, stdio: 'inherit' });
-// Orders from earlier runs would leave tables occupied; start every run from a clean floor.
+// Orders, payments and shifts from earlier runs would leave tables occupied and drawers open;
+// start every run from a clean floor.
 execSync('pnpm exec prisma db execute --stdin --schema prisma/schema.prisma', {
   cwd,
   stdio: ['pipe', 'inherit', 'inherit'],
-  input: `TRUNCATE TABLE order_item_modifiers, order_items, order_taxes, order_discounts,
-          order_status_history, orders, order_counters CASCADE;`,
+  input: `TRUNCATE TABLE cash_transactions, payments, shifts, order_item_modifiers, order_items,
+          order_taxes, order_discounts, order_status_history, orders, order_counters CASCADE;`,
 });
 execSync('pnpm seed', { cwd, stdio: 'inherit' });

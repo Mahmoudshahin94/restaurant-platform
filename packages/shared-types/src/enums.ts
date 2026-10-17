@@ -61,6 +61,47 @@ export const PaymentStatus = {
 } as const;
 export type PaymentStatus = ValueOf<typeof PaymentStatus>;
 
+/** Kinds of tender. Restaurants configure named methods (e.g. "Mada", "Visa") of these types. */
+export const PaymentMethodType = {
+  CASH: 'CASH',
+  /** Card approved on an external terminal; the POS records the approval reference. */
+  CARD: 'CARD',
+  /** Online payment through a payment gateway (customer website, Phase 7). */
+  ONLINE: 'ONLINE',
+} as const;
+export type PaymentMethodType = ValueOf<typeof PaymentMethodType>;
+
+/** A payment row is either money in (CHARGE) or money back (REFUND); rows are never edited away. */
+export const PaymentTransactionType = {
+  CHARGE: 'CHARGE',
+  REFUND: 'REFUND',
+} as const;
+export type PaymentTransactionType = ValueOf<typeof PaymentTransactionType>;
+
+export const PaymentRecordStatus = {
+  PENDING: 'PENDING',
+  AUTHORIZED: 'AUTHORIZED',
+  CAPTURED: 'CAPTURED',
+  FAILED: 'FAILED',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type PaymentRecordStatus = ValueOf<typeof PaymentRecordStatus>;
+
+export const ShiftStatus = {
+  OPEN: 'OPEN',
+  CLOSED: 'CLOSED',
+} as const;
+export type ShiftStatus = ValueOf<typeof ShiftStatus>;
+
+/** Movements of cash in a drawer during a shift. */
+export const CashTransactionType = {
+  SALE: 'SALE',
+  REFUND: 'REFUND',
+  PAY_IN: 'PAY_IN',
+  PAY_OUT: 'PAY_OUT',
+} as const;
+export type CashTransactionType = ValueOf<typeof CashTransactionType>;
+
 /** Which system performed an action (recorded on status history and audit entries). */
 export const ActionSource = {
   POS: 'POS',

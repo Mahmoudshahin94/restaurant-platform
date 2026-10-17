@@ -182,6 +182,68 @@ guestCount, notes }`. The `id` is a client-generated UUID and the **idempotency 
 - **Audit:** `order.created`, `order.discount_applied`, `order.modified` (before/after totals),
   `order.status_changed`, `order.cancelled`.
 
+## Payments (Phase 3)
+
+| Method | Path                                                          | Permission                       |
+| ------ | ------------------------------------------------------------- | -------------------------------- |
+| GET    | `/restaurants/:rid/payment-methods`                           | any role at one of its locations |
+| POST   | `/locations/:lid/orders/:orderId/payments`                    | `payments.create`                |
+| POST   | `/locations/:lid/orders/:orderId/payments/:paymentId/refunds` | `payments.refund`                |
+
+- **Charge** takes `{ id, shiftId, paymentMethodId, amount, tendered?, reference? }`. The `id`
+  is a client-generated UUID and the idempotency key: a resend (including a concurrent one)
+  returns the order with the original payment. The order row is locked (`SELECT … FOR UPDATE`)
+  for the whole charge, so two terminals can never over-pay the same balance.
+- **An open shift is required** (`SHIFT_NOT_FOUND` / `409 SHIFT_NOT_OPEN`); every payment and
+  refund records the shift whose drawer it touched.
+- **Split payments** are several charges. `amount` must be `1 … balanceDue`
+  (`422 PAYMENT_FAILED`, `reason: INVALID_AMOUNT | ALREADY_PAID`). Orders can be paid in
+  `PLACED` … `READY` (`reason: NOT_PAYABLE` otherwise).
+- **Cash** may be over-tendered: `change = tendered − amount` (`INSUFFICIENT_TENDERED` when
+  short). When the location has `cashRoundingIncrement` set (off by default) the payment that
+  settles the balance in cash is rounded; the difference is stored as `roundingAdjustment` and
+  never changes the order total.
+- **Card** is an externally approved payment (standalone terminal): `reference` is the approval
+  code, max 64 chars. Anything that looks like a card number (13–19 digits) is rejected
+  (`422 VALIDATION_FAILED`, `reason: LOOKS_LIKE_CARD_NUMBER`) and never stored. `tendered` is
+  rejected for non-cash methods.
+- **Online** methods go through the provider registry; until a gateway is configured they fail
+  with `reason: PROVIDER_NOT_CONFIGURED`.
+- **Refund** takes `{ id, shiftId, amount, reason }` against one charge: at most what is left of
+  it (`422 REFUND_NOT_ALLOWED`, `reason: EXCEEDS_REFUNDABLE | REASON_REQUIRED`). Cash refunds are
+  paid out of the given shift's drawer. When a completed order is fully refunded it moves
+  `COMPLETED → REFUNDED` as a system transition.
+- Payment rows are append-only; `paymentStatus` (`UNPAID` … `REFUNDED`) is derived from them on
+  every change. Orders also expose `payments[]`, `paidTotal`, `refundedTotal` and `balanceDue`.
+- Order guards that involve money: cancelling with money held answers
+  `409 INVALID_ORDER_STATE` (`reason: REFUND_FIRST`); an edit that would push the total below what
+  is held answers `reason: BELOW_PAID`.
+- **Audit:** `payment.captured`, `payment.refunded` (references only, never card data).
+
+## Shifts and cash drawer (Phase 3)
+
+| Method | Path                                                  | Permission      |
+| ------ | ----------------------------------------------------- | --------------- |
+| GET    | `/locations/:lid/cash-registers`                      | `shifts.manage` |
+| GET    | `/locations/:lid/shifts?status=OPEN&limit=`           | `shifts.manage` |
+| GET    | `/locations/:lid/shifts/:shiftId`                     | `shifts.manage` |
+| POST   | `/locations/:lid/shifts`                              | `shifts.manage` |
+| POST   | `/locations/:lid/shifts/:shiftId/cash-movements`      | `cash.manage`   |
+| POST   | `/locations/:lid/shifts/:shiftId/close`               | `shifts.manage` |
+| GET    | `/locations/:lid/reports/daily-summary?businessDate=` | `shifts.manage` |
+
+- **Open** takes `{ id, cashRegisterId, openingFloat }` (idempotent by `id`). One open shift per
+  drawer is enforced by a unique column (`409 SHIFT_ALREADY_OPEN`).
+- **Cash movements** take `{ id, type: PAY_IN|PAY_OUT, amount, reason }`.
+- **Close** takes `{ countedCash, notes? }` and stores `expectedCash` (float + cash sales − cash
+  refunds + pay-ins − pay-outs, rounding included), `countedCash` and `cashDifference`
+  (negative = short).
+- A shift response carries a live `summary` (cash breakdown, totals per payment method, order
+  count) and its cash transactions.
+- The **daily summary** covers one business date in the location's timezone: order counts, sales
+  (subtotal, discounts, tax, total), per-channel totals, per-method payments and net collected.
+- **Audit:** `shift.opened`, `shift.closed`, `cash.pay_in`, `cash.pay_out`.
+
 ## Security headers and limits
 
 - `@fastify/helmet` defaults, CORS allowlist from `CORS_ORIGINS` (credentials enabled), a 1 MB

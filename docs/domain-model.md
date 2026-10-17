@@ -16,8 +16,8 @@ mirrors the operational subset.
 | Catalog   | Tax, ProductTax, Discount                                                                                                         | ✅ 0004 (+ 0005 CHECK constraints) |
 | Floor     | TableSection, Table (`DiningTable` in Prisma)                                                                                     | ✅ 0004                            |
 | Orders    | Order, OrderItem, OrderItemModifier, OrderTax, OrderDiscount, OrderStatusHistory, OrderCounter                                    | ✅ 0004 (+ 0005)                   |
-| Payments  | PaymentMethod, Payment                                                                                                            | ⏳ Phase 3                         |
-| Cash      | Shift, CashRegister, CashTransaction                                                                                              | ⏳ Phase 3                         |
+| Payments  | PaymentMethod, Payment                                                                                                            | ✅ Phase 3                         |
+| Cash      | Shift, CashRegister, CashTransaction                                                                                              | ✅ Phase 3                         |
 | Kitchen   | KitchenTicket, KitchenTicketItem                                                                                                  | ⏳ Phase 4                         |
 | Sync      | ProcessedOperation, ChangeLog (cloud); SyncOperation, SyncState (hub)                                                             | ⏳ Phase 6                         |
 | Customers | Customer, Address                                                                                                                 | ⏳ Phase 7                         |
@@ -156,3 +156,21 @@ historical orders.
 - `Tax` (rate in bps, `isDefault` preselects it for new products) and `ProductTax` (explicit
   assignment; pricing never applies taxes implicitly). `Discount` is PERCENTAGE (bps) or FIXED
   (minor units).
+
+**Payments and cash** (Phase 3):
+
+- `PaymentMethod`: per restaurant, typed `CASH`, `CARD` or `ONLINE`, with localized names and a
+  sort order.
+- `Payment`: append-only. The id is the client's UUID (idempotency key). A row is a `CHARGE` or a
+  `REFUND` (`refundOfId` points at its charge) and snapshots the method's type and names. It
+  stores `amount`, cash `tendered`/`change`, `roundingAdjustment`, the card approval `reference`
+  (never a card number), `provider`/`providerRef`, `status` and the `shiftId`. Database check
+  constraints keep amounts positive and refunds linked to a charge. Payment rows are never
+  updated or deleted; the order's `paymentStatus` is derived from them.
+- `CashRegister`: a physical drawer at a location.
+- `Shift`: one drawer session, with opening float, opened/closed by and at, and on close
+  `expectedCash`, `countedCash` and `cashDifference`. `openRegisterId` is set only while the shift
+  is open; its unique index guarantees one open shift per drawer.
+- `CashTransaction`: every movement of cash in a shift: `SALE`, `REFUND` (linked to the
+  payment), `PAY_IN` and `PAY_OUT` (with a reason).
+- `Location.cashRoundingIncrement`: optional cash rounding step in minor units (null = off).

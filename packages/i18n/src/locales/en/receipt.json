@@ -1,0 +1,15 @@
+{
+  "orderNumber": "Order {{number}}",
+  "table": "Table",
+  "customer": "Customer",
+  "cashier": "Cashier",
+  "taxIncluded": "Incl. {{name}}",
+  "tendered": "Received",
+  "change": "Change",
+  "rounding": "Rounding",
+  "reference": "Ref. {{reference}}",
+  "refund": "Refund",
+  "balanceDue": "Balance due",
+  "thanks": "Thank you!",
+  "testTitle": "Test receipt"
+}

@@ -2,6 +2,9 @@
 //! hosts the web UI and exposes device capabilities (more arrive with printing and the local hub).
 
 use serde::Serialize;
+use std::time::Duration;
+
+pub mod printing;
 
 /// Facts about the running build and host, shown on the POS status bar and sent with device
 /// registration so support can see what is installed where.
@@ -26,10 +29,23 @@ fn app_info(app: tauri::AppHandle) -> AppInfo {
     app_info_for(&app.package_info().version.to_string())
 }
 
+/// Sends a raw ESC/POS job to a network printer. Runs off the UI thread; errors are returned
+/// as text for the UI to show.
+#[tauri::command]
+async fn print_raw(host: String, port: u16, data: Vec<u8>) -> Result<(), String> {
+    printing::validate_target(&host, port, data.len()).map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        printing::send_raw(&host, port, &data, Duration::from_secs(5))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![app_info])
+        .invoke_handler(tauri::generate_handler![app_info, print_raw])
         .run(tauri::generate_context!())
         .expect("error while running the POS application");
 }
