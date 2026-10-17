@@ -30,6 +30,14 @@ export interface Applied {
   rowVersion: number | null;
 }
 
+/**
+ * `force` (ADR 0014): an administrator chose the hub's version of a conflicting entity. Ownership
+ * is not checked (the row is still locked); scope, schema, child and payment checks all apply.
+ */
+export interface ApplyOptions {
+  force?: boolean;
+}
+
 /** Cloud-side effects the push path needs for website orders (ADR 0013). */
 export interface ApplyHooks {
   /** Voids the online payments of a website order the restaurant rejected. */
@@ -50,6 +58,7 @@ export async function applyOperation(
   device: AuthenticatedDevice,
   op: SyncOperation,
   hooks: ApplyHooks,
+  options: ApplyOptions = {},
 ): Promise<Applied> {
   if (op.payload.id !== op.entityId) throw reject('entityId does not match the payload id');
   if (
@@ -60,11 +69,11 @@ export async function applyOperation(
   }
   switch (op.operationType) {
     case 'ORDER_UPSERT':
-      return applyOrder(tx, device, op, op.payload, hooks);
+      return applyOrder(tx, device, op, op.payload, hooks, options);
     case 'SHIFT_UPSERT':
-      return applyShift(tx, device, op.entityVersion, op.payload);
+      return applyShift(tx, device, op, op.payload, options);
     case 'KITCHEN_TICKET_UPSERT':
-      return applyTicket(tx, device, op.entityVersion, op.payload);
+      return applyTicket(tx, device, op, op.payload, options);
   }
 }
 
@@ -83,23 +92,35 @@ async function claim(
   tx: PrismaTx,
   device: AuthenticatedDevice,
   table: Table,
-  entityType: string,
-  entityId: string,
-  entityVersion: number,
+  op: Pick<SyncOperation, 'entityType' | 'entityId' | 'entityVersion' | 'baseVersion'>,
+  options: ApplyOptions,
   currentRowVersion: (id: string) => Promise<number | null>,
   handOver?: () => Promise<boolean>,
 ): Promise<boolean> {
+  const { entityType, entityId, entityVersion } = op;
   const locked = await tx.$queryRawUnsafe<{ id: string }[]>(
     `SELECT id FROM "${table}" WHERE id = $1::uuid FOR UPDATE`,
     entityId,
   );
   if (locked.length === 0) return false;
+  if (options.force) return true;
 
+  // The baseline is the hub's last change the cloud stored, or the cloud copy an administrator
+  // chose to keep instead of a refused change (ADR 0014).
   const last = await tx.processedOperation.findFirst({
-    where: { entityType, entityId, locationId: device.locationId, status: 'APPLIED' },
+    where: {
+      entityType,
+      entityId,
+      locationId: device.locationId,
+      OR: [{ status: 'APPLIED' }, { resolution: 'KEPT_CLOUD' }],
+    },
     orderBy: { entityVersion: 'desc' },
-    select: { entityVersion: true, rowVersion: true },
+    select: { entityVersion: true, rowVersion: true, resolution: true },
   });
+  if (last?.resolution === 'KEPT_CLOUD' && op.baseVersion !== last.rowVersion) {
+    // Only changes the hub made after taking the cloud's copy may follow; they carry its version.
+    throw conflict(`${entityType} was kept as the cloud's version; this change predates that`);
+  }
   if (!last) {
     if (handOver && (await handOver())) return true;
     throw conflict(`${entityType} exists in the cloud but was never synchronized from this hub`);
@@ -217,6 +238,7 @@ async function applyOrder(
   op: SyncOperation,
   o: SyncOrder,
   hooks: ApplyHooks,
+  options: ApplyOptions,
 ): Promise<Applied> {
   checkOrderChildren(o, device);
   const ownership = { handedOver: false };
@@ -224,9 +246,8 @@ async function applyOrder(
     tx,
     device,
     'orders',
-    'Order',
-    o.id,
-    op.entityVersion,
+    op,
+    options,
     async (id) => {
       const row = await tx.order.findUnique({ where: { id }, select: { version: true } });
       return row?.version ?? null;
@@ -321,16 +342,15 @@ async function applyOrder(
 async function applyShift(
   tx: PrismaTx,
   device: AuthenticatedDevice,
-  entityVersion: number,
+  op: SyncOperation,
   s: SyncShift,
+  options: ApplyOptions,
 ): Promise<Applied> {
   if (!s.cash.every((c) => c.shiftId === s.id)) {
     throw reject('A cash movement belongs to another shift');
   }
   // Shifts have no version column: ownership rests on the ledger alone.
-  const exists = await claim(tx, device, 'shifts', 'Shift', s.id, entityVersion, () =>
-    Promise.resolve(null),
-  );
+  const exists = await claim(tx, device, 'shifts', op, options, () => Promise.resolve(null));
   const { cash, ...shift } = s;
   const data = {
     ...shift,
@@ -367,24 +387,17 @@ async function applyShift(
 async function applyTicket(
   tx: PrismaTx,
   device: AuthenticatedDevice,
-  entityVersion: number,
+  op: SyncOperation,
   t: SyncKitchenTicket,
+  options: ApplyOptions,
 ): Promise<Applied> {
   if (!t.items.every((i) => i.ticketId === t.id)) {
     throw reject('A ticket item belongs to another ticket');
   }
-  const exists = await claim(
-    tx,
-    device,
-    'kitchen_tickets',
-    'KitchenTicket',
-    t.id,
-    entityVersion,
-    async (id) => {
-      const row = await tx.kitchenTicket.findUnique({ where: { id }, select: { version: true } });
-      return row?.version ?? null;
-    },
-  );
+  const exists = await claim(tx, device, 'kitchen_tickets', op, options, async (id) => {
+    const row = await tx.kitchenTicket.findUnique({ where: { id }, select: { version: true } });
+    return row?.version ?? null;
+  });
   const order = await tx.order.findUnique({
     where: { id: t.orderId },
     select: { locationId: true },

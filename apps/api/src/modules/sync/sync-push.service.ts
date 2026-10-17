@@ -73,8 +73,10 @@ export class SyncPushService {
     try {
       return await this.prisma.$transaction(
         async (tx) => {
-          const ledger = await tx.$queryRaw<{ status: string; entity_id: string }[]>`
-            SELECT status, entity_id FROM processed_operations
+          const ledger = await tx.$queryRaw<
+            { status: string; entity_id: string; resolution: string | null }[]
+          >`
+            SELECT status, entity_id, resolution FROM processed_operations
             WHERE operation_id = ${op.operationId}::uuid FOR UPDATE`;
           const previous = ledger[0];
           if (previous && previous.entity_id !== op.entityId) {
@@ -82,6 +84,11 @@ export class SyncPushService {
             return result(op.operationId, 'REJECTED', 'SYNC_REJECTED', message);
           }
           if (previous?.status === 'APPLIED') return result(op.operationId, 'DUPLICATE');
+          if (previous?.resolution === 'KEPT_CLOUD') {
+            // An administrator kept the cloud's version (ADR 0014): this change is settled.
+            const message = 'An administrator kept the cloud’s version';
+            return result(op.operationId, 'DUPLICATE', 'SYNC_SUPERSEDED', message);
+          }
           const applied = await applyOperation(tx, device, op, this.hooks);
           const row = {
             status: 'APPLIED' as const,
@@ -146,7 +153,10 @@ export class SyncPushService {
     return result(op.operationId, 'RETRY', 'INTERNAL_ERROR', 'Unexpected error; retry later');
   }
 
-  /** Records the refusal (never over an APPLIED row) and answers the hub. */
+  /**
+   * Records the refusal (never over an APPLIED or settled row) with the hub's state, so an
+   * administrator can compare and decide (ADR 0014), and answers the hub.
+   */
   private async refuse(
     device: AuthenticatedDevice,
     op: Envelope,
@@ -155,19 +165,21 @@ export class SyncPushService {
     // RETRY is not a decision about the operation; only lasting refusals are kept for admins.
     if (refusal.status !== 'RETRY') {
       const status = refusal.status;
+      const payload = JSON.stringify(op.payload ?? null);
       await this.prisma.$executeRaw`
         INSERT INTO processed_operations (operation_id, restaurant_id, location_id, device_id,
           entity_type, entity_id, operation_type, entity_version, status, error_code,
-          error_message, attempts, updated_at)
+          error_message, attempts, payload, updated_at)
         VALUES (${op.operationId}::uuid, ${device.restaurantId}::uuid, ${device.locationId}::uuid,
           ${device.id}::uuid, ${op.entityType}, ${op.entityId}::uuid, ${op.operationType},
           ${op.entityVersion}, ${status}::processed_operation_status, ${refusal.code},
-          ${refusal.message}, 1, now())
+          ${refusal.message}, 1, ${payload}::jsonb, now())
         ON CONFLICT (operation_id) DO UPDATE SET
           status = EXCLUDED.status, error_code = EXCLUDED.error_code,
-          error_message = EXCLUDED.error_message,
+          error_message = EXCLUDED.error_message, payload = EXCLUDED.payload,
           attempts = processed_operations.attempts + 1, updated_at = now()
-        WHERE processed_operations.status <> 'APPLIED'`;
+        WHERE processed_operations.status <> 'APPLIED'
+          AND processed_operations.resolution IS NULL`;
     }
     return result(op.operationId, refusal.status, refusal.code, refusal.message);
   }

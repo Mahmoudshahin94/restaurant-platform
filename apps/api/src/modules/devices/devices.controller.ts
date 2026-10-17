@@ -1,5 +1,11 @@
 import { Body, Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
-import { type Device, type PairedDevice, idSchema, pairDeviceSchema } from '@pos/validation';
+import {
+  type AdminDevice,
+  type Device,
+  type PairedDevice,
+  idSchema,
+  pairDeviceSchema,
+} from '@pos/validation';
 import { RequirePermissions, ZodValidationPipe } from '@pos/server';
 import type { z } from 'zod';
 import { DevicesService } from './devices.service';
@@ -12,7 +18,7 @@ export class DevicesController {
 
   @RequirePermissions(['devices.manage'])
   @Get()
-  list(@Param('locationId', id) locationId: string): Promise<Device[]> {
+  list(@Param('locationId', id) locationId: string): Promise<AdminDevice[]> {
     return this.devices.list(locationId);
   }
 

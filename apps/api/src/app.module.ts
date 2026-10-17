@@ -15,6 +15,7 @@ import {
   ServerCoreModule,
   ShiftsModule,
 } from '@pos/server';
+import { AdminModule } from './modules/admin/admin.module';
 import { DevicesModule } from './modules/devices/devices.module';
 import { SyncModule } from './modules/sync/sync.module';
 import { WebOrderChangeRecorder } from './modules/sync/web-order-change.recorder';
@@ -50,6 +51,8 @@ export class AppModule {
         OnlineOrderingModule,
         DevicesModule,
         SyncModule,
+        // Cloud-only: the admin portal's staff, payment setup, overviews and audit log.
+        AdminModule,
       ],
     };
   }

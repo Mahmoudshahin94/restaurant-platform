@@ -3,7 +3,9 @@ import {
   type SyncPullResponse,
   type SyncPushRequest,
   type SyncPushResponse,
+  type SyncResolution,
   syncOrderSchema,
+  syncResolutionSchema,
   syncPullResponseSchema,
   syncPushResponseSchema,
 } from '@pos/validation';
@@ -58,6 +60,16 @@ export class CloudClient {
     return this.call('GET', `/api/v1/sync/orders/${encodeURIComponent(orderId)}`, syncOrderSchema, {
       signal,
     });
+  }
+
+  /** An administrator's decision on an operation this hub pushed (`RESOLUTION` topic). */
+  resolution(operationId: string, signal?: AbortSignal): Promise<SyncResolution> {
+    return this.call(
+      'GET',
+      `/api/v1/sync/resolutions/${encodeURIComponent(operationId)}`,
+      syncResolutionSchema,
+      { signal },
+    );
   }
 
   private async call<T>(

@@ -33,6 +33,7 @@ import { PrismaService, type PrismaTx } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { KitchenDispatchService } from '../kitchen/kitchen-dispatch.service';
 import { PublishedMenuService } from '../menu/published-menu.service';
+import { assertCloudMayChangeOrder } from './hub-ownership';
 import { RealtimeBus } from '../realtime/realtime.bus';
 import { discountRows, itemSnapshot, taxRows, totalsOf } from './order-snapshot';
 import {
@@ -251,6 +252,7 @@ export class OrdersService {
       });
     }
     assertEditableByStaff(current);
+    await assertCloudMayChangeOrder(this.mode, this.prisma, orderId);
     this.assertVersion(current, input.version);
 
     const { location, menu } = await this.menus.resolve(locationId);
@@ -366,6 +368,7 @@ export class OrdersService {
     input: TransitionInput,
   ): Promise<Order> {
     const current = await this.load(this.prisma, locationId, orderId);
+    await assertCloudMayChangeOrder(this.mode, this.prisma, orderId);
     if (input.version !== undefined) this.assertVersion(current, input.version);
     const rule = assertTransition({
       from: current.status,

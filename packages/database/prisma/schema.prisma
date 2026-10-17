@@ -1121,8 +1121,19 @@ enum ChangeTopic {
   CONFIG
   /// A website order the cloud created or changed (entityId = order id).
   ORDER
+  /// An administrator resolved an operation refused from a hub (entityId = operation id).
+  RESOLUTION
 
   @@map("change_topic")
+}
+
+/// @cloud-only
+/// How an administrator settled a refused hub operation (ADR 0014).
+enum SyncIssueResolution {
+  APPLIED_HUB
+  KEPT_CLOUD
+
+  @@map("sync_issue_resolution")
 }
 
 /// @cloud-only
@@ -1130,24 +1141,34 @@ enum ChangeTopic {
 /// so an operation can be applied once only. Refused operations are kept with their reason (for
 /// administrators) and may be applied later if the hub retries them.
 model ProcessedOperation {
-  operationId   String                   @id @map("operation_id") @db.Uuid
-  restaurantId  String                   @map("restaurant_id") @db.Uuid
-  locationId    String                   @map("location_id") @db.Uuid
-  deviceId      String                   @map("device_id") @db.Uuid
-  entityType    String                   @map("entity_type")
-  entityId      String                   @map("entity_id") @db.Uuid
-  operationType String                   @map("operation_type")
+  operationId       String                   @id @map("operation_id") @db.Uuid
+  restaurantId      String                   @map("restaurant_id") @db.Uuid
+  locationId        String                   @map("location_id") @db.Uuid
+  deviceId          String                   @map("device_id") @db.Uuid
+  entityType        String                   @map("entity_type")
+  entityId          String                   @map("entity_id") @db.Uuid
+  operationType     String                   @map("operation_type")
   /// The hub's per-entity outbox sequence: increases with every change the hub makes.
-  entityVersion Int                      @map("entity_version")
+  entityVersion     Int                      @map("entity_version")
   /// The entity's own `version` column after applying (orders, tickets): if the cloud's row has
   /// moved on since, the cloud changed it and the next push is a conflict.
-  rowVersion    Int?                     @map("row_version")
-  status        ProcessedOperationStatus
-  errorCode     String?                  @map("error_code")
-  errorMessage  String?                  @map("error_message")
-  attempts      Int                      @default(1)
-  createdAt     DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt     DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
+  rowVersion        Int?                     @map("row_version")
+  status            ProcessedOperationStatus
+  errorCode         String?                  @map("error_code")
+  errorMessage      String?                  @map("error_message")
+  attempts          Int                      @default(1)
+  /// Refused operations: the hub's state as it was pushed, so an administrator can compare it
+  /// with the cloud's copy and decide (ADR 0014). Kept after the decision; never shown to hubs.
+  payload           Json?
+  /// Set once an administrator settled the refusal; null while it is open.
+  resolution        SyncIssueResolution?
+  resolvedAt        DateTime?                @map("resolved_at") @db.Timestamptz(3)
+  resolvedById      String?                  @map("resolved_by_id") @db.Uuid
+  resolutionNote    String?                  @map("resolution_note")
+  /// An administrator asked the hub to send the operation again (after fixing its cause).
+  resendRequestedAt DateTime?                @map("resend_requested_at") @db.Timestamptz(3)
+  createdAt         DateTime                 @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@index([entityType, entityId, status])
   @@index([locationId, status, updatedAt])

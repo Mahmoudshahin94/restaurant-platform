@@ -64,3 +64,42 @@ export function assertPermissions(
     throw new DomainError('INSUFFICIENT_PERMISSION', 'Missing required permissions', { missing });
   }
 }
+
+/**
+ * Locations (of `allLocationIds`) where every `required` permission is granted: all of them for a
+ * restaurant-wide grant, otherwise those of matching location roles. Used to filter lists that
+ * span locations (orders, payments, audit) to what the caller may see.
+ */
+export function locationsWithPermissions(
+  assignments: readonly RoleAssignment[],
+  allLocationIds: readonly string[],
+  required: readonly Permission[],
+): string[] {
+  return allLocationIds.filter((id) =>
+    hasAllPermissions(resolvePermissions(assignments, id), required),
+  );
+}
+
+/**
+ * Nobody can hand out more than they hold (privilege escalation). Granting or revoking a role at
+ * a scope (a location, or `null` for restaurant-wide) requires holding each of the role's
+ * permissions at that scope; creating or editing a role requires holding them restaurant-wide.
+ */
+export function assertCanGrant(
+  actor: readonly RoleAssignment[],
+  scope: string | null,
+  permissions: readonly Permission[],
+): void {
+  const granted = resolvePermissions(actor, scope);
+  const missing = permissions.filter((p) => !granted.has(p));
+  if (missing.length > 0) {
+    throw new DomainError(
+      'INSUFFICIENT_PERMISSION',
+      'You cannot grant permissions you do not hold',
+      {
+        missing,
+        reason: 'ESCALATION',
+      },
+    );
+  }
+}

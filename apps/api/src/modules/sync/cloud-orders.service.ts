@@ -5,7 +5,7 @@ import { type SyncOrder, syncOrderSchema } from '@pos/validation';
 import type { AuthenticatedDevice } from '../devices/device.guard';
 
 /** The order aggregate exactly as hubs exchange it (the outbox payload shape, ADR 0012). */
-const orderAggregate = {
+export const orderAggregate = {
   items: { include: { modifiers: true } },
   taxes: true,
   discounts: true,

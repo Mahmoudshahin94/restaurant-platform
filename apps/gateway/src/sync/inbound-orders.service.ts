@@ -97,6 +97,70 @@ export class InboundOrdersService {
     return outcome;
   }
 
+  /**
+   * An administrator kept the cloud's version of an order this hub had changed (ADR 0014): the
+   * hub takes the cloud's copy, and its changes of the order that never reached the cloud are
+   * marked superseded. Money is never dropped: payments taken here that the cloud's copy lacks
+   * stay, and go to the cloud with a new change based on the adopted version (`baseVersion`).
+   */
+  async adopt(order: SyncOrder): Promise<{ resent: boolean }> {
+    const { resent, events } = await this.prisma.$transaction(async (raw) => {
+      const tx = asHubTx(raw);
+      const local = await tx.order.findUnique({
+        where: { id: order.id },
+        include: { payments: { select: { id: true } } },
+      });
+      const cloudPayments = new Set(order.payments.map((p) => p.id));
+      const hubOnly = (local?.payments ?? []).filter((p) => !cloudPayments.has(p.id));
+      await this.store(tx, order, local !== null);
+      await this.remember(tx, order);
+      await tx.syncOperation.updateMany({
+        where: { entityType: 'Order', entityId: order.id, status: { not: 'COMPLETED' } },
+        data: {
+          status: 'COMPLETED',
+          processedAt: new Date(),
+          nextRetryAt: null,
+          errorCode: 'SYNC_SUPERSEDED',
+          errorMessage: 'An administrator kept the cloud’s version',
+        },
+      });
+      const ticketEvents =
+        order.status === 'CANCELLED' ? await this.kitchen.cancelTickets(raw, order) : [];
+      if (hubOnly.length > 0) {
+        const captured = await tx.payment.findMany({
+          where: { orderId: order.id, status: 'CAPTURED' },
+        });
+        await tx.order.update({
+          where: { id: order.id },
+          data: {
+            paymentStatus: derivePaymentStatus(
+              order.total,
+              captured.map((p) => ({
+                id: p.id,
+                type: p.type,
+                amount: p.amount,
+                refundOfId: p.refundOfId,
+              })),
+            ),
+          },
+        });
+      }
+      await this.changes.record(raw, {
+        ticketIds: ticketIdsOf(ticketEvents),
+        ...(hubOnly.length > 0 ? { orderIds: [order.id] } : {}),
+      });
+      return {
+        resent: hubOnly.length > 0,
+        events: [
+          this.event(order.status === 'CANCELLED' ? 'order.cancelled' : 'order.updated', order),
+          ...ticketEvents,
+        ],
+      };
+    });
+    this.bus.publish(events);
+    return { resent };
+  }
+
   /** The cloud version the hub holds, sent as `baseVersion` with its first change (hand-over). */
   private async remember(tx: HubTx, order: SyncOrder): Promise<void> {
     await tx.inboundOrder.upsert({

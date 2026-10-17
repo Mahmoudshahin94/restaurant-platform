@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { DomainError } from '../errors';
 import {
   accessibleLocations,
+  assertCanGrant,
+  locationsWithPermissions,
   assertPermissions,
   canAccessLocation,
   hasAllPermissions,
@@ -58,6 +60,42 @@ describe('assertPermissions', () => {
       expect(error).toBeInstanceOf(DomainError);
       expect((error as DomainError).code).toBe('INSUFFICIENT_PERMISSION');
       expect((error as DomainError).details).toEqual({ missing: ['orders.refund'] });
+    }
+  });
+});
+
+describe('locationsWithPermissions', () => {
+  it('lists every location for restaurant-wide grants and only matching ones otherwise', () => {
+    expect(locationsWithPermissions(owner, [LOC_A, LOC_B], ['orders.view'])).toEqual([
+      LOC_A,
+      LOC_B,
+    ]);
+    expect(locationsWithPermissions(branchCashier, [LOC_A, LOC_B], ['orders.view'])).toEqual([
+      LOC_A,
+    ]);
+    expect(locationsWithPermissions(branchCashier, [LOC_A, LOC_B], ['audit.view'])).toEqual([]);
+  });
+});
+
+describe('assertCanGrant', () => {
+  it('lets people grant only what they hold at that scope', () => {
+    expect(() => {
+      assertCanGrant(owner, null, ['orders.view']);
+    }).not.toThrow();
+    expect(() => {
+      assertCanGrant(branchCashier, LOC_A, ['orders.create']);
+    }).not.toThrow();
+    // A branch role cannot be handed out restaurant-wide, nor more than the actor holds.
+    expect(() => {
+      assertCanGrant(branchCashier, null, ['orders.create']);
+    }).toThrow(DomainError);
+    try {
+      assertCanGrant(owner, LOC_B, ['orders.view', 'roles.manage']);
+    } catch (error) {
+      expect((error as DomainError).details).toEqual({
+        missing: ['roles.manage'],
+        reason: 'ESCALATION',
+      });
     }
   });
 });
