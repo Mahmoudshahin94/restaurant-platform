@@ -18,6 +18,8 @@ export function toLocationDto(row: LocationRow): Location {
     taxInclusive: row.taxInclusive,
     onlineOrderingState: row.onlineOrderingState,
     cashRoundingIncrement: row.cashRoundingIncrement,
+    kdsWarnMinutes: row.kdsWarnMinutes,
+    kdsLateMinutes: row.kdsLateMinutes,
     addressLine: row.addressLine,
     phone: row.phone,
     isActive: row.isActive,
@@ -77,6 +79,15 @@ export class LocationsService {
     return this.prisma.$transaction(async (tx) => {
       const before = await tx.location.findUnique({ where: { id: locationId } });
       if (!before) throw new DomainError('LOCATION_NOT_FOUND', 'Location not found');
+      const warn = changes.kdsWarnMinutes ?? before.kdsWarnMinutes;
+      const late = changes.kdsLateMinutes ?? before.kdsLateMinutes;
+      if (late <= warn) {
+        throw new DomainError('VALIDATION_FAILED', 'The late threshold must be above the warning', {
+          issues: [
+            { path: ['kdsLateMinutes'], code: 'custom', message: 'Must be above the warning' },
+          ],
+        });
+      }
       const after = await tx.location.update({ where: { id: locationId }, data: changes });
       await this.audit.record(
         {

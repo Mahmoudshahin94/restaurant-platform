@@ -1,0 +1,46 @@
+@import 'tailwindcss';
+@import '@pos/ui/theme.css';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/noto-sans-arabic';
+
+@source '../../../packages/ui/src';
+@source '../../../packages/app-kit/src';
+
+/* Kitchen screens fill the viewport; only the ticket board scrolls. */
+html,
+body,
+#root {
+  height: 100%;
+  overscroll-behavior: none;
+}
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+input {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Cancelled tickets: diagonal stripes, so the state reads without colour. */
+.ticket-stripes {
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 14px,
+    color-mix(in oklch, var(--color-destructive) 22%, transparent) 14px 28px
+  );
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ticket-arrive {
+    animation: ticket-arrive 1.2s ease-out 3;
+  }
+}
+@keyframes ticket-arrive {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--color-primary) 70%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 14px transparent;
+  }
+}

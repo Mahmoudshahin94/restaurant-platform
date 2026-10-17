@@ -42,5 +42,11 @@
     "tooLong": "This value is too long",
     "invalidAmount": "Enter a valid amount",
     "minMax": "Minimum cannot be greater than maximum"
+  },
+  "realtime": {
+    "live": "Live",
+    "connecting": "Connecting…",
+    "offline": "Offline · retrying",
+    "forbidden": "No live updates for this location"
   }
 }

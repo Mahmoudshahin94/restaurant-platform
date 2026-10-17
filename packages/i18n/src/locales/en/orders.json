@@ -68,11 +68,28 @@
     "UNPAID": "The order must be paid first.",
     "SYSTEM_ONLY": "This status is set by the kitchen.",
     "REFUND_FIRST": "Refund the payments before cancelling.",
-    "BELOW_PAID": "The new total would be below what was already paid."
+    "BELOW_PAID": "The new total would be below what was already paid.",
+    "KITCHEN_PENDING": "The kitchen has not finished this order yet.",
+    "KITCHEN_STARTED": "The kitchen already started this order."
   },
   "history": "History",
   "empty": "No orders",
   "emptyHint": "New orders appear here.",
   "items_one": "{{count}} item",
-  "items_other": "{{count}} items"
+  "items_other": "{{count}} items",
+  "kitchen": {
+    "title": "Kitchen",
+    "none": "Nothing to prepare",
+    "rush": "Rush",
+    "unrush": "Normal priority",
+    "rushed": "Rush",
+    "ready": "Order {{number}} is ready",
+    "ticket": {
+      "NEW": "Waiting",
+      "PREPARING": "Preparing",
+      "READY": "Ready",
+      "COMPLETED": "Served",
+      "CANCELLED": "Cancelled"
+    }
+  }
 }

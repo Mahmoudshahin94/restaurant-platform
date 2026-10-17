@@ -15,6 +15,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router';
 import { CancelOrderDialog } from '../components/cancel-order-dialog';
+import { KitchenProgress, hasLiveTickets } from '../components/kitchen-progress';
 import { OrderStatusBadge } from '../components/order-status-badge';
 import { PaymentDialog } from '../components/payment-dialog';
 import { ReceiptPreview } from '../components/receipt-preview';
@@ -208,10 +209,15 @@ function OrderDetail({ order, timeZone }: { order: Order; timeZone: string }) {
   const canEdit = canModifyItems(order.status) && canAt(order.locationId, 'orders.update');
   const canPay =
     PAYABLE.has(order.status) && order.balanceDue > 0 && canAt(order.locationId, 'payments.create');
+  // A confirmed order may skip READY only when the kitchen has nothing of it left.
   const canComplete =
     next.includes('COMPLETED') &&
     order.paymentStatus === 'PAID' &&
+    !(order.status === 'CONFIRMED' && hasLiveTickets(order)) &&
     canAt(order.locationId, 'orders.update');
+  const rush = useOrderMutation((priority: 'RUSH' | 'NORMAL') =>
+    api.orders.kitchenPriority(order.locationId, order.id, { priority }),
+  );
   const canRefund = canAt(order.locationId, 'payments.refund');
 
   return (
@@ -279,6 +285,19 @@ function OrderDetail({ order, timeZone }: { order: Order; timeZone: string }) {
           <dt className="font-semibold">{t('payments:balanceDue')}</dt>
           <dd className="text-end font-semibold">{format(order.balanceDue)}</dd>
         </dl>
+        <KitchenProgress
+          order={order}
+          canRush={canAt(order.locationId, 'orders.update')}
+          rushing={rush.isPending}
+          onRush={(priority) => {
+            setError(null);
+            rush.mutate(priority, {
+              onError: (e) => {
+                setError(errorText(e));
+              },
+            });
+          }}
+        />
         <PaymentsList
           order={order}
           canRefund={canRefund}

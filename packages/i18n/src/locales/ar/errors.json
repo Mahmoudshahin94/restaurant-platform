@@ -35,6 +35,8 @@
   "SHIFT_NOT_OPEN": "افتح وردية قبل استلام المدفوعات.",
   "SHIFT_ALREADY_OPEN": "يوجد وردية مفتوحة على هذا الدرج بالفعل.",
   "CASH_REGISTER_NOT_FOUND": "درج النقد غير موجود.",
+  "KITCHEN_TICKET_NOT_FOUND": "لم يتم العثور على تذكرة المطبخ.",
+  "INVALID_TICKET_STATE": "لا يمكن تنفيذ هذا الإجراء على التذكرة الآن.",
   "SYNC_CONFLICT": "يتعارض هذا التغيير مع نسخة أحدث.",
   "DUPLICATE_OPERATION": "تمت معالجة هذه العملية مسبقًا.",
   "RESTAURANT_OFFLINE": "المطعم غير متصل حاليًا.",

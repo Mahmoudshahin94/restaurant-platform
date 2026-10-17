@@ -18,7 +18,7 @@ mirrors the operational subset.
 | Orders    | Order, OrderItem, OrderItemModifier, OrderTax, OrderDiscount, OrderStatusHistory, OrderCounter                                    | ✅ 0004 (+ 0005)                   |
 | Payments  | PaymentMethod, Payment                                                                                                            | ✅ Phase 3                         |
 | Cash      | Shift, CashRegister, CashTransaction                                                                                              | ✅ Phase 3                         |
-| Kitchen   | KitchenTicket, KitchenTicketItem                                                                                                  | ⏳ Phase 4                         |
+| Kitchen   | KitchenTicket, KitchenTicketItem                                                                                                  | ✅ Phase 4                         |
 | Sync      | ProcessedOperation, ChangeLog (cloud); SyncOperation, SyncState (hub)                                                             | ⏳ Phase 6                         |
 | Customers | Customer, Address                                                                                                                 | ⏳ Phase 7                         |
 | Inventory | InventoryItem, Recipe, StockMovement                                                                                              | ⏳ module boundary only            |
@@ -174,3 +174,16 @@ historical orders.
 - `CashTransaction`: every movement of cash in a shift: `SALE`, `REFUND` (linked to the
   payment), `PAY_IN` and `PAY_OUT` (with a reason).
 - `Location.cashRoundingIncrement`: optional cash rounding step in minor units (null = off).
+
+**Kitchen** (Phase 4):
+
+- `KitchenTicket`: one per order and station (unique `orderId + stationId`), created when the
+  order is confirmed. It holds `status` (NEW → PREPARING → READY → COMPLETED, or CANCELLED),
+  `priority` (NORMAL/RUSH), `version` for optimistic concurrency between screens, `revision`
+  (bumped when an order edit rewrites its items), and timestamps for started, ready, completed,
+  cancelled and dismissed (a cancelled ticket stays on screen until acknowledged). Tickets are
+  never deleted. Check constraints keep the timestamps consistent with the status.
+- `KitchenTicketItem`: what the station prepares, as a snapshot of the order line: names, variant,
+  quantity, notes and modifier names (JSON), plus `doneAt` when the cook strikes the line.
+- `Location.kdsWarnMinutes` / `kdsLateMinutes` (defaults 8 / 15): when tickets are flagged as
+  getting late and late.

@@ -35,6 +35,8 @@
   "SHIFT_NOT_OPEN": "Open a shift before taking payments.",
   "SHIFT_ALREADY_OPEN": "This cash drawer already has an open shift.",
   "CASH_REGISTER_NOT_FOUND": "Cash drawer not found.",
+  "KITCHEN_TICKET_NOT_FOUND": "Kitchen ticket not found.",
+  "INVALID_TICKET_STATE": "This ticket cannot do that right now.",
   "SYNC_CONFLICT": "This change conflicts with a newer version.",
   "DUPLICATE_OPERATION": "This operation was already processed.",
   "RESTAURANT_OFFLINE": "The restaurant is offline right now.",

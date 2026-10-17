@@ -95,6 +95,13 @@
       "preferredLocale": "ar",
       "role": "Cashier",
       "location": "MAIN"
+    },
+    {
+      "envPrefix": "SEED_KITCHEN",
+      "displayName": "Demo Kitchen",
+      "preferredLocale": "en",
+      "role": "Kitchen",
+      "location": "MAIN"
     }
   ],
   "menu": {

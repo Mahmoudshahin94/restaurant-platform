@@ -11,7 +11,7 @@ import {
   paymentTotals,
   quoteOrder,
 } from '@pos/domain';
-import { OPEN_ORDER_STATUSES } from '@pos/shared-types';
+import { OPEN_ORDER_STATUSES, type RealtimeEvent } from '@pos/shared-types';
 import type {
   Order,
   createOrderSchema,
@@ -24,9 +24,17 @@ import type { Principal } from '../../common/auth/principal';
 import { RequestContext } from '../../common/context/request-context';
 import { PrismaService, type PrismaTx } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { KitchenDispatchService } from '../kitchen/kitchen-dispatch.service';
 import { PublishedMenuService } from '../menu/published-menu.service';
+import { RealtimeBus } from '../realtime/realtime.bus';
 import { discountRows, itemSnapshot, taxRows, totalsOf } from './order-snapshot';
-import { type OrderRow, orderInclude, settledEntries, toOrderDto } from './orders.mappers';
+import {
+  type OrderRow,
+  orderEventPayload,
+  orderInclude,
+  settledEntries,
+  toOrderDto,
+} from './orders.mappers';
 
 type CreateInput = z.output<typeof createOrderSchema>;
 type UpdateInput = z.output<typeof updateOrderSchema>;
@@ -55,6 +63,8 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly menus: PublishedMenuService,
     private readonly audit: AuditService,
+    private readonly kitchen: KitchenDispatchService,
+    private readonly bus: RealtimeBus,
   ) {}
 
   /**
@@ -110,7 +120,7 @@ export class OrdersService {
             taxInclusive: location.taxInclusive,
             ...totalsOf(quote),
             createdById: principal.userId,
-            placedAt: input.status === 'PLACED' ? now : null,
+            placedAt: input.status === 'DRAFT' ? null : now,
           },
         });
         await this.writeLines(tx, input.id, menu, quote, input.items);
@@ -155,9 +165,28 @@ export class OrdersService {
             tx,
           );
         }
-        return tx.order.findUniqueOrThrow({ where: { id: input.id }, include: orderInclude });
+        // Orders created as CONFIRMED (the POS) go straight to the kitchen.
+        const ticketEvents =
+          input.status === 'CONFIRMED'
+            ? await this.kitchen.syncTickets(tx, {
+                id: input.id,
+                restaurantId: location.restaurantId,
+                locationId,
+                orderNumber: formatOrderNumber(location.code, sequence),
+                status: input.status,
+              })
+            : [];
+        const created = await tx.order.findUniqueOrThrow({
+          where: { id: input.id },
+          include: orderInclude,
+        });
+        return { created, ticketEvents };
       });
-      return { order: toOrderDto(row), created: true };
+      this.bus.publish([
+        this.bus.event('order.created', row.created, orderEventPayload(row.created)),
+        ...row.ticketEvents,
+      ]);
+      return { order: toOrderDto(row.created), created: true };
     } catch (error) {
       // Two identical requests raced: the loser returns what the winner created.
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
@@ -300,9 +329,17 @@ export class OrdersService {
         },
         tx,
       );
-      return tx.order.findUniqueOrThrow({ where: { id: orderId }, include: orderInclude });
+      // A confirmed order is already in the kitchen: its tickets follow the edit.
+      const ticketEvents =
+        current.status === 'CONFIRMED' ? await this.kitchen.syncTickets(tx, current) : [];
+      const updated = await tx.order.findUniqueOrThrow({
+        where: { id: orderId },
+        include: orderInclude,
+      });
+      return { updated, ticketEvents };
     });
-    return toOrderDto(row);
+    this.publishOrder('order.updated', row.updated, row.ticketEvents);
+    return toOrderDto(row.updated);
   }
 
   /** Moves an order through the state machine on behalf of a staff member. */
@@ -372,12 +409,54 @@ export class OrdersService {
         },
         tx,
       );
-      return tx.order.findUniqueOrThrow({ where: { id: orderId }, include: orderInclude });
+      const ticketEvents = await this.followKitchen(tx, current, input.to);
+      const updated = await tx.order.findUniqueOrThrow({
+        where: { id: orderId },
+        include: orderInclude,
+      });
+      return { updated, ticketEvents };
     });
-    return toOrderDto(row);
+    this.publishOrder(
+      input.to === 'CANCELLED' ? 'order.cancelled' : 'order.updated',
+      row.updated,
+      row.ticketEvents,
+    );
+    return toOrderDto(row.updated);
   }
 
-  // --- helpers -------------------------------------------------------------------------------
+  // --- helpers ---------------------------------------------------------------------------------
+
+  /** Kitchen side effects of a staff transition (runs inside the transition's transaction). */
+  private async followKitchen(
+    tx: PrismaTx,
+    current: OrderRow,
+    to: TransitionInput['to'],
+  ): Promise<RealtimeEvent[]> {
+    const order = { ...current, status: to };
+    if (to === 'CONFIRMED') return this.kitchen.syncTickets(tx, order);
+    if (to === 'CANCELLED') return this.kitchen.cancelTickets(tx, order);
+    if (to === 'COMPLETED') {
+      if (current.status === 'CONFIRMED') await this.kitchen.assertNothingPending(tx, current.id);
+      return this.kitchen.completeReadyTickets(tx, order);
+    }
+    return [];
+  }
+
+  private publishOrder(
+    type: 'order.updated' | 'order.cancelled',
+    row: OrderRow,
+    ticketEvents: readonly RealtimeEvent[],
+  ): void {
+    const payload = orderEventPayload(row);
+    this.bus.publish([
+      type === 'order.cancelled'
+        ? this.bus.event(type, row, { ...payload, reason: row.cancelReason })
+        : this.bus.event(type, row, payload),
+      ...ticketEvents,
+    ]);
+  }
+
+  // --- persistence helpers ------------------------------------------------------------------
 
   private replay(existing: OrderRow, locationId: string): Order {
     if (existing.locationId !== locationId) {

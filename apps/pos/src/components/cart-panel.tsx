@@ -60,7 +60,12 @@ export function CartPanel({ locationId, menu, discounts, floor, onEditLine }: Ca
       };
     }
     return {
-      order: await api.orders.create(locationId, { ...body, id: cart.draftId }),
+      // Orders entered at the POS are accepted at once and go straight to the kitchen.
+      order: await api.orders.create(locationId, {
+        ...body,
+        id: cart.draftId,
+        status: 'CONFIRMED',
+      }),
       edited: false,
     };
   });

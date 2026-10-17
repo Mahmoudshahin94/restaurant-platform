@@ -163,21 +163,26 @@ Mutations return the refreshed floor.
 | PUT    | `/locations/:lid/orders/:orderId`                                                        | `orders.update` (+ `orders.discount` if discounts change)        |
 | POST   | `/locations/:lid/orders/:orderId/transitions`                                            | per transition (see the state machine)                           |
 
-- **Create** takes `{ id, channel, status?: DRAFT|PLACED, items[{ id, productId, variantId,
+- **Create** takes `{ id, channel, status?: DRAFT|PLACED|CONFIRMED, items[{ id, productId, variantId,
 modifierIds, quantity, notes }], discountIds, tableId, customerName, customerPhone,
 guestCount, notes }`. The `id` is a client-generated UUID and the **idempotency key**:
   resending it returns the existing order with `200` instead of `201` (concurrent duplicates
   included). Channels: `DINE_IN` needs a table of the location; `PHONE`/`DELIVERY` need a
-  customer name or phone; `WEBSITE` is rejected (customer API, Phase 7).
+  customer name or phone; `WEBSITE` is rejected (customer API, Phase 7). `CONFIRMED` (what the
+  POS sends since Phase 4) accepts the order at once and sends it to the kitchen; `PLACED` waits
+  for acceptance.
 - **Prices are never accepted from clients.** Every create/update re-validates items against the
   location's published menu (`quoteOrder`) and re-prices with `priceOrder`. Unknown fields such
   as `total` or `unitPrice` are stripped by validation.
 - **Update** replaces items, discounts and details. It is allowed only in `DRAFT`/`PLACED`/
   `CONFIRMED` (`409 INVALID_ORDER_STATE`, `reason: NOT_MODIFIABLE`) and requires the current
-  `version` (`409 CONFLICT`, `reason: STALE_VERSION`, `currentVersion`).
+  `version` (`409 CONFLICT`, `reason: STALE_VERSION`, `currentVersion`). Editing a confirmed
+  order rewrites its kitchen tickets (see Kitchen); once a station has started, the order is
+  PREPARING and no longer editable.
 - **Transitions** take `{ to, reason?, version? }` and are validated by `assertTransition`.
   Failure reasons: `NOT_ALLOWED` (with the allowed targets), `SYSTEM_ONLY` (PREPARING/READY come
-  from the kitchen), `REASON_REQUIRED` (cancellations), `UNPAID` (completion). The specific
+  from the kitchen), `REASON_REQUIRED` (cancellations), `UNPAID` (completion),
+  `KITCHEN_PENDING` (completing a confirmed order the kitchen still has). The specific
   permission is `orders.update`, `orders.cancel` or `orders.refund`.
 - **Audit:** `order.created`, `order.discount_applied`, `order.modified` (before/after totals),
   `order.status_changed`, `order.cancelled`.
@@ -243,6 +248,49 @@ guestCount, notes }`. The `id` is a client-generated UUID and the **idempotency 
 - The **daily summary** covers one business date in the location's timezone: order counts, sales
   (subtotal, discounts, tax, total), per-channel totals, per-method payments and net collected.
 - **Audit:** `shift.opened`, `shift.closed`, `cash.pay_in`, `cash.pay_out`.
+
+## Kitchen (Phase 4)
+
+| Method | Path                                                           | Permission       |
+| ------ | -------------------------------------------------------------- | ---------------- |
+| GET    | `/locations/:lid/kitchen/settings`                             | `kitchen.view`   |
+| GET    | `/locations/:lid/kitchen/tickets?stationIds=&view=&limit=`     | `kitchen.view`   |
+| GET    | `/locations/:lid/kitchen/tickets/:ticketId`                    | `kitchen.view`   |
+| POST   | `/locations/:lid/kitchen/tickets/:ticketId/transitions`        | `kitchen.update` |
+| POST   | `/locations/:lid/kitchen/tickets/:ticketId/priority`           | `kitchen.update` |
+| POST   | `/locations/:lid/kitchen/tickets/:ticketId/items/:itemId/done` | `kitchen.update` |
+| POST   | `/locations/:lid/kitchen/tickets/:ticketId/dismiss`            | `kitchen.update` |
+| POST   | `/locations/:lid/orders/:orderId/kitchen-priority`             | `orders.update`  |
+
+- **Routing:** when an order becomes `CONFIRMED`, it gets one ticket per station. Each line goes
+  to every station of its product (snapshot `stationIds`); lines without a station are not sent.
+  Edits before the kitchen starts rewrite NEW tickets (their `revision` goes up only when what
+  the cook sees changes), open tickets for new stations, and cancel tickets whose station lost
+  all its items. Cancelling the order cancels its live tickets; completing it bumps READY ones.
+- **Settings** returns the restaurant's stations and the location's `warnMinutes`/`lateMinutes`
+  (`Location.kdsWarnMinutes`/`kdsLateMinutes`, editable through `PATCH /locations/:lid`; late
+  must be above warn).
+- **List:** `view=active` (default) returns NEW/PREPARING/READY tickets plus cancelled ones not yet
+  dismissed, rush first then oldest; `view=completed` returns tickets bumped in the last 12 hours,
+  newest first. `stationIds` is a comma-separated filter (omitted = every station).
+- **Transitions** take `{ to: PREPARING|READY|COMPLETED, version }`: start, ready (also straight
+  from NEW), bump, undo-ready (READY → PREPARING) and recall (COMPLETED → READY). Errors:
+  `409 INVALID_TICKET_STATE` (`reason: NOT_ALLOWED | SYSTEM_ONLY | ORDER_CLOSED`) and
+  `409 CONFLICT` (`reason: STALE_VERSION`) when another screen acted first. The order row is
+  locked for every ticket change, so the order moves CONFIRMED → PREPARING (first start),
+  → READY (all live tickets ready) and back READY → PREPARING (undo) exactly once, recorded as
+  system transitions with the KDS as source.
+- **Priority** `{ priority: NORMAL|RUSH, version }` per ticket, or for every live ticket of an order
+  from the POS. **Item done** `{ done }` strikes a line. **Dismiss** `{ version }` acknowledges a
+  cancelled ticket.
+- Orders expose `tickets[]` (`stationId`, station names, `status`, `priority`) for the POS.
+- **Audit:** `kitchen.ticket_recalled`, `kitchen.priority_changed`, and `order.status_changed`
+  with `trigger: KITCHEN` for derived order statuses.
+
+## Realtime (Phase 4)
+
+`GET /api/v1/realtime` upgrades to a WebSocket; see [events.md](events.md) for the protocol and
+event list.
 
 ## Security headers and limits
 

@@ -1,6 +1,8 @@
 import type { Payment as PaymentRow, Prisma } from '@pos/database';
 import { paymentTotals } from '@pos/domain';
+import type { OrderEventPayload } from '@pos/shared-types';
 import type { Order, OrderPayment } from '@pos/validation';
+import { orderTicketsInclude, toTicketSummary } from '../kitchen/kitchen.mappers';
 
 export const orderInclude = {
   items: { include: { modifiers: true }, orderBy: { sortOrder: 'asc' } },
@@ -9,6 +11,7 @@ export const orderInclude = {
   statusHistory: { orderBy: { createdAt: 'asc' } },
   table: { select: { label: true } },
   payments: { orderBy: { createdAt: 'asc' } },
+  tickets: orderTicketsInclude,
 } satisfies Prisma.OrderInclude;
 
 export type OrderRow = Prisma.OrderGetPayload<{ include: typeof orderInclude }>;
@@ -121,6 +124,7 @@ export function toOrderDto(row: OrderRow): Order {
       amount: d.amount,
     })),
     payments: row.payments.map(toPaymentDto),
+    tickets: row.tickets.map(toTicketSummary),
     paidTotal: totals.paid,
     refundedTotal: totals.refunded,
     balanceDue: totals.balanceDue,
@@ -132,5 +136,24 @@ export function toOrderDto(row: OrderRow): Order {
       reason: h.reason,
       createdAt: iso(h.createdAt),
     })),
+  };
+}
+
+/** Realtime payload for order events; consumers re-fetch the order when they need more. */
+export function orderEventPayload(row: {
+  id: string;
+  orderNumber: string;
+  channel: Order['channel'];
+  status: Order['status'];
+  paymentStatus: Order['paymentStatus'];
+  version: number;
+}): OrderEventPayload {
+  return {
+    orderId: row.id,
+    orderNumber: row.orderNumber,
+    channel: row.channel,
+    status: row.status,
+    paymentStatus: row.paymentStatus,
+    version: row.version,
   };
 }

@@ -49,6 +49,8 @@ export const ORDER_TRANSITIONS: readonly TransitionRule[] = [
   rule('PREPARING', 'READY', { trigger: 'SYSTEM', permission: null }),
   rule('PREPARING', 'CANCELLED', { permission: 'orders.cancel', requiresReason: true }),
 
+  // The kitchen took back a "ready" (a ticket was un-readied).
+  rule('READY', 'PREPARING', { trigger: 'SYSTEM', permission: null }),
   rule('READY', 'COMPLETED', { requiresPaid: true }),
 
   // Derived from payments: an order becomes REFUNDED when everything paid has been refunded

@@ -12,6 +12,11 @@ export interface AccessTokenClaims {
   restaurantId: string;
 }
 
+export interface VerifiedAccessToken extends AccessTokenClaims {
+  /** Epoch milliseconds; long-lived connections (realtime socket) close at this time. */
+  expiresAt: number;
+}
+
 /** Signs/verifies short-lived access JWTs and creates opaque refresh tokens. */
 @Injectable()
 export class TokenService {
@@ -36,17 +41,21 @@ export class TokenService {
       .sign(this.key);
   }
 
-  async verifyAccessToken(token: string): Promise<AccessTokenClaims> {
+  async verifyAccessToken(token: string): Promise<VerifiedAccessToken> {
     try {
       const { payload } = await jwtVerify(token, this.key, {
         issuer: ISSUER,
         audience: AUDIENCE,
         algorithms: ['HS256'],
       });
-      if (typeof payload.sub !== 'string' || typeof payload.rid !== 'string') {
+      if (
+        typeof payload.sub !== 'string' ||
+        typeof payload.rid !== 'string' ||
+        typeof payload.exp !== 'number'
+      ) {
         throw new DomainError('UNAUTHENTICATED', 'Malformed access token');
       }
-      return { userId: payload.sub, restaurantId: payload.rid };
+      return { userId: payload.sub, restaurantId: payload.rid, expiresAt: payload.exp * 1000 };
     } catch (error) {
       if (error instanceof joseErrors.JWTExpired) {
         throw new DomainError('TOKEN_EXPIRED', 'Access token expired');

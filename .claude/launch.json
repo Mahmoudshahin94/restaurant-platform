@@ -18,6 +18,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@pos/pos", "dev"],
       "port": 1420
+    },
+    {
+      "name": "kds",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@pos/kds", "dev"],
+      "port": 5174
     }
   ]
 }

@@ -8,3 +8,4 @@ export * from './money';
 export * from './permissions';
 export * from './session';
 export * from './storage';
+export * from './realtime';

@@ -1,4 +1,11 @@
 import {
+  type DismissTicketRequest,
+  type OrderKitchenPriorityRequest,
+  type TicketItemDoneRequest,
+  type TicketPriorityRequest,
+  type TransitionTicketRequest,
+  kitchenSettingsSchema,
+  kitchenTicketSchema,
   type ListProductsQuery,
   type SetLocationProductRequest,
   type CloseShiftRequest,
@@ -61,6 +68,14 @@ export interface OrderListFilter {
   /** YYYY-MM-DD in the location's timezone. */
   businessDate?: string;
   tableId?: string;
+  limit?: number;
+}
+
+export interface TicketListFilter {
+  /** Omitted or empty = every station (expo view). */
+  stationIds?: string[];
+  /** `active`: on the screen; `completed`: recently bumped, for recall. */
+  view?: 'active' | 'completed';
   limit?: number;
 }
 
@@ -257,6 +272,58 @@ export function createApiClient(options: HttpClientOptions) {
         http.request('POST', `${API}/locations/${locationId}/orders/${orderId}/transitions`, {
           body,
           schema: orderSchema,
+        }),
+      /** Rush (or un-rush) the order in every kitchen station it was sent to. */
+      kitchenPriority: (locationId: string, orderId: string, body: OrderKitchenPriorityRequest) =>
+        http.request('POST', `${API}/locations/${locationId}/orders/${orderId}/kitchen-priority`, {
+          body,
+          schema: z.array(kitchenTicketSchema),
+        }),
+    },
+    kitchen: {
+      settings: (locationId: string) =>
+        http.request('GET', `${API}/locations/${locationId}/kitchen/settings`, {
+          schema: kitchenSettingsSchema,
+        }),
+      tickets: (locationId: string, query: TicketListFilter = {}) =>
+        http.request('GET', `${API}/locations/${locationId}/kitchen/tickets`, {
+          query: {
+            stationIds: query.stationIds?.length ? query.stationIds.join(',') : undefined,
+            view: query.view,
+            limit: query.limit,
+          },
+          schema: z.array(kitchenTicketSchema),
+        }),
+      transition: (locationId: string, ticketId: string, body: TransitionTicketRequest) =>
+        http.request(
+          'POST',
+          `${API}/locations/${locationId}/kitchen/tickets/${ticketId}/transitions`,
+          { body, schema: kitchenTicketSchema },
+        ),
+      priority: (locationId: string, ticketId: string, body: TicketPriorityRequest) =>
+        http.request(
+          'POST',
+          `${API}/locations/${locationId}/kitchen/tickets/${ticketId}/priority`,
+          {
+            body,
+            schema: kitchenTicketSchema,
+          },
+        ),
+      itemDone: (
+        locationId: string,
+        ticketId: string,
+        itemId: string,
+        body: TicketItemDoneRequest,
+      ) =>
+        http.request(
+          'POST',
+          `${API}/locations/${locationId}/kitchen/tickets/${ticketId}/items/${itemId}/done`,
+          { body, schema: kitchenTicketSchema },
+        ),
+      dismiss: (locationId: string, ticketId: string, body: DismissTicketRequest) =>
+        http.request('POST', `${API}/locations/${locationId}/kitchen/tickets/${ticketId}/dismiss`, {
+          body,
+          schema: kitchenTicketSchema,
         }),
     },
     menu: {

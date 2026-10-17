@@ -34,6 +34,8 @@ export interface SessionClientOptions {
 
 export interface SessionClient {
   useSession: UseBoundStore<StoreApi<SessionState>>;
+  /** API origin (`''` = same origin); the realtime socket connects there too. */
+  baseUrl: string;
   api: ApiClient;
   /** Single-flight: concurrent callers share one refresh request (tokens rotate on use). */
   refreshSession: () => Promise<boolean>;
@@ -98,6 +100,7 @@ export function createSessionClient(options: SessionClientOptions): SessionClien
 
   return {
     useSession,
+    baseUrl: options.baseUrl ?? '',
     api,
     refreshSession,
     async signIn(email, password) {

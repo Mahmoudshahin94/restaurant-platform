@@ -1,0 +1,80 @@
+{
+  "title": "شاشة المطبخ",
+  "nav": {
+    "active": "النشطة",
+    "completed": "المُنجزة",
+    "settings": "الإعدادات",
+    "main": "عروض المطبخ"
+  },
+  "stations": {
+    "label": "المحطات",
+    "all": "كل المحطات",
+    "expo": "كل المحطات (التجميع)"
+  },
+  "status": {
+    "NEW": "جديد",
+    "PREPARING": "قيد التحضير",
+    "READY": "جاهز",
+    "COMPLETED": "مُنجز",
+    "CANCELLED": "ملغى"
+  },
+  "actions": {
+    "start": "ابدأ",
+    "ready": "جاهز",
+    "bump": "إنهاء",
+    "notReady": "غير جاهز",
+    "recall": "استرجاع",
+    "dismiss": "تم",
+    "rush": "استعجال",
+    "normal": "عادي",
+    "itemDone": "تعليم {{name}} كمنجز",
+    "itemUndone": "تعليم {{name}} كغير منجز"
+  },
+  "ticket": {
+    "rush": "مستعجل",
+    "updated": "تم التعديل",
+    "cancelled": "ملغى — توقف",
+    "table": "طاولة {{label}}",
+    "guests_zero": "{{count}} ضيف",
+    "guests_one": "ضيف واحد",
+    "guests_two": "ضيفان",
+    "guests_few": "{{count}} ضيوف",
+    "guests_many": "{{count}} ضيفًا",
+    "guests_other": "{{count}} ضيف",
+    "note": "ملاحظة",
+    "minutes": "{{count}} د",
+    "justNow": "جديد",
+    "received": "استُلم {{time}}",
+    "bumpedAt": "أُنجز {{time}}"
+  },
+  "urgency": {
+    "ok": "في الوقت",
+    "warn": "يقترب من التأخير",
+    "late": "متأخر"
+  },
+  "counts": {
+    "new": "جديد {{count}}",
+    "preparing": "قيد التحضير {{count}}",
+    "ready": "جاهز {{count}}"
+  },
+  "empty": "لا توجد تذاكر الآن. تظهر الطلبات الجديدة هنا تلقائيًا.",
+  "emptyCompleted": "لم يُنجز شيء خلال آخر 12 ساعة.",
+  "sound": {
+    "enable": "تشغيل التنبيهات الصوتية",
+    "on": "الصوت مُفعّل",
+    "off": "الصوت متوقف"
+  },
+  "settings": {
+    "title": "إعدادات الشاشة",
+    "stations": "المحطات المعروضة على هذه الشاشة",
+    "stationsHint": "لا تختر شيئًا لعرض كل المحطات (التجميع).",
+    "sound": "تشغيل صوت عند وصول تذاكر جديدة",
+    "location": "الموقع",
+    "signOut": "تسجيل الخروج",
+    "thresholds": "تتحول التذاكر إلى اللون الكهرماني بعد {{warn}} د وإلى الأحمر بعد {{late}} د."
+  },
+  "location": {
+    "title": "اختر الموقع",
+    "none": "ليس لحسابك صلاحية المطبخ في أي موقع."
+  }
+}

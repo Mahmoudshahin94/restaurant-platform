@@ -134,6 +134,23 @@ enum CashTransactionType {
   @@map("cash_transaction_type")
 }
 
+enum KitchenTicketStatus {
+  NEW
+  PREPARING
+  READY
+  COMPLETED
+  CANCELLED
+
+  @@map("kitchen_ticket_status")
+}
+
+enum TicketPriority {
+  NORMAL
+  RUSH
+
+  @@map("ticket_priority")
+}
+
 enum ActorType {
   USER
   EMPLOYEE
@@ -181,6 +198,7 @@ model Restaurant {
   products        Product[]
   modifierGroups  ModifierGroup[]
   kitchenStations KitchenStation[]
+  kitchenTickets  KitchenTicket[]
   taxes           Tax[]
   discounts       Discount[]
   orders          Order[]
@@ -202,6 +220,9 @@ model Location {
   onlineOrderingState   OnlineOrderingState @default(CLOSED) @map("online_ordering_state")
   /// Smallest coin for cash rounding in minor units (e.g. 5 = 0.05); null = no rounding.
   cashRoundingIncrement Int?                @map("cash_rounding_increment")
+  /// Kitchen screen: tickets older than this many minutes are flagged, then flagged as late.
+  kdsWarnMinutes        Int                 @default(8) @map("kds_warn_minutes")
+  kdsLateMinutes        Int                 @default(15) @map("kds_late_minutes")
   addressLine           String?             @map("address_line")
   phone                 String?
   isActive              Boolean             @default(true) @map("is_active")
@@ -220,6 +241,7 @@ model Location {
   cashRegisters    CashRegister[]
   shifts           Shift[]
   payments         Payment[]
+  kitchenTickets   KitchenTicket[]
 
   @@unique([restaurantId, code])
   @@index([restaurantId])
@@ -550,6 +572,7 @@ model KitchenStation {
 
   restaurant Restaurant       @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
   products   ProductStation[]
+  tickets    KitchenTicket[]
 
   @@unique([restaurantId, code])
   @@map("kitchen_stations")
@@ -728,6 +751,7 @@ model Order {
   discounts     OrderDiscount[]
   statusHistory OrderStatusHistory[]
   payments      Payment[]
+  tickets       KitchenTicket[]
 
   @@unique([locationId, businessDate, orderNumber])
   @@index([locationId, status])
@@ -762,9 +786,10 @@ model OrderItem {
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  order     Order               @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  product   Product             @relation(fields: [productId], references: [id], onDelete: Restrict)
-  modifiers OrderItemModifier[]
+  order       Order               @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  product     Product             @relation(fields: [productId], references: [id], onDelete: Restrict)
+  modifiers   OrderItemModifier[]
+  ticketItems KitchenTicketItem[]
 
   @@index([orderId])
   @@map("order_items")
@@ -987,4 +1012,68 @@ model CashTransaction {
 
   @@index([shiftId])
   @@map("cash_transactions")
+}
+
+// ---------------------------------------------------------------------------
+// Kitchen (Phase 4)
+// ---------------------------------------------------------------------------
+
+/// One per order and station. Created when the order is confirmed; the order's PREPARING/READY
+/// statuses are derived from its tickets. Never deleted: cancelled tickets stay for history.
+model KitchenTicket {
+  id           String              @id @default(uuid(7)) @db.Uuid
+  restaurantId String              @map("restaurant_id") @db.Uuid
+  locationId   String              @map("location_id") @db.Uuid
+  orderId      String              @map("order_id") @db.Uuid
+  stationId    String              @map("station_id") @db.Uuid
+  status       KitchenTicketStatus @default(NEW)
+  priority     TicketPriority      @default(NORMAL)
+  /// Incremented on every change; kitchen screens send it back for optimistic concurrency.
+  version      Int                 @default(1)
+  /// Incremented when an order edit rewrites the items; screens flag tickets with revision > 1.
+  revision     Int                 @default(1)
+  startedAt    DateTime?           @map("started_at") @db.Timestamptz(3)
+  readyAt      DateTime?           @map("ready_at") @db.Timestamptz(3)
+  completedAt  DateTime?           @map("completed_at") @db.Timestamptz(3)
+  cancelledAt  DateTime?           @map("cancelled_at") @db.Timestamptz(3)
+  /// A cancelled ticket stays on the screen until the kitchen acknowledges it.
+  dismissedAt  DateTime?           @map("dismissed_at") @db.Timestamptz(3)
+  createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  restaurant Restaurant          @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  location   Location            @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  order      Order               @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  station    KitchenStation      @relation(fields: [stationId], references: [id], onDelete: Restrict)
+  items      KitchenTicketItem[]
+
+  @@unique([orderId, stationId])
+  @@index([locationId, status])
+  @@index([locationId, updatedAt])
+  @@map("kitchen_tickets")
+}
+
+/// What the station has to make: a snapshot of the order line (names, quantity, modifiers, notes).
+model KitchenTicketItem {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  ticketId      String    @map("ticket_id") @db.Uuid
+  orderItemId   String    @map("order_item_id") @db.Uuid
+  nameEn        String    @map("name_en")
+  nameAr        String    @map("name_ar")
+  variantNameEn String?   @map("variant_name_en")
+  variantNameAr String?   @map("variant_name_ar")
+  quantity      Int
+  notes         String?
+  /// [{ nameEn, nameAr }] in selection order.
+  modifiers     Json      @default("[]")
+  sortOrder     Int       @default(0) @map("sort_order")
+  /// Struck through on the screen when the cook finished this line.
+  doneAt        DateTime? @map("done_at") @db.Timestamptz(3)
+
+  ticket    KitchenTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  orderItem OrderItem     @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@index([orderItemId])
+  @@map("kitchen_ticket_items")
 }

@@ -122,6 +122,20 @@ export const KitchenTicketStatus = {
 } as const;
 export type KitchenTicketStatus = ValueOf<typeof KitchenTicketStatus>;
 
+/** Tickets on the kitchen screen that still need attention (not bumped or cancelled). */
+export const ACTIVE_TICKET_STATUSES = [
+  'NEW',
+  'PREPARING',
+  'READY',
+] as const satisfies readonly KitchenTicketStatus[];
+
+export const TicketPriority = {
+  NORMAL: 'NORMAL',
+  /** Shown first on every station, with a "Rush" label. */
+  RUSH: 'RUSH',
+} as const;
+export type TicketPriority = ValueOf<typeof TicketPriority>;
+
 export const DeviceType = {
   POS: 'POS',
   KDS: 'KDS',
