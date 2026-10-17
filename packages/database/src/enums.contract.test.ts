@@ -18,6 +18,7 @@ import {
   LOCALES,
   OnlineOrderingState,
   FulfillmentType,
+  SyncIssueResolution,
 } from '@pos/shared-types';
 import { $Enums } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
@@ -31,6 +32,7 @@ describe('Prisma enums mirror @pos/shared-types', () => {
     ['ActionSource', $Enums.ActionSource, ActionSource],
     ['ActorType', $Enums.ActorType, ActorType],
     ['ChangeTopic', $Enums.ChangeTopic, ChangeTopic],
+    ['SyncIssueResolution', $Enums.SyncIssueResolution, SyncIssueResolution],
     ['FulfillmentType', $Enums.FulfillmentType, FulfillmentType],
     ['OrderChannel', $Enums.OrderChannel, OrderChannel],
     ['OrderStatus', $Enums.OrderStatus, OrderStatus],

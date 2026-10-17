@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   DomainError,
   assertRefund,
@@ -16,6 +16,7 @@ import type {
   refundPaymentSchema,
 } from '@pos/validation';
 import type { z } from 'zod';
+import { SERVER_MODE, type ServerMode } from '../../common/auth/managed-in-cloud';
 import type { Principal } from '../../common/auth/principal';
 import { RequestContext } from '../../common/context/request-context';
 import { ChangeRecorder } from '../../prisma/change-recorder';
@@ -31,6 +32,7 @@ import {
   toOrderDto,
   toPaymentDto,
 } from '../orders/orders.mappers';
+import { assertCloudMayChangeOrder } from '../orders/hub-ownership';
 import { PaymentProviderRegistry } from './providers/payment-provider.registry';
 
 type ChargeInput = z.output<typeof createPaymentSchema>;
@@ -55,6 +57,7 @@ export class PaymentsService {
     private readonly bus: RealtimeBus,
     private readonly dialect: SqlDialect,
     private readonly changes: ChangeRecorder,
+    @Inject(SERVER_MODE) private readonly mode: ServerMode,
   ) {}
 
   async listMethods(restaurantId: string): Promise<PaymentMethod[]> {
@@ -86,6 +89,7 @@ export class PaymentsService {
         // A concurrent retry with the same id may have committed while we waited for the lock.
         const committed = await this.replayIn(tx, input.id, locationId, orderId, 'CHARGE');
         if (committed) return committed;
+        await assertCloudMayChangeOrder(this.mode, tx, orderId);
         const order = await tx.order.findUniqueOrThrow({
           where: { id: orderId },
           include: orderInclude,
@@ -218,6 +222,7 @@ export class PaymentsService {
         await this.dialect.lockOrderRow(tx, locationId, orderId);
         const committed = await this.replayIn(tx, input.id, locationId, orderId, 'REFUND');
         if (committed) return committed;
+        await assertCloudMayChangeOrder(this.mode, tx, orderId);
         const order = await tx.order.findUniqueOrThrow({
           where: { id: orderId },
           include: orderInclude,

@@ -247,8 +247,22 @@ export const ChangeTopic = {
   CONFIG: 'CONFIG',
   /** A website order was created or changed in the cloud: fetch it (entityId = order id). */
   ORDER: 'ORDER',
+  /**
+   * An administrator resolved an operation the cloud had refused from this hub (entityId =
+   * operation id): fetch the decision from `/sync/resolutions/:operationId` (ADR 0014).
+   */
+  RESOLUTION: 'RESOLUTION',
 } as const;
 export type ChangeTopic = ValueOf<typeof ChangeTopic>;
+
+/** How an administrator settled an operation the cloud refused from a hub (ADR 0014). */
+export const SyncIssueResolution = {
+  /** The hub's version was applied; the cloud's previous copy is kept in the audit log. */
+  APPLIED_HUB: 'APPLIED_HUB',
+  /** The cloud's version was kept; the hub replaces its copy and its change is superseded. */
+  KEPT_CLOUD: 'KEPT_CLOUD',
+} as const;
+export type SyncIssueResolution = ValueOf<typeof SyncIssueResolution>;
 
 /** Connectivity indicator shown on the POS. */
 export const SyncConnectionState = {

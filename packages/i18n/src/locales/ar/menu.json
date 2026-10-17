@@ -48,7 +48,12 @@
     "stations": "محطات المطبخ",
     "stationsHint": "يُرسل الصنف إلى كل محطة محددة.",
     "noModifierGroups": "لا توجد مجموعات خيارات بعد.",
-    "noStations": "لا توجد محطات مطبخ بعد."
+    "noStations": "لا توجد محطات مطبخ بعد.",
+    "overrideMin": "الحد الأدنى",
+    "overrideMax": "الحد الأقصى",
+    "overrideHint": "الفارغ يستخدم قاعدة المجموعة: {{min}} على الأقل، و{{max}} على الأكثر.",
+    "unlimited": "بلا حد",
+    "overrideInvalid": "تحقق من الحد الأدنى والأقصى لهذا المنتج"
   },
   "modifierGroups": {
     "title": "مجموعات الخيارات",

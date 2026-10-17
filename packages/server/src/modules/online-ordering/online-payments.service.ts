@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { DomainError, derivePaymentStatus, newId } from '@pos/domain';
 import { APP_CONFIG, type AppConfig } from '../../config/env';
+import { AuditService } from '../audit/audit.service';
 import type { PrismaTx } from '../../prisma/prisma.service';
 import { settledEntries } from '../orders/orders.mappers';
 import { MockOnlinePaymentProvider } from '../payments/providers/mock-online.provider';
@@ -17,7 +18,10 @@ export class OnlinePaymentsService {
   private readonly logger = new Logger(OnlinePaymentsService.name);
   readonly provider: PaymentProvider;
 
-  constructor(@Inject(APP_CONFIG) config: AppConfig) {
+  constructor(
+    @Inject(APP_CONFIG) config: AppConfig,
+    private readonly audit: AuditService,
+  ) {
     this.provider =
       config.ONLINE_PAYMENT_PROVIDER === 'mock'
         ? new MockOnlinePaymentProvider()
@@ -80,6 +84,23 @@ export class OnlinePaymentsService {
           reason: `VOID: ${reason}`,
         },
       });
+      // A payment correction: audited like a refund, as the system's action.
+      await this.audit.record(
+        {
+          action: 'payment.voided',
+          entityType: 'Order',
+          entityId: orderId,
+          restaurantId: charge.restaurantId,
+          locationId: charge.locationId,
+          metadata: {
+            chargeId: charge.id,
+            amount: charge.amount,
+            reason,
+            settled: result?.status === 'CANCELLED',
+          },
+        },
+        tx,
+      );
     }
     if (charges.length > 0) {
       const payments = await tx.payment.findMany({ where: { orderId } });

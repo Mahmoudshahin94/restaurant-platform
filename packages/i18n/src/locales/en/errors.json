@@ -44,10 +44,16 @@
   "SYNC_SCOPE_MISMATCH": "This change belongs to another restaurant or location.",
   "SYNC_DEPENDENCY_MISSING": "This change depends on data the cloud does not have yet.",
   "SYNC_UNAVAILABLE": "The cloud could not be reached. The change will be sent again automatically.",
-  "SYNC_SUPERSEDED": "The cloud decided on this order first; this change was not needed.",
+  "SYNC_SUPERSEDED": "The cloud's version was kept; this change was not applied.",
   "DUPLICATE_OPERATION": "This operation was already processed.",
   "RESTAURANT_OFFLINE": "The restaurant is offline right now.",
   "ONLINE_ORDERING_DISABLED": "Online ordering is not available right now.",
   "NETWORK_ERROR": "Cannot reach the server. Check your connection.",
-  "INVALID_RESPONSE": "The server sent an unexpected response."
+  "INVALID_RESPONSE": "The server sent an unexpected response.",
+  "USER_NOT_FOUND": "User not found.",
+  "ROLE_NOT_FOUND": "Role not found.",
+  "EMPLOYEE_NOT_FOUND": "Employee not found.",
+  "DEVICE_NOT_FOUND": "Device not found.",
+  "PAYMENT_METHOD_NOT_FOUND": "Payment method not found.",
+  "SYNC_ISSUE_NOT_FOUND": "Synchronization issue not found."
 }

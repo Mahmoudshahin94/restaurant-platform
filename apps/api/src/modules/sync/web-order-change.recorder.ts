@@ -23,20 +23,37 @@ export class WebOrderChangeRecorder extends ChangeRecorder {
   }
 }
 
-/** Appends one ORDER entry for a website order (also used by the hub-push path). */
+/**
+ * Appends one ORDER entry for an order the cloud changed (also used by the hub-push path and the
+ * admin portal's online refunds).
+ */
 export async function recordOrderChange(
   tx: PrismaTx,
   order: { id: string; restaurantId: string; locationId: string },
 ): Promise<void> {
+  await appendChange(tx, order.restaurantId, order.locationId, 'ORDER', order.id);
+}
+
+/**
+ * Appends one RESOLUTION entry: an administrator settled an operation the location's hub pushed
+ * (ADR 0014); the hub fetches the decision from `/sync/resolutions/:operationId`.
+ */
+export async function recordResolutionChange(
+  tx: PrismaTx,
+  issue: { operationId: string; restaurantId: string; locationId: string },
+): Promise<void> {
+  await appendChange(tx, issue.restaurantId, issue.locationId, 'RESOLUTION', issue.operationId);
+}
+
+async function appendChange(
+  tx: PrismaTx,
+  restaurantId: string,
+  locationId: string,
+  topic: 'ORDER' | 'RESOLUTION',
+  entityId: string,
+): Promise<void> {
   await tx.$queryRaw`
     SELECT 1 FROM (SELECT pg_advisory_xact_lock(
-      hashtextextended(${`change_log:${order.restaurantId}`}, 0))) AS locked`;
-  await tx.changeLog.create({
-    data: {
-      restaurantId: order.restaurantId,
-      locationId: order.locationId,
-      topic: 'ORDER',
-      entityId: order.id,
-    },
-  });
+      hashtextextended(${`change_log:${restaurantId}`}, 0))) AS locked`;
+  await tx.changeLog.create({ data: { restaurantId, locationId, topic, entityId } });
 }

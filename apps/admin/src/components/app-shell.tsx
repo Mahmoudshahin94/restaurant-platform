@@ -4,17 +4,33 @@ import { Button, NativeSelect, cn } from '@pos/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   BadgePercent,
+  Banknote,
+  Building2,
   ChefHat,
-  Grid3x3,
-  Receipt,
+  Contact,
+  CreditCard,
   FolderTree,
+  Globe,
+  Grid3x3,
+  IdCard,
   LayoutDashboard,
   ListChecks,
   LogOut,
+  MapPin,
+  Receipt,
+  RefreshCw,
+  ScrollText,
+  ServerCog,
+  ShieldCheck,
+  ShoppingBag,
+  Timer,
   ToggleRight,
+  Users,
   UtensilsCrossed,
+  Wallet,
   type LucideIcon,
 } from 'lucide-react';
+import type { I18nResources } from '@pos/i18n';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NavLink, Outlet, useNavigate } from 'react-router';
@@ -26,62 +42,165 @@ import { usePreferences } from '../stores/preferences';
 import { useSession } from '../stores/session';
 import { LanguageSwitcher } from './language-switcher';
 
+type NavKey = keyof I18nResources['admin']['nav'];
+
 interface NavItem {
   to: string;
-  labelKey:
-    | 'nav.dashboard'
-    | 'nav.categories'
-    | 'nav.products'
-    | 'nav.modifierGroups'
-    | 'nav.kitchenStations'
-    | 'nav.availability'
-    | 'nav.taxes'
-    | 'nav.discounts'
-    | 'nav.tables';
+  labelKey: NavKey;
   icon: LucideIcon;
   permission?: Permission;
+  /** The permission must be held restaurant-wide (pages for the whole restaurant). */
+  restaurantWide?: boolean;
 }
 
-const NAV: NavItem[] = [
-  { to: '/', labelKey: 'nav.dashboard', icon: LayoutDashboard },
+interface NavGroup {
+  labelKey: NavKey;
+  items: NavItem[];
+}
+
+const NAV: NavGroup[] = [
   {
-    to: '/menu/categories',
-    labelKey: 'nav.categories',
-    icon: FolderTree,
-    permission: 'products.view',
+    labelKey: 'overview',
+    items: [{ to: '/', labelKey: 'dashboard', icon: LayoutDashboard }],
   },
   {
-    to: '/menu/products',
-    labelKey: 'nav.products',
-    icon: UtensilsCrossed,
-    permission: 'products.view',
+    labelKey: 'operations',
+    items: [
+      {
+        to: '/operations/orders',
+        labelKey: 'orders',
+        icon: ShoppingBag,
+        permission: 'orders.view',
+      },
+      {
+        to: '/operations/customers',
+        labelKey: 'customers',
+        icon: Contact,
+        permission: 'customers.view',
+      },
+      {
+        to: '/operations/payments',
+        labelKey: 'payments',
+        icon: CreditCard,
+        permission: 'payments.view',
+      },
+      { to: '/operations/shifts', labelKey: 'shifts', icon: Timer, permission: 'shifts.manage' },
+    ],
   },
   {
-    to: '/menu/modifier-groups',
-    labelKey: 'nav.modifierGroups',
-    icon: ListChecks,
-    permission: 'products.view',
+    labelKey: 'menu',
+    items: [
+      {
+        to: '/menu/categories',
+        labelKey: 'categories',
+        icon: FolderTree,
+        permission: 'products.view',
+      },
+      {
+        to: '/menu/products',
+        labelKey: 'products',
+        icon: UtensilsCrossed,
+        permission: 'products.view',
+      },
+      {
+        to: '/menu/modifier-groups',
+        labelKey: 'modifierGroups',
+        icon: ListChecks,
+        permission: 'products.view',
+      },
+      {
+        to: '/menu/kitchen-stations',
+        labelKey: 'kitchenStations',
+        icon: ChefHat,
+        permission: 'products.view',
+      },
+      {
+        to: '/menu/availability',
+        labelKey: 'availability',
+        icon: ToggleRight,
+        permission: 'products.view',
+      },
+    ],
   },
   {
-    to: '/menu/kitchen-stations',
-    labelKey: 'nav.kitchenStations',
-    icon: ChefHat,
-    permission: 'products.view',
+    labelKey: 'settings',
+    items: [
+      {
+        to: '/settings/restaurant',
+        labelKey: 'restaurant',
+        icon: Building2,
+        permission: 'settings.manage',
+        restaurantWide: true,
+      },
+      {
+        to: '/settings/locations',
+        labelKey: 'locations',
+        icon: MapPin,
+        permission: 'locations.view',
+      },
+      {
+        to: '/settings/online-ordering',
+        labelKey: 'onlineOrdering',
+        icon: Globe,
+        permission: 'locations.view',
+      },
+      { to: '/settings/taxes', labelKey: 'taxes', icon: Receipt, permission: 'products.view' },
+      {
+        to: '/settings/discounts',
+        labelKey: 'discounts',
+        icon: BadgePercent,
+        permission: 'settings.manage',
+      },
+      { to: '/settings/tables', labelKey: 'tables', icon: Grid3x3, permission: 'orders.view' },
+      {
+        to: '/settings/payment-methods',
+        labelKey: 'paymentMethods',
+        icon: Wallet,
+        permission: 'settings.manage',
+        restaurantWide: true,
+      },
+      {
+        to: '/settings/cash-registers',
+        labelKey: 'cashRegisters',
+        icon: Banknote,
+        permission: 'settings.manage',
+      },
+    ],
   },
   {
-    to: '/menu/availability',
-    labelKey: 'nav.availability',
-    icon: ToggleRight,
-    permission: 'products.view',
+    labelKey: 'staff',
+    items: [
+      {
+        to: '/staff/users',
+        labelKey: 'users',
+        icon: Users,
+        permission: 'users.manage',
+        restaurantWide: true,
+      },
+      {
+        to: '/staff/roles',
+        labelKey: 'roles',
+        icon: ShieldCheck,
+        permission: 'roles.manage',
+        restaurantWide: true,
+      },
+      {
+        to: '/staff/employees',
+        labelKey: 'employees',
+        icon: IdCard,
+        permission: 'users.manage',
+        restaurantWide: true,
+      },
+    ],
   },
-  { to: '/settings/taxes', labelKey: 'nav.taxes', icon: Receipt, permission: 'products.view' },
   {
-    to: '/settings/discounts',
-    labelKey: 'nav.discounts',
-    icon: BadgePercent,
-    permission: 'settings.manage',
+    labelKey: 'system',
+    items: [
+      { to: '/system/devices', labelKey: 'devices', icon: ServerCog, permission: 'devices.manage' },
+      { to: '/system/sync', labelKey: 'sync', icon: RefreshCw, permission: 'sync.view' },
+      { to: '/system/audit-log', labelKey: 'auditLog', icon: ScrollText, permission: 'audit.view' },
+    ],
   },
-  { to: '/settings/tables', labelKey: 'nav.tables', icon: Grid3x3, permission: 'orders.view' },
 ];
 
 function LocationPicker() {
@@ -119,7 +238,7 @@ function LocationPicker() {
 export function AppShell() {
   const { t } = useTranslation(['admin', 'common']);
   const user = useSession((s) => s.user);
-  const { canAnywhere } = usePermissions();
+  const { can, canAnywhere } = usePermissions();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -134,30 +253,45 @@ export function AppShell() {
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
-      <aside className="border-b bg-card md:w-64 md:shrink-0 md:border-e md:border-b-0">
+      <aside className="border-b bg-card md:sticky md:top-0 md:h-screen md:w-64 md:shrink-0 md:overflow-y-auto md:border-e md:border-b-0">
         <div className="flex h-14 items-center px-4 font-semibold">{t('common:appName')}</div>
         <nav
           aria-label={t('admin:nav.mainNavigation')}
-          className="flex gap-1 overflow-x-auto px-2 pb-2 md:flex-col md:pb-4"
+          className="flex gap-4 overflow-x-auto px-2 pb-2 md:flex-col md:gap-3 md:pb-4"
         >
-          {NAV.filter((item) => !item.permission || canAnywhere(item.permission)).map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/'}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-3 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-foreground hover:bg-muted',
-                )
-              }
-            >
-              <item.icon aria-hidden className="size-4" />
-              {t(`admin:${item.labelKey}`)}
-            </NavLink>
-          ))}
+          {NAV.map((group) => {
+            const items = group.items.filter(
+              (item) =>
+                !item.permission ||
+                (item.restaurantWide ? can(item.permission) : canAnywhere(item.permission)),
+            );
+            if (items.length === 0) return null;
+            return (
+              <div key={group.labelKey} className="flex gap-1 md:flex-col">
+                <span className="hidden px-3 pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground md:block">
+                  {t(`admin:nav.${group.labelKey}`)}
+                </span>
+                {items.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.to === '/'}
+                    className={({ isActive }) =>
+                      cn(
+                        'flex items-center gap-3 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                        isActive
+                          ? 'bg-primary text-primary-foreground'
+                          : 'text-foreground hover:bg-muted',
+                      )
+                    }
+                  >
+                    <item.icon aria-hidden className="size-4" />
+                    {t(`admin:nav.${item.labelKey}`)}
+                  </NavLink>
+                ))}
+              </div>
+            );
+          })}
         </nav>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">

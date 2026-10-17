@@ -520,6 +520,51 @@ export class SyncEngineService implements OnApplicationBootstrap, OnModuleDestro
         await this.inbound.ingest(order);
       }
     }
+    const operationIds = [
+      ...new Set(
+        changes.flatMap((c) => (c.topic === 'RESOLUTION' && c.entityId ? [c.entityId] : [])),
+      ),
+    ];
+    for (const operationId of operationIds) await this.applyResolution(client, operationId, signal);
+  }
+
+  /**
+   * An administrator settled an operation the cloud refused (ADR 0014). RESEND puts the entity's
+   * failed operations back in the queue (the cloud then answers DUPLICATE for one it applied);
+   * ADOPT_CLOUD replaces the hub's copy of the order with the cloud's.
+   */
+  private async applyResolution(
+    client: CloudClient,
+    operationId: string,
+    signal: AbortSignal,
+  ): Promise<void> {
+    let decision;
+    try {
+      decision = await client.resolution(operationId, signal);
+    } catch (error) {
+      // Not this location's operation, or nothing decided: nothing to do.
+      if (error instanceof CloudRequestRejected && error.status === 404) return;
+      throw error;
+    }
+    if (decision.action === 'ADOPT_CLOUD' && decision.order) {
+      try {
+        await this.inbound.adopt(decision.order);
+      } catch (error) {
+        if (!isForeignKeyError(error)) throw error;
+        await this.refreshConfiguration();
+        await this.inbound.adopt(decision.order);
+      }
+      this.logger.log(`Took the cloud's version of order ${decision.order.orderNumber}`);
+    } else {
+      const { count } = await this.db.syncOperation.updateMany({
+        where: { entityType: decision.entityType, entityId: decision.entityId, status: 'FAILED' },
+        data: { status: 'PENDING', nextRetryAt: null, retryCount: 0 },
+      });
+      if (count > 0)
+        this.logger.log(`Resending ${String(count)} operation(s) as decided in the cloud`);
+    }
+    this.schedulePush(0);
+    await this.announce();
   }
 
   private async refreshConfiguration(): Promise<void> {

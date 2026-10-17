@@ -1,8 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type { Device as DeviceRow } from '@pos/database';
 import { DomainError } from '@pos/domain';
-import { AuditService, PrismaService } from '@pos/server';
-import type { Device, PairDeviceRequest, PairedDevice } from '@pos/validation';
+import { APP_CONFIG, type AppConfig, AuditService, PrismaService } from '@pos/server';
+import {
+  type AdminDevice,
+  type Device,
+  type PairDeviceRequest,
+  type PairedDevice,
+  reportedOutboxSchema,
+} from '@pos/validation';
 import { hashDeviceSecret, newDeviceSecret } from './device-credentials';
 
 const toDto = (row: DeviceRow): Device => ({
@@ -15,20 +21,46 @@ const toDto = (row: DeviceRow): Device => ({
   createdAt: row.createdAt.toISOString(),
 });
 
+/**
+ * A device for the admin portal: whether it was heard from within the heartbeat window, and the
+ * outbox size its last push reported (kept in `metadata.outbox`; non-secret).
+ */
+export function toAdminDevice(row: DeviceRow, staleAfterMs: number, now = new Date()): AdminDevice {
+  const metadata =
+    row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
+      ? (row.metadata as Record<string, unknown>)
+      : {};
+  const outbox = reportedOutboxSchema.safeParse(metadata.outbox);
+  return {
+    ...toDto(row),
+    online:
+      row.status === 'ACTIVE' &&
+      row.lastSeenAt !== null &&
+      now.getTime() - row.lastSeenAt.getTime() <= staleAfterMs,
+    outbox: outbox.success ? outbox.data : null,
+  };
+}
+
 /** Registers location hubs and issues their credentials (shown once). */
 @Injectable()
 export class DevicesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
-  async list(locationId: string): Promise<Device[]> {
+  get staleAfterMs(): number {
+    return this.config.HUB_HEARTBEAT_STALE_SECONDS * 1000;
+  }
+
+  async list(locationId: string): Promise<AdminDevice[]> {
     const rows = await this.prisma.device.findMany({
       where: { locationId },
       orderBy: { createdAt: 'desc' },
     });
-    return rows.map(toDto);
+    const now = new Date();
+    return rows.map((row) => toAdminDevice(row, this.staleAfterMs, now));
   }
 
   async pair(locationId: string, input: Required<PairDeviceRequest>): Promise<PairedDevice> {
@@ -63,7 +95,7 @@ export class DevicesService {
   async disable(locationId: string, deviceId: string): Promise<Device> {
     return this.prisma.$transaction(async (tx) => {
       const found = await tx.device.findFirst({ where: { id: deviceId, locationId } });
-      if (!found) throw new DomainError('NOT_FOUND', 'Device not found', { deviceId });
+      if (!found) throw new DomainError('DEVICE_NOT_FOUND', 'Device not found', { deviceId });
       const row = await tx.device.update({
         where: { id: deviceId },
         data: { status: 'DISABLED', credentialHash: null },
@@ -74,7 +106,7 @@ export class DevicesService {
           entityType: 'Device',
           entityId: deviceId,
           locationId,
-          metadata: {},
+          metadata: { name: found.name, type: found.type },
         },
         tx,
       );

@@ -10,6 +10,7 @@ import type {
   SyncOperationResult,
   SyncOrder,
   SyncPushRequest,
+  SyncResolution,
 } from '@pos/validation';
 import { createHub } from '../src/bootstrap';
 import { loadHubConfig } from '../src/config';
@@ -38,6 +39,8 @@ export class FakeCloud {
   readonly changes: ChangeEntry[] = [];
   /** Website orders the cloud serves at `/sync/orders/:id` (the ORDER topic). */
   readonly orders = new Map<string, SyncOrder>();
+  /** Administrators' decisions served at `/sync/resolutions/:operationId` (ADR 0014). */
+  readonly resolutions = new Map<string, SyncResolution>();
   readonly credential = 'device-id.secret-value';
   private server: Server | null = null;
   url = '';
@@ -55,6 +58,12 @@ export class FakeCloud {
   publishOrder(order: SyncOrder): void {
     this.orders.set(order.id, order);
     this.addChange('ORDER', order.id);
+  }
+
+  /** An administrator settled a refused operation: serve the decision and announce it. */
+  publishResolution(decision: SyncResolution): void {
+    this.resolutions.set(decision.operationId, decision);
+    this.addChange('RESOLUTION', decision.operationId);
   }
 
   /** Operations of every push, flattened. */
@@ -77,6 +86,13 @@ export class FakeCloud {
         const order = this.orders.get(decodeURIComponent(orderPath[1] ?? ''));
         if (order) json(200, order);
         else json(404, { code: 'ORDER_NOT_FOUND' });
+        return;
+      }
+      const resolutionPath = /^\/api\/v1\/sync\/resolutions\/([^/]+)$/.exec(url.pathname);
+      if (resolutionPath) {
+        const decision = this.resolutions.get(decodeURIComponent(resolutionPath[1] ?? ''));
+        if (decision) json(200, decision);
+        else json(404, { code: 'SYNC_ISSUE_NOT_FOUND' });
         return;
       }
       switch (url.pathname) {

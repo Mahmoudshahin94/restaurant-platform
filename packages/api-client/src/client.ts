@@ -63,6 +63,7 @@ import {
 } from '@pos/validation';
 import type { OrderStatus } from '@pos/shared-types';
 import { z } from 'zod';
+import { adminApi } from './admin';
 import { HttpClient, type HttpClientOptions } from './http';
 
 const API = '/api/v1';
@@ -91,6 +92,8 @@ export function createApiClient(options: HttpClientOptions) {
 
   return {
     http,
+    /** Admin portal (cloud only, Phase 8). */
+    admin: adminApi(http),
     auth: {
       login: (body: LoginRequest) =>
         http.request('POST', `${API}/auth/login`, {

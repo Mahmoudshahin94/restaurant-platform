@@ -1,4 +1,10 @@
-import type { ListProductsQuery } from '@pos/validation';
+import type {
+  AuditLogQuery,
+  CustomerQuery,
+  ListProductsQuery,
+  PaymentSearchQuery,
+  SyncIssuesQuery,
+} from '@pos/validation';
 import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSession } from '../stores/session';
 import { api } from './api';
@@ -16,6 +22,27 @@ export const keys = {
   discounts: (rid: string, archived: boolean) => ['discounts', rid, archived] as const,
   floor: (locationId: string) => ['floor', locationId] as const,
   locationMenu: (locationId: string) => ['location-menu', locationId] as const,
+  dashboard: (rid: string) => ['dashboard', rid] as const,
+  users: (rid: string) => ['users', rid] as const,
+  roles: (rid: string) => ['roles', rid] as const,
+  employees: (rid: string) => ['employees', rid] as const,
+  paymentMethods: (rid: string) => ['payment-methods', rid] as const,
+  cashRegisters: (locationId: string) => ['cash-registers', locationId] as const,
+  onlineOrdering: (locationId: string) => ['online-ordering', locationId] as const,
+  orders: (rid: string, query: object) => ['orders', rid, query] as const,
+  order: (locationId: string, orderId: string) => ['order', locationId, orderId] as const,
+  customers: (rid: string, query: CustomerQuery) => ['customers', rid, query] as const,
+  customer: (rid: string, key: string) => ['customer', rid, key] as const,
+  payments: (rid: string, query: PaymentSearchQuery) => ['payments', rid, query] as const,
+  shifts: (locationId: string, status: string) => ['shifts', locationId, status] as const,
+  shift: (locationId: string, shiftId: string) => ['shift', locationId, shiftId] as const,
+  devices: (locationId: string) => ['devices', locationId] as const,
+  syncStatus: (locationId: string) => ['sync-status', locationId] as const,
+  syncIssues: (locationId: string, query: SyncIssuesQuery) =>
+    ['sync-issues', locationId, query] as const,
+  syncIssue: (locationId: string, operationId: string) =>
+    ['sync-issue', locationId, operationId] as const,
+  auditLogs: (rid: string, query: AuditLogQuery) => ['audit-logs', rid, query] as const,
 };
 
 export function useRestaurantId(): string {
@@ -128,5 +155,23 @@ export function useCatalogMutation<TVariables, TResult>(
   return useMutation({
     mutationFn: fn,
     onSuccess: () => invalidateCatalog(client),
+  });
+}
+
+/**
+ * A mutation that refreshes the queries whose first key is listed (admin screens other than the
+ * catalog). Pass every list the change can affect.
+ */
+export function useAdminMutation<TVariables, TResult>(
+  fn: (variables: TVariables) => Promise<TResult>,
+  affects: readonly string[],
+) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () =>
+      client.invalidateQueries({
+        predicate: (q) => affects.includes(String(q.queryKey[0])),
+      }),
   });
 }

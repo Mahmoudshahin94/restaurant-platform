@@ -28,8 +28,32 @@ import { moneyField, useMoney } from '../../lib/money';
 import { useCatalogMutation, useRestaurantId } from '../../lib/queries';
 
 const required = 'common:validation.required';
+const selectionCount = z
+  .string()
+  .trim()
+  .regex(/^\d{0,2}$/, 'common:validation.invalid');
 
-function productForm(currency: string) {
+/** A group's own rule, the default when the product does not override it. */
+interface GroupRule {
+  id: string;
+  minSelect: number;
+  maxSelect: number | null;
+  options: number;
+}
+
+/**
+ * The product's overrides must still make a valid choice: min ≤ max (each falling back to the
+ * group's value) and min no more than the group's options. The API checks the same.
+ */
+export function validOverride(rule: GroupRule, min: string, max: string): boolean {
+  const minValue = min === '' ? rule.minSelect : Number(min);
+  const maxValue = max === '' ? rule.maxSelect : Number(max);
+  if (max !== '' && Number(max) < 1) return false;
+  if (minValue > rule.options) return false;
+  return maxValue === null || minValue <= maxValue;
+}
+
+function productForm(currency: string, groups: readonly GroupRule[]) {
   return z.object({
     categoryId: z.string().min(1, required),
     sku: z.string().trim().max(40, 'common:validation.tooLong'),
@@ -50,13 +74,27 @@ function productForm(currency: string) {
         price: moneyField(currency),
       }),
     ),
-    modifierGroupIds: z.array(z.string()),
+    modifierGroups: z
+      .array(z.object({ id: z.string(), min: selectionCount, max: selectionCount }))
+      .superRefine((links, ctx) => {
+        links.forEach((link, index) => {
+          const rule = groups.find((g) => g.id === link.id);
+          if (rule && !validOverride(rule, link.min, link.max)) {
+            ctx.addIssue({
+              code: 'custom',
+              message: 'menu:products.overrideInvalid',
+              path: [index, 'max'],
+            });
+          }
+        });
+      }),
     stationIds: z.array(z.string()),
     taxIds: z.array(z.string()),
   });
 }
 type ProductFormInput = z.input<ReturnType<typeof productForm>>;
 type ProductFormOutput = z.output<ReturnType<typeof productForm>>;
+type GroupLinkInput = ProductFormInput['modifierGroups'][number];
 
 interface ProductDialogProps {
   product: Product | null;
@@ -66,6 +104,22 @@ interface ProductDialogProps {
   stations: KitchenStation[];
   taxes: Tax[];
   onClose: () => void;
+}
+
+/** Adds or removes a group link, keeping display order and any override already typed. */
+function toggleGroup(
+  list: readonly GroupLinkInput[],
+  id: string,
+  on: boolean,
+  universe: readonly { id: string }[],
+): GroupLinkInput[] {
+  const byId = new Map(list.map((l) => [l.id, l]));
+  if (on && !byId.has(id)) byId.set(id, { id, min: '', max: '' });
+  if (!on) byId.delete(id);
+  return universe.flatMap((u) => {
+    const link = byId.get(u.id);
+    return link ? [link] : [];
+  });
 }
 
 /** Toggles an id in a list while keeping the order of `universe` (display order). */
@@ -97,8 +151,14 @@ export function ProductDialog({
   const { toInput } = useMoney();
   const [formError, setFormError] = useState<string | null>(null);
 
+  const rules: GroupRule[] = modifierGroups.map((g) => ({
+    id: g.id,
+    minSelect: g.minSelect,
+    maxSelect: g.maxSelect,
+    options: g.modifiers.filter((m) => m.archivedAt === null).length,
+  }));
   const form = useForm<ProductFormInput, unknown, ProductFormOutput>({
-    resolver: zodResolver(productForm(currency)),
+    resolver: zodResolver(productForm(currency, rules)),
     defaultValues: {
       categoryId: product?.categoryId ?? categories[0]?.id ?? '',
       sku: product?.sku ?? '',
@@ -115,7 +175,12 @@ export function ProductDialog({
           nameAr: v.nameAr,
           price: toInput(v.price),
         })) ?? [],
-      modifierGroupIds: product?.modifierGroups.map((l) => l.modifierGroupId) ?? [],
+      modifierGroups:
+        product?.modifierGroups.map((l) => ({
+          id: l.modifierGroupId,
+          min: l.minSelect === null ? '' : String(l.minSelect),
+          max: l.maxSelect === null ? '' : String(l.maxSelect),
+        })) ?? [],
       stationIds: product?.stationIds ?? [],
       // New products start with the restaurant's default taxes; nothing is applied implicitly.
       taxIds: product?.taxIds ?? taxes.filter((t) => t.isDefault).map((t) => t.id),
@@ -126,8 +191,7 @@ export function ProductDialog({
   const msg = (m?: string) => (m ? tKey(t, m) : undefined);
 
   const save = useCatalogMutation((values: ProductFormOutput) => {
-    // Keep per-product min/max overrides set elsewhere (API) for groups that stay attached.
-    const existing = new Map(product?.modifierGroups.map((l) => [l.modifierGroupId, l]) ?? []);
+    const count = (v: string) => (v === '' ? null : Number(v));
     const body = {
       categoryId: values.categoryId,
       sku: values.sku || null,
@@ -138,11 +202,12 @@ export function ProductDialog({
       price: values.price,
       sortOrder: values.sortOrder,
       variants: values.variants.map((v, i) => ({ ...v, sortOrder: i })),
-      modifierGroups: values.modifierGroupIds.map((modifierGroupId, i) => ({
-        modifierGroupId,
+      // Per-product overrides of the group's min/max; empty = the group's own rule.
+      modifierGroups: values.modifierGroups.map((link, i) => ({
+        modifierGroupId: link.id,
         sortOrder: i,
-        minSelect: existing.get(modifierGroupId)?.minSelect ?? null,
-        maxSelect: existing.get(modifierGroupId)?.maxSelect ?? null,
+        minSelect: count(link.min),
+        maxSelect: count(link.max),
       })),
       stationIds: values.stationIds,
       taxIds: values.taxIds,
@@ -283,21 +348,80 @@ export function ProductDialog({
             ) : (
               <Controller
                 control={form.control}
-                name="modifierGroupIds"
+                name="modifierGroups"
                 render={({ field }) => (
-                  <div className="grid gap-2">
-                    {modifierGroups.map((g) => (
-                      <div key={g.id} className="flex items-center gap-2">
-                        <Checkbox
-                          id={`group-${g.id}`}
-                          checked={field.value.includes(g.id)}
-                          onCheckedChange={(v) => {
-                            field.onChange(toggle(field.value, g.id, v === true, modifierGroups));
-                          }}
-                        />
-                        <Label htmlFor={`group-${g.id}`}>{pickLocalized(g, 'name', locale)}</Label>
-                      </div>
-                    ))}
+                  <div className="grid gap-3">
+                    {modifierGroups.map((g) => {
+                      const index = field.value.findIndex((l) => l.id === g.id);
+                      const link = index >= 0 ? field.value[index] : undefined;
+                      const linkError =
+                        index >= 0 ? errors.modifierGroups?.[index]?.max?.message : undefined;
+                      const setLink = (patch: Partial<GroupLinkInput>) => {
+                        field.onChange(
+                          field.value.map((l) => (l.id === g.id ? { ...l, ...patch } : l)),
+                        );
+                      };
+                      return (
+                        <div key={g.id} className="grid gap-2">
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id={`group-${g.id}`}
+                              checked={link !== undefined}
+                              onCheckedChange={(v) => {
+                                field.onChange(
+                                  toggleGroup(field.value, g.id, v === true, modifierGroups),
+                                );
+                              }}
+                            />
+                            <Label htmlFor={`group-${g.id}`}>
+                              {pickLocalized(g, 'name', locale)}
+                            </Label>
+                          </div>
+                          {link ? (
+                            <div className="grid gap-1 ps-6">
+                              <div className="flex flex-wrap items-end gap-2">
+                                <Field label={t('menu:products.overrideMin')} className="w-24">
+                                  <Input
+                                    inputMode="numeric"
+                                    dir="ltr"
+                                    placeholder={String(g.minSelect)}
+                                    value={link.min}
+                                    onChange={(e) => {
+                                      setLink({ min: e.target.value });
+                                    }}
+                                  />
+                                </Field>
+                                <Field label={t('menu:products.overrideMax')} className="w-24">
+                                  <Input
+                                    inputMode="numeric"
+                                    dir="ltr"
+                                    placeholder={g.maxSelect === null ? '—' : String(g.maxSelect)}
+                                    value={link.max}
+                                    onChange={(e) => {
+                                      setLink({ max: e.target.value });
+                                    }}
+                                  />
+                                </Field>
+                              </div>
+                              <p
+                                className={
+                                  linkError
+                                    ? 'text-xs text-destructive'
+                                    : 'text-xs text-muted-foreground'
+                                }
+                              >
+                                {linkError
+                                  ? tKey(t, linkError)
+                                  : t('menu:products.overrideHint', {
+                                      min: g.minSelect,
+                                      max: g.maxSelect ?? t('menu:products.unlimited'),
+                                    })}
+                              </p>
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               />

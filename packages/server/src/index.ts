@@ -12,6 +12,7 @@ export * from './common/auth/principal';
 export * from './common/context/request-context';
 export * from './common/validation/zod-validation.pipe';
 export * from './modules/audit/audit.service';
+export { redactForAudit } from './modules/audit/redact';
 export * from './modules/auth/access.service';
 export * from './modules/auth/token.service';
 export * from './modules/realtime/realtime.bus';

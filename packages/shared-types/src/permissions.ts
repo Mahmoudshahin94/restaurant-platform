@@ -31,6 +31,7 @@ export const PERMISSIONS = [
   'online_ordering.manage',
   'devices.manage',
   'sync.view',
+  'sync.resolve',
   'audit.view',
 ] as const;
 

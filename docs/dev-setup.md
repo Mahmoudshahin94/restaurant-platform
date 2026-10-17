@@ -45,7 +45,10 @@ the API runs, the sync engine sends the hub's outbox to it and follows its chang
 and settings changes made in the admin reach the hub within seconds (`HUB_*` sync settings in
 `.env`, see [sync.md](sync.md)). To start over, stop it and delete `apps/gateway/.hub-data/`.
 `GET http://localhost:4000/api/v1/hub/status` shows the pairing, cloud link and sync state; the
-POS shows the same in its footer and on its synchronization screen (`/sync`).
+POS shows the same in its footer and on its synchronization screen (`/sync`). In the admin portal,
+System → Devices shows the paired hub and its outbox, and System → Synchronization lists the
+changes the cloud refused, with both versions side by side and the decision to take
+([ADR 0014](adr/0014-admin-portal-and-conflict-resolution.md)).
 
 To try offline operation: stop the API, take orders on the POS (footer: "Offline · N pending"),
 start the API again and press "Sync now" on the synchronization screen (or wait up to a minute).

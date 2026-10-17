@@ -12,17 +12,30 @@
     "availability": "Availability",
     "taxes": "Taxes",
     "discounts": "Discounts",
-    "tables": "Tables"
+    "tables": "Tables",
+    "overview": "Overview",
+    "operations": "Operations",
+    "staff": "Staff",
+    "system": "System",
+    "orders": "Orders",
+    "customers": "Customers",
+    "payments": "Payments",
+    "shifts": "Shifts",
+    "restaurant": "Restaurant",
+    "onlineOrdering": "Online ordering",
+    "paymentMethods": "Payment methods",
+    "cashRegisters": "Cash drawers",
+    "users": "Users",
+    "roles": "Roles",
+    "employees": "Employees",
+    "devices": "Devices",
+    "sync": "Synchronization",
+    "auditLog": "Audit log"
   },
   "header": {
     "location": "Location",
     "allLocations": "All locations",
     "signedInAs": "Signed in as {{name}}"
-  },
-  "dashboard": {
-    "title": "Dashboard",
-    "welcome": "Welcome, {{name}}",
-    "phaseNotice": "Sales, orders and reports appear here once ordering is enabled."
   },
   "forbidden": {
     "title": "No access",
@@ -30,5 +43,609 @@
   },
   "notFound": {
     "title": "Page not found"
+  },
+  "shared": {
+    "location": "Location",
+    "allLocations": "All locations",
+    "chooseLocation": "Choose a location",
+    "chooseLocationHint": "Pick a location in the header to see this page.",
+    "from": "From",
+    "to": "To",
+    "search": "Search",
+    "filters": "Filters",
+    "any": "Any",
+    "clear": "Clear filters",
+    "previous": "Previous",
+    "next": "Next",
+    "pageOf": "Page {{page}} of {{pages}}",
+    "total": "{{count}} in total",
+    "pagination": "Pages",
+    "details": "Details",
+    "view": "View",
+    "never": "Never",
+    "none": "None",
+    "unknown": "Unknown",
+    "status": "Status",
+    "actions": "Actions",
+    "minutes": "minutes",
+    "saved": "Changes saved.",
+    "back": "Back",
+    "note": "Note",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome, {{name}}",
+    "subtitle": "Today at each location. Full reports come later.",
+    "businessDay": "Business day {{date}}",
+    "orders": "Orders",
+    "open": "Open",
+    "cancelled": "Cancelled",
+    "sales": "Sales",
+    "collected": "Collected",
+    "openShifts": "Open shifts",
+    "online": "Online ordering",
+    "hub": "Restaurant hub",
+    "lastSeen": "Last contact {{time}}",
+    "outbox": "Waiting {{pending}} · failed {{failed}}",
+    "issues": "Sync issues",
+    "inactive": "Inactive location",
+    "empty": "No locations to show",
+    "emptyHint": "Your role does not include viewing orders at any location.",
+    "hubState": {
+      "NOT_PAIRED": "Not paired",
+      "ONLINE": "Online",
+      "OFFLINE": "Offline",
+      "DISABLED": "Disabled"
+    }
+  },
+  "onlineState": {
+    "OPEN": "Open",
+    "PAUSED": "Paused",
+    "CLOSED": "Closed",
+    "OFFLINE": "Offline"
+  },
+  "onlineReason": {
+    "LOCATION_INACTIVE": "The location is inactive.",
+    "SETTING_CLOSED": "Closed by the restaurant.",
+    "SETTING_PAUSED": "Paused by the restaurant.",
+    "OUTSIDE_HOURS": "Outside opening hours.",
+    "HUB_OFFLINE": "The restaurant hub is not connected to the cloud."
+  },
+  "restaurant": {
+    "title": "Restaurant",
+    "description": "Names, language and time zone used across all locations.",
+    "currency": "Currency",
+    "currencyHint": "Set when the restaurant was created; every amount is stored in it.",
+    "slug": "Web address name",
+    "defaultLocale": "Default language",
+    "timezone": "Time zone",
+    "timezoneHint": "IANA name, e.g. Asia/Riyadh."
+  },
+  "locations": {
+    "title": "Locations",
+    "description": "Branches, their taxes, cash rounding and kitchen screen timers.",
+    "new": "New location",
+    "edit": "Edit location",
+    "code": "Code",
+    "codeHint": "2–10 letters or digits, printed on receipts and order numbers. Cannot change later.",
+    "timezone": "Time zone",
+    "address": "Address",
+    "phone": "Phone",
+    "taxInclusive": "Prices include tax",
+    "taxInclusiveHint": "Menu prices at this location already contain tax.",
+    "cashRounding": "Cash rounding",
+    "cashRoundingHint": "Smallest coin for cash payments (e.g. 0.05). Empty turns rounding off.",
+    "noRounding": "Off",
+    "kdsWarn": "Kitchen warning after (minutes)",
+    "kdsLate": "Kitchen late after (minutes)",
+    "kdsHint": "Tickets older than this are flagged on the kitchen screen.",
+    "lateAboveWarn": "Must be more than the warning time",
+    "active": "Location is active",
+    "empty": "No locations",
+    "kitchen": "Kitchen screen",
+    "taxes": "Tax",
+    "inclusive": "Included",
+    "exclusive": "Added"
+  },
+  "online": {
+    "title": "Online ordering",
+    "description": "What customers of the website can order from this location, and when.",
+    "state": "Ordering",
+    "stateHint": "Open takes orders within the opening hours; paused shows the location but takes none.",
+    "customersSee": "Customers see now",
+    "hubLastSeen": "Hub last contact: {{time}}",
+    "hours": "Opening hours",
+    "hoursHint": "In the location's time zone. A closing time at or before the opening time runs past midnight. No hours means no restriction.",
+    "addWindow": "Add hours",
+    "day": "Day",
+    "opens": "Opens",
+    "closes": "Closes",
+    "noHours": "No opening hours: open all day while ordering is open.",
+    "acceptMinutes": "Minutes to accept an order",
+    "acceptMinutesHint": "Orders not accepted in time are cancelled and refunded automatically.",
+    "pickup": "Pickup",
+    "delivery": "Delivery",
+    "deliveryFee": "Delivery fee",
+    "fulfillment": "Fulfillment",
+    "days": {
+      "0": "Sunday",
+      "1": "Monday",
+      "2": "Tuesday",
+      "3": "Wednesday",
+      "4": "Thursday",
+      "5": "Friday",
+      "6": "Saturday"
+    }
+  },
+  "paymentMethods": {
+    "title": "Payment methods",
+    "description": "Tenders the POS and website accept. Archived methods stay on past payments.",
+    "new": "New payment method",
+    "edit": "Edit payment method",
+    "type": "Type",
+    "typeHint": "Cannot change later: recorded payments keep their type.",
+    "types": {
+      "CASH": "Cash",
+      "CARD": "Card (terminal)",
+      "ONLINE": "Online card"
+    },
+    "sortOrder": "Display order",
+    "empty": "No payment methods"
+  },
+  "cashRegisters": {
+    "title": "Cash drawers",
+    "description": "Drawers at this location. Shifts are opened on a drawer at the POS.",
+    "new": "New cash drawer",
+    "edit": "Edit cash drawer",
+    "shift": "Shift",
+    "openShift": "Shift open",
+    "noShift": "No open shift",
+    "empty": "No cash drawers"
+  },
+  "users": {
+    "title": "Users",
+    "description": "People who sign in to the admin portal or the POS, and what their roles let them do.",
+    "new": "New user",
+    "edit": "Edit user",
+    "email": "Email",
+    "name": "Name",
+    "language": "Language",
+    "password": "Password",
+    "passwordHint": "At least 10 characters. Share it privately; the user can be asked to change it.",
+    "roles": "Roles",
+    "rolesHint": "Restaurant-wide roles apply to every location.",
+    "addRole": "Add role",
+    "role": "Role",
+    "where": "Where",
+    "restaurantWide": "Every location",
+    "noRoles": "No roles: this user cannot do anything yet.",
+    "lastLogin": "Last sign-in",
+    "deactivate": "Deactivate",
+    "reactivate": "Reactivate",
+    "deactivateTitle": "Deactivate {{name}}?",
+    "deactivateBody": "They are signed out everywhere at once and cannot sign in until reactivated.",
+    "resetPassword": "Reset password",
+    "resetTitle": "New password for {{name}}",
+    "resetBody": "Their current sessions end. Share the new password privately.",
+    "resetDone": "Password changed.",
+    "editRoles": "Roles",
+    "rolesTitle": "Roles of {{name}}",
+    "employee": "Employee code",
+    "you": "You",
+    "empty": "No users"
+  },
+  "roles": {
+    "title": "Roles",
+    "description": "Each role is a set of permissions. Nobody can grant permissions they do not hold.",
+    "new": "New role",
+    "edit": "Edit role",
+    "name": "Name",
+    "roleDescription": "Description",
+    "system": "System role",
+    "systemHint": "Holds every permission and cannot be changed.",
+    "users": "Users",
+    "permissions": "Permissions",
+    "count": "{{count}} of {{total}}",
+    "deleteTitle": "Delete the role {{name}}?",
+    "deleteBody": "Only roles nobody holds can be deleted.",
+    "notGrantable": "You do not hold this permission",
+    "empty": "No roles"
+  },
+  "permissionGroups": {
+    "orders": "Orders",
+    "products": "Menu",
+    "payments": "Payments and cash",
+    "kitchen": "Kitchen and tables",
+    "people": "Customers, staff and reports",
+    "settings": "Settings and system"
+  },
+  "permissions": {
+    "orders": {
+      "view": "View orders",
+      "create": "Take orders",
+      "update": "Change orders",
+      "cancel": "Cancel orders",
+      "refund": "Refund orders",
+      "discount": "Apply discounts"
+    },
+    "products": {
+      "view": "View the menu",
+      "create": "Add menu items",
+      "update": "Change menu items and prices",
+      "delete": "Archive menu items"
+    },
+    "payments": {
+      "view": "View payments",
+      "create": "Take payments",
+      "refund": "Refund payments"
+    },
+    "shifts": {
+      "manage": "Open and close shifts"
+    },
+    "cash": {
+      "manage": "Pay cash in and out"
+    },
+    "tables": {
+      "manage": "Manage tables"
+    },
+    "kitchen": {
+      "view": "View the kitchen screen",
+      "update": "Work kitchen tickets"
+    },
+    "customers": {
+      "view": "View customers",
+      "manage": "Manage customers"
+    },
+    "reports": {
+      "view": "View reports"
+    },
+    "users": {
+      "manage": "Manage users and employees"
+    },
+    "roles": {
+      "manage": "Manage roles"
+    },
+    "locations": {
+      "view": "View locations"
+    },
+    "settings": {
+      "manage": "Change settings"
+    },
+    "online_ordering": {
+      "manage": "Manage online ordering"
+    },
+    "devices": {
+      "manage": "Manage devices"
+    },
+    "sync": {
+      "view": "View synchronization",
+      "resolve": "Resolve sync conflicts"
+    },
+    "audit": {
+      "view": "View the audit log"
+    }
+  },
+  "employees": {
+    "title": "Employees",
+    "description": "Staff who sign in at the POS with a code and PIN. They act with the roles of their linked user.",
+    "new": "New employee",
+    "edit": "Edit employee",
+    "code": "Employee code",
+    "codeHint": "Typed at the POS, e.g. 1001.",
+    "name": "Name",
+    "homeLocation": "Home location",
+    "noHomeLocation": "None",
+    "user": "Signs in as",
+    "noUser": "Nobody (cannot sign in)",
+    "userHint": "The employee gets this user's roles at the POS.",
+    "pin": "PIN",
+    "pinHint": "4 to 8 digits. Stored encrypted; nobody can read it back.",
+    "setPin": "Set PIN",
+    "resetPin": "Reset PIN",
+    "pinTitle": "PIN for {{name}}",
+    "pinDone": "PIN saved. It reaches the restaurant hub within a minute.",
+    "hasPin": "PIN set",
+    "noPin": "No PIN",
+    "empty": "No employees"
+  },
+  "orders": {
+    "title": "Orders",
+    "description": "Orders of every channel at your locations.",
+    "searchPlaceholder": "Order number, name or phone",
+    "number": "Order",
+    "date": "Business day",
+    "customer": "Customer",
+    "items": "Items",
+    "payment": "Payment",
+    "empty": "No orders match",
+    "emptyHint": "Change the filters to see more.",
+    "detail": {
+      "title": "Order {{number}}",
+      "back": "All orders",
+      "summary": "Summary",
+      "items": "Items",
+      "history": "Status history",
+      "payments": "Payments",
+      "tickets": "Kitchen tickets",
+      "noPayments": "No payments yet",
+      "noTickets": "Not sent to the kitchen",
+      "placed": "Placed",
+      "source": "Taken on",
+      "version": "Version",
+      "delivery": "Delivery address",
+      "fulfillment": "Fulfillment",
+      "reason": "Reason: {{reason}}",
+      "by": "By",
+      "station": "Station",
+      "hubOwned": "This order is managed at the restaurant's POS; changes are made there."
+    }
+  },
+  "sources": {
+    "POS": "POS",
+    "KDS": "Kitchen screen",
+    "WEBSITE": "Website",
+    "ADMIN": "Admin portal",
+    "HUB": "Restaurant hub",
+    "SYSTEM": "System"
+  },
+  "actorTypes": {
+    "USER": "User",
+    "EMPLOYEE": "Employee",
+    "DEVICE": "Device",
+    "CUSTOMER": "Customer",
+    "SYSTEM": "System"
+  },
+  "customers": {
+    "title": "Customers",
+    "description": "Grouped by phone number from the contact details on orders. There are no customer accounts yet.",
+    "searchPlaceholder": "Name or phone",
+    "name": "Name",
+    "phone": "Phone",
+    "email": "Email",
+    "orders": "Orders",
+    "spent": "Total spent",
+    "last": "Last order",
+    "first": "First order",
+    "empty": "No customers yet",
+    "emptyHint": "Customers appear when orders carry a phone number.",
+    "detailTitle": "Customer",
+    "back": "All customers"
+  },
+  "payments": {
+    "title": "Payments",
+    "description": "Charges and refunds at your locations. Dates are the orders' business days.",
+    "kind": "Kind",
+    "kinds": {
+      "CHARGE": "Payment",
+      "REFUND": "Refund"
+    },
+    "method": "Method",
+    "amount": "Amount",
+    "refundable": "Refundable",
+    "order": "Order",
+    "when": "When",
+    "reference": "Reference",
+    "empty": "No payments match",
+    "refund": "Refund",
+    "refundTitle": "Refund online payment of order {{number}}",
+    "refundAmount": "Amount to refund",
+    "refundMax": "Up to {{amount}}",
+    "refundReason": "Reason",
+    "refundReasonHint": "Required. Shown in the order history and audit log.",
+    "refundConfirm": "Refund {{amount}}",
+    "refundDone": "Refund recorded.",
+    "atTill": "Cash and card refunds are made at the POS, where the drawer is.",
+    "statuses": {
+      "PENDING": "Pending",
+      "AUTHORIZED": "Authorized",
+      "CAPTURED": "Completed",
+      "FAILED": "Failed",
+      "CANCELLED": "Cancelled"
+    }
+  },
+  "shifts": {
+    "title": "Shifts",
+    "description": "Cash drawer shifts at this location (read only; shifts are run at the POS).",
+    "register": "Drawer",
+    "opened": "Opened",
+    "closed": "Closed",
+    "statuses": {
+      "OPEN": "Open",
+      "CLOSED": "Closed"
+    },
+    "openingFloat": "Opening cash",
+    "expected": "Expected",
+    "counted": "Counted",
+    "difference": "Difference",
+    "short": "Short",
+    "over": "Over",
+    "even": "Even",
+    "empty": "No shifts",
+    "filter": "Show",
+    "all": "All shifts",
+    "detailTitle": "Shift details",
+    "back": "All shifts",
+    "cash": "Cash",
+    "byMethod": "By payment method",
+    "orders": "Orders paid",
+    "movements": "Cash movements",
+    "movementTypes": {
+      "SALE": "Sale",
+      "REFUND": "Refund",
+      "PAY_IN": "Paid in",
+      "PAY_OUT": "Paid out"
+    },
+    "notes": "Closing notes",
+    "noMovements": "No cash movements"
+  },
+  "devices": {
+    "title": "Devices",
+    "description": "The restaurant hub of this location and its connection to the cloud.",
+    "pair": "Pair a hub",
+    "pairTitle": "Pair a restaurant hub",
+    "name": "Name",
+    "type": "Type",
+    "types": {
+      "POS": "POS terminal",
+      "KDS": "Kitchen screen",
+      "PRINTER": "Printer",
+      "KITCHEN_DISPLAY": "Kitchen display",
+      "CUSTOMER_DISPLAY": "Customer display",
+      "GATEWAY": "Restaurant hub"
+    },
+    "statuses": {
+      "PENDING": "Pending",
+      "ACTIVE": "Active",
+      "DISABLED": "Disabled"
+    },
+    "lastSeen": "Last contact",
+    "connection": "Connection",
+    "online": "Online",
+    "offline": "Offline",
+    "outbox": "Waiting to send",
+    "outboxValue": "{{pending}} waiting · {{failed}} failed",
+    "disable": "Disable",
+    "disableTitle": "Disable {{name}}?",
+    "disableBody": "Its credential stops working at once. Pair a new hub to replace it.",
+    "empty": "No hub paired",
+    "emptyHint": "Pair the location's hub so the POS and kitchen screens work offline.",
+    "steps": {
+      "title": "How pairing works",
+      "one": "Install the restaurant hub on a computer at the location (it runs on the restaurant's network).",
+      "two": "On that computer, run the pairing command below with an owner's email and this location's code; it asks for the password.",
+      "three": "The hub downloads the location's menu, staff and settings, then keeps them in sync by itself.",
+      "four": "Point the POS terminals and kitchen screens at the hub's address on the local network.",
+      "command": "Pairing command"
+    },
+    "manualTitle": "Pair here instead",
+    "manualHint": "Creates the credential now; enter it on the hub. It is shown only once.",
+    "credential": "Credential",
+    "credentialHint": "Copy it now: it is shown only once and stored only as a hash.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "hubName": "Hub name"
+  },
+  "sync": {
+    "title": "Synchronization",
+    "description": "The location hub's link to the cloud, and the changes the cloud refused from it.",
+    "hub": "Hub",
+    "noHub": "No hub is paired with this location.",
+    "lastReceived": "Last change received",
+    "openIssues": "Open issues",
+    "issues": "Refused changes",
+    "states": {
+      "open": "Open",
+      "resolved": "Resolved",
+      "all": "All"
+    },
+    "columns": {
+      "change": "Change",
+      "problem": "Problem",
+      "when": "Last attempt",
+      "attempts": "Attempts",
+      "outcome": "Outcome"
+    },
+    "entity": {
+      "Order": "Order",
+      "Shift": "Shift",
+      "KitchenTicket": "Kitchen ticket"
+    },
+    "status": {
+      "APPLIED": "Applied",
+      "CONFLICT": "Conflict",
+      "REJECTED": "Refused"
+    },
+    "resolution": {
+      "APPLIED_HUB": "Restaurant's version applied",
+      "KEPT_CLOUD": "Cloud's version kept"
+    },
+    "resendRequested": "Resend requested",
+    "noIssues": "Nothing was refused",
+    "noIssuesHint": "Every change from the restaurant reached the cloud.",
+    "detail": {
+      "title": "Refused change",
+      "back": "All issues",
+      "rule": "Nothing is overwritten silently. Compare both versions and choose; the version that loses is kept in the audit log, and the restaurant hub follows your decision automatically.",
+      "hubVersion": "Restaurant's version",
+      "cloudVersion": "Cloud's version",
+      "notInCloud": "The cloud has no copy.",
+      "noHubVersion": "Not kept (refused before this was recorded).",
+      "fields": {
+        "label": "Number",
+        "status": "Status",
+        "paymentStatus": "Payment",
+        "total": "Total",
+        "itemCount": "Items",
+        "paymentCount": "Payments",
+        "paidTotal": "Paid",
+        "version": "Version",
+        "updatedAt": "Last changed"
+      },
+      "differs": "Differs",
+      "problem": "Why it was refused",
+      "decision": "Decision",
+      "decided": "{{resolution}} by {{name}} on {{time}}",
+      "note": "Note for the record",
+      "noteHint": "Required: why this is the right choice.",
+      "rawData": "Full data",
+      "actions": {
+        "APPLY_HUB": "Use the restaurant's version",
+        "KEEP_CLOUD": "Keep the cloud's version",
+        "RESEND": "Ask the hub to send it again"
+      },
+      "explain": {
+        "APPLY_HUB": "The restaurant's state replaces the cloud's; the cloud's copy is saved in the audit log first.",
+        "KEEP_CLOUD": "The hub replaces its copy with the cloud's; its refused change stays on record.",
+        "RESEND": "For when the cause was fixed elsewhere; the cloud checks the change again."
+      },
+      "confirm": "Confirm decision",
+      "done": "Decision recorded. The hub follows it within a minute.",
+      "noResolve": "You can view this issue, but resolving it needs the “Resolve sync conflicts” permission."
+    }
+  },
+  "audit": {
+    "title": "Audit log",
+    "description": "Who did what, when and from where. Secrets are never shown.",
+    "action": "Action",
+    "actionHint": "Exact action or a prefix ending in a dot, e.g. order.",
+    "entity": "Record",
+    "actor": "Who",
+    "source": "From",
+    "when": "When",
+    "location": "Location",
+    "restaurantLevel": "Restaurant",
+    "metadata": "Details",
+    "requestId": "Request",
+    "empty": "No entries match",
+    "show": "Show details"
+  },
+  "reasons": {
+    "EMAIL_TAKEN": "This email is already in use.",
+    "SELF": "You cannot do this to your own account.",
+    "LAST_OWNER": "The restaurant needs at least one active owner.",
+    "ESCALATION": "You cannot grant or remove permissions you do not hold.",
+    "SYSTEM_ROLE": "System roles cannot be changed.",
+    "IN_USE": "Remove this role from its users first.",
+    "NAME_TAKEN": "A role with this name exists.",
+    "CODE_TAKEN": "This employee code is in use.",
+    "USER_LINKED": "This user is already linked to another employee.",
+    "LAST_CASH_METHOD": "Keep at least one cash method.",
+    "SHIFT_OPEN": "Close the drawer's shift at the POS first.",
+    "IN_STORE_METHOD": "Refund this payment at the POS.",
+    "AWAITING_ACCEPTANCE": "The order is still waiting for the restaurant.",
+    "EXCEEDS_REFUNDABLE": "That is more than can be refunded.",
+    "PROVIDER_NOT_CONFIGURED": "No online payment provider is set up.",
+    "OWNED_BY_RESTAURANT": "This order is managed at the restaurant's POS.",
+    "APPLY_FAILED": "The restaurant's version could not be applied (it clashes with another record). Fix the cause, then ask the hub to resend.",
+    "INVALID_HUB_VERSION": "The restaurant's version is not valid data.",
+    "ALREADY_RESOLVED": "Already resolved.",
+    "NOT_A_CONFLICT": "Only version conflicts can take the restaurant's version.",
+    "NO_HUB_VERSION": "The restaurant's version was not kept.",
+    "ORDERS_ONLY": "Only orders can take the cloud's version.",
+    "NOT_IN_CLOUD": "The cloud has no copy to keep: the sale would be lost.",
+    "HUB_HAS_PAYMENTS": "The restaurant's version has payments the cloud has not recorded.",
+    "HUB_DISABLED": "The hub that sent it is disabled."
   }
 }

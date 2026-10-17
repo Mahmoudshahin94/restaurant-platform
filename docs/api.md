@@ -232,7 +232,12 @@ guestCount, notes }`. The `id` is a client-generated UUID and the **idempotency 
 - Order guards that involve money: cancelling with money held answers
   `409 INVALID_ORDER_STATE` (`reason: REFUND_FIRST`); an edit that would push the total below what
   is held answers `reason: BELOW_PAID`.
-- **Audit:** `payment.captured`, `payment.refunded` (references only, never card data).
+- **Hub-owned orders** (Phase 8, ADR 0014): in the cloud, an order a location hub has synchronized
+  belongs to that hub. Charges and refunds of it (and order edits and transitions) answer
+  `409 INVALID_ORDER_STATE`, `reason: OWNED_BY_RESTAURANT`; they are made at the POS. Online card
+  charges are refunded from the admin portal instead (below).
+- **Audit:** `payment.captured`, `payment.refunded`, `payment.voided` (online voids; references
+  only, never card data).
 
 ## Shifts and cash drawer (Phase 3)
 
@@ -385,12 +390,12 @@ a label (the order number), status, retry count, next retry, error code and mess
 | Method | Path                                        | Auth              |
 | ------ | ------------------------------------------- | ----------------- |
 | GET    | `/locations/:lid/devices`                   | `devices.manage`  |
+| GET    | `/sync/resolutions/:operationId`            | device credential |
 | POST   | `/locations/:lid/devices`                   | `devices.manage`  |
 | POST   | `/locations/:lid/devices/:deviceId/disable` | `devices.manage`  |
 | GET    | `/sync/snapshot`                            | device credential |
 | POST   | `/sync/push`                                | device credential |
 | GET    | `/sync/pull`                                | device credential |
-| GET    | `/locations/:lid/sync/issues`               | `sync.view`       |
 
 - **Pairing** `{ name, type: GATEWAY }` returns the device and its credential
   (`<deviceId>.<secret>`) once; only a SHA-256 of the secret is stored. Disabling a device revokes
@@ -409,9 +414,132 @@ status: APPLIED|DUPLICATE|CONFLICT|REJECTED|RETRY, code, message }] }`, one per 
 entityId, createdAt }], cursor, hasMore }`; without `cursor`, the head of the feed. With `wait`
   the request is held until a change arrives (long poll). `ORDER` entries name a website order to
   fetch from `/sync/orders/:orderId`.
-- **Issues:** operations the cloud refused from the location's hub (`CONFLICT`/`REJECTED`, newest
-  first, up to 200), with error code, message and attempts.
+- **Devices** (list) carry `online` (heard from within `HUB_HEARTBEAT_STALE_SECONDS`) and the
+  `outbox` the hub last reported (`pending`, `failed`, `reportedAt`). Disabling an unknown device
+  answers `404 DEVICE_NOT_FOUND`.
+- **Pull** entries of topic `RESOLUTION` name an operation an administrator settled; the hub reads
+  the decision from `/sync/resolutions/:operationId` →
+  `{ operationId, entityType, entityId, action: RESEND | ADOPT_CLOUD, order }` (ADR 0014). `404
+SYNC_ISSUE_NOT_FOUND` when nothing was decided or the operation is another location's.
+- Refused operations and their resolution: see [Synchronization issues](#synchronization-issues-phase-8).
 - **Audit:** `device.paired`, `device.disabled`.
+
+## Admin portal (Phase 8, cloud only)
+
+Cloud-only endpoints of the admin portal (`apps/api/src/modules/admin`, ADR 0014). Hubs receive
+staff and configuration through the change feed and never serve these routes. Lists that span
+locations (`any-location`) return only the locations where the caller holds the permission; with
+`locationId` the answer is `404 LOCATION_NOT_FOUND` for a location outside that reach. Paged
+lists take `page` (1…) and `pageSize` (1–100, default 25) and answer `{ items, page, pageSize,
+total }`.
+
+### Staff (restaurant-wide)
+
+| Method | Path                                          | Permission                       |
+| ------ | --------------------------------------------- | -------------------------------- |
+| GET    | `/restaurants/:rid/users`                     | `users.manage`                   |
+| POST   | `/restaurants/:rid/users`                     | `users.manage`                   |
+| PATCH  | `/restaurants/:rid/users/:userId`             | `users.manage`                   |
+| PUT    | `/restaurants/:rid/users/:userId/roles`       | `users.manage`                   |
+| POST   | `/restaurants/:rid/users/:userId/password`    | `users.manage` (204)             |
+| GET    | `/restaurants/:rid/roles`                     | `roles.manage` or `users.manage` |
+| POST   | `/restaurants/:rid/roles`                     | `roles.manage`                   |
+| PATCH  | `/restaurants/:rid/roles/:roleId`             | `roles.manage`                   |
+| DELETE | `/restaurants/:rid/roles/:roleId`             | `roles.manage` (204)             |
+| GET    | `/restaurants/:rid/employees`                 | `users.manage`                   |
+| POST   | `/restaurants/:rid/employees`                 | `users.manage`                   |
+| PATCH  | `/restaurants/:rid/employees/:employeeId`     | `users.manage`                   |
+| PUT    | `/restaurants/:rid/employees/:employeeId/pin` | `users.manage`                   |
+
+- **Users:** create `{ email, displayName, preferredLocale, password (≥ 10), roles: [{ roleId,
+locationId | null }] }`; update `{ displayName?, preferredLocale?, isActive? }`; roles are
+  replaced with `PUT …/roles { roles }`. Passwords are argon2id hashes, never returned.
+  Deactivating a user or resetting their password revokes their refresh tokens.
+- **Roles:** `{ name, description, permissions[] }` from the catalog (`PERMISSIONS`); responses
+  carry `isSystem` and `userCount`. Employees: `{ employeeCode, displayName, homeLocationId,
+userId, pin? }`; the PIN (4–8 digits) is stored hashed; responses only say `hasPin`.
+- **Refusals:** `403 INSUFFICIENT_PERMISSION` with `reason: ESCALATION` and the `missing`
+  permissions (granting, removing, editing or deleting a role, or deactivating, resetting or
+  linking a user, beyond what the caller holds at that scope); `409 CONFLICT` with `reason`
+  `SELF` (own roles or deactivation), `LAST_OWNER` (the last active restaurant-wide holder of a
+  system role), `SYSTEM_ROLE`, `IN_USE` (deleting a role someone holds), `NAME_TAKEN`,
+  `EMAIL_TAKEN`, `CODE_TAKEN`, `USER_LINKED`; `404 USER_NOT_FOUND`, `ROLE_NOT_FOUND`,
+  `EMPLOYEE_NOT_FOUND`.
+- **Audit:** `user.created/updated/deactivated/reactivated/roles_changed/password_reset`,
+  `role.created/updated/permissions_changed/deleted`,
+  `employee.created/updated/user_linked/deactivated/pin_set/pin_reset` (never a password or PIN).
+
+### Payment setup
+
+| Method     | Path                                                             | Permission                         |
+| ---------- | ---------------------------------------------------------------- | ---------------------------------- |
+| GET        | `/restaurants/:rid/payment-methods/all`                          | `settings.manage` (incl. archived) |
+| POST/PATCH | `/restaurants/:rid/payment-methods[/:methodId]`                  | `settings.manage`                  |
+| POST       | `/restaurants/:rid/payment-methods/:methodId/archive · /restore` | `settings.manage`                  |
+| GET        | `/locations/:lid/cash-registers/all`                             | `settings.manage` at the location  |
+| POST/PATCH | `/locations/:lid/cash-registers[/:registerId]`                   | `settings.manage` at the location  |
+| POST       | `/locations/:lid/cash-registers/:registerId/archive · /restore`  | `settings.manage` at the location  |
+
+A method's `type` cannot change; the last active cash method cannot be archived
+(`LAST_CASH_METHOD`), nor a drawer with an open shift (`SHIFT_OPEN`). Audit:
+`payment_method.*`, `cash_register.*`.
+
+### Overview and searches
+
+| Method | Path                                          | Permission                             |
+| ------ | --------------------------------------------- | -------------------------------------- |
+| GET    | `/restaurants/:rid/dashboard`                 | `orders.view` (any location)           |
+| GET    | `/restaurants/:rid/orders`                    | `orders.view` (any location), paged    |
+| GET    | `/restaurants/:rid/customers?search=`         | `customers.view` (any location), paged |
+| GET    | `/restaurants/:rid/customers/:customerKey`    | `customers.view` (any location)        |
+| GET    | `/restaurants/:rid/payments`                  | `payments.view` (any location), paged  |
+| POST   | `/locations/:lid/payments/:paymentId/refunds` | `payments.refund` at the location      |
+| GET    | `/restaurants/:rid/audit-logs`                | `audit.view` (any location), paged     |
+
+- **Dashboard:** per location, today's business date, orders (count, open, cancelled), sales
+  (total of orders not cancelled, money collected), open shifts, online-ordering status, and — with
+  `sync.view` there — the hub (`NOT_PAIRED | ONLINE | OFFLINE | DISABLED`, last contact, outbox,
+  open issues).
+- **Orders:** `locationId`, `from`/`to` (business dates), `status`, `channel`, `paymentStatus`
+  (comma-separated), `search` (number, name or phone) → order summaries; details come from
+  `GET /locations/:lid/orders/:orderId` (history, payments, tickets).
+- **Customers** are grouped by the (trimmed) phone number on orders; `customerKey` is its SHA-256,
+  so no phone number travels in a URL. A detail lists the customer's last 100 orders.
+- **Payments:** `locationId`, `from`/`to` (the orders' business dates), `type`
+  (`CHARGE | REFUND`), `methodType`; each charge carries what is still `refundable`.
+- **Refund** `{ id, amount, reason }` (idempotent by `id`): online card charges only, through the
+  provider, as an append-only drawer-less `REFUND` row, also for orders a hub owns; the order's
+  `version` does not change and an `ORDER` change tells the hub. `422 REFUND_NOT_ALLOWED` with
+  `IN_STORE_METHOD` (cash and card are refunded at the POS) or `EXCEEDS_REFUNDABLE`;
+  `409 INVALID_ORDER_STATE` (`AWAITING_ACCEPTANCE`). Audit: `payment.refunded`.
+- **Audit log:** `action` (exact, or a prefix ending in `.`), `entityType`, `entityId`, `actorId`,
+  `locationId`, `source`, `from`/`to` (UTC dates) → entries with the actor's name; restaurant-level
+  entries need `audit.view` restaurant-wide; metadata is redacted again when read.
+
+### Synchronization issues (Phase 8)
+
+| Method | Path                                                    | Permission                   |
+| ------ | ------------------------------------------------------- | ---------------------------- |
+| GET    | `/locations/:lid/sync/status`                           | `sync.view`                  |
+| GET    | `/locations/:lid/sync/issues?state=open\|resolved\|all` | `sync.view`                  |
+| GET    | `/locations/:lid/sync/issues/:operationId`              | `sync.view`                  |
+| POST   | `/locations/:lid/sync/issues/:operationId/resolve`      | `sync.view` + `sync.resolve` |
+
+- **Status:** the location's hubs (connection, last contact, reported outbox), open issues and the
+  last operation received.
+- **Issues** are operations the cloud refused from the location's hub (`CONFLICT`/`REJECTED`,
+  newest first, up to 200; `open` = not settled), with the error, attempts, the hub's order number,
+  and the resolution once settled (`APPLIED_HUB | KEPT_CLOUD`, who, when, note).
+- **Detail:** the hub's refused version (stored since Phase 8) and the cloud's current copy, each
+  summarised (status, payment status, total, items, payments, paid, version, last change) with the
+  full data, and which actions are possible now (`options.applyHub|keepCloud|resend` with a
+  blocking `reason`: `ALREADY_RESOLVED`, `NOT_A_CONFLICT`, `NO_HUB_VERSION`, `ORDERS_ONLY`,
+  `NOT_IN_CLOUD`, `HUB_HAS_PAYMENTS`, `HUB_DISABLED`).
+- **Resolve** `{ action: APPLY_HUB | KEEP_CLOUD | RESEND, note (3–500) }` → the updated detail
+  (rules in [ADR 0014](adr/0014-admin-portal-and-conflict-resolution.md)); a blocked action answers
+  `409 CONFLICT` with its `reason`; a hub version that cannot be applied (e.g. a clashing order
+  number) `409 CONFLICT` `APPLY_FAILED` and the issue stays open. Audit: `sync.issue_resolved`
+  (with the cloud's previous copy for `APPLY_HUB`), `sync.resend_requested`.
 
 ## Security headers and limits
 
@@ -424,5 +552,7 @@ entityId, createdAt }], cursor, hasMore }`; without `cursor`, the head of the fe
 Structured JSON logs (pino) include `reqId`, `userId`, `restaurantId` and `locationId`.
 Authorization headers, cookies, passwords, tokens, PINs and card fields are redacted. Audit
 entries record actor, source, request id and redacted metadata for: login, failed login, logout,
-refresh-token reuse, restaurant/location changes, and (Phase 1) catalog changes including price
-changes.
+refresh-token reuse, restaurant/location changes, catalog changes including price changes,
+orders (creation, discounts, edits, status changes, cancellations), payments (captures, refunds,
+voids), shifts and cash movements, online-ordering settings, devices, staff and permission
+changes, payment setup and sync decisions (the admin portal's audit log, `audit.view`).
