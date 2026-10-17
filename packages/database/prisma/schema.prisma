@@ -781,7 +781,8 @@ model OrderItem {
   total         Int
   notes         String?
   /// Kitchen stations at the time of ordering (routing snapshot for Phase 4).
-  stationIds    String[] @map("station_ids") @db.Uuid
+  /// JSON array of station ids (portable across PostgreSQL and the hub's SQLite).
+  stationIds    Json     @default("[]") @map("station_ids")
   sortOrder     Int      @default(0) @map("sort_order")
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)

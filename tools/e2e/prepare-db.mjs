@@ -16,7 +16,7 @@ execSync('pnpm exec prisma migrate deploy', { cwd, stdio: 'inherit' });
 execSync('pnpm exec prisma db execute --stdin --schema prisma/schema.prisma', {
   cwd,
   stdio: ['pipe', 'inherit', 'inherit'],
-  input: `TRUNCATE TABLE kitchen_ticket_items, kitchen_tickets, cash_transactions, payments, shifts,
+  input: `TRUNCATE TABLE devices, kitchen_ticket_items, kitchen_tickets, cash_transactions, payments, shifts,
           order_item_modifiers, order_items,
           order_taxes, order_discounts, order_status_history, orders, order_counters CASCADE;`,
 });

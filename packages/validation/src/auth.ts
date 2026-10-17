@@ -18,6 +18,17 @@ export const loginRequestSchema = z.object({
 });
 export type LoginRequest = z.input<typeof loginRequestSchema>;
 
+/** Staff PIN sign-in at the location hub (never offered by the internet-facing cloud). */
+export const pinLoginRequestSchema = z.object({
+  employeeCode: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9-]{1,20}$/),
+  pin: z.string().regex(/^\d{4,8}$/),
+  client: z.enum(['web', 'native']).default('native'),
+});
+export type PinLoginRequest = z.input<typeof pinLoginRequestSchema>;
+
 export const refreshRequestSchema = z.object({
   refreshToken: z.string().min(1).max(512).optional(),
 });

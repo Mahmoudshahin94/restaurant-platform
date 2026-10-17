@@ -1,10 +1,5 @@
 import { type Page, expect, test } from '@playwright/test';
 
-const cashier = {
-  email: process.env.SEED_CASHIER_EMAIL ?? '',
-  password: process.env.SEED_CASHIER_PASSWORD ?? '',
-};
-
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     if (!sessionStorage.getItem('e2e-init')) {
@@ -18,10 +13,11 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
+/** The cashier signs in at the till with employee code and PIN, served by the hub. */
 async function signIn(page: Page): Promise<void> {
   await page.goto('/login');
-  await page.getByLabel('Email').fill(cashier.email);
-  await page.getByLabel('Password').fill(cashier.password);
+  await page.getByLabel('Employee code').fill('1001');
+  await page.getByLabel('PIN', { exact: true }).fill(process.env.SEED_CASHIER_PIN ?? '');
   await page.getByRole('button', { name: 'Sign in' }).click();
   // One location: the terminal selects it automatically and opens order entry.
   await expect(page.getByRole('button', { name: 'Place order' })).toBeVisible();
@@ -154,4 +150,29 @@ test('the POS works in Arabic (RTL) and English (LTR)', async ({ page }) => {
 
   await page.getByRole('combobox', { name: 'اللغة' }).selectOption('en');
   await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
+});
+
+test('staff can still sign in with email and password at the hub', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByRole('tab', { name: 'Email' }).click();
+  await page.getByLabel('Email').fill(process.env.SEED_CASHIER_EMAIL ?? '');
+  await page.getByLabel('Password').fill(process.env.SEED_CASHIER_PASSWORD ?? '');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('button', { name: 'Place order' })).toBeVisible();
+});
+
+test('a wrong PIN is refused without revealing whether the code exists', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByLabel('Employee code').fill('1001');
+  await page.getByLabel('PIN', { exact: true }).fill('0000');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByText('Incorrect employee code or PIN.')).toBeVisible();
+  await expect(page.getByLabel('PIN', { exact: true })).toHaveValue('');
+});
+
+test('the POS shows that it runs on the hub without the cloud', async ({ page }) => {
+  await signIn(page);
+  await expect(
+    page.getByText(/Hub · (offline, orders saved locally|cloud connected|Hub)/),
+  ).toBeVisible();
 });

@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { type AppConfig, loadConfig } from '../src/config/env';
+import { type AppConfig, loadConfig } from '@pos/server';
 
 const ROOT_ENV = resolve(__dirname, '../../../.env');
 

@@ -8,6 +8,12 @@
       "port": 3000
     },
     {
+      "name": "gateway",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@pos/gateway", "start"],
+      "port": 4000
+    },
+    {
       "name": "admin",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@pos/admin", "dev"],

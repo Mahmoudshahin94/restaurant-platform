@@ -32,6 +32,9 @@ export function KdsShell() {
   const [unlocked, setUnlocked] = useState(soundUnlocked);
 
   const status = useRealtime(session, locationId, (event) => {
+    if (event.type === 'menu.updated') {
+      void client.invalidateQueries({ queryKey: ['kitchen-settings'] });
+    }
     if (isKitchenEvent(event) || event.type.startsWith('order.')) {
       void client.invalidateQueries({ queryKey: ticketsKey(locationId) });
     }

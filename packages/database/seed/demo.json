@@ -94,7 +94,8 @@
       "displayName": "Demo Cashier",
       "preferredLocale": "ar",
       "role": "Cashier",
-      "location": "MAIN"
+      "location": "MAIN",
+      "employeeCode": "1001"
     },
     {
       "envPrefix": "SEED_KITCHEN",

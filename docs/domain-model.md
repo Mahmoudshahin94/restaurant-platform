@@ -19,7 +19,7 @@ mirrors the operational subset.
 | Payments  | PaymentMethod, Payment                                                                                                            | ✅ Phase 3                         |
 | Cash      | Shift, CashRegister, CashTransaction                                                                                              | ✅ Phase 3                         |
 | Kitchen   | KitchenTicket, KitchenTicketItem                                                                                                  | ✅ Phase 4                         |
-| Sync      | ProcessedOperation, ChangeLog (cloud); SyncOperation, SyncState (hub)                                                             | ⏳ Phase 6                         |
+| Sync      | SyncOperation, HubState (hub); ProcessedOperation, ChangeLog (cloud)                                                              | Hub ✅ Phase 5, cloud ⏳ Phase 6   |
 | Customers | Customer, Address                                                                                                                 | ⏳ Phase 7                         |
 | Inventory | InventoryItem, Recipe, StockMovement                                                                                              | ⏳ module boundary only            |
 
@@ -147,7 +147,8 @@ historical orders.
   (UUIDv7) and doubles as the idempotency key.
 - `OrderItem`: the id is the client's cart line id. It snapshots names, `basePrice`,
   `unitPrice` (with modifiers), `gross`, the allocated `discount`, `tax` and `total`, plus the
-  kitchen `stationIds` for Phase 4 routing.
+  kitchen `stationIds` (a JSON array, so the same model works on the hub's SQLite) for Phase 4
+  routing.
 - `OrderItemModifier`, `OrderTax` (per-tax breakdown) and `OrderDiscount` (applied amount and
   who applied it) are all snapshots.
 - `OrderStatusHistory`: append-only, recording from → to, actor, source, reason and time.
@@ -187,3 +188,14 @@ historical orders.
   quantity, notes and modifier names (JSON), plus `doneAt` when the cook strikes the line.
 - `Location.kdsWarnMinutes` / `kdsLateMinutes` (defaults 8 / 15): when tickets are flagged as
   getting late and late.
+
+**Location hub** (Phase 5): the hub's SQLite database has the same models (generated schema,
+`prisma/hub/schema.prisma`, guarded by a contract test) plus two of its own:
+
+- `SyncOperation` (`sync_operations`): the outbox (see [sync.md](sync.md)): operation id, entity,
+  operation type, full aggregate payload, entity version, status and retry bookkeeping.
+- `HubState` (`hub_state`): key/value state of the hub's cloud link (pairing and device
+  credential, last applied snapshot).
+
+`Employee` rows carry the PIN hash used for hub sign-in; `Device` rows in the cloud hold the hub's
+credential hash.

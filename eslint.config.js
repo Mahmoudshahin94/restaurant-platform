@@ -52,7 +52,7 @@ export default tseslint.config(
   },
   {
     // NestJS relies on runtime type metadata for DI, so constructor-injected types cannot be type-only imports.
-    files: ['apps/api/**/*.ts'],
+    files: ['apps/api/**/*.ts', 'apps/gateway/**/*.ts', 'packages/server/**/*.ts'],
     rules: {
       '@typescript-eslint/consistent-type-imports': 'off',
     },

@@ -37,6 +37,8 @@
   "CASH_REGISTER_NOT_FOUND": "درج النقد غير موجود.",
   "KITCHEN_TICKET_NOT_FOUND": "لم يتم العثور على تذكرة المطبخ.",
   "INVALID_TICKET_STATE": "لا يمكن تنفيذ هذا الإجراء على التذكرة الآن.",
+  "MANAGED_IN_CLOUD": "يُدار هذا الإعداد من بوابة الإدارة السحابية.",
+  "HUB_NOT_PROVISIONED": "لم يتم إعداد خادم المطعم المحلي بعد.",
   "SYNC_CONFLICT": "يتعارض هذا التغيير مع نسخة أحدث.",
   "DUPLICATE_OPERATION": "تمت معالجة هذه العملية مسبقًا.",
   "RESTAURANT_OFFLINE": "المطعم غير متصل حاليًا.",

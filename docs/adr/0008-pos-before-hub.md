@@ -1,6 +1,7 @@
 # ADR 0008: The POS uses the cloud API until the location hub exists
 
-- Status: Accepted (2026-10-17), to be superseded in Phase 5
+- Status: Superseded by the location hub in Phase 5 (2026-10-17): the POS and KDS now talk to
+  `apps/gateway` through the same API client and contracts, as decided here.
 
 ## Context
 

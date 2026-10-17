@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createApp } from './bootstrap';
-import { loadConfig } from './config/env';
+import { loadConfig } from '@pos/server';
 
 async function main(): Promise<void> {
   // Local development reads the repo-root .env; deployments inject real environment variables.

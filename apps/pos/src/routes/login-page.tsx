@@ -1,11 +1,13 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { LanguageSwitcher, tKey, useErrorText } from '@pos/app-kit';
-import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Field, Input } from '@pos/ui';
+import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Field, Input, cn } from '@pos/ui';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Navigate, useNavigate } from 'react-router';
 import { z } from 'zod';
+import { PinSignIn } from '../components/pin-sign-in';
+import { useHubStatus } from '../lib/queries';
 import { session, useSession } from '../lib/session';
 import { usePreferences } from '../stores/preferences';
 
@@ -26,6 +28,10 @@ export function LoginPage() {
   const status = useSession((s) => s.status);
   const setLocale = usePreferences((s) => s.setLocale);
   const [error, setError] = useState<string | null>(null);
+  // Behind a location hub staff sign in with a PIN; email stays available for managers.
+  const hub = useHubStatus();
+  const [mode, setMode] = useState<'pin' | 'email' | null>(null);
+  const method = mode ?? (hub.data ? 'pin' : 'email');
   const form = useForm<LoginForm>({
     resolver: zodResolver(loginForm),
     defaultValues: { email: '', password: '' },
@@ -50,37 +56,70 @@ export function LoginPage() {
         <CardHeader>
           <CardTitle className="text-2xl">{t('auth:signIn.title')}</CardTitle>
         </CardHeader>
-        <CardContent>
-          <form className="grid gap-5" noValidate onSubmit={(e) => void onSubmit(e)}>
-            {error ? <Alert variant="destructive">{error}</Alert> : null}
-            <Field
-              label={t('auth:signIn.email')}
-              error={fieldError(form.formState.errors.email?.message)}
-            >
-              <Input
-                type="email"
-                dir="ltr"
-                className="h-14 text-lg"
-                autoComplete="username"
-                {...form.register('email')}
-              />
-            </Field>
-            <Field
-              label={t('auth:signIn.password')}
-              error={fieldError(form.formState.errors.password?.message)}
-            >
-              <Input
-                type="password"
-                dir="ltr"
-                className="h-14 text-lg"
-                autoComplete="current-password"
-                {...form.register('password')}
-              />
-            </Field>
-            <Button type="submit" size="touch" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? t('auth:signIn.submitting') : t('auth:signIn.submit')}
-            </Button>
-          </form>
+        <CardContent className="grid gap-4">
+          {hub.data?.cloud === 'OFFLINE' ? <Alert>{t('auth:hub.offline')}</Alert> : null}
+          {hub.data ? (
+            <div role="tablist" className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+              {(['pin', 'email'] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  role="tab"
+                  aria-selected={method === m}
+                  className={cn(
+                    'h-11 rounded-md text-base font-medium',
+                    method === m ? 'bg-card shadow-sm' : 'text-muted-foreground',
+                  )}
+                  onClick={() => {
+                    setMode(m);
+                  }}
+                >
+                  {m === 'pin' ? t('auth:pin.tab') : t('auth:pin.emailTab')}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {method === 'pin' ? (
+            <PinSignIn
+              onSignIn={async (code, pin) => {
+                await session.signInWithPin(code, pin);
+                void navigate('/order', { replace: true });
+              }}
+            />
+          ) : (
+            <form className="grid gap-5" noValidate onSubmit={(e) => void onSubmit(e)}>
+              {error ? <Alert variant="destructive">{error}</Alert> : null}
+              <Field
+                label={t('auth:signIn.email')}
+                error={fieldError(form.formState.errors.email?.message)}
+              >
+                <Input
+                  type="email"
+                  dir="ltr"
+                  className="h-14 text-lg"
+                  autoComplete="username"
+                  {...form.register('email')}
+                />
+              </Field>
+              <Field
+                label={t('auth:signIn.password')}
+                error={fieldError(form.formState.errors.password?.message)}
+              >
+                <Input
+                  type="password"
+                  dir="ltr"
+                  className="h-14 text-lg"
+                  autoComplete="current-password"
+                  {...form.register('password')}
+                />
+              </Field>
+              <Button type="submit" size="touch" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting
+                  ? t('auth:signIn.submitting')
+                  : t('auth:signIn.submit')}
+              </Button>
+            </form>
+          )}
         </CardContent>
       </Card>
       <LanguageSwitcher className="h-12 w-auto" onLocaleChange={setLocale} />

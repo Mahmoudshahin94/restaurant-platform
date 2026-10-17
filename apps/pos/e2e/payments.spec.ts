@@ -14,11 +14,6 @@ interface DecodedImage {
 }
 const decodeRasterJob = untypedDecode as (bytes: Uint8Array) => DecodedImage | null;
 
-const cashier = {
-  email: process.env.SEED_CASHIER_EMAIL ?? '',
-  password: process.env.SEED_CASHIER_PASSWORD ?? '',
-};
-
 test.describe.configure({ mode: 'serial' });
 
 test.beforeEach(async ({ page }) => {
@@ -42,11 +37,13 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
+/** The cashier signs in at the till with employee code and PIN, served by the hub. */
 async function signIn(page: Page): Promise<void> {
   await page.goto('/login');
-  await page.getByLabel('Email').fill(cashier.email);
-  await page.getByLabel('Password').fill(cashier.password);
+  await page.getByLabel('Employee code').fill('1001');
+  await page.getByLabel('PIN', { exact: true }).fill(process.env.SEED_CASHIER_PIN ?? '');
   await page.getByRole('button', { name: 'Sign in' }).click();
+  // One location: the terminal selects it automatically and opens order entry.
   await expect(page.getByRole('button', { name: 'Place order' })).toBeVisible();
 }
 

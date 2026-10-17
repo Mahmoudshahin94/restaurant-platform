@@ -44,6 +44,8 @@ interface SeedFile {
     preferredLocale: Locale;
     role: string;
     location: string | null;
+    /** POS sign-in at the location hub: employee code + PIN from `<envPrefix>_PIN`. */
+    employeeCode?: string;
   }[];
 }
 
@@ -263,6 +265,28 @@ export async function seed(prisma: PrismaClient, file: SeedFile): Promise<void> 
       where: { userId: user.id, roleId, locationId },
     });
     if (!existing) await prisma.userRole.create({ data: { userId: user.id, roleId, locationId } });
+
+    if (userSpec.employeeCode) {
+      const pin = requireEnv(`${userSpec.envPrefix}_PIN`);
+      if (!/^\d{4,8}$/.test(pin)) throw new Error(`${userSpec.envPrefix}_PIN must be 4–8 digits`);
+      const employee = {
+        displayName: userSpec.displayName,
+        pinHash: await hashSecret(pin),
+        homeLocationId: locationId,
+        userId: user.id,
+        isActive: true,
+      };
+      await prisma.employee.upsert({
+        where: {
+          restaurantId_employeeCode: {
+            restaurantId: restaurant.id,
+            employeeCode: userSpec.employeeCode,
+          },
+        },
+        update: employee,
+        create: { ...employee, restaurantId: restaurant.id, employeeCode: userSpec.employeeCode },
+      });
+    }
   }
 }
 
