@@ -53,7 +53,8 @@
         "online_ordering.manage",
         "devices.manage",
         "sync.view",
-        "audit.view"
+        "audit.view",
+        "payments.create"
       ]
     },
     {
@@ -69,7 +70,8 @@
         "tables.manage",
         "products.view",
         "customers.view",
-        "locations.view"
+        "locations.view",
+        "payments.create"
       ]
     },
     {
@@ -334,6 +336,31 @@
             "seats": 4
           }
         ]
+      }
+    ]
+  },
+  "paymentMethods": [
+    {
+      "type": "CASH",
+      "nameEn": "Cash",
+      "nameAr": "نقدًا"
+    },
+    {
+      "type": "CARD",
+      "nameEn": "Mada",
+      "nameAr": "مدى"
+    },
+    {
+      "type": "CARD",
+      "nameEn": "Visa / Mastercard",
+      "nameAr": "فيزا / ماستركارد"
+    }
+  ],
+  "cashRegisters": {
+    "MAIN": [
+      {
+        "nameEn": "Main drawer",
+        "nameAr": "الدرج الرئيسي"
       }
     ]
   }

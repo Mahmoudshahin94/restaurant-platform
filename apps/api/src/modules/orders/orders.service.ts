@@ -5,8 +5,10 @@ import {
   assertPermissions,
   assertTransition,
   businessDateFor,
+  derivePaymentStatus,
   canModifyItems,
   formatOrderNumber,
+  paymentTotals,
   quoteOrder,
 } from '@pos/domain';
 import { OPEN_ORDER_STATUSES } from '@pos/shared-types';
@@ -24,7 +26,7 @@ import { PrismaService, type PrismaTx } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { PublishedMenuService } from '../menu/published-menu.service';
 import { discountRows, itemSnapshot, taxRows, totalsOf } from './order-snapshot';
-import { type OrderRow, orderInclude, toOrderDto } from './orders.mappers';
+import { type OrderRow, orderInclude, settledEntries, toOrderDto } from './orders.mappers';
 
 type CreateInput = z.output<typeof createOrderSchema>;
 type UpdateInput = z.output<typeof updateOrderSchema>;
@@ -231,10 +233,21 @@ export class OrdersService {
       discounts: discounts.map((d) => ({ id: d.id, type: d.type, value: d.value })),
     });
 
+    // Money already taken stays covered: an edit may not push the total below it.
+    const held = settledEntries(current.payments);
+    const { paid, refunded } = paymentTotals(current.total, held);
+    if (quote.pricing.total < paid - refunded) {
+      throw new DomainError('INVALID_ORDER_STATE', 'The new total is below what was already paid', {
+        reason: 'BELOW_PAID',
+        held: paid - refunded,
+      });
+    }
+
     const row = await this.prisma.$transaction(async (tx) => {
       const claimed = await tx.order.updateMany({
         where: { id: orderId, version: current.version },
         data: {
+          paymentStatus: derivePaymentStatus(quote.pricing.total, held),
           channel: input.channel,
           tableId: input.tableId,
           customerName: input.customerName,
@@ -309,6 +322,15 @@ export class OrdersService {
       reason: input.reason,
     });
     if (rule.permission) assertPermissions(principal.assignments, locationId, [rule.permission]);
+    if (input.to === 'CANCELLED') {
+      const { paid, refunded } = paymentTotals(current.total, settledEntries(current.payments));
+      if (paid - refunded > 0) {
+        throw new DomainError('INVALID_ORDER_STATE', 'Refund the payments before cancelling', {
+          reason: 'REFUND_FIRST',
+          held: paid - refunded,
+        });
+      }
+    }
 
     const source = RequestContext.get()?.source ?? 'POS';
     const now = new Date();

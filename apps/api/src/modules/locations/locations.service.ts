@@ -17,6 +17,7 @@ export function toLocationDto(row: LocationRow): Location {
     timezone: row.timezone,
     taxInclusive: row.taxInclusive,
     onlineOrderingState: row.onlineOrderingState,
+    cashRoundingIncrement: row.cashRoundingIncrement,
     addressLine: row.addressLine,
     phone: row.phone,
     isActive: row.isActive,

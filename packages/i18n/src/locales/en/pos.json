@@ -3,7 +3,9 @@
     "order": "Order",
     "orders": "Orders",
     "tables": "Tables",
-    "main": "POS navigation"
+    "main": "POS navigation",
+    "shift": "Shift",
+    "settings": "Settings"
   },
   "menu": {
     "search": "Search menu",
@@ -58,7 +60,8 @@
     "place": "Place order",
     "newOrder": "New order",
     "orders": "Orders",
-    "tables": "Tables"
+    "tables": "Tables",
+    "shift": "Shift"
   },
   "device": {
     "version": "POS {{version}}",

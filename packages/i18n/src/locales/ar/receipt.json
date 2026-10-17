@@ -1,0 +1,15 @@
+{
+  "orderNumber": "طلب {{number}}",
+  "table": "الطاولة",
+  "customer": "العميل",
+  "cashier": "الكاشير",
+  "taxIncluded": "شامل {{name}}",
+  "tendered": "المستلم",
+  "change": "الباقي",
+  "rounding": "التقريب",
+  "reference": "مرجع {{reference}}",
+  "refund": "استرداد",
+  "balanceDue": "المتبقي",
+  "thanks": "شكرًا لزيارتكم!",
+  "testTitle": "إيصال تجريبي"
+}

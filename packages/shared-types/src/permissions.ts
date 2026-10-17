@@ -14,6 +14,7 @@ export const PERMISSIONS = [
   'products.update',
   'products.delete',
   'payments.view',
+  'payments.create',
   'payments.refund',
   'shifts.manage',
   'cash.manage',

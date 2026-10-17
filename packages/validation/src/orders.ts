@@ -7,6 +7,7 @@ import {
 } from '@pos/shared-types';
 import { z } from 'zod';
 import { idSchema, isoDateTimeSchema } from './common';
+import { orderPaymentSchema } from './payments';
 import { discountTypeSchema } from './pricing-config';
 
 export const orderChannelSchema = z.enum(enumValues(OrderChannel));
@@ -222,6 +223,11 @@ export const orderSchema = z.object({
       amount: z.int(),
     }),
   ),
+  payments: z.array(orderPaymentSchema),
+  /** Charges minus refunds are reconciled against the total by the server. */
+  paidTotal: z.int(),
+  refundedTotal: z.int(),
+  balanceDue: z.int(),
   statusHistory: z.array(
     z.object({
       fromStatus: orderStatusSchema.nullable(),

@@ -232,6 +232,9 @@ importers:
       '@pos/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
+      '@pos/receipts':
+        specifier: workspace:*
+        version: link:../../packages/receipts
       '@pos/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
@@ -468,6 +471,25 @@ importers:
       i18next:
         specifier: 25.10.10
         version: 25.10.10(typescript@5.9.3)
+    devDependencies:
+      tsup:
+        specifier: 8.5.1
+        version: 8.5.1(@swc/core@1.15.3)(jiti@2.7.0)(postcss@8.5.30)(tsx@4.23.15)(typescript@5.9.3)
+      vitest:
+        specifier: 3.2.7
+        version: 3.2.7(@types/node@22.20.5)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0)(terser@5.51.2)(tsx@4.23.15)
+
+  packages/receipts:
+    dependencies:
+      '@pos/i18n':
+        specifier: workspace:*
+        version: link:../i18n
+      '@pos/shared-types':
+        specifier: workspace:*
+        version: link:../shared-types
+      '@pos/validation':
+        specifier: workspace:*
+        version: link:../validation
     devDependencies:
       tsup:
         specifier: 8.5.1

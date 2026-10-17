@@ -12,6 +12,9 @@ import { LocationsModule } from './modules/locations/locations.module';
 import { FloorModule } from './modules/floor/floor.module';
 import { MenuModule } from './modules/menu/menu.module';
 import { OrdersModule } from './modules/orders/orders.module';
+import { PaymentsModule } from './modules/payments/payments.module';
+import { ReportsModule } from './modules/reports/reports.module';
+import { ShiftsModule } from './modules/shifts/shifts.module';
 import { PricingConfigModule } from './modules/pricing-config/pricing-config.module';
 import { RestaurantsModule } from './modules/restaurants/restaurants.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -32,6 +35,9 @@ export class AppModule {
         PricingConfigModule,
         FloorModule,
         OrdersModule,
+        PaymentsModule,
+        ShiftsModule,
+        ReportsModule,
       ],
       controllers: [HealthController],
       providers: [

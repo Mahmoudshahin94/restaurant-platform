@@ -60,7 +60,57 @@ export function useOrders(locationId: string, filter: OrderListFilter) {
   });
 }
 
-/** Order writes refresh order lists and table occupancy. */
+export function useRestaurant() {
+  const rid = useRestaurantId();
+  return useQuery({
+    queryKey: ['restaurant', rid],
+    queryFn: () => api.restaurants.get(rid),
+    staleTime: 10 * 60_000,
+  });
+}
+
+export function usePaymentMethods() {
+  const rid = useRestaurantId();
+  return useQuery({
+    queryKey: ['payment-methods', rid],
+    queryFn: () => api.payments.methods(rid),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useCashRegisters(locationId: string) {
+  return useQuery({
+    queryKey: ['cash-registers', locationId],
+    queryFn: () => api.shifts.registers(locationId),
+  });
+}
+
+export function useShift(locationId: string, shiftId: string | null) {
+  return useQuery({
+    queryKey: ['shift', locationId, shiftId],
+    queryFn: () => api.shifts.get(locationId, shiftId ?? ''),
+    enabled: shiftId !== null,
+    refetchInterval: 30_000,
+  });
+}
+
+/** The open shift this terminal works in, if any. */
+export function useCurrentShift(locationId: string) {
+  const shiftId = usePreferences((s) => s.shiftId);
+  const shift = useShift(locationId, shiftId);
+  const open = shift.data?.status === 'OPEN' ? shift.data : null;
+  return { shiftId: open ? shiftId : null, shift: open, query: shift };
+}
+
+export function useDailySummary(locationId: string) {
+  return useQuery({
+    queryKey: ['daily-summary', locationId],
+    queryFn: () => api.reports.dailySummary(locationId),
+    refetchInterval: 60_000,
+  });
+}
+
+/** Order writes refresh order lists, table occupancy, shift totals and the daily summary. */
 export function useOrderMutation<TVariables, TResult>(
   fn: (variables: TVariables) => Promise<TResult>,
 ) {
@@ -69,7 +119,10 @@ export function useOrderMutation<TVariables, TResult>(
     mutationFn: fn,
     onSuccess: () =>
       client.invalidateQueries({
-        predicate: (q) => ['orders', 'floor'].includes(String(q.queryKey[0])),
+        predicate: (q) =>
+          ['orders', 'floor', 'shift', 'cash-registers', 'daily-summary'].includes(
+            String(q.queryKey[0]),
+          ),
       }),
   });
 }

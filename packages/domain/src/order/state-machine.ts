@@ -51,7 +51,9 @@ export const ORDER_TRANSITIONS: readonly TransitionRule[] = [
 
   rule('READY', 'COMPLETED', { requiresPaid: true }),
 
-  rule('COMPLETED', 'REFUNDED', { permission: 'orders.refund', requiresReason: true }),
+  // Derived from payments: an order becomes REFUNDED when everything paid has been refunded
+  // (the refund itself needs payments.refund and a reason).
+  rule('COMPLETED', 'REFUNDED', { trigger: 'SYSTEM', permission: null }),
 ];
 
 export const TERMINAL_STATUSES: readonly OrderStatus[] = ['CANCELLED', 'REFUNDED'];

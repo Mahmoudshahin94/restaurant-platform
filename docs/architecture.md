@@ -189,7 +189,7 @@ The cloud is never in this path. Event names and payloads are typed in
 | 0     | Docs, monorepo, tooling, shared packages, identity/tenancy schema, auth, RBAC, audit, restaurants/locations API                                         | ✅ Done |
 | 1     | Menu: categories, products, variants, modifier groups/modifiers, kitchen stations, location availability/price overrides, published menu, admin menu UI | ✅ Done |
 | 2     | POS order creation, pricing engine, taxes, discounts, order state machine, tables, Tauri shell                                                          | ✅ Done |
-| 3     | Payments (provider abstraction, cash, split), shifts, cash drawer                                                                                       | ⏳      |
+| 3     | Payments (provider abstraction, cash, split), shifts, cash drawer                                                                                       | ✅ Done |
 | 4     | KDS app, kitchen tickets, station routing                                                                                                               | ⏳      |
 | 5     | Location hub with SQLite, offline POS                                                                                                                   | ⏳      |
 | 6     | Synchronization engine                                                                                                                                  | ⏳      |
@@ -231,6 +231,35 @@ duplication, editing an open order, Arabic RTL ⇄ English LTR), and the Rust sh
 - **Shared app plumbing** moved to `@pos/app-kit` so the admin and POS do not duplicate session,
   i18n or error handling.
 
+**Phase 3 verification (2026-10-17):** `turbo run build typecheck lint test --force` with 48/48
+tasks green. That covers 269 unit and integration tests (domain 99, API 81, i18n 22, validation 16,
+database 14, POS 11, receipts 8, api-client 6, app-kit 5, admin 5, ui 2) and 12 Playwright E2E
+tests (admin 3; POS 9, adding: cash with change → complete → receipt; a bill split between card and
+cash with a card number refused; shift close-out reporting the cash difference; an Arabic receipt
+encoded as a valid ESC/POS raster job). Refunds, idempotent and concurrent charges, and shift
+rules are covered by the API integration tests. Also `pnpm test:tools` (lint rule, printer
+decoder), the Rust shell's `cargo fmt`, `clippy -D warnings` and tests (5, including printer
+target validation), and a clean `migrate status`.
+
+### Phase 3 decisions
+
+See [ADR 0009](adr/0009-payment-providers-and-raster-receipts.md).
+
+- **Payment providers:** cash, externally approved card (approval code only, card numbers
+  rejected), and an online provider that fails until a gateway is configured.
+- **Payments are append-only and idempotent** by their client id; the order row is locked while
+  charging. `paymentStatus` is derived from the payment rows. A fully refunded completed order
+  moves to `REFUNDED` as a system transition.
+- **An open shift is required to take payments** and each payment records its shift. Shift
+  close stores expected, counted and difference; one open shift per drawer is a unique index.
+- **Cash rounding** is per location and off by default; it never alters order totals.
+- **Receipts** render to a canvas (correct Arabic shaping and RTL) and print as ESC/POS raster
+  over TCP from the Tauri shell, or through the browser print dialog.
+- **Money guards on orders:** cancel requires refunding first; edits cannot drop the total below
+  what is held.
+- The `test:tools` script previously passed directory arguments to `node --test`, which ran no
+  test files. It now uses a glob, and both tool tests run.
+
 Known gaps carried forward:
 
 - The admin UI does not yet expose per-product modifier min/max overrides. The API supports them
@@ -238,8 +267,13 @@ Known gaps carried forward:
 - POS sign-in uses email and password, with the refresh token kept in memory (sign in again
   after a restart). PIN login for cashiers and OS-keychain token storage arrive with the hub
   (Phase 5).
-- The POS cannot take payments or print yet (Phase 3), so orders cannot be completed: completion
-  requires full payment.
+- Payment methods and cash registers are provisioned by seed; there is no admin UI for them or
+  for a location's cash rounding yet (Phase 8). Shift and daily reports are on the POS only.
+- Card payments are recorded after approval on a standalone terminal; no integrated terminal or
+  online gateway is wired yet. Receipt QR blocks are placeholders until a market's e-invoicing
+  rules are chosen.
+- Printing goes from the terminal to the printer; a cash drawer kick and printer status checks
+  come with the hub's printer service (Phase 5).
 - Drafts are supported by the API (`status: DRAFT`) but not exposed in the POS UI yet.
 - A configurable business-day start hour (for venues open past midnight) is not implemented; the
   business day is the calendar date in the location's timezone.
@@ -268,6 +302,9 @@ Recorded as ADRs in [adr/](adr/):
    Postgres for local development (Docker optional).
 8. [0008](adr/0008-pos-before-hub.md): the POS uses the cloud API (through the shared client)
    until the location hub exists; client-generated order ids make submits idempotent now.
+9. [0009](adr/0009-payment-providers-and-raster-receipts.md): payment provider abstraction,
+   externally approved cards, shift-bound payments, and receipts printed as ESC/POS raster
+   images.
 
 Open items to revisit:
 

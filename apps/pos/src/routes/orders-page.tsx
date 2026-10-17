@@ -7,21 +7,173 @@ import {
   useMoneyFormat,
   usePermissionChecks,
 } from '@pos/app-kit';
-import { allowedTransitions, canModifyItems } from '@pos/domain';
+import { allowedTransitions, canModifyItems, refundableAmount } from '@pos/domain';
 import { formatDateTime, pickLocalized } from '@pos/i18n';
-import type { Order } from '@pos/validation';
-import { Alert, Button, Card, Dialog, EmptyState, cn } from '@pos/ui';
+import type { Order, OrderPayment } from '@pos/validation';
+import { Alert, Button, Card, Dialog, DialogContent, EmptyState, cn } from '@pos/ui';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router';
 import { CancelOrderDialog } from '../components/cancel-order-dialog';
 import { OrderStatusBadge } from '../components/order-status-badge';
-import { useLocationId, useLocations, useOrderMutation, useOrders } from '../lib/queries';
+import { PaymentDialog } from '../components/payment-dialog';
+import { ReceiptPreview } from '../components/receipt-preview';
+import { RefundDialog } from '../components/refund-dialog';
+import {
+  useCurrentShift,
+  useLocationId,
+  useLocations,
+  useOrderMutation,
+  useOrders,
+  usePaymentMethods,
+} from '../lib/queries';
+import { useReceiptBuilder } from '../lib/receipt';
 import { api, useSession } from '../lib/session';
 import { useCart } from '../stores/cart';
 
+const PAYABLE = new Set<Order['status']>(['PLACED', 'CONFIRMED', 'PREPARING', 'READY']);
+
+type DetailDialog = 'cancel' | 'pay' | 'receipt' | { refund: OrderPayment } | null;
+
+/** Payment, receipt and refund actions shared by the orders screen and the order entry screen. */
+export function OrderPaymentDialogs({
+  order,
+  dialog,
+  setDialog,
+}: {
+  order: Order;
+  dialog: DetailDialog;
+  setDialog: (d: DetailDialog) => void;
+}) {
+  const { t } = useTranslation(['payments', 'common']);
+  const locale = useCurrentLocale();
+  const navigate = useNavigate();
+  const methods = usePaymentMethods();
+  const location = useLocations().data?.find((l) => l.id === order.locationId);
+  const { shiftId } = useCurrentShift(order.locationId);
+  const buildReceipt = useReceiptBuilder();
+  const [latest, setLatest] = useState(order);
+  const needsShift =
+    (dialog === 'pay' || (typeof dialog === 'object' && dialog !== null)) && !shiftId;
+
+  return (
+    <Dialog
+      open={dialog !== null && dialog !== 'cancel'}
+      onOpenChange={(open) => {
+        if (!open) setDialog(null);
+      }}
+    >
+      {needsShift ? (
+        <DialogContent closeLabel={t('common:actions.close')}>
+          <Alert
+            action={
+              <Button onClick={() => void navigate('/shift')}>{t('payments:goToShift')}</Button>
+            }
+          >
+            {t('payments:needShift')}
+          </Alert>
+        </DialogContent>
+      ) : null}
+      {dialog === 'pay' && shiftId && methods.data ? (
+        <PaymentDialog
+          order={order}
+          methods={methods.data}
+          shiftId={shiftId}
+          cashRoundingIncrement={location?.cashRoundingIncrement ?? null}
+          onPaid={setLatest}
+        />
+      ) : null}
+      {dialog === 'receipt' && buildReceipt ? (
+        <ReceiptPreview doc={buildReceipt(latest.version >= order.version ? latest : order)} />
+      ) : null}
+      {typeof dialog === 'object' && dialog !== null && shiftId ? (
+        <RefundDialog
+          order={order}
+          charge={dialog.refund}
+          shiftId={shiftId}
+          refundable={refundableAmount(
+            dialog.refund,
+            order.payments.filter((p) => p.status === 'CAPTURED'),
+          )}
+          methodName={pickLocalized(
+            { nameEn: dialog.refund.methodNameEn, nameAr: dialog.refund.methodNameAr },
+            'name',
+            locale,
+          )}
+          onDone={() => {
+            setDialog(null);
+          }}
+        />
+      ) : null}
+    </Dialog>
+  );
+}
+
+function PaymentsList({
+  order,
+  canRefund,
+  onRefund,
+}: {
+  order: Order;
+  canRefund: boolean;
+  onRefund: (p: OrderPayment) => void;
+}) {
+  const { t } = useTranslation(['payments']);
+  const locale = useCurrentLocale();
+  const { format } = useMoneyFormat(order.currencyCode);
+  const settled = order.payments.filter((p) => p.status === 'CAPTURED');
+  if (settled.length === 0) return null;
+  return (
+    <section className="mt-4">
+      <h3 className="mb-2 font-semibold">{t('payments:payments')}</h3>
+      <ul className="grid gap-1 text-sm">
+        {settled.map((p) => {
+          const name = pickLocalized(
+            { nameEn: p.methodNameEn, nameAr: p.methodNameAr },
+            'name',
+            locale,
+          );
+          const refundable = p.type === 'CHARGE' ? refundableAmount(p, settled) : 0;
+          return (
+            <li key={p.id} className="flex items-center justify-between gap-2">
+              <span>
+                {p.type === 'REFUND' ? `${t('payments:refunded')} · ${name}` : name}
+                {p.reference ? (
+                  <span className="ltr-nums text-muted-foreground"> · {p.reference}</span>
+                ) : null}
+                {p.change > 0 ? (
+                  <span className="text-muted-foreground">
+                    {' '}
+                    · {t('payments:change')} {format(p.change)}
+                  </span>
+                ) : null}
+              </span>
+              <span className="flex items-center gap-2">
+                <span className="whitespace-nowrap">
+                  {format(p.type === 'REFUND' ? -p.amount : p.amount)}
+                </span>
+                {canRefund && refundable > 0 ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      onRefund(p);
+                    }}
+                  >
+                    {t('payments:refund')}
+                  </Button>
+                ) : null}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 function OrderDetail({ order, timeZone }: { order: Order; timeZone: string }) {
-  const { t } = useTranslation(['orders', 'pos', 'common']);
+  const { t } = useTranslation(['orders', 'pos', 'common', 'payments']);
   const locale = useCurrentLocale();
   const errorText = useErrorText();
   const { format } = useMoneyFormat(order.currencyCode);
@@ -29,7 +181,11 @@ function OrderDetail({ order, timeZone }: { order: Order; timeZone: string }) {
   const { canAt } = usePermissionChecks(user);
   const loadOrder = useCart((s) => s.loadOrder);
   const navigate = useNavigate();
-  const [cancelling, setCancelling] = useState(false);
+  const [dialog, setDialog] = useState<DetailDialog>(null);
+  const cancelling = dialog === 'cancel';
+  const setCancelling = (open: boolean) => {
+    setDialog(open ? 'cancel' : null);
+  };
   const [error, setError] = useState<string | null>(null);
 
   const transition = useOrderMutation((body: { to: Order['status']; reason?: string }) =>
@@ -50,6 +206,13 @@ function OrderDetail({ order, timeZone }: { order: Order; timeZone: string }) {
   const canConfirm = next.includes('CONFIRMED') && canAt(order.locationId, 'orders.update');
   const canCancel = next.includes('CANCELLED') && canAt(order.locationId, 'orders.cancel');
   const canEdit = canModifyItems(order.status) && canAt(order.locationId, 'orders.update');
+  const canPay =
+    PAYABLE.has(order.status) && order.balanceDue > 0 && canAt(order.locationId, 'payments.create');
+  const canComplete =
+    next.includes('COMPLETED') &&
+    order.paymentStatus === 'PAID' &&
+    canAt(order.locationId, 'orders.update');
+  const canRefund = canAt(order.locationId, 'payments.refund');
 
   return (
     <Card className="flex h-full min-h-0 flex-col">
@@ -107,7 +270,22 @@ function OrderDetail({ order, timeZone }: { order: Order; timeZone: string }) {
           <dd className="text-end text-muted-foreground">{format(order.taxTotal)}</dd>
           <dt className="text-lg font-bold">{t('orders:totals.total')}</dt>
           <dd className="text-end text-lg font-bold">{format(order.total)}</dd>
+          {order.paidTotal > 0 ? (
+            <>
+              <dt>{t('payments:paid')}</dt>
+              <dd className="text-end">{format(order.paidTotal - order.refundedTotal)}</dd>
+            </>
+          ) : null}
+          <dt className="font-semibold">{t('payments:balanceDue')}</dt>
+          <dd className="text-end font-semibold">{format(order.balanceDue)}</dd>
         </dl>
+        <PaymentsList
+          order={order}
+          canRefund={canRefund}
+          onRefund={(p) => {
+            setDialog({ refund: p });
+          }}
+        />
         <h3 className="mt-6 mb-2 font-semibold">{t('orders:history')}</h3>
         <ol className="grid gap-1 text-sm text-muted-foreground">
           {order.statusHistory.map((h) => (
@@ -121,6 +299,36 @@ function OrderDetail({ order, timeZone }: { order: Order; timeZone: string }) {
       <footer className="grid gap-2 border-t p-4">
         {error ? <Alert variant="destructive">{error}</Alert> : null}
         <div className="flex flex-wrap gap-2">
+          {canPay ? (
+            <Button
+              size="touch"
+              onClick={() => {
+                setDialog('pay');
+              }}
+            >
+              {t('payments:takePayment')}
+            </Button>
+          ) : null}
+          {canComplete ? (
+            <Button
+              size="touch"
+              disabled={transition.isPending}
+              onClick={() => void run({ to: 'COMPLETED' })}
+            >
+              {t('payments:complete')}
+            </Button>
+          ) : null}
+          {order.status !== 'DRAFT' ? (
+            <Button
+              size="touch"
+              variant="outline"
+              onClick={() => {
+                setDialog('receipt');
+              }}
+            >
+              {t('payments:printReceipt')}
+            </Button>
+          ) : null}
           {canConfirm ? (
             <Button
               size="touch"
@@ -156,6 +364,7 @@ function OrderDetail({ order, timeZone }: { order: Order; timeZone: string }) {
           ) : null}
         </div>
       </footer>
+      <OrderPaymentDialogs order={order} dialog={dialog} setDialog={setDialog} />
       <Dialog open={cancelling} onOpenChange={setCancelling}>
         {cancelling ? (
           <CancelOrderDialog
@@ -228,11 +437,7 @@ export function OrdersPage() {
               ))}
             </ul>
             {selected ? (
-              <OrderDetail
-                key={selected.id + String(selected.version)}
-                order={selected}
-                timeZone={timeZone}
-              />
+              <OrderDetail key={selected.id} order={selected} timeZone={timeZone} />
             ) : (
               <EmptyState title={t('pos:orders.select')} />
             )}

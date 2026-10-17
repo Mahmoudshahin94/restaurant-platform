@@ -93,6 +93,47 @@ enum DiscountType {
   @@map("discount_type")
 }
 
+enum PaymentMethodType {
+  CASH
+  CARD
+  ONLINE
+
+  @@map("payment_method_type")
+}
+
+enum PaymentTransactionType {
+  CHARGE
+  REFUND
+
+  @@map("payment_transaction_type")
+}
+
+enum PaymentRecordStatus {
+  PENDING
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  CANCELLED
+
+  @@map("payment_record_status")
+}
+
+enum ShiftStatus {
+  OPEN
+  CLOSED
+
+  @@map("shift_status")
+}
+
+enum CashTransactionType {
+  SALE
+  REFUND
+  PAY_IN
+  PAY_OUT
+
+  @@map("cash_transaction_type")
+}
+
 enum ActorType {
   USER
   EMPLOYEE
@@ -143,26 +184,29 @@ model Restaurant {
   taxes           Tax[]
   discounts       Discount[]
   orders          Order[]
+  paymentMethods  PaymentMethod[]
 
   @@map("restaurants")
 }
 
 model Location {
-  id                  String              @id @default(uuid(7)) @db.Uuid
-  restaurantId        String              @map("restaurant_id") @db.Uuid
+  id                    String              @id @default(uuid(7)) @db.Uuid
+  restaurantId          String              @map("restaurant_id") @db.Uuid
   /// Short code, unique within the restaurant; prefix of locally generated order numbers.
-  code                String
-  nameEn              String              @map("name_en")
-  nameAr              String              @map("name_ar")
-  timezone            String
+  code                  String
+  nameEn                String              @map("name_en")
+  nameAr                String              @map("name_ar")
+  timezone              String
   /// Whether menu prices at this location already include tax.
-  taxInclusive        Boolean             @map("tax_inclusive")
-  onlineOrderingState OnlineOrderingState @default(CLOSED) @map("online_ordering_state")
-  addressLine         String?             @map("address_line")
-  phone               String?
-  isActive            Boolean             @default(true) @map("is_active")
-  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  taxInclusive          Boolean             @map("tax_inclusive")
+  onlineOrderingState   OnlineOrderingState @default(CLOSED) @map("online_ordering_state")
+  /// Smallest coin for cash rounding in minor units (e.g. 5 = 0.05); null = no rounding.
+  cashRoundingIncrement Int?                @map("cash_rounding_increment")
+  addressLine           String?             @map("address_line")
+  phone                 String?
+  isActive              Boolean             @default(true) @map("is_active")
+  createdAt             DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   restaurant       Restaurant        @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
   userRoles        UserRole[]
@@ -173,6 +217,9 @@ model Location {
   tables           DiningTable[]
   orders           Order[]
   orderCounters    OrderCounter[]
+  cashRegisters    CashRegister[]
+  shifts           Shift[]
+  payments         Payment[]
 
   @@unique([restaurantId, code])
   @@index([restaurantId])
@@ -680,6 +727,7 @@ model Order {
   taxes         OrderTax[]
   discounts     OrderDiscount[]
   statusHistory OrderStatusHistory[]
+  payments      Payment[]
 
   @@unique([locationId, businessDate, orderNumber])
   @@index([locationId, status])
@@ -799,4 +847,144 @@ model OrderCounter {
 
   @@id([locationId, businessDate])
   @@map("order_counters")
+}
+
+// ---------------------------------------------------------------------------
+// Payments, shifts and cash. Financial rows are append-only: corrections are new rows
+// (refunds, pay-outs), never edits or deletes.
+// ---------------------------------------------------------------------------
+
+/// A tender the restaurant accepts, e.g. "Cash", "Mada", "Visa".
+model PaymentMethod {
+  id           String            @id @default(uuid(7)) @db.Uuid
+  restaurantId String            @map("restaurant_id") @db.Uuid
+  type         PaymentMethodType
+  nameEn       String            @map("name_en")
+  nameAr       String            @map("name_ar")
+  sortOrder    Int               @default(0) @map("sort_order")
+  archivedAt   DateTime?         @map("archived_at") @db.Timestamptz(3)
+  createdAt    DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  payments   Payment[]
+
+  @@index([restaurantId])
+  @@map("payment_methods")
+}
+
+/// One money movement on an order. The id is client-generated and is the idempotency key.
+model Payment {
+  id                 String                 @id @db.Uuid
+  restaurantId       String                 @map("restaurant_id") @db.Uuid
+  locationId         String                 @map("location_id") @db.Uuid
+  orderId            String                 @map("order_id") @db.Uuid
+  shiftId            String                 @map("shift_id") @db.Uuid
+  paymentMethodId    String                 @map("payment_method_id") @db.Uuid
+  /// Snapshot of the method type and names at the time of payment.
+  methodType         PaymentMethodType      @map("method_type")
+  methodNameEn       String                 @map("method_name_en")
+  methodNameAr       String                 @map("method_name_ar")
+  type               PaymentTransactionType
+  status             PaymentRecordStatus
+  /// Provider adapter that processed it (e.g. "cash", "external-card").
+  provider           String
+  /// Provider-side id (gateway transaction id); null for cash.
+  providerRef        String?                @map("provider_ref")
+  /// Applied to the order (minor units, always positive).
+  amount             Int
+  /// Cash handed over (CASH charges only).
+  tendered           Int?
+  /// Cash returned to the customer (CASH charges only).
+  change             Int                    @default(0)
+  /// Cash rounding difference kept in the drawer (CASH charges only).
+  roundingAdjustment Int                    @default(0) @map("rounding_adjustment")
+  /// Card approval code / terminal receipt number. Never a card number.
+  reference          String?
+  /// REFUND rows: the CHARGE being refunded.
+  refundOfId         String?                @map("refund_of_id") @db.Uuid
+  reason             String?
+  createdById        String?                @map("created_by_id") @db.Uuid
+  createdAt          DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  location Location          @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  order    Order             @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  shift    Shift             @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+  method   PaymentMethod     @relation(fields: [paymentMethodId], references: [id], onDelete: Restrict)
+  refundOf Payment?          @relation("PaymentRefunds", fields: [refundOfId], references: [id], onDelete: Restrict)
+  refunds  Payment[]         @relation("PaymentRefunds")
+  cash     CashTransaction[]
+
+  @@index([orderId])
+  @@index([shiftId])
+  @@index([locationId, createdAt])
+  @@map("payments")
+}
+
+/// A physical cash drawer at a location.
+model CashRegister {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  locationId String    @map("location_id") @db.Uuid
+  nameEn     String    @map("name_en")
+  nameAr     String    @map("name_ar")
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  location Location @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  shifts   Shift[]
+
+  @@index([locationId])
+  @@map("cash_registers")
+}
+
+model Shift {
+  id             String      @id @db.Uuid
+  restaurantId   String      @map("restaurant_id") @db.Uuid
+  locationId     String      @map("location_id") @db.Uuid
+  cashRegisterId String      @map("cash_register_id") @db.Uuid
+  status         ShiftStatus
+  /// Equals cashRegisterId while the shift is open and null once closed: the unique index
+  /// guarantees at most one open shift per drawer, even under concurrent requests.
+  openRegisterId String?     @unique @map("open_register_id") @db.Uuid
+  openingFloat   Int         @map("opening_float")
+  openedById     String      @map("opened_by_id") @db.Uuid
+  openedAt       DateTime    @default(now()) @map("opened_at") @db.Timestamptz(3)
+  closedById     String?     @map("closed_by_id") @db.Uuid
+  closedAt       DateTime?   @map("closed_at") @db.Timestamptz(3)
+  /// Snapshot at closing: what the drawer should contain, what was counted, and the difference.
+  expectedCash   Int?        @map("expected_cash")
+  countedCash    Int?        @map("counted_cash")
+  cashDifference Int?        @map("cash_difference")
+  closingNotes   String?     @map("closing_notes")
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  location     Location          @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  cashRegister CashRegister      @relation(fields: [cashRegisterId], references: [id], onDelete: Restrict)
+  payments     Payment[]
+  cash         CashTransaction[]
+
+  @@index([locationId, status])
+  @@map("shifts")
+}
+
+/// Cash movements in a drawer during a shift (sales and refunds are linked to their payment).
+model CashTransaction {
+  id          String              @id @db.Uuid
+  shiftId     String              @map("shift_id") @db.Uuid
+  type        CashTransactionType
+  /// Positive minor units; the type gives the direction.
+  amount      Int
+  paymentId   String?             @map("payment_id") @db.Uuid
+  reason      String?
+  createdById String?             @map("created_by_id") @db.Uuid
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  shift   Shift    @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+  payment Payment? @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  @@index([shiftId])
+  @@map("cash_transactions")
 }
