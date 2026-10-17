@@ -172,7 +172,8 @@ test('a wrong PIN is refused without revealing whether the code exists', async (
 
 test('the POS shows that it runs on the hub without the cloud', async ({ page }) => {
   await signIn(page);
+  // The cloud is stopped: the indicator says so and counts what waits to be sent.
   await expect(
-    page.getByText(/Hub · (offline, orders saved locally|cloud connected|Hub)/),
+    page.getByRole('status').filter({ hasText: /^Offline · \d+ pending$/ }),
   ).toBeVisible();
 });

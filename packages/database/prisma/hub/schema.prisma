@@ -1108,6 +1108,8 @@ model SyncOperation {
   status        SyncOperationStatus @default(PENDING)
   retryCount    Int                 @default(0) @map("retry_count")
   nextRetryAt   DateTime?           @map("next_retry_at")
+  /// Error code of the last failure (`SYNC_CONFLICT`, `SYNC_UNAVAILABLE`, …); the POS localizes it.
+  errorCode     String?             @map("error_code")
   errorMessage  String?             @map("error_message")
   createdAt     DateTime            @default(now()) @map("created_at")
   processedAt   DateTime?           @map("processed_at")
@@ -1117,7 +1119,7 @@ model SyncOperation {
   @@map("sync_operations")
 }
 
-/// The hub's link to the cloud: pairing, last snapshot, sync cursors. One row per key.
+/// The hub's link to the cloud: pairing, last snapshot, change-feed cursor. One row per key.
 model HubState {
   key       String   @id
   value     Json

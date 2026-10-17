@@ -113,6 +113,16 @@ export const ActionSource = {
 } as const;
 export type ActionSource = ValueOf<typeof ActionSource>;
 
+/** Who performed an action (recorded on status history and audit entries). */
+export const ActorType = {
+  USER: 'USER',
+  EMPLOYEE: 'EMPLOYEE',
+  DEVICE: 'DEVICE',
+  CUSTOMER: 'CUSTOMER',
+  SYSTEM: 'SYSTEM',
+} as const;
+export type ActorType = ValueOf<typeof ActorType>;
+
 export const KitchenTicketStatus = {
   NEW: 'NEW',
   PREPARING: 'PREPARING',
@@ -171,6 +181,41 @@ export const SyncOperationStatus = {
   COMPLETED: 'COMPLETED',
 } as const;
 export type SyncOperationStatus = ValueOf<typeof SyncOperationStatus>;
+
+/** What an outbox operation carries: the full state of one aggregate (ADR 0012). */
+export const SyncOperationType = {
+  ORDER_UPSERT: 'ORDER_UPSERT',
+  SHIFT_UPSERT: 'SHIFT_UPSERT',
+  KITCHEN_TICKET_UPSERT: 'KITCHEN_TICKET_UPSERT',
+} as const;
+export type SyncOperationType = ValueOf<typeof SyncOperationType>;
+
+export const SyncEntityType = {
+  Order: 'Order',
+  Shift: 'Shift',
+  KitchenTicket: 'KitchenTicket',
+} as const;
+export type SyncEntityType = ValueOf<typeof SyncEntityType>;
+
+/**
+ * The cloud's answer for one pushed operation. APPLIED and DUPLICATE are success; CONFLICT and
+ * REJECTED are permanent for that operation; RETRY is transient (try again later).
+ */
+export const SyncResultStatus = {
+  APPLIED: 'APPLIED',
+  DUPLICATE: 'DUPLICATE',
+  CONFLICT: 'CONFLICT',
+  REJECTED: 'REJECTED',
+  RETRY: 'RETRY',
+} as const;
+export type SyncResultStatus = ValueOf<typeof SyncResultStatus>;
+
+/** Kinds of entries in the cloud's change feed (`GET /sync/pull`). */
+export const ChangeTopic = {
+  /** Configuration, catalog, floor or staff changed: refresh the location snapshot. */
+  CONFIG: 'CONFIG',
+} as const;
+export type ChangeTopic = ValueOf<typeof ChangeTopic>;
 
 /** Connectivity indicator shown on the POS. */
 export const SyncConnectionState = {

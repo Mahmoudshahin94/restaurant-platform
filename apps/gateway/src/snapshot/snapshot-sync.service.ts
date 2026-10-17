@@ -17,7 +17,8 @@ export type SnapshotOutcome = 'applied' | 'unchanged' | 'offline' | 'rejected' |
 /**
  * Keeps the hub's copy of the location configuration current: pulls the snapshot from the cloud
  * at start-up and then periodically. Without the cloud the hub keeps serving its last copy; the
- * POS and KDS never notice. (Phase 6 replaces snapshots with an incremental change feed.)
+ * POS and KDS never notice. The sync engine calls it whenever the change feed reports a
+ * configuration change; the timer is only a safety net (ADR 0012).
  */
 @Injectable()
 export class SnapshotSyncService implements OnApplicationBootstrap, OnModuleDestroy {
@@ -78,7 +79,7 @@ export class SnapshotSyncService implements OnApplicationBootstrap, OnModuleDest
     }
     if (response.status === 401 || response.status === 403) {
       // The device was disabled or re-paired in the cloud: keep serving, but say so loudly.
-      this.state.markCloud('ONLINE', 'The cloud rejected this hub’s credential (re-pair it)');
+      this.state.markCredentialRejected('The cloud rejected this hub’s credential (re-pair it)');
       this.logger.error('Cloud rejected the hub credential');
       return 'rejected';
     }

@@ -292,7 +292,7 @@ guestCount, notes }`. The `id` is a client-generated UUID and the **idempotency 
 `GET /api/v1/realtime` upgrades to a WebSocket; see [events.md](events.md) for the protocol and
 event list.
 
-## Location hub (Phase 5)
+## Location hub (Phases 5–6)
 
 The hub (`apps/gateway`) serves the same API as the cloud to the POS and KDS on the restaurant LAN
 (orders, payments, shifts, kitchen, menu, floor, realtime), from its SQLite database. Differences:
@@ -305,15 +305,20 @@ The hub (`apps/gateway`) serves the same API as the cloud to the POS and KDS on 
   `/auth/login`. Five wrong PINs lock the code for 5 minutes (`429 RATE_LIMITED`); the error never
   reveals whether the code exists. The cloud answers 404.
 
-| Method | Path          | Auth                                |
-| ------ | ------------- | ----------------------------------- |
-| GET    | `/hub/status` | public (no secrets)                 |
-| POST   | `/hub/sync`   | `sync.view` — pull the snapshot now |
+| Method | Path                             | Auth                                                                     |
+| ------ | -------------------------------- | ------------------------------------------------------------------------ |
+| GET    | `/hub/status`                    | public (no secrets)                                                      |
+| POST   | `/hub/sync`                      | `orders.view` — "Sync now": push, then check the feed                    |
+| GET    | `/hub/sync/operations`           | `orders.view` — the outbox (`?status=PENDING\|FAILED\|COMPLETED&limit=`) |
+| POST   | `/hub/sync/operations/:id/retry` | `sync.view` — put a FAILED operation back in the queue                   |
 
-`HubStatus`: `{ paired, restaurantId, locationId, cloud: ONLINE|OFFLINE|UNKNOWN, lastSnapshotAt,
-snapshotVersion, lastError, pendingOperations }`. Clients use it to know they are behind a hub.
+`HubStatus`: `{ paired, restaurantId, locationId, cloud: ONLINE|OFFLINE|UNKNOWN,
+state: ONLINE|OFFLINE|SYNCING|SYNC_ERROR, lastSnapshotAt, snapshotVersion, lastError,
+pendingOperations, failedOperations, syncedOperations (24 h), lastSyncAt, nextAttemptAt }`.
+Clients use it to know they are behind a hub. Outbox rows (`HubSyncOperation`) carry the entity,
+a label (the order number), status, retry count, next retry, error code and message.
 
-## Devices and hub link (Phase 5, cloud)
+## Devices and hub link (Phases 5–6, cloud)
 
 | Method | Path                                        | Auth              |
 | ------ | ------------------------------------------- | ----------------- |
@@ -321,6 +326,9 @@ snapshotVersion, lastError, pendingOperations }`. Clients use it to know they ar
 | POST   | `/locations/:lid/devices`                   | `devices.manage`  |
 | POST   | `/locations/:lid/devices/:deviceId/disable` | `devices.manage`  |
 | GET    | `/sync/snapshot`                            | device credential |
+| POST   | `/sync/push`                                | device credential |
+| GET    | `/sync/pull`                                | device credential |
+| GET    | `/locations/:lid/sync/issues`               | `sync.view`       |
 
 - **Pairing** `{ name, type: GATEWAY }` returns the device and its credential
   (`<deviceId>.<secret>`) once; only a SHA-256 of the secret is stored. Disabling a device revokes
@@ -331,6 +339,15 @@ snapshotVersion, lastError, pendingOperations }`. Clients use it to know they ar
   `@pos/validation`): restaurant, its location, roles and grants, staff of this location (with
   password and PIN hashes), catalog, taxes, discounts, floor, payment methods, drawers. Rows of
   other locations are excluded. `ETag` = content version; `If-None-Match` answers `304`.
+- **Push** `{ operations: [≤ 50], outbox?: { pending, failed } }` → `{ results: [{ operationId,
+status: APPLIED|DUPLICATE|CONFLICT|REJECTED|RETRY, code, message }] }`, one per operation, in
+  order. Each operation is applied exactly once (see [sync.md](sync.md#push)); a malformed one is
+  `REJECTED` without failing the others. An empty or malformed envelope is `400`.
+- **Pull** `?cursor=<seq>&limit=1..500&wait=0..30` → `{ changes: [{ seq, topic, entityId,
+createdAt }], cursor, hasMore }`; without `cursor`, the head of the feed. With `wait` the request
+  is held until a change arrives (long poll).
+- **Issues:** operations the cloud refused from the location's hub (`CONFLICT`/`REJECTED`, newest
+  first, up to 200), with error code, message and attempts.
 - **Audit:** `device.paired`, `device.disabled`.
 
 ## Security headers and limits

@@ -8,3 +8,4 @@ export * from './payments';
 export * from './kitchen';
 export * from './realtime';
 export * from './hub';
+export * from './sync';

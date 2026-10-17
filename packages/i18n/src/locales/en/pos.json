@@ -68,10 +68,67 @@
     "browser": "Browser preview"
   },
   "hub": {
-    "cloudOnline": "Hub · cloud connected",
-    "cloudOffline": "Hub · offline, orders saved locally",
-    "cloudUnknown": "Hub",
-    "pending_one": "{{count}} change waiting to sync",
-    "pending_other": "{{count}} changes waiting to sync"
+    "ONLINE": "Online",
+    "OFFLINE": "Offline",
+    "SYNCING": "Syncing",
+    "SYNC_ERROR": "Sync error",
+    "synced_one": "{{count}} synchronized",
+    "synced_other": "{{count}} synchronized",
+    "pending_one": "{{count}} pending",
+    "pending_other": "{{count}} pending",
+    "failed_one": "{{count}} failed",
+    "failed_other": "{{count}} failed",
+    "open": "Open synchronization details"
+  },
+  "sync": {
+    "title": "Synchronization",
+    "description": "Changes made at this location are saved here first and sent to the cloud automatically.",
+    "syncNow": "Sync now",
+    "syncing": "Syncing…",
+    "state": {
+      "ONLINE": "Everything is synchronized with the cloud.",
+      "OFFLINE": "The cloud cannot be reached. Orders are saved at this location and will be sent when the connection returns.",
+      "SYNCING": "Sending changes to the cloud.",
+      "SYNC_ERROR": "Some changes were refused by the cloud. A manager can retry them after the cause is fixed."
+    },
+    "figures": {
+      "pending": "Waiting",
+      "failed": "Failed",
+      "synced": "Synchronized (24 h)",
+      "lastSync": "Last contact",
+      "nextAttempt": "Next attempt",
+      "never": "Never"
+    },
+    "lastError": "Last error: {{message}}",
+    "tabs": {
+      "PENDING": "Waiting",
+      "FAILED": "Failed",
+      "COMPLETED": "Recently synchronized"
+    },
+    "columns": {
+      "what": "Change",
+      "created": "Made at",
+      "status": "Status",
+      "attempts": "Attempts"
+    },
+    "entity": {
+      "Order": "Order",
+      "Shift": "Shift",
+      "KitchenTicket": "Kitchen ticket"
+    },
+    "status": {
+      "PENDING": "Waiting",
+      "PROCESSING": "Sending",
+      "FAILED": "Failed",
+      "COMPLETED": "Synchronized"
+    },
+    "retry": "Retry",
+    "retryDenied": "Only a manager can retry failed changes.",
+    "empty": {
+      "PENDING": "Nothing is waiting to be sent.",
+      "FAILED": "No failed changes.",
+      "COMPLETED": "Nothing was synchronized recently."
+    },
+    "notHub": "This terminal is connected to the cloud directly; there is nothing to synchronize."
   }
 }

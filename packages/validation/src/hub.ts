@@ -1,4 +1,4 @@
-import { DeviceStatus, DeviceType, enumValues } from '@pos/shared-types';
+import { DeviceStatus, DeviceType, SyncConnectionState, enumValues } from '@pos/shared-types';
 import { z } from 'zod';
 import { idSchema, isoDateTimeSchema } from './common';
 
@@ -63,6 +63,8 @@ export const SNAPSHOT_TABLES = [
   'diningTables',
   'paymentMethods',
   'cashRegisters',
+  /** The cloud's order numbers of recent business days: a hub paired mid-day continues them. */
+  'orderCounters',
 ] as const;
 export type SnapshotTable = (typeof SNAPSHOT_TABLES)[number];
 
@@ -88,10 +90,20 @@ export const hubStatusSchema = z.object({
   locationId: idSchema.nullable(),
   /** Whether the last attempt to reach the cloud succeeded. */
   cloud: z.enum(['ONLINE', 'OFFLINE', 'UNKNOWN']),
+  /** What the POS shows: SYNC_ERROR > OFFLINE > SYNCING > ONLINE (docs/sync.md). */
+  state: z.enum(enumValues(SyncConnectionState)),
   lastSnapshotAt: isoDateTimeSchema.nullable(),
   snapshotVersion: z.string().nullable(),
   lastError: z.string().nullable(),
-  /** Outbox rows waiting for the sync engine (Phase 6). */
+  /** Outbox rows waiting to be sent (or in flight). */
   pendingOperations: z.int(),
+  /** Outbox rows the cloud refused; they wait for someone to retry them. */
+  failedOperations: z.int(),
+  /** Outbox rows completed in the last 24 hours. */
+  syncedOperations: z.int(),
+  /** Last successful push or pull. */
+  lastSyncAt: isoDateTimeSchema.nullable(),
+  /** When the engine tries the cloud again after a failure; null when it is not waiting. */
+  nextAttemptAt: isoDateTimeSchema.nullable(),
 });
 export type HubStatus = z.infer<typeof hubStatusSchema>;

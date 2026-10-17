@@ -9,6 +9,7 @@ import { OrderPage } from './routes/order-page';
 import { OrdersPage } from './routes/orders-page';
 import { SettingsPage } from './routes/settings-page';
 import { ShiftPage } from './routes/shift-page';
+import { SyncPage } from './routes/sync-page';
 import { TablesPage } from './routes/tables-page';
 import { usePreferences } from './stores/preferences';
 
@@ -45,6 +46,7 @@ export function AppRoutes() {
           <Route path="/tables" element={<TablesPage />} />
           <Route path="/shift" element={<ShiftPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/sync" element={<SyncPage />} />
           <Route path="*" element={<Navigate to="/order" replace />} />
         </Route>
       </Routes>

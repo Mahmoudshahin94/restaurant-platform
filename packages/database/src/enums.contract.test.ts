@@ -1,5 +1,7 @@
 import {
   ActionSource,
+  ActorType,
+  ChangeTopic,
   CashTransactionType,
   KitchenTicketStatus,
   TicketPriority,
@@ -26,6 +28,8 @@ describe('Prisma enums mirror @pos/shared-types', () => {
     ['DeviceType', $Enums.DeviceType, DeviceType],
     ['DeviceStatus', $Enums.DeviceStatus, DeviceStatus],
     ['ActionSource', $Enums.ActionSource, ActionSource],
+    ['ActorType', $Enums.ActorType, ActorType],
+    ['ChangeTopic', $Enums.ChangeTopic, ChangeTopic],
     ['OrderChannel', $Enums.OrderChannel, OrderChannel],
     ['OrderStatus', $Enums.OrderStatus, OrderStatus],
     ['PaymentStatus', $Enums.PaymentStatus, PaymentStatus],

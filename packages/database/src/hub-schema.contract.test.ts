@@ -12,6 +12,9 @@ import { Prisma as HubPrisma } from '../generated/hub-client';
  */
 const HUB_ONLY_MODELS = new Set(['SyncOperation', 'HubState']);
 const HUB_ONLY_ENUMS = new Set(['SyncOperationStatus']);
+/** Sync ledger and change feed exist only in the cloud (`/// @cloud-only`). */
+const CLOUD_ONLY_MODELS = new Set(['ProcessedOperation', 'ChangeLog']);
+const CLOUD_ONLY_ENUMS = new Set(['ProcessedOperationStatus', 'ChangeTopic']);
 
 type Datamodel = typeof Prisma.dmmf.datamodel;
 
@@ -64,7 +67,7 @@ describe('hub (SQLite) schema', () => {
 
   it('has exactly the cloud models, fields, relations and enums', () => {
     expect(shape(HubPrisma.dmmf.datamodel, HUB_ONLY_MODELS, HUB_ONLY_ENUMS)).toEqual(
-      shape(Prisma.dmmf.datamodel),
+      shape(Prisma.dmmf.datamodel, CLOUD_ONLY_MODELS, CLOUD_ONLY_ENUMS),
     );
   });
 

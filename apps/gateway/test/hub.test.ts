@@ -208,12 +208,15 @@ describe('running the restaurant on the hub', () => {
     expect(types.filter((t) => t === 'ORDER_UPSERT').length).toBeGreaterThanOrEqual(4);
     expect(types).toContain('SHIFT_UPSERT');
     expect(types).toContain('KITCHEN_TICKET_UPSERT');
-    const lastOrderOp = ops.filter((o) => o.entityId === order.id).at(-1);
-    expect(lastOrderOp).toMatchObject({
-      status: 'PENDING',
-      entityVersion: done.json<Order>().version,
+    // entityVersion is the hub's per-entity change sequence; the payload carries the row version.
+    const orderOps = ops.filter((o) => o.entityId === order.id);
+    expect(orderOps.map((o) => o.entityVersion)).toEqual(orderOps.map((_, i) => i + 1));
+    const lastOrderOp = orderOps.at(-1);
+    expect(lastOrderOp?.status).toBe('PENDING');
+    expect(lastOrderOp?.payload).toMatchObject({
+      status: 'COMPLETED',
+      version: done.json<Order>().version,
     });
-    expect((lastOrderOp?.payload as { status: string }).status).toBe('COMPLETED');
     expect(new Set(ops.map((o) => o.operationId)).size).toBe(ops.length);
   });
 
@@ -354,6 +357,26 @@ describe('configuration from the cloud', () => {
     ).json<PublishedMenu>();
     const price = menu.categories.flatMap((c) => c.products).find((p) => p.nameEn === 'Fries');
     expect(price?.price).toBe(1100);
+  });
+
+  it('continues the cloud’s order numbers for the day, and never goes backwards', async () => {
+    const cashier = await signIn('cashier@hub.test');
+    const first = await placeOrder(cashier, [fixture.ids.cola]);
+    expect(first.orderNumber).toBe('MAIN-001');
+    // The cloud had numbered 41 orders today before this hub was paired.
+    fixture.tables.orderCounters = [
+      { locationId: fixture.ids.locationId, businessDate: first.businessDate, lastNumber: 41 },
+    ];
+    cloud.snapshot = withVersion(fixture.ids, fixture.tables);
+    expect(await hub.snapshots.syncNow()).toBe('applied');
+    expect((await placeOrder(cashier, [fixture.ids.cola])).orderNumber).toBe('MAIN-042');
+
+    fixture.tables.orderCounters = [
+      { locationId: fixture.ids.locationId, businessDate: first.businessDate, lastNumber: 3 },
+    ];
+    cloud.snapshot = withVersion(fixture.ids, fixture.tables);
+    expect(await hub.snapshots.syncNow()).toBe('applied');
+    expect((await placeOrder(cashier, [fixture.ids.cola])).orderNumber).toBe('MAIN-043');
   });
 
   it('deactivates staff the cloud no longer sends, and keeps their past orders', async () => {

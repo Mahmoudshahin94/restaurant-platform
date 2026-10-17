@@ -37,7 +37,11 @@ const DELEGATE: Record<SnapshotTable, string> = {
   diningTables: 'diningTable',
   paymentMethods: 'paymentMethod',
   cashRegisters: 'cashRegister',
+  orderCounters: 'orderCounter',
 };
+
+/** Merged rather than copied: the hub's own numbering must never go backwards. */
+const MERGED: ReadonlySet<SnapshotTable> = new Set(['orderCounters']);
 
 interface Delegate {
   upsert(args: { where: { id: unknown }; create: Row; update: Row }): Promise<unknown>;
@@ -63,7 +67,9 @@ export async function applySnapshot(tx: HubTx, snapshot: LocationSnapshot): Prom
     const delegate = delegates[DELEGATE[table]];
     if (!delegate) throw new Error(`No hub model for snapshot table ${table}`);
     const rows = snapshot.tables[table] as Row[];
-    if (REPLACED.has(table)) {
+    if (MERGED.has(table)) {
+      await mergeOrderCounters(tx, rows);
+    } else if (REPLACED.has(table)) {
       if (rows.length > 0) await delegate.createMany({ data: rows });
     } else {
       for (const row of rows) {
@@ -82,4 +88,27 @@ export async function applySnapshot(tx: HubTx, snapshot: LocationSnapshot): Prom
     data: { isActive: false },
   });
   return written;
+}
+
+/**
+ * Continues the cloud's order numbers for a business day the cloud already numbered (orders taken
+ * before the hub was paired), so hub orders never reuse a number the cloud has: the higher of the
+ * two counters wins.
+ */
+async function mergeOrderCounters(tx: HubTx, rows: Row[]): Promise<void> {
+  for (const row of rows) {
+    const key = {
+      locationId: String(row.locationId),
+      businessDate: new Date(String(row.businessDate)),
+    };
+    const cloud = Number(row.lastNumber);
+    const local = await tx.orderCounter.findUnique({ where: { locationId_businessDate: key } });
+    if (!local) await tx.orderCounter.create({ data: { ...key, lastNumber: cloud } });
+    else if (local.lastNumber < cloud) {
+      await tx.orderCounter.update({
+        where: { locationId_businessDate: key },
+        data: { lastNumber: cloud },
+      });
+    }
+  }
 }

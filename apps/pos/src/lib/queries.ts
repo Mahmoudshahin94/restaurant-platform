@@ -137,7 +137,38 @@ export function useHubStatus() {
     queryKey: ['hub-status'],
     queryFn: () => api.hub.status(),
     retry: false,
-    refetchInterval: 30_000,
-    staleTime: 10_000,
+    // Realtime `sync.*` events refresh it at once; polling is the fallback.
+    refetchInterval: 15_000,
+    staleTime: 5_000,
   });
+}
+
+/** Query roots refreshed when the hub reports sync progress. */
+export const SYNC_QUERY_ROOTS = ['hub-status', 'hub-operations'];
+
+export function useHubOperations(status: 'PENDING' | 'FAILED' | 'COMPLETED') {
+  return useQuery({
+    queryKey: ['hub-operations', status],
+    queryFn: () => api.hub.operations({ status, limit: 100 }),
+    refetchInterval: 15_000,
+  });
+}
+
+function useSyncMutation<A, T>(fn: (arg: A) => Promise<T>) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSettled: () =>
+      client.invalidateQueries({
+        predicate: (q) => SYNC_QUERY_ROOTS.includes(String(q.queryKey[0])),
+      }),
+  });
+}
+
+export function useSyncNow() {
+  return useSyncMutation(() => api.hub.sync());
+}
+
+export function useRetryOperation() {
+  return useSyncMutation((id: string) => api.hub.retry(id));
 }

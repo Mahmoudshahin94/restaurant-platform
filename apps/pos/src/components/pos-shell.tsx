@@ -16,11 +16,12 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { appInfo, isTauri } from '../lib/device';
-import { ORDER_QUERY_ROOTS, useHubStatus, useLocations } from '../lib/queries';
+import { ORDER_QUERY_ROOTS, SYNC_QUERY_ROOTS, useHubStatus, useLocations } from '../lib/queries';
 import { session, useSession } from '../lib/session';
 import { usePreferences } from '../stores/preferences';
 import { FOCUS_SEARCH_EVENT } from './product-grid';
 import { PLACE_ORDER_EVENT } from './cart-panel';
+import { SyncIndicator } from './sync-indicator';
 
 const NAV = [
   { to: '/order', key: 'nav.order', icon: ShoppingBasket, shortcut: 'F2' },
@@ -104,6 +105,13 @@ export function PosShell() {
       });
       return;
     }
+    if (event.type.startsWith('sync.')) {
+      // The hub's sync engine made progress or the cloud link changed.
+      void queryClient.invalidateQueries({
+        predicate: (q) => SYNC_QUERY_ROOTS.includes(String(q.queryKey[0])),
+      });
+      return;
+    }
     if (!event.type.startsWith('order.')) return;
     void queryClient.invalidateQueries({
       predicate: (q) => ORDER_QUERY_ROOTS.includes(String(q.queryKey[0])),
@@ -180,21 +188,7 @@ export function PosShell() {
       <footer className="flex h-7 shrink-0 items-center justify-between border-t px-3 text-xs text-muted-foreground">
         <span className="flex items-center gap-4">
           <RealtimeIndicator status={realtime} />
-          {hub.data ? (
-            <span
-              role="status"
-              className={hub.data.cloud === 'OFFLINE' ? 'font-semibold text-foreground' : ''}
-            >
-              {hub.data.cloud === 'ONLINE'
-                ? t('pos:hub.cloudOnline')
-                : hub.data.cloud === 'OFFLINE'
-                  ? t('pos:hub.cloudOffline')
-                  : t('pos:hub.cloudUnknown')}
-              {hub.data.pendingOperations > 0
-                ? ` · ${t('pos:hub.pending', { count: hub.data.pendingOperations })}`
-                : ''}
-            </span>
-          ) : null}
+          {hub.data ? <SyncIndicator status={hub.data} /> : null}
         </span>
         {isTauri() && info.data
           ? t('pos:device.version', { version: info.data.version })
