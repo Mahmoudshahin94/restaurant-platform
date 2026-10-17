@@ -48,7 +48,12 @@
     "stations": "Kitchen stations",
     "stationsHint": "The order item is sent to every selected station.",
     "noModifierGroups": "No option groups yet.",
-    "noStations": "No kitchen stations yet."
+    "noStations": "No kitchen stations yet.",
+    "overrideMin": "Min",
+    "overrideMax": "Max",
+    "overrideHint": "Empty uses the group's rule: at least {{min}}, at most {{max}}.",
+    "unlimited": "no limit",
+    "overrideInvalid": "Check the minimum and maximum for this product"
   },
   "modifierGroups": {
     "title": "Option groups",

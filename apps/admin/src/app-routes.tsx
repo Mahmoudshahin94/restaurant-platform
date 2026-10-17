@@ -1,4 +1,6 @@
 import { RequireAuth } from '@pos/app-kit';
+import type { Permission } from '@pos/shared-types';
+import type { ReactNode } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router';
 import { session } from './lib/api';
 import { AppShell } from './components/app-shell';
@@ -10,10 +12,38 @@ import { CategoriesPage } from './routes/menu/categories-page';
 import { KitchenStationsPage } from './routes/menu/kitchen-stations-page';
 import { ModifierGroupsPage } from './routes/menu/modifier-groups-page';
 import { ProductsPage } from './routes/menu/products-page';
+import { CustomerDetailPage, CustomersPage } from './routes/operations/customers-page';
+import { OrderDetailPage } from './routes/operations/order-detail-page';
+import { OrdersPage } from './routes/operations/orders-page';
+import { PaymentsPage } from './routes/operations/payments-page';
+import { ShiftDetailPage, ShiftsPage } from './routes/operations/shifts-page';
+import { CashRegistersPage } from './routes/settings/cash-registers-page';
 import { DiscountsPage } from './routes/settings/discounts-page';
+import { LocationsPage } from './routes/settings/locations-page';
+import { OnlineOrderingPage } from './routes/settings/online-ordering-page';
+import { PaymentMethodsPage } from './routes/settings/payment-methods-page';
+import { RestaurantPage } from './routes/settings/restaurant-page';
 import { TablesPage } from './routes/settings/tables-page';
 import { TaxesPage } from './routes/settings/taxes-page';
+import { EmployeesPage } from './routes/staff/employees-page';
+import { RolesPage } from './routes/staff/roles-page';
+import { UsersPage } from './routes/staff/users-page';
+import { AuditLogPage } from './routes/system/audit-log-page';
+import { DevicesPage } from './routes/system/devices-page';
+import { SyncIssuePage, SyncPage } from './routes/system/sync-page';
 import { NotFoundPage } from './routes/not-found-page';
+
+/** A page behind a permission (checked again by the API). */
+function guarded(path: string, permission: Permission, element: ReactNode, restaurantWide = false) {
+  return (
+    <Route
+      key={path}
+      element={<RequirePermission permission={permission} restaurantWide={restaurantWide} />}
+    >
+      <Route path={path} element={element} />
+    </Route>
+  );
+}
 
 export function AppRoutes() {
   return (
@@ -28,6 +58,13 @@ export function AppRoutes() {
           }
         >
           <Route index element={<DashboardPage />} />
+          {guarded('operations/orders', 'orders.view', <OrdersPage />)}
+          {guarded('operations/orders/:locationId/:orderId', 'orders.view', <OrderDetailPage />)}
+          {guarded('operations/customers', 'customers.view', <CustomersPage />)}
+          {guarded('operations/customers/:key', 'customers.view', <CustomerDetailPage />)}
+          {guarded('operations/payments', 'payments.view', <PaymentsPage />)}
+          {guarded('operations/shifts', 'shifts.manage', <ShiftsPage />)}
+          {guarded('operations/shifts/:locationId/:shiftId', 'shifts.manage', <ShiftDetailPage />)}
           <Route path="menu" element={<RequirePermission permission="products.view" />}>
             <Route path="categories" element={<CategoriesPage />} />
             <Route path="products" element={<ProductsPage />} />
@@ -35,11 +72,21 @@ export function AppRoutes() {
             <Route path="kitchen-stations" element={<KitchenStationsPage />} />
             <Route path="availability" element={<AvailabilityPage />} />
           </Route>
-          <Route path="settings">
-            <Route path="taxes" element={<TaxesPage />} />
-            <Route path="discounts" element={<DiscountsPage />} />
-            <Route path="tables" element={<TablesPage />} />
-          </Route>
+          {guarded('settings/restaurant', 'settings.manage', <RestaurantPage />, true)}
+          {guarded('settings/locations', 'locations.view', <LocationsPage />)}
+          {guarded('settings/online-ordering', 'locations.view', <OnlineOrderingPage />)}
+          {guarded('settings/taxes', 'products.view', <TaxesPage />)}
+          {guarded('settings/discounts', 'settings.manage', <DiscountsPage />)}
+          {guarded('settings/tables', 'orders.view', <TablesPage />)}
+          {guarded('settings/payment-methods', 'settings.manage', <PaymentMethodsPage />, true)}
+          {guarded('settings/cash-registers', 'settings.manage', <CashRegistersPage />)}
+          {guarded('staff/users', 'users.manage', <UsersPage />, true)}
+          {guarded('staff/roles', 'roles.manage', <RolesPage />, true)}
+          {guarded('staff/employees', 'users.manage', <EmployeesPage />, true)}
+          {guarded('system/devices', 'devices.manage', <DevicesPage />)}
+          {guarded('system/sync', 'sync.view', <SyncPage />)}
+          {guarded('system/sync/:locationId/:operationId', 'sync.view', <SyncIssuePage />)}
+          {guarded('system/audit-log', 'audit.view', <AuditLogPage />)}
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>
