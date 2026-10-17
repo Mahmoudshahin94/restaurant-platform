@@ -19,7 +19,7 @@ mirrors the operational subset.
 | Payments  | PaymentMethod, Payment                                                                                                            | ✅ Phase 3                         |
 | Cash      | Shift, CashRegister, CashTransaction                                                                                              | ✅ Phase 3                         |
 | Kitchen   | KitchenTicket, KitchenTicketItem                                                                                                  | ✅ Phase 4                         |
-| Sync      | SyncOperation, HubState, InboundOrder (hub); ProcessedOperation, ChangeLog (cloud)                                                | ✅ Phases 5–7                      |
+| Sync      | SyncOperation, HubState, InboundOrder (hub); ProcessedOperation, ChangeLog (cloud)                                                | ✅ Phases 5–8                      |
 | Online    | WebOrderCounter (cloud); website fields on Order and Location                                                                     | ✅ Phase 7                         |
 | Customers | Customer, Address (accounts)                                                                                                      | ⏳ deferred (guest checkout only)  |
 | Inventory | InventoryItem, Recipe, StockMovement                                                                                              | ⏳ module boundary only            |
@@ -108,10 +108,15 @@ distinct.
 Presenting a rotated token revokes the whole family.
 
 **Employee**: staff who operate POS/KDS, with an argon2id PIN hash for offline PIN login on the
-hub (Phase 2/5). Optionally linked to a `User`.
+hub (Phase 2/5). Linked to a `User`, whose roles the employee signs in with; without one, no PIN
+sign-in. Managed in the admin portal (Phase 8).
 
 **Device**: POS, KDS, printer, kitchen display, customer display or gateway. `metadata` holds
 non-secret descriptive data only.
+
+**ProcessedOperation** (cloud): the exactly-once ledger of hub pushes (ADR 0012). Refusals keep
+the hub's state (`payload`) and, once an administrator settled them, the `resolution`
+(`APPLIED_HUB` / `KEPT_CLOUD`), who and when, and a note (ADR 0014).
 
 **AuditLog**: append-only. `metadata` is redacted (passwords, tokens, PINs, card data) before
 insert. It records `actorType/actorId`, `source` (POS/KDS/WEBSITE/ADMIN/HUB/SYSTEM) and

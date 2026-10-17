@@ -5,8 +5,10 @@ location snapshot and the outbox; Phase 6 built the sync engine: push with exact
 application in the cloud, the change feed with long polling, retries, conflict detection, the POS
 indicator and synchronization screen, and the cloud's record of refused operations. Phase 7 added
 website orders: the `ORDER` topic of the change feed and the ownership hand-over on acceptance.
-Design decisions: [ADR 0006](adr/0006-sync-protocol.md), [ADR 0012](adr/0012-sync-engine.md) and
-[ADR 0013](adr/0013-online-ordering.md).
+Phase 8 added the administrator's resolution of refused operations (`RESOLUTION` topic).
+Design decisions: [ADR 0006](adr/0006-sync-protocol.md), [ADR 0012](adr/0012-sync-engine.md),
+[ADR 0013](adr/0013-online-ordering.md) and
+[ADR 0014](adr/0014-admin-portal-and-conflict-resolution.md).
 
 ## Actors
 
@@ -117,10 +119,11 @@ Results, one per operation:
 | `REJECTED`  | invalid, out of scope or against a database rule       | `FAILED`, entity held back                  |
 | `RETRY`     | try later (missing dependency, unexpected error)       | `PENDING` with backoff; `FAILED` after 10   |
 
-`CONFLICT` and `REJECTED` are recorded in the ledger with their reason, for administrators
-(`GET /locations/:lid/sync/issues`, `sync.view`). A refused operation that the hub retries later
-is applied if its cause was fixed (the ledger row then becomes `APPLIED`). `RETRY` is not recorded.
-The hub's reported outbox size is kept in the device's metadata.
+`CONFLICT` and `REJECTED` are recorded in the ledger with their reason and the hub's state, for
+administrators (`GET /locations/:lid/sync/issues`, `sync.view`; see
+[Resolving refused operations](#resolving-refused-operations-phase-8)). A refused operation that
+the hub retries later is applied if its cause was fixed (the ledger row then becomes `APPLIED`).
+`RETRY` is not recorded. The hub's reported outbox size is kept in the device's metadata.
 
 ## Pull (cloud → hub)
 
@@ -148,9 +151,12 @@ bigserial sequence, **never by timestamps**:
   appends one `ORDER` entry per website order a transaction created or changed (creation, the
   acceptance timeout, a cloud staff action, a void after a rejection), with the order's
   `locationId`, under the same advisory lock. Orders pushed by hubs are not echoed back.
+- **Producers (`RESOLUTION`, Phase 8).** An administrator's decision on a refused operation
+  appends one entry with the operation id, in the transaction that records it.
 - **Consumer.** The hub handles a page in order: if it holds a `CONFIG` change it refreshes its
   snapshot first; then it fetches each announced website order once (`GET /sync/orders/:id`, the
-  outbox payload shape; 404 for another location's order, which is skipped) and stores it (below).
+  outbox payload shape; 404 for another location's order, which is skipped) and stores it (below);
+  then it applies each announced decision (`GET /sync/resolutions/:operationId`, below).
   Then it stores the new cursor in `hub_state`. If anything cannot be fetched, the cursor stays
   and the page is seen again. An order whose products the hub does not have yet triggers one more
   snapshot refresh before it is stored.
@@ -171,9 +177,10 @@ bigserial sequence, **never by timestamps**:
 - **Operation asked to retry** (`RETRY`): the operation waits `random(0, min(5 min, 2 s × 2^n))`;
   after 10 such answers it becomes `FAILED`.
 - **Refused** (`CONFLICT`, `REJECTED`): `FAILED` with the error code and message. It is shown on
-  the POS synchronization screen (and its cloud copy on the admin issues endpoint), holds back
-  only its entity and the entities depending on it, and is never deleted. A manager retries it
-  from the POS (`sync.view`); the newest state of the entity is then sent.
+  the POS synchronization screen (and its cloud copy, with the hub's state, in the admin portal),
+  holds back only its entity and the entities depending on it, and is never deleted. A manager
+  retries it from the POS (`sync.view`), or an administrator settles it in the cloud (below); the
+  newest state of the entity is then sent.
 - **Crash safety:** operations left `PROCESSING` return to `PENDING` at start-up; the cloud answers
   `DUPLICATE` for any it had already applied.
 - **Credential refused** (HTTP 401/403): the hub shows `SYNC_ERROR` ("re-pair it") and checks again
@@ -194,8 +201,40 @@ bigserial sequence, **never by timestamps**:
 
 Timestamps never decide a conflict or identify duplicates: duplicates are recognised by
 `operationId`, ownership by the ledger, ordering by `entity_version` and the feed's `seq`.
-Shifts have no `version` column, so a shift changed in the cloud itself is not detected; nothing
-in the cloud changes hub shifts today.
+
+In the cloud, staff cannot change an order a hub owns (edits, transitions, charges, refunds answer
+`OWNED_BY_RESTAURANT`); only online card payments are still settled by the cloud, without
+changing the order's version (ADR 0014).
+
+## Resolving refused operations (Phase 8)
+
+Rule: **a refused change is never applied or dropped without a person deciding, and the version
+that loses is kept** ([ADR 0014](adr/0014-admin-portal-and-conflict-resolution.md)).
+
+```
+Hub push ── CONFLICT ──▶ Cloud ledger: status, reason, hub's state (payload)
+                            │ admin portal: both versions side by side
+Administrator (sync.resolve) ── decision + note ──▶ ledger + audit log + RESOLUTION entry
+Hub ◀── GET /sync/resolutions/:operationId ── RESEND | ADOPT_CLOUD (+ the cloud's order)
+```
+
+| Decision                       | When                                                                  | Cloud                                                                                                     | Hub                                                                                                         |
+| ------------------------------ | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Apply the restaurant's version | `CONFLICT` (`SYNC_CONFLICT`) with the hub's state kept                | audit log gets the cloud's copy; the hub's state is applied without the ownership check; ledger `APPLIED` | `RESEND`: failed operations of the entity go back to the queue; the cloud answers `DUPLICATE`               |
+| Keep the cloud's version       | orders the cloud has, whose hub copy holds no payment the cloud lacks | ledger keeps the hub's state, records `KEPT_CLOUD` and the cloud version as the new baseline              | `ADOPT_CLOUD`: stores the cloud's order, marks its unsent changes `SYNC_SUPERSEDED`, keeps its own payments |
+| Ask the hub to resend          | the cause was fixed elsewhere (not for a disabled hub)                | records the request; the issue stays open                                                                 | `RESEND` as above; the cloud judges the resend like any push                                                |
+
+- After **keep the cloud's version**, the hub's next change of the order must carry
+  `baseVersion` = the kept version (the hub records it in `inbound_orders` when adopting), so a
+  change made before adopting is a `CONFLICT` rather than overwriting the decision. A repeat of
+  the settled operation answers `DUPLICATE` with code `SYNC_SUPERSEDED`. Payments the hub took
+  that the cloud's copy lacks are kept and sent with a new change based on the adopted version.
+- **Apply the restaurant's version** keeps payments append-only (a payment differing from the
+  cloud's still refuses) and re-derives the payment status from every recorded payment; a clash
+  with another record (e.g. the same order number twice on one day) leaves the issue open.
+- Refusals recorded before Phase 8 have no stored state: only a resend is possible for them.
+  Shifts have no `version` column, so a shift changed in the cloud itself is not detected; nothing
+  in the cloud changes hub shifts today.
 
 ## Website orders (Phase 7)
 

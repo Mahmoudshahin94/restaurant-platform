@@ -302,13 +302,20 @@ function Comparison({ detail, locationId }: { detail: SyncIssueDetail; locationI
   );
 }
 
-function Decision({ detail, locationId }: { detail: SyncIssueDetail; locationId: string }) {
+function Decision({
+  detail,
+  locationId,
+  onDone,
+}: {
+  detail: SyncIssueDetail;
+  locationId: string;
+  onDone: () => void;
+}) {
   const { t } = useTranslation(['admin', 'common']);
   const errorText = useAdminErrorText();
   const [action, setAction] = useState<Action | null>(null);
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
   const options: Record<Action, SyncIssueDetail['options']['applyHub']> = {
     APPLY_HUB: detail.options.applyHub,
     KEEP_CLOUD: detail.options.keepCloud,
@@ -326,7 +333,6 @@ function Decision({ detail, locationId }: { detail: SyncIssueDetail; locationId:
         <CardTitle>{t('admin:sync.detail.decision')}</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4">
-        {done ? <Alert>{t('admin:sync.detail.done')}</Alert> : null}
         {error ? <Alert variant="destructive">{error}</Alert> : null}
         <div role="radiogroup" aria-label={t('admin:sync.detail.decision')} className="grid gap-2">
           {ACTIONS.map((a) => {
@@ -374,12 +380,11 @@ function Decision({ detail, locationId }: { detail: SyncIssueDetail; locationId:
             onClick={() => {
               if (!action) return;
               setError(null);
-              setDone(false);
               resolve.mutateAsync({ action, note: note.trim() }).then(
                 () => {
-                  setDone(true);
                   setAction(null);
                   setNote('');
+                  onDone();
                 },
                 (e: unknown) => {
                   setError(errorText(e));
@@ -401,8 +406,11 @@ function IssueDetail({ detail, locationId }: { detail: SyncIssueDetail; location
   const { canAt } = usePermissions();
   const issue = detail.issue;
   const open = detail.issue.resolution === null && issue.status !== 'APPLIED';
+  // Shown above the issue: once settled, the decision form is gone.
+  const [done, setDone] = useState(false);
   return (
     <div className="grid gap-6">
+      {done ? <Alert>{t('admin:sync.detail.done')}</Alert> : null}
       <Alert>{t('admin:sync.detail.rule')}</Alert>
       <Card>
         <CardHeader>
@@ -433,7 +441,13 @@ function IssueDetail({ detail, locationId }: { detail: SyncIssueDetail; location
       <Comparison detail={detail} locationId={locationId} />
       {open ? (
         canAt(locationId, 'sync.resolve') ? (
-          <Decision detail={detail} locationId={locationId} />
+          <Decision
+            detail={detail}
+            locationId={locationId}
+            onDone={() => {
+              setDone(true);
+            }}
+          />
         ) : (
           <Alert>{t('admin:sync.detail.noResolve')}</Alert>
         )

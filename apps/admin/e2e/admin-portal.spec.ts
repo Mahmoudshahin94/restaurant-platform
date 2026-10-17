@@ -287,11 +287,12 @@ test('an administrator resolves a change the cloud refused from the hub', async 
   // The administrator compares both versions and applies the restaurant's, in Arabic.
   await signIn(page);
   await page.getByRole('combobox', { name: 'Language' }).selectOption('ar');
-  await page.getByRole('link', { name: 'المزامنة' }).click();
+  await page.getByRole('link', { name: 'المزامنة', exact: true }).click();
   const issue = page.getByRole('row', { name: new RegExp(order.orderNumber) });
   await expect(issue).toContainText('تعارض');
   await issue.getByRole('link').click();
-  await expect(page.getByText('نسخة الفرع')).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'نسخة الفرع' })).toBeVisible();
+  await expect(page.getByRole('row', { name: /الإصدار/ })).toContainText('مختلف');
   await page.getByRole('radio', { name: /اعتماد نسخة الفرع/ }).click();
   await page.getByLabel('ملاحظة للسجل').fill('أكد الفرع أن هذه هي الحالة الصحيحة');
   await page.getByRole('button', { name: 'تأكيد القرار' }).click();

@@ -287,11 +287,9 @@ function OnlineOrdering({ locationId }: { locationId: string }) {
       {() => (
         <QueryState query={query}>
           {(data) => (
-            <OnlineForm
-              key={`${locationId}:${JSON.stringify([data.state, data.openingHours, data.deliveryFee])}`}
-              locationId={locationId}
-              data={data}
-            />
+            // Keyed by location only: a save refreshes `data` without discarding the form's
+            // confirmation; another location starts a fresh form.
+            <OnlineForm key={locationId} locationId={locationId} data={data} />
           )}
         </QueryState>
       )}

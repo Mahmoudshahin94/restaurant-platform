@@ -3,9 +3,9 @@
 Restaurant platform: offline-first POS, Kitchen Display System (KDS), customer online ordering,
 admin portal, cloud API, and a per-restaurant location hub. Arabic and English with full RTL.
 
-> Status: Phases 0–7 (foundations, menu, POS, payments, KDS, location hub, sync engine, customer
-> website and online ordering) are implemented. See the [phase checklist](#10-development-phases)
-> at the end.
+> Status: Phases 0–8 (foundations, menu, POS, payments, KDS, location hub, sync engine, customer
+> website and online ordering, admin portal) are implemented. See the
+> [phase checklist](#10-development-phases) at the end.
 
 ## 1. Starting point
 
@@ -52,7 +52,7 @@ owns the local database.
 ```
 apps/
   api/            NestJS + Fastify cloud API                         (Phase 0–1: implemented)
-  admin/          React admin portal                                 (Phase 1: menu screens)
+  admin/          React admin portal                                 (Phases 1, 8)
   gateway/        Location hub: SQLite, sync engine, LAN WS, printers (Phase 5–6)
   pos/            Tauri 2 + React point of sale                      (Phase 2: order entry)
   kds/            React kitchen display                              (Phase 4)
@@ -206,7 +206,7 @@ and [sync.md](sync.md#website-orders-phase-7).
 | 5     | Location hub with SQLite, offline POS                                                                                                                   | ✅ Done |
 | 6     | Synchronization engine                                                                                                                                  | ✅ Done |
 | 7     | Customer website, online ordering availability                                                                                                          | ✅ Done |
-| 8     | Admin portal completion                                                                                                                                 | ⏳      |
+| 8     | Admin portal completion                                                                                                                                 | ✅ Done |
 | 9     | Reporting                                                                                                                                               | ⏳      |
 | 10    | Hardening, full E2E suite                                                                                                                               | ⏳      |
 
@@ -438,26 +438,93 @@ See [ADR 0013](adr/0013-online-ordering.md).
   address, payment, countdown), accept or reject with a reason preset; online tenders are no
   longer offered at the till.
 
+**Phase 8 verification (2026-10-18):** `turbo run build typecheck lint test --force` with 64/64
+tasks green, covering 518 unit, integration and component tests (API 175, domain 142, gateway 48,
+i18n 24, database 23, validation 20, admin 18, POS 13, customer-web 12, api-client 11, server 10,
+receipts 8, KDS 7, app-kit 5, ui 2), and 28 Playwright E2E tests (admin 7, POS 14, KDS 4,
+customer-web 3). New: the cloud's staff suite (users with location roles, passwords never
+returned or audited, role changes audited before/after, deactivation ending sessions and refresh
+tokens, the last-owner and self rules, privilege escalation refused for grants, removals,
+deactivation, password resets and PIN links, roles from the catalog with audited permission
+changes, protected system roles, employees with hashed PINs and reset); the overview suite
+(payment methods and drawers with archive rules, dashboard per location within the caller's reach
+with the hub link, order/customer/payment searches with filters and paging, online refunds that
+are append-only, idempotent and announced to the hub, cash refunds sent to the till, hub-owned
+orders refused in the cloud, audit-log filters, scope and redaction on read); the resolution suite
+(stored refused payloads, both versions compared, applying the hub's version with the cloud's copy
+in the audit log and a duplicate on resend, keeping the cloud's version with older hub changes
+refused and `baseVersion` changes accepted, never dropping a sale or a hub payment, a failed apply
+leaving the issue open, resend after a fix, permissions, a replaced hub's change rescued, malformed
+payloads kept); an audit-coverage test producing each action the specification lists; the hub's
+resolution suite (resend, adopting the cloud's order with superseded changes and `baseVersion`,
+keeping money taken at the till, unknown decisions skipped); domain tests for grants and resolution
+options; component tests for the sync issue page, roles matrix, users, online ordering and product
+overrides. The admin E2E suite runs the main flows: an owner creating a role and a user (audited,
+enforced in a second browser), branch settings, online ordering and payment setup in Arabic RTL,
+order search and detail with the customer view, and an administrator resolving a refused hub
+change in Arabic. Also `pnpm test:tools`, `prettier --check`, a clean `migrate status` (development
+and test databases), the hub schema check, and a manual run of every screen against the
+development database (including the two refusals left there in Phase 6, which offer only a
+resend because their state predates Phase 8).
+
+### Phase 8 decisions
+
+See [ADR 0014](adr/0014-admin-portal-and-conflict-resolution.md).
+
+- **Admin portal** (`apps/admin`) completed with grouped, permission-filtered navigation: dashboard;
+  operations (orders with filters and detail, customers, payments with online refunds, shifts
+  read-only); menu (now with per-product modifier min/max overrides); settings (restaurant,
+  locations with tax mode, cash rounding and kitchen timers, online ordering with opening hours,
+  taxes, discounts, tables, payment methods, cash drawers); staff (users, roles with a permission
+  matrix, employees with PINs); system (devices with pairing instructions, synchronization with
+  conflict resolution, audit log). Every screen has loading, empty and error states, English and
+  Arabic with RTL, and asks the API for every decision.
+- **Cloud-only admin API** (`apps/api/src/modules/admin`): staff, payment setup, dashboard,
+  searches across the caller's locations (only where they hold the permission), online refunds,
+  audit-log search (redacted again on read).
+- **No privilege escalation:** nobody grants, revokes, edits or deletes a role holding permissions
+  they lack at that scope; linking a user to an employee or setting that employee's PIN requires
+  the user's permissions; system roles hold every permission (also new ones) and cannot change;
+  an active owner always remains; nobody changes or deactivates themselves. Deactivation and
+  password resets end sessions at once. All permission changes are audited.
+- **Hub-owned orders are changed at the POS:** the cloud refuses staff edits, transitions, charges
+  and refunds of orders a hub owns (`OWNED_BY_RESTAURANT`); online card refunds stay with the cloud
+  (append-only, no version change, announced to the hub).
+- **Conflict resolution:** refused hub changes keep their state; an administrator with
+  `sync.resolve` applies the restaurant's version (the cloud's copy goes to the audit log first),
+  keeps the cloud's version (orders only, never dropping a sale or a hub payment), or asks for a
+  resend, with a required note. The decision reaches the hub on the change feed (`RESOLUTION`); a
+  kept cloud version is enforced through `baseVersion`.
+- **New permission** `sync.resolve`; new error codes `USER_NOT_FOUND`, `ROLE_NOT_FOUND`,
+  `EMPLOYEE_NOT_FOUND`, `DEVICE_NOT_FOUND`, `PAYMENT_METHOD_NOT_FOUND`, `SYNC_ISSUE_NOT_FOUND`.
+- **Audit coverage** checked against the specification: login and logout, cancellation, refund
+  (and online voids), discount, price change, product change, payment correction, shift open and
+  close, permission change (user roles, role permissions, employee links and PINs) and
+  configuration change (restaurant, locations, online ordering, taxes, discounts, floor, payment
+  methods, drawers, devices, sync decisions) are recorded in the cloud; actions taken at the hub
+  are recorded on the hub (upload in Phase 10).
+
 Known gaps carried forward:
 
-- The admin UI does not yet expose per-product modifier min/max overrides. The API supports them
-  and the UI preserves existing values.
-- **Resolving a sync conflict needs a person and a tool**: the POS shows refused changes and a
-  manager can retry them, and the cloud lists them (`/sync/issues`), but there is no admin screen
-  yet to inspect or fix the conflicting data (Phase 8). Hub audit-log rows are not uploaded yet
-  (Phase 10).
+- Hub audit-log rows are not uploaded yet (Phase 10): actions taken at the restaurant (PIN
+  sign-ins, shift open/close, refunds at the till) are audited on the hub only; the cloud's audit
+  log shows them once the hub uploads its audit trail.
+- **Sync conflicts** (ADR 0014): an order-number clash (the same number twice on one business day,
+  possible only with data from before Phase 6) cannot be settled by choosing a version; there is no
+  screen to renumber an order. "Keep the cloud's version" exists for orders only.
 - Shifts have no `version` column, so a shift changed in the cloud itself would not be detected as a
   conflict; nothing in the cloud edits hub shifts today.
 - The change feed's waiting requests poll PostgreSQL once a second each; `LISTEN/NOTIFY` should
   replace this before many hubs share one API instance.
 - The POS keeps its refresh token in memory (sign in again after a restart); OS-keychain storage
-  is still to do. Employees and PINs are provisioned by seed; their admin screen comes in Phase 8.
+  is still to do. An employee signs in with the roles of a linked user, so every PIN user is also a
+  user account (with an e-mail); employees without one cannot sign in.
 - The hub runs as a separate Node process; packaging it as a Tauri sidecar for single-terminal
   sites, an installer/service wrapper and disk encryption of its data are hardening work.
 - The hub's SQLite tables have no CHECK constraints (the cloud's do); rules are enforced by the
   shared services.
-- Payment methods and cash registers are provisioned by seed; there is no admin UI for them or
-  for a location's cash rounding yet (Phase 8). Shift and daily reports are on the POS only.
+- The admin portal shows shifts read-only and a small dashboard; daily and shift reports beyond
+  that come with reporting (Phase 9).
 - Card payments are recorded after approval on a standalone terminal; no integrated terminal or
   online gateway is wired yet. Receipt QR blocks are placeholders until a market's e-invoicing
   rules are chosen.
@@ -471,13 +538,12 @@ Known gaps carried forward:
 - Realtime delivery is in-process: fine for the hub (one per site); several cloud API instances
   would need a shared channel (e.g. Postgres LISTEN/NOTIFY) behind `RealtimeBus`.
 - No bump-bar/keyboard control on the KDS.
-- KDS thresholds (`kdsWarnMinutes`/`kdsLateMinutes`) are set through the API; the admin screen
-  for them comes in Phase 8. Prep-time reporting comes with reporting (Phase 9).
+- Prep-time reporting comes with reporting (Phase 9).
 - Restaurants are provisioned by seed only; there is no platform-operator UI yet.
 - **Online ordering (Phase 7):** no customer accounts, saved addresses, delivery zones or radius,
   scheduled orders, promo codes or tips; customers (and support staff in the cloud) cannot cancel
-  a website order, only the restaurant (reject) or the acceptance timeout can; the delivery fee is flat and untaxed. The admin portal has
-  no online-ordering screen yet (switch, hours and options are set through the API; Phase 8).
+  a website order, only the restaurant (reject) or the acceptance timeout can; the delivery fee is
+  flat and untaxed.
 - Online card payments use the mock adapter only; a real gateway (authorize at checkout, capture
   on acceptance, voids through an outbox instead of inside the database transaction) is still to
   be integrated. A void the provider refuses is recorded as a `PENDING` refund for an operator.
@@ -492,6 +558,12 @@ Known gaps carried forward:
   the order. Tokens cannot be revoked one by one (rotating `TRACKING_TOKEN_SECRET` revokes all).
 - The timeout sweep runs in every API instance (the row lock keeps it correct, but several
   instances would repeat the scan).
+- **Admin portal (Phase 8):** customers are grouped from order contact details (no accounts,
+  merging or erasure yet); the portal refunds online card payments only (cash and card refunds
+  happen at the POS) and cannot cancel or edit orders a hub owns; users have no self-service
+  password change, password reset by e-mail or second factor; the audit log has no free-text search
+  or export; pairing a hub still needs the command on the hub machine (the portal shows it);
+  location and restaurant time zones are typed as IANA names, not picked from a list.
 
 ## Architectural decisions and open questions
 
@@ -530,6 +602,10 @@ Recorded as ADRs in [adr/](adr/):
     the shared engine, the `ORDER` change feed, ownership hand-over on acceptance (`baseVersion`),
     the acceptance timeout winning over a late acceptance, mock online card with append-only
     voids, signed tracking tokens.
+14. [0014](adr/0014-admin-portal-and-conflict-resolution.md): admin portal: no privilege
+    escalation in staff management, hub-owned orders changed only at the POS (online refunds stay
+    in the cloud), and resolving refused hub changes by an explicit, audited decision
+    (`RESOLUTION` change-feed topic).
 
 Open items to revisit:
 
