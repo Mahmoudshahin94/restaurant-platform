@@ -37,6 +37,8 @@
   "CASH_REGISTER_NOT_FOUND": "Cash drawer not found.",
   "KITCHEN_TICKET_NOT_FOUND": "Kitchen ticket not found.",
   "INVALID_TICKET_STATE": "This ticket cannot do that right now.",
+  "MANAGED_IN_CLOUD": "This setting is managed in the cloud admin portal.",
+  "HUB_NOT_PROVISIONED": "This restaurant hub is not set up yet.",
   "SYNC_CONFLICT": "This change conflicts with a newer version.",
   "DUPLICATE_OPERATION": "This operation was already processed.",
   "RESTAURANT_OFFLINE": "The restaurant is offline right now.",

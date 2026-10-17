@@ -1,4 +1,6 @@
 import {
+  type PinLoginRequest,
+  hubStatusSchema,
   type DismissTicketRequest,
   type OrderKitchenPriorityRequest,
   type TicketItemDoneRequest,
@@ -105,6 +107,21 @@ export function createApiClient(options: HttpClientOptions) {
           noRetry: true,
         }),
       me: () => http.request('GET', `${API}/auth/me`, { schema: authUserSchema }),
+      /** Employee code + PIN; only the location hub offers it. */
+      pinLogin: (body: PinLoginRequest) =>
+        http.request('POST', `${API}/auth/pin`, {
+          body,
+          schema: tokenResponseSchema,
+          noRetry: true,
+        }),
+    },
+    hub: {
+      /** Answers only on a location hub (the cloud returns 404): pairing, cloud link, outbox. */
+      status: () =>
+        http.request('GET', `${API}/hub/status`, { schema: hubStatusSchema, noRetry: true }),
+      /** Pulls the latest configuration from the cloud now. */
+      refresh: () =>
+        http.request('POST', `${API}/hub/sync`, { schema: hubStatusSchema, noRetry: true }),
     },
     restaurants: {
       get: (restaurantId: string) =>

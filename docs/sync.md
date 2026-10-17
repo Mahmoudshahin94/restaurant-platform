@@ -1,4 +1,9 @@
-# Synchronization protocol (design — implemented in Phases 5–6)
+# Synchronization protocol
+
+**Status:** Phase 5 implemented the hub, pairing (device credentials), provisioning by full
+location snapshot (`GET /sync/snapshot`, below) and the outbox: every hub change writes its
+`sync_operations` row in the same transaction. Phase 6 implements push, the change feed and the
+connectivity states below; the snapshot remains for first provisioning and recovery.
 
 ## Actors
 
@@ -24,6 +29,23 @@ transaction** as the mutation itself. If either fails, both roll back.
 | `status`                                        | `PENDING → PROCESSING → COMPLETED` or `FAILED`                   |
 | `retry_count`, `next_retry_at`, `error_message` | retry bookkeeping                                                |
 | `created_at`, `processed_at`                    | UTC timestamps                                                   |
+
+## Provisioning snapshot (Phase 5)
+
+Pairing: an owner runs `pnpm --filter @pos/gateway pair --cloud <url> --email <owner> --location
+<CODE>` on the hub machine. The cloud registers a `GATEWAY` device and returns its credential
+once; the hub stores it in `hub_state` and authenticates every `/sync/*` call with it.
+
+The hub then pulls `GET /api/v1/sync/snapshot` at start-up and every
+`HUB_SNAPSHOT_INTERVAL_SECONDS` (default 300), with `If-None-Match` so unchanged configuration
+costs a `304`. A new snapshot is applied in one transaction: rows are upserted by id in dependency
+order, join tables and role grants are replaced, staff missing from the snapshot are deactivated,
+and nothing referenced by local orders is ever deleted. A `menu.updated` event tells screens to
+refresh. Without the cloud the hub keeps serving its last snapshot.
+
+Outbox payloads are full aggregate rows: an order with items, modifiers, taxes, discounts, status
+history and payments (`ORDER_UPSERT`, `entityVersion` = order version); a shift with its cash
+transactions (`SHIFT_UPSERT`); a kitchen ticket with its items (`KITCHEN_TICKET_UPSERT`).
 
 ## Push
 

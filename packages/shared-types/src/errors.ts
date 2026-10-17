@@ -48,6 +48,9 @@ export const ERROR_CODES = [
   // kitchen
   'KITCHEN_TICKET_NOT_FOUND',
   'INVALID_TICKET_STATE',
+  // location hub
+  'MANAGED_IN_CLOUD',
+  'HUB_NOT_PROVISIONED',
   // sync / online ordering
   'SYNC_CONFLICT',
   'DUPLICATE_OPERATION',

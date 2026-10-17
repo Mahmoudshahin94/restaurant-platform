@@ -1,7 +1,7 @@
 import type { APIRequestContext } from '@playwright/test';
 
-/** The E2E API (see playwright.config.ts); the kitchen is driven through it directly. */
-const API = `http://localhost:${process.env.POS_E2E_API_PORT ?? '3110'}/api/v1`;
+/** The E2E location hub (see playwright.config.ts); the kitchen is driven through it directly. */
+const API = `http://localhost:${process.env.POS_E2E_API_PORT ?? '4110'}/api/v1`;
 
 /** The kitchen (seeded Kitchen user) marks every station of an order ready. */
 export async function kitchenMarksReady(

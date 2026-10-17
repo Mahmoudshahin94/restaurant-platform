@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "node20",
+    "moduleResolution": "node16",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "strictPropertyInitialization": false,
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["src"]
+}

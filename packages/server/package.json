@@ -1,0 +1,44 @@
+{
+  "name": "@pos/server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Server application layer shared by the cloud API and the location hub: NestJS modules for auth, orders, payments, shifts, kitchen and realtime, written against an injected database client",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fastify/cookie": "11.1.3",
+    "@fastify/helmet": "13.2.0",
+    "@fastify/rate-limit": "10.3.0",
+    "@fastify/websocket": "11.3.1",
+    "@nestjs/common": "11.2.7",
+    "@nestjs/core": "11.2.7",
+    "@nestjs/platform-fastify": "11.2.7",
+    "@pos/database": "workspace:*",
+    "@pos/domain": "workspace:*",
+    "@pos/shared-types": "workspace:*",
+    "@pos/validation": "workspace:*",
+    "fastify": "5.11.3",
+    "jose": "6.2.12",
+    "pino": "10.4.0",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2",
+    "zod": "4.1.13"
+  },
+  "devDependencies": {
+    "@swc/core": "1.15.3",
+    "@types/node": "22.20.5",
+    "@types/ws": "8.18.1",
+    "unplugin-swc": "1.6.0",
+    "vitest": "3.2.7"
+  }
+}

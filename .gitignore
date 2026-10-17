@@ -14,3 +14,10 @@ packages/database/generated/
 apps/pos/src-tauri/target/
 .vite/
 tools/printer-sim/out/
+
+# SQLite files (hub data, migration scratch databases)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.hub-data/

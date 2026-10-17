@@ -1,8 +1,8 @@
 # Realtime events
 
-Typed in `packages/shared-types/src/events.ts` (`EventMap`, `RealtimeEvent<K>`). The same
-contract is used on the cloud socket today and on the hub's LAN WebSocket (POS ↔ hub ↔ KDS) from
-Phase 5.
+Typed in `packages/shared-types/src/events.ts` (`EventMap`, `RealtimeEvent<K>`). The cloud API and
+the location hub serve the same socket (shared server code); in a restaurant the POS and KDS
+connect to the hub on the LAN, so kitchen traffic never depends on the Internet.
 
 Envelope:
 
@@ -32,7 +32,7 @@ payloads carry `{ ticketId, orderId, orderNumber, stationId, status, version }`.
 | `kitchen.ticket_cancelled`                         | Order cancelled, or an edit removed the station's items          | KDS                                   | Phase 4 |
 | `sync.completed` / `sync.failed`                   | Push/pull cycle finished                                         | POS sync indicator, admin             | Phase 6 |
 | `restaurant.status_changed`                        | Online ordering state changed                                    | POS, customer web                     | Phase 7 |
-| `menu.updated`                                     | Menu published/changed for a location                            | POS, KDS, customer web                | later   |
+| `menu.updated`                                     | The hub applied a new configuration snapshot                     | POS, KDS, customer web                | Phase 5 |
 
 ## Socket protocol (`GET /api/v1/realtime`, WebSocket)
 
@@ -60,6 +60,5 @@ cannot ride on a signed-in user's session, so the Origin header is not used for 
   polling fallback for a dropped connection.
 - A screen subscribes per location and filters by station itself (payloads carry `stationId`).
   Station-level rooms can be added in the hub if LAN traffic ever matters.
-- The cloud API delivers events in-process: one API instance is assumed until the hub takes over
-  LAN delivery (Phase 5). Several instances need a shared channel (e.g. Postgres LISTEN/NOTIFY)
-  behind `RealtimeBus`.
+- Events are delivered in-process: one hub per site is exactly that; several cloud API instances
+  would need a shared channel (e.g. Postgres LISTEN/NOTIFY) behind `RealtimeBus`.

@@ -17,25 +17,34 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
-    }
+    },
+    "./hub-client": {
+      "types": "./generated/hub-client/index.d.ts",
+      "default": "./generated/hub-client/index.js"
+    },
+    "./hub-migrations": "./prisma/hub/migrations/",
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
-    "prisma"
+    "prisma",
+    "generated"
   ],
   "scripts": {
-    "generate": "prisma generate",
-    "build": "prisma generate && tsup",
+    "generate": "node scripts/hub-schema.mjs --check && prisma generate && prisma generate --config prisma.hub.config.ts",
+    "build": "pnpm generate && tsup",
     "dev": "tsup --watch",
-    "typecheck": "prisma generate && tsc --noEmit",
+    "typecheck": "pnpm generate && tsc --noEmit",
     "lint": "eslint .",
-    "test": "prisma generate && vitest run",
+    "test": "pnpm generate && vitest run",
     "migrate:dev": "dotenv -e ../../.env -- prisma migrate dev",
     "migrate:create": "dotenv -e ../../.env -- prisma migrate dev --create-only",
     "migrate:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
     "migrate:reset": "dotenv -e ../../.env -- prisma migrate reset --force",
     "migrate:status": "dotenv -e ../../.env -- prisma migrate status",
-    "seed": "dotenv -e ../../.env -- tsx src/seed.ts"
+    "seed": "dotenv -e ../../.env -- tsx src/seed.ts",
+    "hub:schema": "node scripts/hub-schema.mjs && prisma format --config prisma.hub.config.ts",
+    "hub:migration": "node scripts/hub-migration.mjs"
   },
   "dependencies": {
     "@node-rs/argon2": "2.2.2",

@@ -7,3 +7,4 @@ export * from './pricing-config';
 export * from './payments';
 export * from './kitchen';
 export * from './realtime';
+export * from './hub';

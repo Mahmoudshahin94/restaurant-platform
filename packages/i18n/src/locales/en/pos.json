@@ -66,5 +66,12 @@
   "device": {
     "version": "POS {{version}}",
     "browser": "Browser preview"
+  },
+  "hub": {
+    "cloudOnline": "Hub · cloud connected",
+    "cloudOffline": "Hub · offline, orders saved locally",
+    "cloudUnknown": "Hub",
+    "pending_one": "{{count}} change waiting to sync",
+    "pending_other": "{{count}} changes waiting to sync"
   }
 }

@@ -191,7 +191,7 @@ The cloud is never in this path. Event names and payloads are typed in
 | 2     | POS order creation, pricing engine, taxes, discounts, order state machine, tables, Tauri shell                                                          | ✅ Done |
 | 3     | Payments (provider abstraction, cash, split), shifts, cash drawer                                                                                       | ✅ Done |
 | 4     | KDS app, kitchen tickets, station routing                                                                                                               | ✅ Done |
-| 5     | Location hub with SQLite, offline POS                                                                                                                   | ⏳      |
+| 5     | Location hub with SQLite, offline POS                                                                                                                   | ✅ Done |
 | 6     | Synchronization engine                                                                                                                                  | ⏳      |
 | 7     | Customer website, online ordering availability                                                                                                          | ⏳      |
 | 8     | Admin portal completion                                                                                                                                 | ⏳      |
@@ -290,29 +290,66 @@ See [ADR 0010](adr/0010-kitchen-tickets-and-realtime.md).
 - **Realtime socket** on the API with token-in-first-message authentication; the POS and KDS
   refresh on events, and polling became a 30–60 s fallback.
 
+**Phase 5 verification (2026-10-17):** `turbo run build typecheck lint test --force` with 60/60
+tasks green. That covers 344 unit and integration tests (domain 119, API 96, i18n 23, database 19
+incl. the cloud/hub schema contract, gateway 16, validation 16, api-client 11, POS 11, receipts 8,
+KDS 7, server 6, app-kit 5, admin 5, ui 2) and 19 Playwright E2E tests. The POS (12) and KDS (4)
+suites now run against a hub that was paired with a freshly seeded cloud which is then **stopped**:
+every order, payment, shift and kitchen test passes with no cloud at all. The hub suite covers
+provisioning, PIN sign-in and lockout, a full order through payment and kitchen on SQLite with its
+outbox rows, atomic rollback of outbox rows, three concurrent payments, read-only cloud settings,
+offline operation, restart persistence, snapshot refreshes, staff deactivation and a revoked
+credential; the migrator suite covers idempotency, edited-migration detection and rollback. Also
+`pnpm test:tools`, the Rust shell checks, a clean `migrate status`, and a manual run: POS PIN
+sign-in through the hub, then an order placed after stopping the cloud API.
+
+### Phase 5 decisions
+
+See [ADR 0011](adr/0011-one-server-codebase-on-two-databases.md).
+
+- **One server codebase** (`@pos/server`) runs the cloud API on PostgreSQL and the hub
+  (`apps/gateway`) on SQLite, with a generated hub schema guarded by a contract test.
+- **Pairing:** an owner runs the hub's pairing command once; the cloud issues a device credential
+  (stored hashed) that the hub uses for `/sync/*`. Devices can be listed and disabled.
+- **Provisioning by snapshot** until Phase 6: configuration, catalog, floor and staff (with
+  password/PIN hashes for offline sign-in) are pulled at start-up and every 5 minutes, applied in
+  one transaction, with ETag short-circuiting.
+- **Outbox written now:** every order, shift and kitchen-ticket change writes a full aggregate row
+  to `sync_operations` in the same transaction (Phase 6 sends them).
+- **Hub mode:** cloud-managed settings are read-only on the hub; PIN sign-in (employee code + PIN,
+  locked after 5 failures) exists only on the hub; until provisioned, the hub answers
+  `HUB_NOT_PROVISIONED`.
+- **POS/KDS** talk to the hub in development and tests; the POS offers PIN sign-in with an on-screen
+  keypad and shows the hub's cloud link and pending changes.
+
 Known gaps carried forward:
 
 - The admin UI does not yet expose per-product modifier min/max overrides. The API supports them
   and the UI preserves existing values.
-- POS sign-in uses email and password, with the refresh token kept in memory (sign in again
-  after a restart). PIN login for cashiers and OS-keychain token storage arrive with the hub
-  (Phase 5).
+- **Nothing reaches the cloud yet from the hub**: orders, payments and shifts made at the hub stay
+  in its outbox until the sync engine (Phase 6). Cloud reports and the admin portal therefore do
+  not include hub activity yet, and configuration arrives by full snapshot, not change feed.
+- The POS keeps its refresh token in memory (sign in again after a restart); OS-keychain storage
+  is still to do. Employees and PINs are provisioned by seed; their admin screen comes in Phase 8.
+- The hub runs as a separate Node process; packaging it as a Tauri sidecar for single-terminal
+  sites, an installer/service wrapper and disk encryption of its data are hardening work.
+- The hub's SQLite tables have no CHECK constraints (the cloud's do); rules are enforced by the
+  shared services.
 - Payment methods and cash registers are provisioned by seed; there is no admin UI for them or
   for a location's cash rounding yet (Phase 8). Shift and daily reports are on the POS only.
 - Card payments are recorded after approval on a standalone terminal; no integrated terminal or
   online gateway is wired yet. Receipt QR blocks are placeholders until a market's e-invoicing
   rules are chosen.
-- Printing goes from the terminal to the printer; a cash drawer kick and printer status checks
-  come with the hub's printer service (Phase 5).
+- Printing goes from the terminal to the printer; a hub printer service (cash drawer kick,
+  printer status, kitchen printers for stations without a screen) is not built yet.
 - Drafts are supported by the API (`status: DRAFT`) but not exposed in the POS UI yet.
 - A configurable business-day start hour (for venues open past midnight) is not implemented; the
   business day is the calendar date in the location's timezone.
-- The KDS signs in with a staff account (Kitchen role); device registration and credentials
-  come with the hub (Phase 5). The kitchen still depends on the cloud until then.
-- Realtime delivery is in-process in the API: one instance only until the hub carries LAN
-  traffic or a shared channel (e.g. Postgres LISTEN/NOTIFY) is added.
-- No kitchen printer output yet for stations without a screen (hub printer service, Phase 5),
-  and no bump-bar/keyboard control on the KDS.
+- KDS screens and POS terminals sign in as staff; only the hub itself is a registered device so
+  far. Registering terminals and screens as devices is future work.
+- Realtime delivery is in-process: fine for the hub (one per site); several cloud API instances
+  would need a shared channel (e.g. Postgres LISTEN/NOTIFY) behind `RealtimeBus`.
+- No bump-bar/keyboard control on the KDS.
 - KDS thresholds (`kdsWarnMinutes`/`kdsLateMinutes`) are set through the API; the admin screen
   for them comes in Phase 8. Prep-time reporting comes with reporting (Phase 9).
 - Restaurants are provisioned by seed only; there is no platform-operator UI yet.
@@ -344,6 +381,9 @@ Recorded as ADRs in [adr/](adr/):
    images.
 10. [0010](adr/0010-kitchen-tickets-and-realtime.md): kitchen tickets per station, order status
     derived from tickets, handover at the POS, and the authenticated realtime socket.
+11. [0011](adr/0011-one-server-codebase-on-two-databases.md): one server codebase on PostgreSQL
+    (cloud) and SQLite (hub), generated hub schema with a contract test, pairing and snapshot
+    provisioning, outbox capture.
 
 Open items to revisit:
 

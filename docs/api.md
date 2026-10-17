@@ -292,6 +292,47 @@ guestCount, notes }`. The `id` is a client-generated UUID and the **idempotency 
 `GET /api/v1/realtime` upgrades to a WebSocket; see [events.md](events.md) for the protocol and
 event list.
 
+## Location hub (Phase 5)
+
+The hub (`apps/gateway`) serves the same API as the cloud to the POS and KDS on the restaurant LAN
+(orders, payments, shifts, kitchen, menu, floor, realtime), from its SQLite database. Differences:
+
+- **Cloud-managed settings are read-only** on the hub: writes to menu, prices, taxes, discounts,
+  floor plan, locations and restaurant answer `403 MANAGED_IN_CLOUD`; reads work.
+- **Until provisioned** (no snapshot yet) every call except `/hub/*` answers
+  `503 HUB_NOT_PROVISIONED`.
+- **PIN sign-in** `POST /auth/pin` `{ employeeCode, pin, client? }` → same token response as
+  `/auth/login`. Five wrong PINs lock the code for 5 minutes (`429 RATE_LIMITED`); the error never
+  reveals whether the code exists. The cloud answers 404.
+
+| Method | Path          | Auth                                |
+| ------ | ------------- | ----------------------------------- |
+| GET    | `/hub/status` | public (no secrets)                 |
+| POST   | `/hub/sync`   | `sync.view` — pull the snapshot now |
+
+`HubStatus`: `{ paired, restaurantId, locationId, cloud: ONLINE|OFFLINE|UNKNOWN, lastSnapshotAt,
+snapshotVersion, lastError, pendingOperations }`. Clients use it to know they are behind a hub.
+
+## Devices and hub link (Phase 5, cloud)
+
+| Method | Path                                        | Auth              |
+| ------ | ------------------------------------------- | ----------------- |
+| GET    | `/locations/:lid/devices`                   | `devices.manage`  |
+| POST   | `/locations/:lid/devices`                   | `devices.manage`  |
+| POST   | `/locations/:lid/devices/:deviceId/disable` | `devices.manage`  |
+| GET    | `/sync/snapshot`                            | device credential |
+
+- **Pairing** `{ name, type: GATEWAY }` returns the device and its credential
+  (`<deviceId>.<secret>`) once; only a SHA-256 of the secret is stored. Disabling a device revokes
+  it immediately.
+- **Device authentication:** `Authorization: Device <deviceId>.<secret>` (staff tokens are refused
+  on `/sync/*`). `lastSeenAt` is refreshed at most once a minute.
+- **Snapshot:** everything the hub's location needs (see `SNAPSHOT_TABLES` in
+  `@pos/validation`): restaurant, its location, roles and grants, staff of this location (with
+  password and PIN hashes), catalog, taxes, discounts, floor, payment methods, drawers. Rows of
+  other locations are excluded. `ETag` = content version; `If-None-Match` answers `304`.
+- **Audit:** `device.paired`, `device.disabled`.
+
 ## Security headers and limits
 
 - `@fastify/helmet` defaults, CORS allowlist from `CORS_ORIGINS` (credentials enabled), a 1 MB

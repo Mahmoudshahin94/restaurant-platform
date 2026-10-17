@@ -1,0 +1,43 @@
+// Models that exist only in the location hub's SQLite database. Appended to the generated hub
+// schema by scripts/hub-schema.mjs.
+
+enum SyncOperationStatus {
+  PENDING
+  PROCESSING
+  FAILED
+  COMPLETED
+
+  @@map("sync_operation_status")
+}
+
+/// Outbox: every change that must reach the cloud, written in the same transaction as the change
+/// itself (docs/sync.md). Rows are never deleted while pending or failed.
+model SyncOperation {
+  id            String              @id @default(uuid(7))
+  /// UUIDv7; the cloud's idempotency key for this operation.
+  operationId   String              @unique @map("operation_id")
+  entityType    String              @map("entity_type")
+  entityId      String              @map("entity_id")
+  operationType String              @map("operation_type")
+  payload       Json
+  entityVersion Int                 @map("entity_version")
+  status        SyncOperationStatus @default(PENDING)
+  retryCount    Int                 @default(0) @map("retry_count")
+  nextRetryAt   DateTime?           @map("next_retry_at")
+  errorMessage  String?             @map("error_message")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  processedAt   DateTime?           @map("processed_at")
+
+  @@index([status, nextRetryAt])
+  @@index([entityId, createdAt])
+  @@map("sync_operations")
+}
+
+/// The hub's link to the cloud: pairing, last snapshot, sync cursors. One row per key.
+model HubState {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("hub_state")
+}

@@ -2,7 +2,8 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
-const API_TARGET = process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:3000';
+// In development the screens talk to the location hub (apps/gateway), as in a restaurant.
+const API_TARGET = process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:4000';
 
 // Tauri expects a fixed dev port and serves the built `dist` folder in production.
 export default defineConfig({

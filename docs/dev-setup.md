@@ -30,10 +30,25 @@ pnpm --filter @pos/admin dev      # http://localhost:5173  (proxies /api to :300
 
 Sign in to the admin with `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` from your `.env`.
 
+Run the location hub (the POS and KDS talk to it, as in a restaurant). Pair it once with the
+running API, then start it:
+
+```bash
+pnpm --filter @pos/gateway build
+pnpm --filter @pos/gateway pair -- --cloud http://localhost:3000 --email owner@demo.local --location MAIN
+pnpm --filter @pos/gateway start   # http://localhost:4000; data in apps/gateway/.hub-data/
+```
+
+Pairing asks for the owner's password (or reads `HUB_PAIR_PASSWORD`), registers the hub as a
+device and downloads the location snapshot. The hub keeps working when the API is stopped; it
+refreshes the snapshot every `HUB_SNAPSHOT_INTERVAL_SECONDS` when the API is reachable. To start
+over, stop it and delete `apps/gateway/.hub-data/`. `GET http://localhost:4000/api/v1/hub/status`
+shows the pairing, cloud link and outbox size.
+
 Run the POS:
 
 ```bash
-pnpm --filter @pos/pos dev                 # browser at http://localhost:1420 (proxies /api)
+pnpm --filter @pos/pos dev                 # browser at http://localhost:1420 (proxies /api to the hub)
 pnpm --filter @pos/pos tauri:dev           # same UI in the native Tauri window
 pnpm --filter @pos/pos tauri:build         # installable app; set VITE_API_URL for production
 pnpm --filter @pos/pos rust:check          # cargo fmt --check, clippy -D warnings, cargo test
@@ -50,7 +65,9 @@ it shows (none = all, the expo view) and whether to chime for new tickets; brows
 sound after one tap on "Turn on sound alerts". Orders placed at the POS appear on the KDS within a
 second through the realtime socket.
 
-Sign in to the POS as the cashier (`SEED_CASHIER_*`). Keyboard shortcuts: F2 order, F4 orders, F6 tables,
+Sign in to the POS as the cashier with employee code `1001` and `SEED_CASHIER_PIN` (or with
+`SEED_CASHIER_EMAIL`/`PASSWORD` on the Email tab). To point the POS or KDS at the cloud API
+directly, set `VITE_API_PROXY_TARGET=http://localhost:3000`. Keyboard shortcuts: F2 order, F4 orders, F6 tables,
 `/` search, Ctrl/⌘+Enter place order. A production Tauri build calls the API cross-origin, so
 add its origin (`tauri://localhost` on macOS/Linux, `http://tauri.localhost` on Windows) to
 `CORS_ORIGINS`.
@@ -75,16 +92,16 @@ add its origin (`tauri://localhost` on macOS/Linux, `http://tauri.localhost` on 
 createdb pos_kds_e2e            # once (admin suite; or set E2E_DATABASE_URL)
 createdb pos_kds_pos_e2e        # once (POS suite; or set POS_E2E_DATABASE_URL)
 createdb pos_kds_kds_e2e        # once (KDS suite; or set KDS_E2E_DATABASE_URL)
-pnpm --filter @pos/api build    # E2E runs the built API
+pnpm build                      # E2E runs the built API and hub
 pnpm test:e2e
 ```
 
-Each app's `playwright.config.ts` starts the API (admin :3100, POS :3110, KDS :3120) after
-`tools/e2e/prepare-db.mjs` migrates the app's `*_e2e` database, clears previous runs' orders and
-seeds it. The script refuses any database whose name does not end in `_e2e`. It then starts the
-web UI (admin :5180, POS :1430, KDS :5190). The POS and KDS suites drive the other side of the
-kitchen flow through the API (the kitchen marks a POS order ready; the POS places orders for the
-KDS), using the seeded users.
+The admin suite starts the cloud API (:3100) and the admin UI (:5180). The POS and KDS suites run
+like a restaurant: `tools/e2e/prepare-hub.mjs` prepares the app's `*_e2e` cloud database,
+starts the cloud API just long enough to pair a fresh hub and give it its snapshot, **stops the
+cloud**, and then the hub (POS :4110, KDS :4120) and the web UI (POS :1430, KDS :5190) start.
+Every POS and KDS test therefore runs without the cloud. `tools/e2e/prepare-db.mjs` refuses any
+database whose name does not end in `_e2e`.
 Locally it uses the installed Google Chrome (`PLAYWRIGHT_CHANNEL`, default `chrome`). In CI, run
 `pnpm exec playwright install chromium` first.
 
@@ -108,6 +125,13 @@ with Preview) under `tools/printer-sim/out/`.
   `_test`) and truncate tables between suites. They never touch the development database.
 - `prisma migrate reset` is destructive and is intentionally not used by any automated script.
   Run `pnpm db:reset` yourself when you want a clean development database.
+- **Every schema change also updates the hub (SQLite).** After a cloud migration, run
+  `pnpm --filter @pos/database hub:schema` (regenerates `prisma/hub/schema.prisma`) and
+  `pnpm --filter @pos/database hub:migration <name>` (writes the hub migration), then commit
+  both. The hub applies its migrations itself at start-up. `pnpm build` and the
+  `hub-schema.contract` test fail while the two schemas differ. Avoid PostgreSQL-only Prisma
+  features in shared code (`String[]`, `mode: 'insensitive'` outside admin-only modules,
+  `skipDuplicates`, raw SQL outside `SqlDialect`).
 
 ## Troubleshooting
 

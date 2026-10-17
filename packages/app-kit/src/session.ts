@@ -40,6 +40,8 @@ export interface SessionClient {
   /** Single-flight: concurrent callers share one refresh request (tokens rotate on use). */
   refreshSession: () => Promise<boolean>;
   signIn: (email: string, password: string) => Promise<AuthUser>;
+  /** Employee code + PIN (location hub only). */
+  signInWithPin: (employeeCode: string, pin: string) => Promise<AuthUser>;
   signOut: () => Promise<void>;
 }
 
@@ -105,6 +107,12 @@ export function createSessionClient(options: SessionClientOptions): SessionClien
     refreshSession,
     async signIn(email, password) {
       const session = await api.auth.login({ email, password, client: options.mode });
+      if (options.mode === 'native') tokens.set(session.refreshToken ?? null);
+      useSession.getState().setSession(session.accessToken, session.user);
+      return session.user;
+    },
+    async signInWithPin(employeeCode, pin) {
+      const session = await api.auth.pinLogin({ employeeCode, pin, client: options.mode });
       if (options.mode === 'native') tokens.set(session.refreshToken ?? null);
       useSession.getState().setSession(session.accessToken, session.user);
       return session.user;

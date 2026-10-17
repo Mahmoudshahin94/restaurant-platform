@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { APIRequestContext } from '@playwright/test';
 
-const API = `http://localhost:${process.env.KDS_E2E_API_PORT ?? '3120'}/api/v1`;
+/** The E2E location hub (see playwright.config.ts). */
+const API = `http://localhost:${process.env.KDS_E2E_API_PORT ?? '4120'}/api/v1`;
 
 interface Session {
   headers: Record<string, string>;

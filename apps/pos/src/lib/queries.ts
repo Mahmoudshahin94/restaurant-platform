@@ -127,3 +127,17 @@ export function useOrderMutation<TVariables, TResult>(
       }),
   });
 }
+
+/**
+ * The location hub's status (cloud link, outbox). On the cloud the endpoint does not exist, so
+ * `data` stays undefined: the POS then simply is not behind a hub.
+ */
+export function useHubStatus() {
+  return useQuery({
+    queryKey: ['hub-status'],
+    queryFn: () => api.hub.status(),
+    retry: false,
+    refetchInterval: 30_000,
+    staleTime: 10_000,
+  });
+}
