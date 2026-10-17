@@ -30,7 +30,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: 'node e2e/prepare-db.mjs && node ../api/dist/main.js',
+      command: 'node ../../tools/e2e/prepare-db.mjs && node ../api/dist/main.js',
       url: `http://localhost:${API_PORT}/ready`,
       reuseExistingServer: false,
       timeout: 120_000,

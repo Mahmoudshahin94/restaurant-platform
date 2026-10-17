@@ -6,22 +6,22 @@ mirrors the operational subset.
 
 **Migration status:** ✅ migrated · ⏳ designed, migrates in the phase shown.
 
-| Area      | Entity                                                                                                                            | Status                  |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| Tenancy   | Restaurant, Location                                                                                                              | ✅ 0001                 |
-| Identity  | User, Role, Permission, RolePermission, UserRole, RefreshToken, Employee                                                          | ✅ 0001                 |
-| Devices   | Device                                                                                                                            | ✅ 0001                 |
-| Audit     | AuditLog                                                                                                                          | ✅ 0001                 |
-| Catalog   | Category, Product, ProductVariant, ModifierGroup, Modifier, ProductModifierGroup, KitchenStation, ProductStation, LocationProduct | ✅ 0002                 |
-| Catalog   | Tax, ProductTax, Discount                                                                                                         | ⏳ Phase 2              |
-| Floor     | TableSection, Table                                                                                                               | ⏳ Phase 2              |
-| Orders    | Order, OrderItem, OrderItemModifier, OrderStatusHistory, OrderDiscount                                                            | ⏳ Phase 2              |
-| Payments  | PaymentMethod, Payment                                                                                                            | ⏳ Phase 3              |
-| Cash      | Shift, CashRegister, CashTransaction                                                                                              | ⏳ Phase 3              |
-| Kitchen   | KitchenTicket, KitchenTicketItem                                                                                                  | ⏳ Phase 4              |
-| Sync      | ProcessedOperation, ChangeLog (cloud); SyncOperation, SyncState (hub)                                                             | ⏳ Phase 6              |
-| Customers | Customer, Address                                                                                                                 | ⏳ Phase 7              |
-| Inventory | InventoryItem, Recipe, StockMovement                                                                                              | ⏳ module boundary only |
+| Area      | Entity                                                                                                                            | Status                             |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| Tenancy   | Restaurant, Location                                                                                                              | ✅ 0001                            |
+| Identity  | User, Role, Permission, RolePermission, UserRole, RefreshToken, Employee                                                          | ✅ 0001                            |
+| Devices   | Device                                                                                                                            | ✅ 0001                            |
+| Audit     | AuditLog                                                                                                                          | ✅ 0001                            |
+| Catalog   | Category, Product, ProductVariant, ModifierGroup, Modifier, ProductModifierGroup, KitchenStation, ProductStation, LocationProduct | ✅ 0002                            |
+| Catalog   | Tax, ProductTax, Discount                                                                                                         | ✅ 0004 (+ 0005 CHECK constraints) |
+| Floor     | TableSection, Table (`DiningTable` in Prisma)                                                                                     | ✅ 0004                            |
+| Orders    | Order, OrderItem, OrderItemModifier, OrderTax, OrderDiscount, OrderStatusHistory, OrderCounter                                    | ✅ 0004 (+ 0005)                   |
+| Payments  | PaymentMethod, Payment                                                                                                            | ⏳ Phase 3                         |
+| Cash      | Shift, CashRegister, CashTransaction                                                                                              | ⏳ Phase 3                         |
+| Kitchen   | KitchenTicket, KitchenTicketItem                                                                                                  | ⏳ Phase 4                         |
+| Sync      | ProcessedOperation, ChangeLog (cloud); SyncOperation, SyncState (hub)                                                             | ⏳ Phase 6                         |
+| Customers | Customer, Address                                                                                                                 | ⏳ Phase 7                         |
+| Inventory | InventoryItem, Recipe, StockMovement                                                                                              | ⏳ module boundary only            |
 
 ## ERD
 
@@ -137,3 +137,22 @@ insert. It records `actorType/actorId`, `source` (POS/KDS/WEBSITE/ADMIN/HUB/SYST
 
 Orders store **snapshots** (name, prices, modifiers) so that later menu edits never change
 historical orders.
+
+**Orders** (Phase 2):
+
+- `Order`: one table for all channels. It holds `orderNumber` (unique per location + business
+  day), `status` and `paymentStatus`, `source`, an optional table, customer details, snapshots of
+  `currencyCode` and `taxInclusive`, and integer totals (`subtotal`, `discountTotal`, `taxTotal`,
+  `feeTotal`, `total`). `version` provides optimistic concurrency. Its id is client-generated
+  (UUIDv7) and doubles as the idempotency key.
+- `OrderItem`: the id is the client's cart line id. It snapshots names, `basePrice`,
+  `unitPrice` (with modifiers), `gross`, the allocated `discount`, `tax` and `total`, plus the
+  kitchen `stationIds` for Phase 4 routing.
+- `OrderItemModifier`, `OrderTax` (per-tax breakdown) and `OrderDiscount` (applied amount and
+  who applied it) are all snapshots.
+- `OrderStatusHistory`: append-only, recording from → to, actor, source, reason and time.
+- `OrderCounter`: per-location, per-day sequence, incremented atomically with
+  `INSERT … ON CONFLICT DO UPDATE … RETURNING`.
+- `Tax` (rate in bps, `isDefault` preselects it for new products) and `ProductTax` (explicit
+  assignment; pricing never applies taxes implicitly). `Discount` is PERCENTAGE (bps) or FIXED
+  (minor units).

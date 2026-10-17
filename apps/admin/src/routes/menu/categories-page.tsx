@@ -29,11 +29,11 @@ import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 import { ArchiveAction } from '../../components/archive-action';
 import { LocalizedFields } from '../../components/localized-fields';
-import { QueryState } from '../../components/query-state';
+import { QueryState } from '@pos/app-kit';
 import { ArchivedBadge } from '../../components/status-badge';
 import { api } from '../../lib/api';
-import { applyServerValidation, tKey, useErrorText } from '../../lib/errors';
-import { useCurrentLocale } from '../../lib/locale';
+import { applyServerValidation, tKey, useErrorText } from '@pos/app-kit';
+import { useCurrentLocale } from '@pos/app-kit';
 import { usePermissions } from '../../lib/permissions';
 import { useCatalogMutation, useCategories, useRestaurantId } from '../../lib/queries';
 

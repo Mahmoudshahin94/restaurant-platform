@@ -7,6 +7,7 @@ import type {
   Product as ProductRow,
   ProductModifierGroup as ProductModifierGroupRow,
   ProductStation as ProductStationRow,
+  ProductTax as ProductTaxRow,
   ProductVariant as ProductVariantRow,
 } from '@pos/database';
 import type { CatalogModifierGroup, CatalogProduct } from '@pos/domain';
@@ -27,6 +28,7 @@ export type ProductWithRelations = ProductRow & {
   variants: ProductVariantRow[];
   modifierGroups: ProductModifierGroupRow[];
   stations: ProductStationRow[];
+  taxes: ProductTaxRow[];
 };
 
 export type ModifierGroupWithModifiers = ModifierGroupRow & { modifiers: ModifierRow[] };
@@ -36,6 +38,7 @@ export const productInclude = {
   variants: true,
   modifierGroups: true,
   stations: true,
+  taxes: true,
 } as const;
 
 export function toCategoryDto(row: CategoryRow): Category {
@@ -129,6 +132,7 @@ export function toProductDto(row: ProductWithRelations): Product {
         maxSelect: l.maxSelect,
       })),
     stationIds: row.stations.map((s) => s.kitchenStationId).sort(),
+    taxIds: row.taxes.map((t) => t.taxId).sort(),
     createdAt: iso(row.createdAt),
     updatedAt: iso(row.updatedAt),
   };
@@ -164,6 +168,7 @@ export function toCatalogProduct(row: ProductWithRelations): CatalogProduct {
       maxSelect: l.maxSelect,
     })),
     stationIds: row.stations.map((s) => s.kitchenStationId),
+    taxIds: row.taxes.map((t) => t.taxId),
   };
 }
 

@@ -1,6 +1,20 @@
 import {
   type ListProductsQuery,
   type SetLocationProductRequest,
+  type CreateOrderRequest,
+  type CreateTableRequest,
+  type CreateTableSectionRequest,
+  type TransitionOrderRequest,
+  type UpdateOrderRequest,
+  type UpdateTableRequest,
+  createDiscountSchema,
+  createTaxSchema,
+  discountSchema,
+  orderSchema,
+  tableSectionSchema,
+  taxSchema,
+  updateDiscountSchema,
+  updateTaxSchema,
   categorySchema,
   createCategorySchema,
   createKitchenStationSchema,
@@ -24,10 +38,21 @@ import {
   tokenResponseSchema,
   type CreateLocationRequest,
 } from '@pos/validation';
+import type { OrderStatus } from '@pos/shared-types';
 import { z } from 'zod';
 import { HttpClient, type HttpClientOptions } from './http';
 
 const API = '/api/v1';
+
+export interface OrderListFilter {
+  status?: OrderStatus[];
+  /** Only orders that are not completed, cancelled or refunded. */
+  open?: boolean;
+  /** YYYY-MM-DD in the location's timezone. */
+  businessDate?: string;
+  tableId?: string;
+  limit?: number;
+}
 
 /** Typed access to the cloud API. Every method's request and response types come from @pos/validation. */
 export function createApiClient(options: HttpClientOptions) {
@@ -99,6 +124,68 @@ export function createApiClient(options: HttpClientOptions) {
           schema: locationProductSettingSchema,
         }),
     },
+    floor: {
+      get: (locationId: string) =>
+        http.request('GET', `${API}/locations/${locationId}/floor`, {
+          schema: z.array(tableSectionSchema),
+        }),
+      createSection: (locationId: string, body: CreateTableSectionRequest) =>
+        http.request('POST', `${API}/locations/${locationId}/floor/sections`, {
+          body,
+          schema: z.array(tableSectionSchema),
+        }),
+      archiveSection: (locationId: string, sectionId: string) =>
+        http.request('POST', `${API}/locations/${locationId}/floor/sections/${sectionId}/archive`, {
+          schema: z.array(tableSectionSchema),
+        }),
+      createTable: (locationId: string, body: CreateTableRequest) =>
+        http.request('POST', `${API}/locations/${locationId}/floor/tables`, {
+          body,
+          schema: z.array(tableSectionSchema),
+        }),
+      updateTable: (locationId: string, tableId: string, body: UpdateTableRequest) =>
+        http.request('PATCH', `${API}/locations/${locationId}/floor/tables/${tableId}`, {
+          body,
+          schema: z.array(tableSectionSchema),
+        }),
+      archiveTable: (locationId: string, tableId: string) =>
+        http.request('POST', `${API}/locations/${locationId}/floor/tables/${tableId}/archive`, {
+          schema: z.array(tableSectionSchema),
+        }),
+    },
+    orders: {
+      /** Idempotent: resending the same `id` returns the existing order. */
+      create: (locationId: string, body: CreateOrderRequest) =>
+        http.request('POST', `${API}/locations/${locationId}/orders`, {
+          body,
+          schema: orderSchema,
+        }),
+      list: (locationId: string, query: OrderListFilter = {}) =>
+        http.request('GET', `${API}/locations/${locationId}/orders`, {
+          query: {
+            status: query.status?.join(','),
+            open: query.open ? 'true' : undefined,
+            businessDate: query.businessDate,
+            tableId: query.tableId,
+            limit: query.limit,
+          },
+          schema: z.array(orderSchema),
+        }),
+      get: (locationId: string, orderId: string) =>
+        http.request('GET', `${API}/locations/${locationId}/orders/${orderId}`, {
+          schema: orderSchema,
+        }),
+      update: (locationId: string, orderId: string, body: UpdateOrderRequest) =>
+        http.request('PUT', `${API}/locations/${locationId}/orders/${orderId}`, {
+          body,
+          schema: orderSchema,
+        }),
+      transition: (locationId: string, orderId: string, body: TransitionOrderRequest) =>
+        http.request('POST', `${API}/locations/${locationId}/orders/${orderId}/transitions`, {
+          body,
+          schema: orderSchema,
+        }),
+    },
     menu: {
       categories: crud(
         http,
@@ -120,6 +207,14 @@ export function createApiClient(options: HttpClientOptions) {
         modifierGroupSchema,
         createModifierGroupSchema,
         updateModifierGroupSchema,
+      ),
+      taxes: crud(http, 'taxes', taxSchema, createTaxSchema, updateTaxSchema),
+      discounts: crud(
+        http,
+        'discounts',
+        discountSchema,
+        createDiscountSchema,
+        updateDiscountSchema,
       ),
       products: {
         ...crud(http, 'products', productSchema, createProductSchema, updateProductSchema),

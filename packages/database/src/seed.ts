@@ -28,6 +28,13 @@ interface SeedFile {
   }[];
   roles: { name: string; description: string; isSystem: boolean; permissions: '*' | string[] }[];
   menu?: SeedMenu;
+  taxes?: { nameEn: string; nameAr: string; rateBps: number; isDefault: boolean }[];
+  discounts?: { nameEn: string; nameAr: string; type: 'PERCENTAGE' | 'FIXED'; value: number }[];
+  /** Location code → sections with tables. */
+  floorPlans?: Record<
+    string,
+    { nameEn: string; nameAr: string; tables: { label: string; seats: number }[] }[]
+  >;
   users: {
     envPrefix: string;
     displayName: string;
@@ -114,6 +121,50 @@ async function seedMenu(prisma: PrismaClient, restaurantId: string, menu: SeedMe
   }
 }
 
+/** Taxes (assigned to every product), discounts and floor plans; each skipped if present. */
+async function seedConfiguration(
+  prisma: PrismaClient,
+  restaurantId: string,
+  locationIds: Map<string, string>,
+  file: SeedFile,
+): Promise<void> {
+  if (file.taxes && (await prisma.tax.count({ where: { restaurantId } })) === 0) {
+    const products = await prisma.product.findMany({
+      where: { restaurantId },
+      select: { id: true },
+    });
+    for (const tax of file.taxes) {
+      await prisma.tax.create({
+        data: {
+          ...tax,
+          restaurantId,
+          products: tax.isDefault
+            ? { create: products.map((p) => ({ productId: p.id })) }
+            : undefined,
+        },
+      });
+    }
+  }
+  if (file.discounts && (await prisma.discount.count({ where: { restaurantId } })) === 0) {
+    await prisma.discount.createMany({ data: file.discounts.map((d) => ({ ...d, restaurantId })) });
+  }
+  for (const [code, sections] of Object.entries(file.floorPlans ?? {})) {
+    const locationId = locationIds.get(code);
+    if (!locationId) throw new Error(`Unknown location ${code} in floorPlans`);
+    if ((await prisma.tableSection.count({ where: { locationId } })) > 0) continue;
+    for (const [i, { tables, ...section }] of sections.entries()) {
+      await prisma.tableSection.create({
+        data: {
+          ...section,
+          locationId,
+          sortOrder: i,
+          tables: { create: tables.map((t, j) => ({ ...t, locationId, sortOrder: j })) },
+        },
+      });
+    }
+  }
+}
+
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value)
@@ -170,6 +221,7 @@ export async function seed(prisma: PrismaClient, file: SeedFile): Promise<void> 
   }
 
   if (file.menu) await seedMenu(prisma, restaurant.id, file.menu);
+  await seedConfiguration(prisma, restaurant.id, locationIds, file);
 
   for (const userSpec of file.users) {
     const email = requireEnv(`${userSpec.envPrefix}_EMAIL`).toLowerCase();

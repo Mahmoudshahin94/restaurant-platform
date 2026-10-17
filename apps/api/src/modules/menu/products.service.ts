@@ -10,7 +10,12 @@ import type {
 import type { z } from 'zod';
 import { PrismaService, type PrismaTx } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
-import { assertCategory, assertKitchenStations, assertModifierGroups } from './catalog-refs';
+import {
+  assertCategory,
+  assertKitchenStations,
+  assertModifierGroups,
+  assertTaxes,
+} from './catalog-refs';
 import { type ProductWithRelations, productInclude, toProductDto } from './menu.mappers';
 
 type CreateInput = z.output<typeof createProductSchema>;
@@ -60,8 +65,9 @@ export class ProductsService {
         input.modifierGroups.map((l) => l.modifierGroupId),
       );
       await assertKitchenStations(tx, restaurantId, input.stationIds);
+      await assertTaxes(tx, restaurantId, input.taxIds);
 
-      const { variants, modifierGroups, stationIds, ...fields } = input;
+      const { variants, modifierGroups, stationIds, taxIds, ...fields } = input;
       const row = await tx.product.create({
         data: {
           ...fields,
@@ -69,6 +75,7 @@ export class ProductsService {
           variants: { create: variants.map(({ id: _ignored, ...v }) => v) },
           modifierGroups: { create: modifierGroups },
           stations: { create: stationIds.map((kitchenStationId) => ({ kitchenStationId })) },
+          taxes: { create: taxIds.map((taxId) => ({ taxId })) },
         },
         include: productInclude,
       });
@@ -88,7 +95,7 @@ export class ProductsService {
   async update(restaurantId: string, productId: string, input: UpdateInput): Promise<Product> {
     return this.prisma.$transaction(async (tx) => {
       const current = await this.load(tx, restaurantId, productId);
-      const { variants, modifierGroups, stationIds, ...fields } = input;
+      const { variants, modifierGroups, stationIds, taxIds, ...fields } = input;
       const priceChanges: Record<string, unknown>[] = [];
 
       if (fields.categoryId) await assertCategory(tx, restaurantId, fields.categoryId);
@@ -100,6 +107,7 @@ export class ProductsService {
         );
       }
       if (stationIds) await assertKitchenStations(tx, restaurantId, stationIds);
+      if (taxIds) await assertTaxes(tx, restaurantId, taxIds);
 
       if (Object.keys(fields).length > 0) {
         await tx.product.update({ where: { id: productId }, data: fields });
@@ -147,6 +155,10 @@ export class ProductsService {
         await tx.productStation.createMany({
           data: stationIds.map((kitchenStationId) => ({ productId, kitchenStationId })),
         });
+      }
+      if (taxIds) {
+        await tx.productTax.deleteMany({ where: { productId } });
+        await tx.productTax.createMany({ data: taxIds.map((taxId) => ({ productId, taxId })) });
       }
 
       await this.audit.record(

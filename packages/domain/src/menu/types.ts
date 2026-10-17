@@ -55,6 +55,13 @@ export interface CatalogProduct extends LocalizedName, LocalizedDescription {
   variants: CatalogVariant[];
   modifierGroups: CatalogProductGroupLink[];
   stationIds: string[];
+  taxIds: string[];
+}
+
+export interface CatalogTax extends LocalizedName {
+  id: string;
+  rateBps: number;
+  archivedAt: Date | null;
 }
 
 export interface CatalogCategory extends LocalizedName, LocalizedDescription {
@@ -75,6 +82,7 @@ export interface Catalog {
   products: CatalogProduct[];
   modifierGroups: CatalogModifierGroup[];
   kitchenStations: CatalogKitchenStation[];
+  taxes: CatalogTax[];
 }
 
 export interface LocationProductSetting {
@@ -110,6 +118,8 @@ export interface MenuProduct extends LocalizedName, LocalizedDescription {
   price: number;
   isAvailable: boolean;
   stationIds: string[];
+  /** Live taxes that apply to this product (rates in LocationMenu.taxes). */
+  taxIds: string[];
   variants: MenuVariant[];
   modifierGroups: MenuModifierGroup[];
 }
@@ -119,8 +129,14 @@ export interface MenuCategory extends LocalizedName, LocalizedDescription {
   products: MenuProduct[];
 }
 
+export interface MenuTax extends LocalizedName {
+  id: string;
+  rateBps: number;
+}
+
 export interface LocationMenu {
   categories: MenuCategory[];
+  taxes: MenuTax[];
 }
 
 // --- Item selection ---------------------------------------------------------------------------

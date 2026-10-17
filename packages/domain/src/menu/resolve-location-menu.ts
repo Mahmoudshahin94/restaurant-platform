@@ -50,6 +50,8 @@ export function resolveLocationMenu(
   const settingByProduct = new Map(settings.map((s) => [s.productId, s]));
   const groupsById = new Map(catalog.modifierGroups.filter(isLive).map((g) => [g.id, g]));
   const liveStationIds = new Set(catalog.kitchenStations.filter(isLive).map((s) => s.id));
+  const liveTaxes = catalog.taxes.filter(isLive);
+  const liveTaxIds = new Set(liveTaxes.map((t) => t.id));
 
   const productsByCategory = new Map<string, MenuProduct[]>();
   for (const product of [...catalog.products].filter(isLive).sort(bySortOrder)) {
@@ -66,6 +68,7 @@ export function resolveLocationMenu(
       price: variants.length === 0 ? (setting?.priceOverride ?? product.price) : product.price,
       isAvailable: setting?.isAvailable ?? true,
       stationIds: product.stationIds.filter((id) => liveStationIds.has(id)),
+      taxIds: product.taxIds.filter((id) => liveTaxIds.has(id)),
       variants: variants.map((v) => ({
         id: v.id,
         nameEn: v.nameEn,
@@ -87,6 +90,9 @@ export function resolveLocationMenu(
   }
 
   return {
+    taxes: liveTaxes
+      .map((t) => ({ id: t.id, nameEn: t.nameEn, nameAr: t.nameAr, rateBps: t.rateBps }))
+      .sort((a, b) => a.id.localeCompare(b.id)),
     categories: [...catalog.categories]
       .filter(isLive)
       .sort(bySortOrder)

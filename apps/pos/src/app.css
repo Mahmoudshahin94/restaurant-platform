@@ -1,0 +1,24 @@
+@import 'tailwindcss';
+@import '@pos/ui/theme.css';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/noto-sans-arabic';
+
+@source '../../../packages/ui/src';
+@source '../../../packages/app-kit/src';
+
+/* POS screens are full-viewport; the page itself never scrolls, panels do. */
+html,
+body,
+#root {
+  height: 100%;
+  overscroll-behavior: none;
+}
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}

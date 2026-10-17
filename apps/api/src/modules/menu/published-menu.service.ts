@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import { DomainError, resolveLocationMenu } from '@pos/domain';
+import type { Location } from '@pos/database';
+import { DomainError, type LocationMenu, resolveLocationMenu } from '@pos/domain';
 import type {
   LocationProductSetting,
   PublishedMenu,
@@ -27,22 +28,29 @@ export class PublishedMenuService {
     private readonly audit: AuditService,
   ) {}
 
-  async getForLocation(locationId: string): Promise<PublishedMenu> {
+  /**
+   * The location and the domain menu it sells right now. Used for the published menu and, by
+   * the orders module, to validate and price orders on the server.
+   */
+  async resolve(
+    locationId: string,
+  ): Promise<{ location: Location; currencyCode: string; menu: LocationMenu }> {
     const location = await this.prisma.location.findUnique({
       where: { id: locationId },
       include: { restaurant: { select: { currencyCode: true } } },
     });
     if (!location) throw new DomainError('LOCATION_NOT_FOUND', 'Location not found');
-    const restaurantId = location.restaurantId;
-    const live = { restaurantId, archivedAt: null };
+    const live = { restaurantId: location.restaurantId, archivedAt: null };
 
-    const [categories, products, modifierGroups, kitchenStations, settings] = await Promise.all([
-      this.prisma.category.findMany({ where: live }),
-      this.prisma.product.findMany({ where: live, include: productInclude }),
-      this.prisma.modifierGroup.findMany({ where: live, include: { modifiers: true } }),
-      this.prisma.kitchenStation.findMany({ where: live }),
-      this.prisma.locationProduct.findMany({ where: { locationId } }),
-    ]);
+    const [categories, products, modifierGroups, kitchenStations, taxes, settings] =
+      await Promise.all([
+        this.prisma.category.findMany({ where: live }),
+        this.prisma.product.findMany({ where: live, include: productInclude }),
+        this.prisma.modifierGroup.findMany({ where: live, include: { modifiers: true } }),
+        this.prisma.kitchenStation.findMany({ where: live }),
+        this.prisma.tax.findMany({ where: live }),
+        this.prisma.locationProduct.findMany({ where: { locationId } }),
+      ]);
 
     const menu = resolveLocationMenu(
       {
@@ -50,15 +58,21 @@ export class PublishedMenuService {
         products: products.map(toCatalogProduct),
         modifierGroups: modifierGroups.map(toCatalogModifierGroup),
         kitchenStations,
+        taxes,
       },
       settings,
     );
+    return { location, currencyCode: location.restaurant.currencyCode, menu };
+  }
 
+  async getForLocation(locationId: string): Promise<PublishedMenu> {
+    const { location, currencyCode, menu } = await this.resolve(locationId);
     const body = {
-      restaurantId,
+      restaurantId: location.restaurantId,
       locationId,
-      currencyCode: location.restaurant.currencyCode,
+      currencyCode,
       taxInclusive: location.taxInclusive,
+      taxes: menu.taxes,
       categories: menu.categories,
     };
     const version = createHash('sha256')

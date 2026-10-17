@@ -129,6 +129,59 @@ maxSelect? }` with optional per-product overrides) and `stationIds`. On `PATCH`,
 archived/restored`, `product.price_changed` (base, variant and location override, with
   from/to), `modifier.price_changed`, and `location_product.updated`.
 
+## Pricing configuration (Phase 2)
+
+| Method     | Path                                                                  | Permission                      |
+| ---------- | --------------------------------------------------------------------- | ------------------------------- |
+| GET        | `/restaurants/:rid/taxes`                                             | `products.view` (any location)  |
+| POST/PATCH | `/restaurants/:rid/taxes[/:taxId]`, `…/archive`, `…/restore`          | `settings.manage`               |
+| GET        | `/restaurants/:rid/discounts`                                         | any member (the POS lists them) |
+| POST/PATCH | `/restaurants/:rid/discounts[/:discountId]`, `…/archive`, `…/restore` | `settings.manage`               |
+
+Products accept `taxIds`. The published menu includes `taxes` (with `rateBps`) and each
+product's `taxIds`. Rate changes are audited as `tax.rate_changed` and affect only orders priced
+afterwards.
+
+## Floor plan (Phase 2)
+
+| Method | Path                                                      | Permission                                      |
+| ------ | --------------------------------------------------------- | ----------------------------------------------- |
+| GET    | `/locations/:lid/floor`                                   | `orders.view`: sections → tables → `openOrders` |
+| POST   | `/locations/:lid/floor/sections`, `/floor/tables`         | `tables.manage`                                 |
+| PATCH  | `/locations/:lid/floor/sections/:id`, `/floor/tables/:id` | `tables.manage`                                 |
+| POST   | `…/archive`, `…/restore`                                  | `tables.manage`                                 |
+
+Mutations return the refreshed floor.
+
+## Orders (Phase 2)
+
+| Method | Path                                                                                     | Permission                                                       |
+| ------ | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| POST   | `/locations/:lid/orders`                                                                 | `orders.create` (+ `orders.discount` when discounts are applied) |
+| GET    | `/locations/:lid/orders?open=true&status=PLACED,CONFIRMED&businessDate=&tableId=&limit=` | `orders.view`                                                    |
+| GET    | `/locations/:lid/orders/:orderId`                                                        | `orders.view`                                                    |
+| PUT    | `/locations/:lid/orders/:orderId`                                                        | `orders.update` (+ `orders.discount` if discounts change)        |
+| POST   | `/locations/:lid/orders/:orderId/transitions`                                            | per transition (see the state machine)                           |
+
+- **Create** takes `{ id, channel, status?: DRAFT|PLACED, items[{ id, productId, variantId,
+modifierIds, quantity, notes }], discountIds, tableId, customerName, customerPhone,
+guestCount, notes }`. The `id` is a client-generated UUID and the **idempotency key**:
+  resending it returns the existing order with `200` instead of `201` (concurrent duplicates
+  included). Channels: `DINE_IN` needs a table of the location; `PHONE`/`DELIVERY` need a
+  customer name or phone; `WEBSITE` is rejected (customer API, Phase 7).
+- **Prices are never accepted from clients.** Every create/update re-validates items against the
+  location's published menu (`quoteOrder`) and re-prices with `priceOrder`. Unknown fields such
+  as `total` or `unitPrice` are stripped by validation.
+- **Update** replaces items, discounts and details. It is allowed only in `DRAFT`/`PLACED`/
+  `CONFIRMED` (`409 INVALID_ORDER_STATE`, `reason: NOT_MODIFIABLE`) and requires the current
+  `version` (`409 CONFLICT`, `reason: STALE_VERSION`, `currentVersion`).
+- **Transitions** take `{ to, reason?, version? }` and are validated by `assertTransition`.
+  Failure reasons: `NOT_ALLOWED` (with the allowed targets), `SYSTEM_ONLY` (PREPARING/READY come
+  from the kitchen), `REASON_REQUIRED` (cancellations), `UNPAID` (completion). The specific
+  permission is `orders.update`, `orders.cancel` or `orders.refund`.
+- **Audit:** `order.created`, `order.discount_applied`, `order.modified` (before/after totals),
+  `order.status_changed`, `order.cancelled`.
+
 ## Security headers and limits
 
 - `@fastify/helmet` defaults, CORS allowlist from `CORS_ORIGINS` (credentials enabled), a 1 MB

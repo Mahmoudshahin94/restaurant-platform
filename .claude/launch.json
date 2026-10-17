@@ -12,6 +12,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@pos/admin", "dev"],
       "port": 5173
+    },
+    {
+      "name": "pos",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@pos/pos", "dev"],
+      "port": 1420
     }
   ]
 }

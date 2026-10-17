@@ -1,0 +1,80 @@
+{
+  "channel": {
+    "DINE_IN": "محلي",
+    "TAKEAWAY": "سفري",
+    "PHONE": "هاتف",
+    "WEBSITE": "الموقع",
+    "DELIVERY": "توصيل"
+  },
+  "status": {
+    "DRAFT": "مسودة",
+    "PLACED": "جديد",
+    "CONFIRMED": "مؤكد",
+    "PREPARING": "قيد التحضير",
+    "READY": "جاهز",
+    "COMPLETED": "مكتمل",
+    "CANCELLED": "ملغى",
+    "REFUNDED": "مسترد"
+  },
+  "payment": {
+    "UNPAID": "غير مدفوع",
+    "PARTIALLY_PAID": "مدفوع جزئيًا",
+    "PAID": "مدفوع",
+    "PARTIALLY_REFUNDED": "مسترد جزئيًا",
+    "REFUNDED": "مسترد"
+  },
+  "totals": {
+    "subtotal": "المجموع الفرعي",
+    "discount": "الخصم",
+    "tax": "الضريبة",
+    "taxIncluded": "يشمل الضريبة",
+    "fees": "الرسوم",
+    "total": "الإجمالي"
+  },
+  "fields": {
+    "channel": "نوع الطلب",
+    "table": "الطاولة",
+    "customerName": "اسم العميل",
+    "customerPhone": "رقم الهاتف",
+    "guestCount": "عدد الضيوف",
+    "notes": "ملاحظات الطلب",
+    "itemNotes": "ملاحظات الصنف",
+    "quantity": "الكمية",
+    "number": "الطلب",
+    "status": "الحالة",
+    "placedAt": "وقت الطلب"
+  },
+  "actions": {
+    "place": "إرسال الطلب",
+    "saveDraft": "حفظ كمسودة",
+    "saveChanges": "حفظ التعديلات",
+    "confirm": "تأكيد",
+    "cancelOrder": "إلغاء الطلب",
+    "edit": "تعديل الأصناف",
+    "newOrder": "طلب جديد",
+    "clear": "مسح"
+  },
+  "cancel": {
+    "title": "إلغاء الطلب {{number}}؟",
+    "reason": "السبب",
+    "reasonHint": "مطلوب. يظهر في سجل الطلب وسجل التدقيق.",
+    "confirm": "إلغاء الطلب",
+    "keep": "الإبقاء على الطلب"
+  },
+  "reasons": {
+    "STALE_VERSION": "قام شخص آخر بتعديل هذا الطلب. تمت إعادة تحميله.",
+    "NOT_MODIFIABLE": "لم يعد بالإمكان تعديل هذا الطلب.",
+    "REASON_REQUIRED": "يرجى إدخال السبب.",
+    "UNPAID": "يجب دفع الطلب أولًا.",
+    "SYSTEM_ONLY": "يتم تعيين هذه الحالة من المطبخ."
+  },
+  "history": "السجل",
+  "empty": "لا توجد طلبات",
+  "emptyHint": "تظهر الطلبات الجديدة هنا.",
+  "items_one": "صنف واحد",
+  "items_other": "{{count}} صنف",
+  "items_zero": "لا أصناف",
+  "items_two": "صنفان",
+  "items_few": "{{count}} أصناف",
+  "items_many": "{{count}} صنفًا"
+}

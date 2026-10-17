@@ -9,7 +9,10 @@
     "locations": "الفروع",
     "settings": "الإعدادات",
     "mainNavigation": "التنقل الرئيسي",
-    "availability": "التوفر"
+    "availability": "التوفر",
+    "taxes": "الضرائب",
+    "discounts": "الخصومات",
+    "tables": "الطاولات"
   },
   "header": {
     "location": "الفرع",

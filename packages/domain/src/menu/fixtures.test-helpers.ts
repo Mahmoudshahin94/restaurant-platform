@@ -13,6 +13,11 @@ export function sampleCatalog(): Catalog {
       { id: 'cat-empty', ...n('Empty'), ...d, sortOrder: 3, ...live },
       { id: 'cat-old', ...n('Old'), ...d, sortOrder: 0, archivedAt: new Date() },
     ],
+    taxes: [
+      { id: 'tax-vat', ...n('VAT'), rateBps: 1500, ...live },
+      { id: 'tax-sugar', ...n('Sugar tax'), rateBps: 5000, ...live },
+      { id: 'tax-old', ...n('Old levy'), rateBps: 100, archivedAt: new Date() },
+    ],
     kitchenStations: [
       { id: 'st-kitchen', code: 'KITCHEN', ...n('Kitchen'), sortOrder: 0, ...live },
       { id: 'st-grill', code: 'GRILL', ...n('Grill'), sortOrder: 1, ...live },
@@ -99,6 +104,7 @@ export function sampleCatalog(): Catalog {
           { modifierGroupId: 'grp-doneness', sortOrder: 1, minSelect: null, maxSelect: null },
         ],
         stationIds: ['st-kitchen', 'st-grill', 'st-closed'],
+        taxIds: ['tax-vat', 'tax-old'],
       },
       {
         id: 'prod-fries',
@@ -112,6 +118,7 @@ export function sampleCatalog(): Catalog {
         variants: [],
         modifierGroups: [],
         stationIds: ['st-fryer'],
+        taxIds: ['tax-vat'],
       },
       {
         id: 'prod-cola',
@@ -129,6 +136,7 @@ export function sampleCatalog(): Catalog {
         ],
         modifierGroups: [],
         stationIds: ['st-bar'],
+        taxIds: ['tax-vat', 'tax-sugar'],
       },
       {
         id: 'prod-retired',
@@ -142,6 +150,7 @@ export function sampleCatalog(): Catalog {
         variants: [],
         modifierGroups: [],
         stationIds: [],
+        taxIds: [],
       },
       {
         id: 'prod-in-archived-cat',
@@ -155,6 +164,7 @@ export function sampleCatalog(): Catalog {
         variants: [],
         modifierGroups: [],
         stationIds: [],
+        taxIds: [],
       },
     ],
   };

@@ -18,6 +18,7 @@
     "@fontsource-variable/noto-sans-arabic": "5.3.0",
     "@hookform/resolvers": "5.9.1",
     "@pos/api-client": "workspace:*",
+    "@pos/app-kit": "workspace:*",
     "@pos/domain": "workspace:*",
     "@pos/i18n": "workspace:*",
     "@pos/shared-types": "workspace:*",

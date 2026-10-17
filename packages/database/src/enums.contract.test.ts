@@ -1,5 +1,9 @@
 import {
   ActionSource,
+  DiscountType,
+  OrderChannel,
+  OrderStatus,
+  PaymentStatus,
   DeviceStatus,
   DeviceType,
   LOCALES,
@@ -15,6 +19,10 @@ describe('Prisma enums mirror @pos/shared-types', () => {
     ['DeviceType', $Enums.DeviceType, DeviceType],
     ['DeviceStatus', $Enums.DeviceStatus, DeviceStatus],
     ['ActionSource', $Enums.ActionSource, ActionSource],
+    ['OrderChannel', $Enums.OrderChannel, OrderChannel],
+    ['OrderStatus', $Enums.OrderStatus, OrderStatus],
+    ['PaymentStatus', $Enums.PaymentStatus, PaymentStatus],
+    ['DiscountType', $Enums.DiscountType, DiscountType],
   ])('%s', (_name, prismaEnum, sharedEnum) => {
     expect(Object.values(prismaEnum).sort()).toEqual(Object.values(sharedEnum).sort());
   });

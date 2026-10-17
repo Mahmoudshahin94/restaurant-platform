@@ -6,7 +6,9 @@
   versions that ship corepack).
 - PostgreSQL 16, either local (e.g. Homebrew) or via Docker:
   `docker compose -f infrastructure/docker-compose.yml up -d`.
-- From Phase 2: Rust (`rustup`) and the Tauri 2 prerequisites for the desktop POS.
+- For the desktop POS: Rust via [rustup](https://rustup.rs) (the repo was set up with
+  `--no-modify-path`, so run `source "$HOME/.cargo/env"` or add `~/.cargo/bin` to `PATH`) and,
+  on macOS, the Xcode command-line tools.
 
 ## First run
 
@@ -28,6 +30,20 @@ pnpm --filter @pos/admin dev      # http://localhost:5173  (proxies /api to :300
 
 Sign in to the admin with `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` from your `.env`.
 
+Run the POS:
+
+```bash
+pnpm --filter @pos/pos dev                 # browser at http://localhost:1420 (proxies /api)
+pnpm --filter @pos/pos tauri:dev           # same UI in the native Tauri window
+pnpm --filter @pos/pos tauri:build         # installable app; set VITE_API_URL for production
+pnpm --filter @pos/pos rust:check          # cargo fmt --check, clippy -D warnings, cargo test
+```
+
+Sign in as the cashier (`SEED_CASHIER_*`). Keyboard shortcuts: F2 order, F4 orders, F6 tables,
+`/` search, Ctrl/⌘+Enter place order. A production Tauri build calls the API cross-origin, so
+add its origin (`tauri://localhost` on macOS/Linux, `http://tauri.localhost` on Windows) to
+`CORS_ORIGINS`.
+
 ## Everyday commands
 
 | Command                                      | What it does                                                    |
@@ -44,13 +60,16 @@ Sign in to the admin with `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` from your `
 ## End-to-end tests (Playwright)
 
 ```bash
-createdb pos_kds_e2e            # once (or set E2E_DATABASE_URL)
+createdb pos_kds_e2e            # once (admin suite; or set E2E_DATABASE_URL)
+createdb pos_kds_pos_e2e        # once (POS suite; or set POS_E2E_DATABASE_URL)
 pnpm --filter @pos/api build    # E2E runs the built API
 pnpm test:e2e
 ```
 
-`apps/admin/playwright.config.ts` starts the API on :3100, after migrating and seeding the
-`*_e2e` database (`e2e/prepare-db.mjs` refuses any other database), and the admin on :5180.
+Each app's `playwright.config.ts` starts the API (admin :3100, POS :3110) after
+`tools/e2e/prepare-db.mjs` migrates the app's `*_e2e` database, clears previous runs' orders and
+seeds it. The script refuses any database whose name does not end in `_e2e`. It then starts the
+web UI (admin :5180, POS :1430).
 Locally it uses the installed Google Chrome (`PLAYWRIGHT_CHANNEL`, default `chrome`). In CI, run
 `pnpm exec playwright install chromium` first.
 

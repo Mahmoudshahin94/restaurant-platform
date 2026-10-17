@@ -2,7 +2,7 @@ import { Alert, Button, EmptyState, Spinner } from '@pos/ui';
 import type { UseQueryResult } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useErrorText } from '../lib/errors';
+import { useErrorText } from '../errors';
 
 interface QueryStateProps<T> {
   query: UseQueryResult<T>;

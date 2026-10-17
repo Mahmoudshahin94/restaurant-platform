@@ -34,6 +34,9 @@ export const ERROR_CODES = [
   'UNSUPPORTED_CURRENCY',
   // orders / payments
   'ORDER_NOT_FOUND',
+  'TABLE_NOT_FOUND',
+  'TAX_NOT_FOUND',
+  'DISCOUNT_NOT_FOUND',
   'INVALID_ORDER_STATE',
   'PAYMENT_FAILED',
   // sync / online ordering

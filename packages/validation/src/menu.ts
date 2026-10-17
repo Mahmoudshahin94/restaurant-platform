@@ -220,6 +220,7 @@ export const productSchema = z.object({
   variants: z.array(productVariantSchema),
   modifierGroups: z.array(productModifierGroupLinkSchema),
   stationIds: z.array(idSchema),
+  taxIds: z.array(idSchema),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
 });
@@ -262,6 +263,7 @@ const productRelations = {
       message: 'Duplicate modifier group',
     }),
   stationIds: z.array(idSchema).max(10).refine(unique, { message: 'Duplicate kitchen station' }),
+  taxIds: z.array(idSchema).max(5).refine(unique, { message: 'Duplicate tax' }),
 };
 
 export const createProductSchema = z.object({
@@ -274,6 +276,7 @@ export const createProductSchema = z.object({
   variants: productRelations.variants.default([]),
   modifierGroups: productRelations.modifierGroups.default([]),
   stationIds: productRelations.stationIds.default([]),
+  taxIds: productRelations.taxIds.default([]),
 });
 export type CreateProductRequest = z.input<typeof createProductSchema>;
 
@@ -340,6 +343,7 @@ const publishedProductSchema = z.object({
   price: z.int(),
   isAvailable: z.boolean(),
   stationIds: z.array(idSchema),
+  taxIds: z.array(idSchema),
   variants: z.array(
     z.object({ id: idSchema, nameEn: z.string(), nameAr: z.string(), price: z.int() }),
   ),
@@ -362,6 +366,9 @@ export const publishedMenuSchema = z.object({
   taxInclusive: z.boolean(),
   /** Content hash; identical to the ETag header. Changes whenever the menu changes. */
   version: z.string(),
+  taxes: z.array(
+    z.object({ id: idSchema, nameEn: z.string(), nameAr: z.string(), rateBps: z.int() }),
+  ),
   categories: z.array(
     z.object({
       id: idSchema,

@@ -12,6 +12,9 @@ export const keys = {
   modifierGroups: (rid: string, archived: boolean) => ['modifier-groups', rid, archived] as const,
   products: (rid: string, query: ListProductsQuery) => ['products', rid, query] as const,
   productSettings: (locationId: string) => ['product-settings', locationId] as const,
+  taxes: (rid: string, archived: boolean) => ['taxes', rid, archived] as const,
+  discounts: (rid: string, archived: boolean) => ['discounts', rid, archived] as const,
+  floor: (locationId: string) => ['floor', locationId] as const,
   locationMenu: (locationId: string) => ['location-menu', locationId] as const,
 };
 
@@ -67,6 +70,30 @@ export function useProducts(query: ListProductsQuery) {
   });
 }
 
+export function useTaxes(includeArchived = false) {
+  const rid = useRestaurantId();
+  return useQuery({
+    queryKey: keys.taxes(rid, includeArchived),
+    queryFn: () => api.menu.taxes.list(rid, { includeArchived }),
+  });
+}
+
+export function useDiscounts(includeArchived = false) {
+  const rid = useRestaurantId();
+  return useQuery({
+    queryKey: keys.discounts(rid, includeArchived),
+    queryFn: () => api.menu.discounts.list(rid, { includeArchived }),
+  });
+}
+
+export function useFloor(locationId: string | null) {
+  return useQuery({
+    queryKey: keys.floor(locationId ?? 'none'),
+    queryFn: () => api.floor.get(locationId ?? ''),
+    enabled: locationId !== null,
+  });
+}
+
 export function useProductSettings(locationId: string | null) {
   return useQuery({
     queryKey: keys.productSettings(locationId ?? 'none'),
@@ -86,6 +113,9 @@ function invalidateCatalog(client: QueryClient): Promise<void> {
         'products',
         'product-settings',
         'location-menu',
+        'taxes',
+        'discounts',
+        'floor',
       ].includes(String(q.queryKey[0])),
   });
 }

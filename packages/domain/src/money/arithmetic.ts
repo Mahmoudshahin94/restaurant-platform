@@ -156,3 +156,26 @@ export function formatMinorAsDecimal(amount: number, currency: string): string {
   const fraction = padded.slice(-exponent);
   return `${negative ? '-' : ''}${whole}.${fraction}`;
 }
+
+const PERCENT_PATTERN = /^(\d{1,3})(?:\.(\d{1,2}))?$/;
+
+/** Parses a percentage typed by a person ("15", "12.5", "0.75") into basis points (1500, 1250, 75). */
+export function parsePercentToBps(value: string): number {
+  const match = PERCENT_PATTERN.exec(value.trim());
+  if (!match) throw new DomainError('VALIDATION_FAILED', 'Not a percentage', { value });
+  const [, whole = '0', fraction = ''] = match;
+  const bps = Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+  if (bps > BPS_DENOMINATOR)
+    throw new DomainError('VALIDATION_FAILED', 'Percentage above 100', { value });
+  return bps;
+}
+
+/** Formats basis points as a plain percentage string without float arithmetic ("12.5"). */
+export function formatBpsAsPercent(bps: number): string {
+  assertMinorUnits(bps, 'bps');
+  const whole = Math.trunc(bps / 100);
+  const fraction = String(Math.abs(bps % 100))
+    .padStart(2, '0')
+    .replace(/0+$/, '');
+  return fraction ? `${whole}.${fraction}` : String(whole);
+}

@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { formatBpsAsPercent } from '@pos/domain';
 import { pickLocalized } from '@pos/i18n';
-import type { Category, KitchenStation, ModifierGroup, Product } from '@pos/validation';
+import type { Category, KitchenStation, ModifierGroup, Product, Tax } from '@pos/validation';
 import {
   Alert,
   Button,
@@ -21,8 +22,8 @@ import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 import { LocalizedFields } from '../../components/localized-fields';
 import { api } from '../../lib/api';
-import { applyServerValidation, tKey, useErrorText } from '../../lib/errors';
-import { useCurrentLocale } from '../../lib/locale';
+import { applyServerValidation, tKey, useErrorText } from '@pos/app-kit';
+import { useCurrentLocale } from '@pos/app-kit';
 import { moneyField, useMoney } from '../../lib/money';
 import { useCatalogMutation, useRestaurantId } from '../../lib/queries';
 
@@ -51,6 +52,7 @@ function productForm(currency: string) {
     ),
     modifierGroupIds: z.array(z.string()),
     stationIds: z.array(z.string()),
+    taxIds: z.array(z.string()),
   });
 }
 type ProductFormInput = z.input<ReturnType<typeof productForm>>;
@@ -62,6 +64,7 @@ interface ProductDialogProps {
   categories: Category[];
   modifierGroups: ModifierGroup[];
   stations: KitchenStation[];
+  taxes: Tax[];
   onClose: () => void;
 }
 
@@ -84,9 +87,10 @@ export function ProductDialog({
   categories,
   modifierGroups,
   stations,
+  taxes,
   onClose,
 }: ProductDialogProps) {
-  const { t } = useTranslation(['menu', 'common']);
+  const { t } = useTranslation(['menu', 'common', 'pricing']);
   const locale = useCurrentLocale();
   const rid = useRestaurantId();
   const errorText = useErrorText();
@@ -113,6 +117,8 @@ export function ProductDialog({
         })) ?? [],
       modifierGroupIds: product?.modifierGroups.map((l) => l.modifierGroupId) ?? [],
       stationIds: product?.stationIds ?? [],
+      // New products start with the restaurant's default taxes; nothing is applied implicitly.
+      taxIds: product?.taxIds ?? taxes.filter((t) => t.isDefault).map((t) => t.id),
     },
   });
   const variants = useFieldArray({ control: form.control, name: 'variants' });
@@ -139,6 +145,7 @@ export function ProductDialog({
         maxSelect: existing.get(modifierGroupId)?.maxSelect ?? null,
       })),
       stationIds: values.stationIds,
+      taxIds: values.taxIds,
     };
     if (product) return api.menu.products.update(rid, product.id, body);
     return api.menu.products.create(rid, {
@@ -327,6 +334,38 @@ export function ProductDialog({
             )}
           </fieldset>
         </div>
+
+        <fieldset className="grid content-start gap-2">
+          <legend className="text-sm font-medium">{t('pricing:products.taxes')}</legend>
+          <p className="text-xs text-muted-foreground">{t('pricing:products.taxesHint')}</p>
+          {taxes.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t('pricing:products.noTaxes')}</p>
+          ) : (
+            <Controller
+              control={form.control}
+              name="taxIds"
+              render={({ field }) => (
+                <div className="flex flex-wrap gap-4">
+                  {taxes.map((tax) => (
+                    <div key={tax.id} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`tax-${tax.id}`}
+                        checked={field.value.includes(tax.id)}
+                        onCheckedChange={(v) => {
+                          field.onChange(toggle(field.value, tax.id, v === true, taxes));
+                        }}
+                      />
+                      <Label htmlFor={`tax-${tax.id}`}>
+                        {pickLocalized(tax, 'name', locale)}{' '}
+                        <span className="ltr-nums">({formatBpsAsPercent(tax.rateBps)}%)</span>
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              )}
+            />
+          )}
+        </fieldset>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>

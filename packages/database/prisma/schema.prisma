@@ -53,6 +53,46 @@ enum DeviceStatus {
   @@map("device_status")
 }
 
+enum OrderChannel {
+  DINE_IN
+  TAKEAWAY
+  PHONE
+  WEBSITE
+  DELIVERY
+
+  @@map("order_channel")
+}
+
+enum OrderStatus {
+  DRAFT
+  PLACED
+  CONFIRMED
+  PREPARING
+  READY
+  COMPLETED
+  CANCELLED
+  REFUNDED
+
+  @@map("order_status")
+}
+
+enum PaymentStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+  PARTIALLY_REFUNDED
+  REFUNDED
+
+  @@map("payment_status")
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+
+  @@map("discount_type")
+}
+
 enum ActorType {
   USER
   EMPLOYEE
@@ -100,6 +140,9 @@ model Restaurant {
   products        Product[]
   modifierGroups  ModifierGroup[]
   kitchenStations KitchenStation[]
+  taxes           Tax[]
+  discounts       Discount[]
+  orders          Order[]
 
   @@map("restaurants")
 }
@@ -126,6 +169,10 @@ model Location {
   employees        Employee[]
   devices          Device[]
   locationProducts LocationProduct[]
+  tableSections    TableSection[]
+  tables           DiningTable[]
+  orders           Order[]
+  orderCounters    OrderCounter[]
 
   @@unique([restaurantId, code])
   @@index([restaurantId])
@@ -357,6 +404,8 @@ model Product {
   modifierGroups   ProductModifierGroup[]
   stations         ProductStation[]
   locationSettings LocationProduct[]
+  taxes            ProductTax[]
+  orderItems       OrderItem[]
 
   @@unique([restaurantId, sku])
   @@index([restaurantId, categoryId, sortOrder])
@@ -487,4 +536,267 @@ model LocationProduct {
 
   @@id([locationId, productId])
   @@map("location_products")
+}
+
+// ---------------------------------------------------------------------------
+// Taxes & discounts (restaurant configuration)
+// ---------------------------------------------------------------------------
+
+model Tax {
+  id           String    @id @default(uuid(7)) @db.Uuid
+  restaurantId String    @map("restaurant_id") @db.Uuid
+  nameEn       String    @map("name_en")
+  nameAr       String    @map("name_ar")
+  /// Basis points: 1500 = 15%.
+  rateBps      Int       @map("rate_bps")
+  /// Pre-selected for new products in the admin. Pricing never applies taxes implicitly.
+  isDefault    Boolean   @default(false) @map("is_default")
+  archivedAt   DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  restaurant Restaurant   @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  products   ProductTax[]
+
+  @@index([restaurantId])
+  @@map("taxes")
+}
+
+model ProductTax {
+  productId String @map("product_id") @db.Uuid
+  taxId     String @map("tax_id") @db.Uuid
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tax     Tax     @relation(fields: [taxId], references: [id], onDelete: Restrict)
+
+  @@id([productId, taxId])
+  @@map("product_taxes")
+}
+
+/// Predefined order-level discounts staff may apply (requires orders.discount).
+model Discount {
+  id           String       @id @default(uuid(7)) @db.Uuid
+  restaurantId String       @map("restaurant_id") @db.Uuid
+  nameEn       String       @map("name_en")
+  nameAr       String       @map("name_ar")
+  type         DiscountType
+  /// Basis points for PERCENTAGE, minor units for FIXED.
+  value        Int
+  archivedAt   DateTime?    @map("archived_at") @db.Timestamptz(3)
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+
+  @@index([restaurantId])
+  @@map("discounts")
+}
+
+// ---------------------------------------------------------------------------
+// Floor plan
+// ---------------------------------------------------------------------------
+
+model TableSection {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  locationId String    @map("location_id") @db.Uuid
+  nameEn     String    @map("name_en")
+  nameAr     String    @map("name_ar")
+  sortOrder  Int       @default(0) @map("sort_order")
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  location Location      @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  tables   DiningTable[]
+
+  @@index([locationId])
+  @@map("table_sections")
+}
+
+/// A dining table ("Table" in the domain model; renamed to avoid the SQL keyword).
+model DiningTable {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  locationId String    @map("location_id") @db.Uuid
+  sectionId  String    @map("section_id") @db.Uuid
+  /// Short label shown on the POS and tickets, unique per location, e.g. "T12".
+  label      String
+  seats      Int       @default(4)
+  sortOrder  Int       @default(0) @map("sort_order")
+  archivedAt DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  location Location     @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  section  TableSection @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  orders   Order[]
+
+  @@unique([locationId, label])
+  @@map("dining_tables")
+}
+
+// ---------------------------------------------------------------------------
+// Orders. One table for every channel. Lines, modifiers, taxes and discounts are snapshots:
+// later menu edits never change an order. Orders are never deleted.
+// ---------------------------------------------------------------------------
+
+model Order {
+  id            String        @id @default(uuid(7)) @db.Uuid
+  restaurantId  String        @map("restaurant_id") @db.Uuid
+  locationId    String        @map("location_id") @db.Uuid
+  /// Human-readable, unique per location and business day, e.g. "MAIN-042".
+  orderNumber   String        @map("order_number")
+  businessDate  DateTime      @map("business_date") @db.Date
+  channel       OrderChannel
+  status        OrderStatus
+  paymentStatus PaymentStatus @default(UNPAID) @map("payment_status")
+  source        ActionSource
+  tableId       String?       @map("table_id") @db.Uuid
+  customerName  String?       @map("customer_name")
+  customerPhone String?       @map("customer_phone")
+  guestCount    Int?          @map("guest_count")
+  notes         String?
+  /// Snapshots of the pricing context at the time of the last pricing.
+  currencyCode  String        @map("currency_code") @db.Char(3)
+  taxInclusive  Boolean       @map("tax_inclusive")
+  subtotal      Int
+  discountTotal Int           @map("discount_total")
+  taxTotal      Int           @map("tax_total")
+  feeTotal      Int           @map("fee_total")
+  total         Int
+  /// Incremented on every change; clients send it back for optimistic concurrency.
+  version       Int           @default(1)
+  createdById   String?       @map("created_by_id") @db.Uuid
+  placedAt      DateTime?     @map("placed_at") @db.Timestamptz(3)
+  completedAt   DateTime?     @map("completed_at") @db.Timestamptz(3)
+  cancelledAt   DateTime?     @map("cancelled_at") @db.Timestamptz(3)
+  cancelReason  String?       @map("cancel_reason")
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  restaurant    Restaurant           @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  location      Location             @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  table         DiningTable?         @relation(fields: [tableId], references: [id], onDelete: Restrict)
+  items         OrderItem[]
+  taxes         OrderTax[]
+  discounts     OrderDiscount[]
+  statusHistory OrderStatusHistory[]
+
+  @@unique([locationId, businessDate, orderNumber])
+  @@index([locationId, status])
+  @@index([locationId, businessDate])
+  @@index([tableId, status])
+  @@map("orders")
+}
+
+model OrderItem {
+  /// The client's cart line id, stable across edits.
+  id            String   @id @db.Uuid
+  orderId       String   @map("order_id") @db.Uuid
+  productId     String   @map("product_id") @db.Uuid
+  variantId     String?  @map("variant_id") @db.Uuid
+  nameEn        String   @map("name_en")
+  nameAr        String   @map("name_ar")
+  variantNameEn String?  @map("variant_name_en")
+  variantNameAr String?  @map("variant_name_ar")
+  quantity      Int
+  /// Product or variant price, before modifiers.
+  basePrice     Int      @map("base_price")
+  /// basePrice + modifier deltas.
+  unitPrice     Int      @map("unit_price")
+  gross         Int
+  discount      Int
+  tax           Int
+  total         Int
+  notes         String?
+  /// Kitchen stations at the time of ordering (routing snapshot for Phase 4).
+  stationIds    String[] @map("station_ids") @db.Uuid
+  sortOrder     Int      @default(0) @map("sort_order")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  order     Order               @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  product   Product             @relation(fields: [productId], references: [id], onDelete: Restrict)
+  modifiers OrderItemModifier[]
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+model OrderItemModifier {
+  id              String @id @default(uuid(7)) @db.Uuid
+  orderItemId     String @map("order_item_id") @db.Uuid
+  modifierId      String @map("modifier_id") @db.Uuid
+  modifierGroupId String @map("modifier_group_id") @db.Uuid
+  nameEn          String @map("name_en")
+  nameAr          String @map("name_ar")
+  priceDelta      Int    @map("price_delta")
+
+  item OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  @@index([orderItemId])
+  @@map("order_item_modifiers")
+}
+
+/// Per-tax totals of an order (receipt and tax-report breakdown).
+model OrderTax {
+  orderId       String @map("order_id") @db.Uuid
+  taxId         String @map("tax_id") @db.Uuid
+  nameEn        String @map("name_en")
+  nameAr        String @map("name_ar")
+  rateBps       Int    @map("rate_bps")
+  taxableAmount Int    @map("taxable_amount")
+  amount        Int
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@id([orderId, taxId])
+  @@map("order_taxes")
+}
+
+model OrderDiscount {
+  id          String       @id @default(uuid(7)) @db.Uuid
+  orderId     String       @map("order_id") @db.Uuid
+  discountId  String       @map("discount_id") @db.Uuid
+  nameEn      String       @map("name_en")
+  nameAr      String       @map("name_ar")
+  type        DiscountType
+  value       Int
+  amount      Int
+  appliedById String?      @map("applied_by_id") @db.Uuid
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@map("order_discounts")
+}
+
+/// Append-only record of every status change.
+model OrderStatusHistory {
+  id         String       @id @default(uuid(7)) @db.Uuid
+  orderId    String       @map("order_id") @db.Uuid
+  fromStatus OrderStatus? @map("from_status")
+  toStatus   OrderStatus  @map("to_status")
+  actorType  ActorType    @map("actor_type")
+  actorId    String?      @map("actor_id") @db.Uuid
+  source     ActionSource
+  reason     String?
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([orderId, createdAt])
+  @@map("order_status_history")
+}
+
+/// Per-location, per-business-day order number sequence (incremented atomically).
+model OrderCounter {
+  locationId   String   @map("location_id") @db.Uuid
+  businessDate DateTime @map("business_date") @db.Date
+  lastNumber   Int      @map("last_number")
+
+  location Location @relation(fields: [locationId], references: [id], onDelete: Restrict)
+
+  @@id([locationId, businessDate])
+  @@map("order_counters")
 }

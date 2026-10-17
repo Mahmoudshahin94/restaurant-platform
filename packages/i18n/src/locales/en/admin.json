@@ -9,7 +9,10 @@
     "locations": "Locations",
     "settings": "Settings",
     "mainNavigation": "Main navigation",
-    "availability": "Availability"
+    "availability": "Availability",
+    "taxes": "Taxes",
+    "discounts": "Discounts",
+    "tables": "Tables"
   },
   "header": {
     "location": "Location",

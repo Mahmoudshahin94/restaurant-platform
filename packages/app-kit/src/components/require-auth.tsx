@@ -2,18 +2,23 @@ import { Spinner } from '@pos/ui';
 import { type ReactNode, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Navigate, useLocation } from 'react-router';
-import { refreshSession } from '../lib/api';
-import { useSession } from '../stores/session';
+import type { SessionClient } from '../session';
 
-/** Restores the session from the refresh cookie on first load, then gates the subtree. */
-export function RequireAuth({ children }: { children: ReactNode }) {
+/** Restores the session (refresh token) on first load, then gates the subtree. */
+export function RequireAuth({
+  session,
+  children,
+}: {
+  session: SessionClient;
+  children: ReactNode;
+}) {
   const { t } = useTranslation();
-  const status = useSession((s) => s.status);
+  const status = session.useSession((s) => s.status);
   const location = useLocation();
 
   useEffect(() => {
-    if (status === 'unknown') void refreshSession();
-  }, [status]);
+    if (status === 'unknown') void session.refreshSession();
+  }, [status, session]);
 
   if (status === 'unknown') {
     return (

@@ -4,7 +4,7 @@ import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '../test/render';
-import { QueryState } from './query-state';
+import { QueryState } from '@pos/app-kit';
 
 function Probe({ fn }: { fn: () => Promise<string[]> }) {
   const query = useQuery({ queryKey: ['probe'], queryFn: fn });

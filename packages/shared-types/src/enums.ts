@@ -34,6 +34,23 @@ export const OrderStatus = {
 } as const;
 export type OrderStatus = ValueOf<typeof OrderStatus>;
 
+/** Order statuses that still need staff attention (not finished or voided). */
+export const OPEN_ORDER_STATUSES: readonly OrderStatus[] = [
+  OrderStatus.DRAFT,
+  OrderStatus.PLACED,
+  OrderStatus.CONFIRMED,
+  OrderStatus.PREPARING,
+  OrderStatus.READY,
+];
+
+export const DiscountType = {
+  /** `value` is basis points of the order subtotal. */
+  PERCENTAGE: 'PERCENTAGE',
+  /** `value` is an amount in minor units. */
+  FIXED: 'FIXED',
+} as const;
+export type DiscountType = ValueOf<typeof DiscountType>;
+
 /** Tracked separately from OrderStatus so partial payments and partial refunds are representable. */
 export const PaymentStatus = {
   UNPAID: 'UNPAID',

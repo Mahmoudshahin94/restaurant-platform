@@ -1,7 +1,7 @@
 import { pickLocalized } from '@pos/i18n';
 import { Alert, Card, CardDescription, CardHeader, CardTitle, PageHeader } from '@pos/ui';
 import { useTranslation } from 'react-i18next';
-import { useCurrentLocale } from '../lib/locale';
+import { useCurrentLocale } from '@pos/app-kit';
 import { useRestaurant } from '../lib/queries';
 import { useSession } from '../stores/session';
 

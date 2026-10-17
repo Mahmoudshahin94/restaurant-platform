@@ -3,7 +3,7 @@
 Restaurant platform: offline-first POS, Kitchen Display System (KDS), customer online ordering,
 admin portal, cloud API, and a per-restaurant location hub. Arabic and English with full RTL.
 
-> Status: Phase 0 (foundations) and Phase 1 (menu) are implemented. See the
+> Status: Phases 0–2 (foundations, menu, POS order creation) are implemented. See the
 > [phase checklist](#10-development-phases) at the end.
 
 ## 1. Starting point
@@ -53,7 +53,7 @@ apps/
   api/            NestJS + Fastify cloud API                         (Phase 0–1: implemented)
   admin/          React admin portal                                 (Phase 1: menu screens)
   gateway/        Location hub: SQLite, sync engine, LAN WS, printers (Phase 5–6)
-  pos/            Tauri 2 + React point of sale                      (Phase 2)
+  pos/            Tauri 2 + React point of sale                      (Phase 2: order entry)
   kds/            React kitchen display                              (Phase 4)
   customer-web/   React customer ordering site                       (Phase 7)
 packages/
@@ -61,6 +61,7 @@ packages/
   validation/     Zod schemas — the API contract (types via z.infer)
   domain/         Pure business logic + unit tests
   api-client/     Typed fetch client (refresh-and-retry, typed errors)
+  app-kit/        Shared React plumbing: session client (web/native), i18n bootstrap, errors, money
   database/       Prisma schema, migrations, seed, credential hashing
   ui/             shadcn/ui-style components, Tailwind v4 theme, RTL via logical properties
   i18n/           i18next setup, en/ar resources, direction + Intl formatting
@@ -187,7 +188,7 @@ The cloud is never in this path. Event names and payloads are typed in
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
 | 0     | Docs, monorepo, tooling, shared packages, identity/tenancy schema, auth, RBAC, audit, restaurants/locations API                                         | ✅ Done |
 | 1     | Menu: categories, products, variants, modifier groups/modifiers, kitchen stations, location availability/price overrides, published menu, admin menu UI | ✅ Done |
-| 2     | POS order creation, pricing engine, taxes, discounts, order state machine (Rust/Tauri setup)                                                            | ⏳      |
+| 2     | POS order creation, pricing engine, taxes, discounts, order state machine, tables, Tauri shell                                                          | ✅ Done |
 | 3     | Payments (provider abstraction, cash, split), shifts, cash drawer                                                                                       | ⏳      |
 | 4     | KDS app, kitchen tickets, station routing                                                                                                               | ⏳      |
 | 5     | Location hub with SQLite, offline POS                                                                                                                   | ⏳      |
@@ -205,12 +206,44 @@ api-client 6, ui 2, database 5, API 42 against a real Postgres, admin 8) plus 3 
 tests (catalog CRUD with session reload, Arabic RTL ⇄ English LTR, permission-limited user)
 and the lint-rule test. Prisma `migrate status` is clean.
 
+**Phase 2 verification (2026-10-17):** `turbo run build typecheck lint test --force` with 44/44
+tasks green. That covers 214 unit and integration tests (domain 79, API 63, i18n 20, validation 16,
+POS 9, database 9, api-client 6, app-kit 5, admin 5, ui 2), 8 Playwright E2E tests (admin 3; POS 5:
+dine-in order, takeaway order with server-confirmed total, lost-response retry without
+duplication, editing an open order, Arabic RTL ⇄ English LTR), and the Rust shell's `cargo fmt`,
+`clippy -D warnings` and tests. `tauri build --debug` produces `Restaurant POS.app`.
+
+### Phase 2 decisions
+
+- **The POS talks to the cloud API until the hub exists (Phase 5)**
+  ([ADR 0008](adr/0008-pos-before-hub.md)). All POS data access goes through `@pos/api-client`
+  and the session client, so Phase 5 swaps the base URL to the location hub without UI changes.
+  The cart is persisted on the terminal (a draft, not business data), and its client-generated
+  order id makes every submit idempotent from day one.
+- **One pricing engine** (`priceOrder` / `quoteOrder` in `@pos/domain`) prices the POS preview
+  and the authoritative server order. The server never accepts client prices.
+- **Order numbers** come from an atomic per-location, per-business-day counter
+  (`order_counters`). The business day is the calendar date in the location's timezone.
+- **Optimistic concurrency:** each order has a `version`. Edits and transitions with a stale
+  version answer `409 CONFLICT` (`reason: STALE_VERSION`), and the POS reloads the order.
+- **Staff vs system transitions:** PREPARING/READY are system transitions (KDS, Phase 4) and are
+  rejected from staff requests.
+- **Shared app plumbing** moved to `@pos/app-kit` so the admin and POS do not duplicate session,
+  i18n or error handling.
+
 Known gaps carried forward:
 
 - The admin UI does not yet expose per-product modifier min/max overrides. The API supports them
   and the UI preserves existing values.
-- The admin is the only frontend so far. POS, KDS, customer web and the gateway start in their
-  phases.
+- POS sign-in uses email and password, with the refresh token kept in memory (sign in again
+  after a restart). PIN login for cashiers and OS-keychain token storage arrive with the hub
+  (Phase 5).
+- The POS cannot take payments or print yet (Phase 3), so orders cannot be completed: completion
+  requires full payment.
+- Drafts are supported by the API (`status: DRAFT`) but not exposed in the POS UI yet.
+- A configurable business-day start hour (for venues open past midnight) is not implemented; the
+  business day is the calendar date in the location's timezone.
+- Order lists refresh by polling (15 s). Realtime WebSocket updates come with the KDS and hub.
 - Restaurants are provisioned by seed only; there is no platform-operator UI yet.
 
 ## Architectural decisions and open questions
@@ -233,6 +266,8 @@ Recorded as ADRs in [adr/](adr/):
    conflict rules.
 7. [0007](adr/0007-tooling-choices.md): Vitest everywhere, stable major versions, Homebrew
    Postgres for local development (Docker optional).
+8. [0008](adr/0008-pos-before-hub.md): the POS uses the cloud API (through the shared client)
+   until the location hub exists; client-generated order ids make submits idempotent now.
 
 Open items to revisit:
 

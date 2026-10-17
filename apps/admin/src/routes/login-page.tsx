@@ -16,8 +16,8 @@ import { useTranslation } from 'react-i18next';
 import { Navigate, useLocation, useNavigate } from 'react-router';
 import { z } from 'zod';
 import { LanguageSwitcher } from '../components/language-switcher';
-import { api } from '../lib/api';
-import { tKey, useErrorText } from '../lib/errors';
+import { session } from '../lib/api';
+import { tKey, useErrorText } from '@pos/app-kit';
 import { useSession } from '../stores/session';
 
 const loginForm = z.object({
@@ -35,7 +35,7 @@ export function LoginPage() {
   const errorText = useErrorText();
   const navigate = useNavigate();
   const location = useLocation();
-  const { status, setSession } = useSession();
+  const status = useSession((s) => s.status);
   const [error, setError] = useState<string | null>(null);
   const form = useForm<LoginForm>({
     resolver: zodResolver(loginForm),
@@ -48,8 +48,7 @@ export function LoginPage() {
   const onSubmit = form.handleSubmit(async (values) => {
     setError(null);
     try {
-      const session = await api.auth.login({ ...values, client: 'web' });
-      setSession(session.accessToken, session.user);
+      await session.signIn(values.email, values.password);
       const from = (location.state as { from?: string } | null)?.from;
       void navigate(from && from !== '/login' ? from : '/', { replace: true });
     } catch (e) {

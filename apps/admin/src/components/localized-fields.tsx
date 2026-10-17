@@ -1,7 +1,7 @@
 import { Field, Input, Textarea } from '@pos/ui';
 import type { FieldErrors, FieldValues, Path, UseFormRegister } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
-import { tKey } from '../lib/errors';
+import { tKey } from '@pos/app-kit';
 
 interface LocalizedFieldsProps<T extends FieldValues> {
   register: UseFormRegister<T>;

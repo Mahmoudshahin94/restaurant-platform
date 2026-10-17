@@ -3,7 +3,10 @@ import type { Permission } from '@pos/shared-types';
 import { Button, NativeSelect, cn } from '@pos/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import {
+  BadgePercent,
   ChefHat,
+  Grid3x3,
+  Receipt,
   FolderTree,
   LayoutDashboard,
   ListChecks,
@@ -15,8 +18,8 @@ import {
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NavLink, Outlet, useNavigate } from 'react-router';
-import { api } from '../lib/api';
-import { useCurrentLocale } from '../lib/locale';
+import { session } from '../lib/api';
+import { useCurrentLocale } from '@pos/app-kit';
 import { usePermissions } from '../lib/permissions';
 import { useLocations } from '../lib/queries';
 import { usePreferences } from '../stores/preferences';
@@ -31,7 +34,10 @@ interface NavItem {
     | 'nav.products'
     | 'nav.modifierGroups'
     | 'nav.kitchenStations'
-    | 'nav.availability';
+    | 'nav.availability'
+    | 'nav.taxes'
+    | 'nav.discounts'
+    | 'nav.tables';
   icon: LucideIcon;
   permission?: Permission;
 }
@@ -68,6 +74,14 @@ const NAV: NavItem[] = [
     icon: ToggleRight,
     permission: 'products.view',
   },
+  { to: '/settings/taxes', labelKey: 'nav.taxes', icon: Receipt, permission: 'products.view' },
+  {
+    to: '/settings/discounts',
+    labelKey: 'nav.discounts',
+    icon: BadgePercent,
+    permission: 'settings.manage',
+  },
+  { to: '/settings/tables', labelKey: 'nav.tables', icon: Grid3x3, permission: 'orders.view' },
 ];
 
 function LocationPicker() {
@@ -105,16 +119,14 @@ function LocationPicker() {
 export function AppShell() {
   const { t } = useTranslation(['admin', 'common']);
   const user = useSession((s) => s.user);
-  const clear = useSession((s) => s.clear);
   const { canAnywhere } = usePermissions();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
   const signOut = async () => {
     try {
-      await api.auth.logout();
+      await session.signOut();
     } finally {
-      clear();
       queryClient.clear();
       void navigate('/login', { replace: true });
     }

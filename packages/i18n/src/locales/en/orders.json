@@ -1,0 +1,76 @@
+{
+  "channel": {
+    "DINE_IN": "Dine-in",
+    "TAKEAWAY": "Takeaway",
+    "PHONE": "Phone",
+    "WEBSITE": "Website",
+    "DELIVERY": "Delivery"
+  },
+  "status": {
+    "DRAFT": "Draft",
+    "PLACED": "New",
+    "CONFIRMED": "Confirmed",
+    "PREPARING": "Preparing",
+    "READY": "Ready",
+    "COMPLETED": "Completed",
+    "CANCELLED": "Cancelled",
+    "REFUNDED": "Refunded"
+  },
+  "payment": {
+    "UNPAID": "Unpaid",
+    "PARTIALLY_PAID": "Partly paid",
+    "PAID": "Paid",
+    "PARTIALLY_REFUNDED": "Partly refunded",
+    "REFUNDED": "Refunded"
+  },
+  "totals": {
+    "subtotal": "Subtotal",
+    "discount": "Discount",
+    "tax": "Tax",
+    "taxIncluded": "Includes tax",
+    "fees": "Fees",
+    "total": "Total"
+  },
+  "fields": {
+    "channel": "Order type",
+    "table": "Table",
+    "customerName": "Customer name",
+    "customerPhone": "Phone number",
+    "guestCount": "Guests",
+    "notes": "Order notes",
+    "itemNotes": "Item notes",
+    "quantity": "Quantity",
+    "number": "Order",
+    "status": "Status",
+    "placedAt": "Placed"
+  },
+  "actions": {
+    "place": "Place order",
+    "saveDraft": "Save draft",
+    "saveChanges": "Save changes",
+    "confirm": "Confirm",
+    "cancelOrder": "Cancel order",
+    "edit": "Edit items",
+    "newOrder": "New order",
+    "clear": "Clear"
+  },
+  "cancel": {
+    "title": "Cancel order {{number}}?",
+    "reason": "Reason",
+    "reasonHint": "Required. Visible in the order history and audit log.",
+    "confirm": "Cancel order",
+    "keep": "Keep order"
+  },
+  "reasons": {
+    "STALE_VERSION": "Someone else changed this order. It has been reloaded.",
+    "NOT_MODIFIABLE": "This order can no longer be changed.",
+    "REASON_REQUIRED": "Please enter a reason.",
+    "UNPAID": "The order must be paid first.",
+    "SYSTEM_ONLY": "This status is set by the kitchen."
+  },
+  "history": "History",
+  "empty": "No orders",
+  "emptyHint": "New orders appear here.",
+  "items_one": "{{count}} item",
+  "items_other": "{{count}} items"
+}

@@ -22,10 +22,10 @@ import { Pencil, Plus, Search } from 'lucide-react';
 import { useDeferredValue, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArchiveAction } from '../../components/archive-action';
-import { QueryState } from '../../components/query-state';
+import { QueryState } from '@pos/app-kit';
 import { ArchivedBadge } from '../../components/status-badge';
 import { api } from '../../lib/api';
-import { useCurrentLocale } from '../../lib/locale';
+import { useCurrentLocale } from '@pos/app-kit';
 import { useMoney } from '../../lib/money';
 import { usePermissions } from '../../lib/permissions';
 import {
@@ -35,6 +35,7 @@ import {
   useModifierGroups,
   useProducts,
   useRestaurantId,
+  useTaxes,
 } from '../../lib/queries';
 import { ProductDialog } from './product-dialog';
 
@@ -53,6 +54,7 @@ export function ProductsPage() {
   const categories = useCategories();
   const groups = useModifierGroups();
   const stations = useKitchenStations();
+  const taxes = useTaxes();
   const products = useProducts({
     ...(categoryId ? { categoryId } : {}),
     ...(deferredSearch ? { search: deferredSearch } : {}),
@@ -73,7 +75,9 @@ export function ProductsPage() {
   }, [stations.data, locale]);
 
   const hasCategories = (categories.data?.length ?? 0) > 0;
-  const formReady = Boolean(currency && categories.data && groups.data && stations.data);
+  const formReady = Boolean(
+    currency && categories.data && groups.data && stations.data && taxes.data,
+  );
 
   return (
     <>
@@ -233,7 +237,12 @@ export function ProductsPage() {
           if (!open) setEditing(null);
         }}
       >
-        {editing !== null && currency && categories.data && groups.data && stations.data ? (
+        {editing !== null &&
+        currency &&
+        categories.data &&
+        groups.data &&
+        stations.data &&
+        taxes.data ? (
           <ProductDialog
             key={editing === 'new' ? 'new' : editing.id}
             product={editing === 'new' ? null : editing}
@@ -241,6 +250,7 @@ export function ProductsPage() {
             categories={categories.data}
             modifierGroups={groups.data}
             stations={stations.data}
+            taxes={taxes.data}
             onClose={() => {
               setEditing(null);
             }}

@@ -36,6 +36,22 @@ export async function assertModifierGroups(
   }
 }
 
+export async function assertTaxes(
+  tx: PrismaTx,
+  restaurantId: string,
+  ids: readonly string[],
+): Promise<void> {
+  if (ids.length === 0) return;
+  const rows = await tx.tax.findMany({
+    where: { id: { in: [...ids] }, restaurantId, archivedAt: null },
+    select: { id: true },
+  });
+  const found = new Set(rows.map((r) => r.id));
+  const missing = ids.filter((id) => !found.has(id));
+  if (missing.length > 0)
+    throw new DomainError('TAX_NOT_FOUND', 'Tax not found', { taxIds: missing });
+}
+
 export async function assertKitchenStations(
   tx: PrismaTx,
   restaurantId: string,

@@ -18,10 +18,10 @@ import {
 } from '@pos/ui';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { QueryState } from '../../components/query-state';
+import { QueryState } from '@pos/app-kit';
 import { api } from '../../lib/api';
-import { tKey, useErrorText } from '../../lib/errors';
-import { useCurrentLocale } from '../../lib/locale';
+import { tKey, useErrorText } from '@pos/app-kit';
+import { useCurrentLocale } from '@pos/app-kit';
 import { optionalMoneyField, useMoney } from '../../lib/money';
 import { usePermissions } from '../../lib/permissions';
 import {

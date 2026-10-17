@@ -4,6 +4,8 @@ import {
   allocateProportionally,
   applyBps,
   divideRoundHalfUp,
+  formatBpsAsPercent,
+  parsePercentToBps,
   formatMinorAsDecimal,
   inclusiveTaxPortion,
   multiplyMinor,
@@ -116,5 +118,23 @@ describe('currency', () => {
 describe('overflow protection', () => {
   it('throws instead of losing precision', () => {
     expect(() => multiplyMinor(Number.MAX_SAFE_INTEGER, 2)).toThrow(DomainError);
+  });
+});
+
+describe('percent ⇄ basis points', () => {
+  it.each([
+    ['15', 1500],
+    ['12.5', 1250],
+    ['0.75', 75],
+    ['100', 10000],
+    ['0', 0],
+  ])('%s%% = %i bps', (text, bps) => {
+    expect(parsePercentToBps(text)).toBe(bps);
+    expect(formatBpsAsPercent(bps)).toBe(text);
+  });
+
+  it('rejects bad percentages', () => {
+    for (const bad of ['101', '1.234', '-5', 'x', ''])
+      expect(() => parsePercentToBps(bad)).toThrow(DomainError);
   });
 });

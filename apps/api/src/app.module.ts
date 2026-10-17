@@ -9,7 +9,10 @@ import { HealthController } from './health/health.controller';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { LocationsModule } from './modules/locations/locations.module';
+import { FloorModule } from './modules/floor/floor.module';
 import { MenuModule } from './modules/menu/menu.module';
+import { OrdersModule } from './modules/orders/orders.module';
+import { PricingConfigModule } from './modules/pricing-config/pricing-config.module';
 import { RestaurantsModule } from './modules/restaurants/restaurants.module';
 import { PrismaModule } from './prisma/prisma.module';
 
@@ -26,6 +29,9 @@ export class AppModule {
         RestaurantsModule,
         LocationsModule,
         MenuModule,
+        PricingConfigModule,
+        FloorModule,
+        OrdersModule,
       ],
       controllers: [HealthController],
       providers: [

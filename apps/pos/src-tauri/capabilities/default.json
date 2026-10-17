@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capabilities of the main POS window: core APIs only. Commands defined in lib.rs are allowed by default.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
