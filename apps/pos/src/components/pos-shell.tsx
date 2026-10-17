@@ -130,29 +130,29 @@ export function PosShell() {
   return (
     <div className="flex h-full flex-col bg-background">
       <header className="flex h-16 shrink-0 items-center gap-3 border-b bg-card px-3">
-        <nav aria-label={t('pos:nav.main')} className="flex gap-1">
+        <nav aria-label={t('pos:nav.main')} className="flex shrink-0 gap-1">
           {NAV.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
                 cn(
-                  'flex h-12 items-center gap-2 rounded-lg px-4 text-base font-semibold',
+                  'flex h-12 min-w-12 items-center justify-center gap-2 rounded-lg px-3 text-base font-semibold xl:px-4',
                   isActive ? 'bg-primary text-primary-foreground' : 'hover:bg-muted',
                 )
               }
             >
-              <item.icon aria-hidden className="size-5" />
-              {t(`pos:${item.key}`)}
-              <kbd className="hidden text-xs opacity-60 lg:inline">{item.shortcut}</kbd>
+              <item.icon aria-hidden className="size-5 shrink-0" />
+              <span className="sr-only lg:not-sr-only">{t(`pos:${item.key}`)}</span>
+              <kbd className="hidden text-xs opacity-60 xl:inline">{item.shortcut}</kbd>
             </NavLink>
           ))}
         </nav>
-        <div className="ms-auto flex items-center gap-3">
+        <div className="ms-auto flex min-w-0 items-center gap-2 xl:gap-3">
           {location ? (
-            <Button variant="ghost" onClick={() => void navigate('/location')}>
+            <Button variant="ghost" className="min-w-0" onClick={() => void navigate('/location')}>
               <MapPin aria-hidden />
-              {pickLocalized(location, 'name', locale)}
+              <span className="max-w-48 truncate">{pickLocalized(location, 'name', locale)}</span>
             </Button>
           ) : null}
           <LanguageSwitcher className="h-10 w-auto" onLocaleChange={setLocale} />
@@ -164,12 +164,12 @@ export function PosShell() {
           >
             <Settings aria-hidden />
           </Button>
-          <span className="hidden text-sm text-muted-foreground md:inline">
+          <span className="hidden max-w-40 truncate text-sm text-muted-foreground xl:inline">
             {user?.displayName}
           </span>
-          <Button variant="outline" onClick={() => void signOut()}>
+          <Button variant="outline" className="shrink-0" onClick={() => void signOut()}>
             <LogOut aria-hidden className="rtl:-scale-x-100" />
-            {t('common:actions.signOut')}
+            <span className="sr-only lg:not-sr-only">{t('common:actions.signOut')}</span>
           </Button>
         </div>
       </header>

@@ -152,6 +152,24 @@ test('the POS works in Arabic (RTL) and English (LTR)', async ({ page }) => {
   await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
 });
 
+test('the top bar fits a 1024px screen in English and Arabic', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await signIn(page);
+  for (const [locale, signOut] of [
+    ['en', 'Sign out'],
+    ['ar', 'تسجيل الخروج'],
+  ] as const) {
+    await page.locator('header select').selectOption(locale);
+    await expect(page.locator('html')).toHaveAttribute('lang', locale);
+    const button = await page.getByRole('button', { name: signOut }).boundingBox();
+    expect(button && button.x >= 0 && button.x + button.width <= 1024).toBe(true);
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBe(0);
+  }
+});
+
 test('staff can still sign in with email and password at the hub', async ({ page }) => {
   await page.goto('/login');
   await page.getByRole('tab', { name: 'Email' }).click();
