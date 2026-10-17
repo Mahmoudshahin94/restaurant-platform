@@ -1,0 +1,46 @@
+{
+  "appName": "Restaurant Platform",
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "create": "Create",
+    "edit": "Edit",
+    "delete": "Delete",
+    "archive": "Archive",
+    "restore": "Restore",
+    "search": "Search",
+    "retry": "Try again",
+    "close": "Close",
+    "confirm": "Confirm",
+    "back": "Back",
+    "add": "Add",
+    "remove": "Remove",
+    "signOut": "Sign out"
+  },
+  "states": {
+    "loading": "Loading…",
+    "saving": "Saving…",
+    "empty": "Nothing here yet",
+    "error": "Something could not be loaded",
+    "saved": "Saved",
+    "archived": "Archived",
+    "active": "Active",
+    "inactive": "Inactive",
+    "yes": "Yes",
+    "no": "No",
+    "optional": "Optional",
+    "required": "Required"
+  },
+  "language": {
+    "label": "Language",
+    "en": "English",
+    "ar": "العربية"
+  },
+  "validation": {
+    "required": "This field is required",
+    "invalid": "This value is not valid",
+    "tooLong": "This value is too long",
+    "invalidAmount": "Enter a valid amount",
+    "minMax": "Minimum cannot be greater than maximum"
+  }
+}

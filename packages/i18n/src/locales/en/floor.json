@@ -1,0 +1,17 @@
+{
+  "title": "Tables",
+  "description": "Sections and tables of the selected location.",
+  "newSection": "New section",
+  "newTable": "New table",
+  "editTable": "Edit table",
+  "section": "Section",
+  "label": "Label",
+  "labelHint": "Short name shown on the POS, e.g. T12",
+  "seats": "Seats",
+  "seatsCount": "{{count}} seats",
+  "empty": "No tables yet",
+  "emptyHint": "Create a section such as “Indoor”, then add its tables.",
+  "free": "Free",
+  "occupied": "Occupied",
+  "noLocation": "Choose a location first."
+}

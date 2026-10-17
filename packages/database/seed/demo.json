@@ -1,0 +1,340 @@
+{
+  "$comment": "Development/demo data only. Production restaurants are provisioned through the admin API. Credentials come from SEED_* environment variables, never from this file.",
+  "restaurant": {
+    "slug": "demo-kitchen",
+    "nameEn": "Demo Kitchen",
+    "nameAr": "مطبخ تجريبي",
+    "currencyCode": "SAR",
+    "defaultLocale": "en",
+    "timezone": "Asia/Riyadh"
+  },
+  "locations": [
+    {
+      "code": "MAIN",
+      "nameEn": "Main Branch",
+      "nameAr": "الفرع الرئيسي",
+      "timezone": "Asia/Riyadh",
+      "taxInclusive": true,
+      "addressLine": null,
+      "phone": null
+    }
+  ],
+  "roles": [
+    {
+      "name": "Owner",
+      "description": "Full access",
+      "isSystem": true,
+      "permissions": "*"
+    },
+    {
+      "name": "Manager",
+      "description": "Runs a branch",
+      "isSystem": false,
+      "permissions": [
+        "orders.view",
+        "orders.create",
+        "orders.update",
+        "orders.cancel",
+        "orders.refund",
+        "orders.discount",
+        "products.view",
+        "products.create",
+        "products.update",
+        "payments.view",
+        "payments.refund",
+        "shifts.manage",
+        "cash.manage",
+        "tables.manage",
+        "kitchen.view",
+        "kitchen.update",
+        "customers.view",
+        "reports.view",
+        "locations.view",
+        "online_ordering.manage",
+        "devices.manage",
+        "sync.view",
+        "audit.view"
+      ]
+    },
+    {
+      "name": "Cashier",
+      "description": "Takes orders and payments",
+      "isSystem": false,
+      "permissions": [
+        "orders.view",
+        "orders.create",
+        "orders.update",
+        "payments.view",
+        "shifts.manage",
+        "tables.manage",
+        "products.view",
+        "customers.view",
+        "locations.view"
+      ]
+    },
+    {
+      "name": "Kitchen",
+      "description": "Kitchen display operator",
+      "isSystem": false,
+      "permissions": ["kitchen.view", "kitchen.update", "products.view", "locations.view"]
+    }
+  ],
+  "users": [
+    {
+      "envPrefix": "SEED_OWNER",
+      "displayName": "Demo Owner",
+      "preferredLocale": "en",
+      "role": "Owner",
+      "location": null
+    },
+    {
+      "envPrefix": "SEED_CASHIER",
+      "displayName": "Demo Cashier",
+      "preferredLocale": "ar",
+      "role": "Cashier",
+      "location": "MAIN"
+    }
+  ],
+  "menu": {
+    "kitchenStations": [
+      {
+        "code": "KITCHEN",
+        "nameEn": "Kitchen",
+        "nameAr": "المطبخ"
+      },
+      {
+        "code": "GRILL",
+        "nameEn": "Grill",
+        "nameAr": "الشواية"
+      },
+      {
+        "code": "FRYER",
+        "nameEn": "Fryer",
+        "nameAr": "المقلاة"
+      },
+      {
+        "code": "BAR",
+        "nameEn": "Bar",
+        "nameAr": "البار"
+      },
+      {
+        "code": "DESSERT",
+        "nameEn": "Dessert",
+        "nameAr": "الحلويات"
+      }
+    ],
+    "modifierGroups": [
+      {
+        "key": "doneness",
+        "nameEn": "Doneness",
+        "nameAr": "درجة الاستواء",
+        "minSelect": 1,
+        "maxSelect": 1,
+        "modifiers": [
+          {
+            "nameEn": "Medium",
+            "nameAr": "متوسط",
+            "priceDelta": 0,
+            "isDefault": true
+          },
+          {
+            "nameEn": "Well done",
+            "nameAr": "مستوي جيدًا",
+            "priceDelta": 0
+          }
+        ]
+      },
+      {
+        "key": "extras",
+        "nameEn": "Extras",
+        "nameAr": "إضافات",
+        "minSelect": 0,
+        "maxSelect": 3,
+        "modifiers": [
+          {
+            "nameEn": "Extra cheese",
+            "nameAr": "جبن إضافي",
+            "priceDelta": 300
+          },
+          {
+            "nameEn": "Jalapeños",
+            "nameAr": "هالبينو",
+            "priceDelta": 200
+          },
+          {
+            "nameEn": "Fried egg",
+            "nameAr": "بيض مقلي",
+            "priceDelta": 400
+          }
+        ]
+      },
+      {
+        "key": "ice",
+        "nameEn": "Ice",
+        "nameAr": "الثلج",
+        "minSelect": 0,
+        "maxSelect": 1,
+        "modifiers": [
+          {
+            "nameEn": "No ice",
+            "nameAr": "بدون ثلج",
+            "priceDelta": 0
+          },
+          {
+            "nameEn": "Extra ice",
+            "nameAr": "ثلج إضافي",
+            "priceDelta": 0
+          }
+        ]
+      }
+    ],
+    "categories": [
+      {
+        "nameEn": "Burgers",
+        "nameAr": "البرجر",
+        "products": [
+          {
+            "sku": "BRG-CLS",
+            "nameEn": "Classic Burger",
+            "nameAr": "برجر كلاسيك",
+            "descriptionEn": "Beef patty, lettuce, tomato, house sauce",
+            "descriptionAr": "قطعة لحم بقري، خس، طماطم، صوص خاص",
+            "price": 2800,
+            "stations": ["KITCHEN", "GRILL"],
+            "groups": ["doneness", "extras"]
+          },
+          {
+            "sku": "BRG-CHK",
+            "nameEn": "Chicken Burger",
+            "nameAr": "برجر دجاج",
+            "price": 2500,
+            "stations": ["KITCHEN", "FRYER"],
+            "groups": ["extras"]
+          }
+        ]
+      },
+      {
+        "nameEn": "Sides",
+        "nameAr": "الأطباق الجانبية",
+        "products": [
+          {
+            "sku": "SD-FRY",
+            "nameEn": "Fries",
+            "nameAr": "بطاطس مقلية",
+            "price": 900,
+            "stations": ["FRYER"],
+            "groups": []
+          }
+        ]
+      },
+      {
+        "nameEn": "Drinks",
+        "nameAr": "المشروبات",
+        "products": [
+          {
+            "sku": "DR-COLA",
+            "nameEn": "Cola",
+            "nameAr": "كولا",
+            "price": 600,
+            "stations": ["BAR"],
+            "groups": ["ice"],
+            "variants": [
+              {
+                "nameEn": "Regular",
+                "nameAr": "عادي",
+                "price": 600
+              },
+              {
+                "nameEn": "Large",
+                "nameAr": "كبير",
+                "price": 800
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "nameEn": "Desserts",
+        "nameAr": "الحلويات",
+        "products": [
+          {
+            "sku": "DS-KUN",
+            "nameEn": "Kunafa",
+            "nameAr": "كنافة",
+            "price": 1800,
+            "stations": ["DESSERT"],
+            "groups": []
+          }
+        ]
+      }
+    ]
+  },
+  "taxes": [
+    {
+      "nameEn": "VAT",
+      "nameAr": "ضريبة القيمة المضافة",
+      "rateBps": 1500,
+      "isDefault": true
+    }
+  ],
+  "discounts": [
+    {
+      "nameEn": "Staff meal 50%",
+      "nameAr": "وجبة الموظفين 50%",
+      "type": "PERCENTAGE",
+      "value": 5000
+    },
+    {
+      "nameEn": "Loyalty 10%",
+      "nameAr": "ولاء العملاء 10%",
+      "type": "PERCENTAGE",
+      "value": 1000
+    },
+    {
+      "nameEn": "5 off",
+      "nameAr": "خصم 5",
+      "type": "FIXED",
+      "value": 500
+    }
+  ],
+  "floorPlans": {
+    "MAIN": [
+      {
+        "nameEn": "Indoor",
+        "nameAr": "الصالة الداخلية",
+        "tables": [
+          {
+            "label": "T1",
+            "seats": 2
+          },
+          {
+            "label": "T2",
+            "seats": 4
+          },
+          {
+            "label": "T3",
+            "seats": 4
+          },
+          {
+            "label": "T4",
+            "seats": 6
+          }
+        ]
+      },
+      {
+        "nameEn": "Terrace",
+        "nameAr": "التراس",
+        "tables": [
+          {
+            "label": "P1",
+            "seats": 4
+          },
+          {
+            "label": "P2",
+            "seats": 4
+          }
+        ]
+      }
+    ]
+  }
+}

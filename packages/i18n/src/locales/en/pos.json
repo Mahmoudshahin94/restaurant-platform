@@ -1,0 +1,67 @@
+{
+  "nav": {
+    "order": "Order",
+    "orders": "Orders",
+    "tables": "Tables",
+    "main": "POS navigation"
+  },
+  "menu": {
+    "search": "Search menu",
+    "all": "All",
+    "noResults": "No items match your search.",
+    "soldOut": "Sold out",
+    "loading": "Loading menu…"
+  },
+  "cart": {
+    "title": "Current order",
+    "editing": "Editing {{number}}",
+    "empty": "Tap items to add them",
+    "increase": "Increase quantity of {{name}}",
+    "decrease": "Decrease quantity of {{name}}",
+    "remove": "Remove {{name}}",
+    "editLine": "Edit {{name}}",
+    "discounts": "Discounts",
+    "addDiscount": "Discount",
+    "chooseTable": "Choose a table",
+    "previewNote": "Totals are confirmed by the server when the order is placed.",
+    "placed": "Order {{number}} placed",
+    "saved": "Order {{number}} updated"
+  },
+  "options": {
+    "title": "Choose options",
+    "size": "Size",
+    "required": "Required · choose {{count}}",
+    "upTo": "Optional · up to {{count}}",
+    "any": "Optional",
+    "between": "Choose {{min}} to {{max}}",
+    "add": "Add to order · {{price}}",
+    "update": "Update · {{price}}",
+    "incomplete": "Complete the required choices"
+  },
+  "orders": {
+    "title": "Orders",
+    "open": "Open",
+    "today": "Today",
+    "select": "Select an order to see details"
+  },
+  "tables": {
+    "title": "Tables",
+    "startOrder": "New order for {{table}}"
+  },
+  "location": {
+    "title": "Choose location",
+    "none": "Your account has no location access."
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "search": "Search menu",
+    "place": "Place order",
+    "newOrder": "New order",
+    "orders": "Orders",
+    "tables": "Tables"
+  },
+  "device": {
+    "version": "POS {{version}}",
+    "browser": "Browser preview"
+  }
+}

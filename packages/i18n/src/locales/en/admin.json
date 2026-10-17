@@ -1,0 +1,34 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "menu": "Menu",
+    "categories": "Categories",
+    "products": "Products",
+    "modifierGroups": "Modifier groups",
+    "kitchenStations": "Kitchen stations",
+    "locations": "Locations",
+    "settings": "Settings",
+    "mainNavigation": "Main navigation",
+    "availability": "Availability",
+    "taxes": "Taxes",
+    "discounts": "Discounts",
+    "tables": "Tables"
+  },
+  "header": {
+    "location": "Location",
+    "allLocations": "All locations",
+    "signedInAs": "Signed in as {{name}}"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "welcome": "Welcome, {{name}}",
+    "phaseNotice": "Sales, orders and reports appear here once ordering is enabled."
+  },
+  "forbidden": {
+    "title": "No access",
+    "body": "Your role does not include access to this page."
+  },
+  "notFound": {
+    "title": "Page not found"
+  }
+}

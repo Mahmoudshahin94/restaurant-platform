@@ -1,0 +1,21 @@
+// Migrates and seeds a dedicated E2E database before the API starts. Playwright starts web
+// servers before globalSetup, so each app's Playwright config runs this in its API command.
+// Each app uses its own database (`*_e2e`) so suites can run in parallel.
+import { execSync } from 'node:child_process';
+import { resolve } from 'node:path';
+
+const url = process.env.DATABASE_URL ?? '';
+if (!/\/[^/?]*_e2e(\?|$)/.test(url)) {
+  console.error(`Refusing to prepare a non-E2E database: ${url}`);
+  process.exit(1);
+}
+const cwd = resolve(import.meta.dirname, '../../packages/database');
+execSync('pnpm exec prisma migrate deploy', { cwd, stdio: 'inherit' });
+// Orders from earlier runs would leave tables occupied; start every run from a clean floor.
+execSync('pnpm exec prisma db execute --stdin --schema prisma/schema.prisma', {
+  cwd,
+  stdio: ['pipe', 'inherit', 'inherit'],
+  input: `TRUNCATE TABLE order_item_modifiers, order_items, order_taxes, order_discounts,
+          order_status_history, orders, order_counters CASCADE;`,
+});
+execSync('pnpm seed', { cwd, stdio: 'inherit' });

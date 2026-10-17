@@ -1,0 +1,67 @@
+{
+  "nav": {
+    "order": "الطلب",
+    "orders": "الطلبات",
+    "tables": "الطاولات",
+    "main": "تنقل نقطة البيع"
+  },
+  "menu": {
+    "search": "ابحث في القائمة",
+    "all": "الكل",
+    "noResults": "لا توجد أصناف مطابقة.",
+    "soldOut": "نفد",
+    "loading": "جارٍ تحميل القائمة…"
+  },
+  "cart": {
+    "title": "الطلب الحالي",
+    "editing": "تعديل {{number}}",
+    "empty": "اضغط على الأصناف لإضافتها",
+    "increase": "زيادة كمية {{name}}",
+    "decrease": "تقليل كمية {{name}}",
+    "remove": "إزالة {{name}}",
+    "editLine": "تعديل {{name}}",
+    "discounts": "الخصومات",
+    "addDiscount": "خصم",
+    "chooseTable": "اختر طاولة",
+    "previewNote": "يؤكد الخادم الإجماليات عند إرسال الطلب.",
+    "placed": "تم إرسال الطلب {{number}}",
+    "saved": "تم تحديث الطلب {{number}}"
+  },
+  "options": {
+    "title": "اختر الخيارات",
+    "size": "الحجم",
+    "required": "إلزامي · اختر {{count}}",
+    "upTo": "اختياري · حتى {{count}}",
+    "any": "اختياري",
+    "between": "اختر من {{min}} إلى {{max}}",
+    "add": "أضف إلى الطلب · {{price}}",
+    "update": "تحديث · {{price}}",
+    "incomplete": "أكمل الخيارات الإلزامية"
+  },
+  "orders": {
+    "title": "الطلبات",
+    "open": "المفتوحة",
+    "today": "اليوم",
+    "select": "اختر طلبًا لعرض التفاصيل"
+  },
+  "tables": {
+    "title": "الطاولات",
+    "startOrder": "طلب جديد للطاولة {{table}}"
+  },
+  "location": {
+    "title": "اختر الفرع",
+    "none": "لا يملك حسابك صلاحية على أي فرع."
+  },
+  "shortcuts": {
+    "title": "اختصارات لوحة المفاتيح",
+    "search": "البحث في القائمة",
+    "place": "إرسال الطلب",
+    "newOrder": "طلب جديد",
+    "orders": "الطلبات",
+    "tables": "الطاولات"
+  },
+  "device": {
+    "version": "نقطة البيع {{version}}",
+    "browser": "معاينة المتصفح"
+  }
+}

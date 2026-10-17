@@ -1,0 +1,49 @@
+import { RequireAuth } from '@pos/app-kit';
+import type { ReactNode } from 'react';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
+import { PosShell } from './components/pos-shell';
+import { session } from './lib/session';
+import { LocationPage } from './routes/location-page';
+import { LoginPage } from './routes/login-page';
+import { OrderPage } from './routes/order-page';
+import { OrdersPage } from './routes/orders-page';
+import { TablesPage } from './routes/tables-page';
+import { usePreferences } from './stores/preferences';
+
+/** Screens that operate on a location need one chosen for this terminal first. */
+function RequireLocation({ children }: { children: ReactNode }) {
+  const locationId = usePreferences((s) => s.locationId);
+  return locationId ? <>{children}</> : <Navigate to="/location" replace />;
+}
+
+export function AppRoutes() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/location"
+          element={
+            <RequireAuth session={session}>
+              <LocationPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          element={
+            <RequireAuth session={session}>
+              <RequireLocation>
+                <PosShell />
+              </RequireLocation>
+            </RequireAuth>
+          }
+        >
+          <Route path="/order" element={<OrderPage />} />
+          <Route path="/orders" element={<OrdersPage />} />
+          <Route path="/tables" element={<TablesPage />} />
+          <Route path="*" element={<Navigate to="/order" replace />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  );
+}

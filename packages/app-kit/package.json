@@ -1,0 +1,62 @@
+{
+  "name": "@pos/app-kit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared React app plumbing: session client, i18n bootstrapping, error/money helpers, common states",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@pos/api-client": "workspace:*",
+    "@pos/domain": "workspace:*",
+    "@pos/i18n": "workspace:*",
+    "@pos/shared-types": "workspace:*",
+    "@pos/ui": "workspace:*",
+    "@pos/validation": "workspace:*"
+  },
+  "peerDependencies": {
+    "@tanstack/react-query": "^5.0.0",
+    "i18next": "^25.0.0",
+    "react": "^19.0.0",
+    "react-hook-form": "^7.0.0",
+    "react-i18next": "^16.0.0",
+    "react-router": "^7.0.0",
+    "zod": "^4.0.0",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@tanstack/react-query": "5.104.3",
+    "@testing-library/jest-dom": "6.10.0",
+    "@testing-library/react": "16.3.3",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "i18next": "25.10.10",
+    "jsdom": "26.1.0",
+    "react": "19.2.9",
+    "react-dom": "19.2.9",
+    "react-hook-form": "7.90.0",
+    "react-i18next": "16.6.6",
+    "react-router": "7.18.4",
+    "tsup": "8.5.1",
+    "vitest": "3.2.7",
+    "zod": "4.1.13",
+    "zustand": "5.0.15"
+  }
+}

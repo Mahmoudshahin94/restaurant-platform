@@ -1,0 +1,32 @@
+{
+  "taxes": {
+    "title": "Taxes",
+    "description": "Tax rates applied to products. Changes affect new orders only.",
+    "new": "New tax",
+    "edit": "Edit tax",
+    "empty": "No taxes yet",
+    "emptyHint": "Add your VAT or other taxes, then assign them to products.",
+    "rate": "Rate (%)",
+    "isDefault": "Select for new products",
+    "default": "Default"
+  },
+  "discounts": {
+    "title": "Discounts",
+    "description": "Predefined discounts staff can apply to orders (requires permission).",
+    "new": "New discount",
+    "edit": "Edit discount",
+    "empty": "No discounts yet",
+    "emptyHint": "Create discounts such as “Staff meal 50%” or “5 off”.",
+    "type": "Type",
+    "value": "Value",
+    "PERCENTAGE": "Percentage",
+    "FIXED": "Fixed amount",
+    "percentHint": "Percent of the order subtotal, e.g. 10",
+    "fixedHint": "Amount taken off the order"
+  },
+  "products": {
+    "taxes": "Taxes",
+    "taxesHint": "Taxes charged on this product.",
+    "noTaxes": "No taxes defined."
+  }
+}

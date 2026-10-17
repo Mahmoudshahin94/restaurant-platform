@@ -1,0 +1,78 @@
+/*
+ * Design tokens shared by every app. Import after `@import "tailwindcss";` and add
+ * `@source "<path>/packages/ui/src";` so component classes are generated.
+ *
+ * RTL: components only use logical utilities (ms-/me-/ps-/pe-/start-/end-/text-start), so
+ * setting dir="rtl" on <html> mirrors layout. Directional icons use the `rtl:` variant.
+ * Contrast: foreground/background pairs target WCAG AA at minimum; status is never conveyed by
+ * colour alone (components pair colour with text or an icon).
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: 'Inter Variable', 'Noto Sans Arabic Variable', ui-sans-serif, system-ui, sans-serif;
+
+  --color-background: oklch(0.985 0.002 250);
+  --color-foreground: oklch(0.2 0.02 260);
+  --color-card: oklch(1 0 0);
+  --color-card-foreground: oklch(0.2 0.02 260);
+  --color-muted: oklch(0.955 0.005 250);
+  --color-muted-foreground: oklch(0.45 0.02 260);
+  --color-border: oklch(0.88 0.01 250);
+  --color-input: oklch(0.8 0.01 250);
+  --color-ring: oklch(0.55 0.19 255);
+
+  --color-primary: oklch(0.5 0.19 255);
+  --color-primary-foreground: oklch(0.99 0 0);
+  --color-secondary: oklch(0.93 0.01 250);
+  --color-secondary-foreground: oklch(0.22 0.02 260);
+  --color-destructive: oklch(0.53 0.21 27);
+  --color-destructive-foreground: oklch(0.99 0 0);
+  --color-success: oklch(0.52 0.14 150);
+  --color-success-foreground: oklch(0.99 0 0);
+  --color-warning: oklch(0.78 0.16 75);
+  --color-warning-foreground: oklch(0.25 0.04 75);
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+}
+
+.dark {
+  --color-background: oklch(0.17 0.01 260);
+  --color-foreground: oklch(0.96 0.005 250);
+  --color-card: oklch(0.21 0.012 260);
+  --color-card-foreground: oklch(0.96 0.005 250);
+  --color-muted: oklch(0.26 0.012 260);
+  --color-muted-foreground: oklch(0.72 0.015 250);
+  --color-border: oklch(0.32 0.012 260);
+  --color-input: oklch(0.4 0.012 260);
+  --color-secondary: oklch(0.3 0.012 260);
+  --color-secondary-foreground: oklch(0.96 0.005 250);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+  }
+  /* Arabic glyphs read better with the Arabic face first and slightly more line height. */
+  :lang(ar) body {
+    font-family:
+      'Noto Sans Arabic Variable', 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+    line-height: 1.7;
+  }
+  /* Numbers, codes and prices keep LTR digit order inside RTL text. */
+  .ltr-nums {
+    direction: ltr;
+    unicode-bidi: isolate;
+    font-variant-numeric: tabular-nums;
+  }
+}
