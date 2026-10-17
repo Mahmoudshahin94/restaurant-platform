@@ -66,7 +66,9 @@ export class InboundOrdersService {
         // The cloud decided before the restaurant's decision reached it: the cloud's stands.
         await this.store(tx, order, true);
         await this.remember(tx, order);
-        const ticketEvents = await this.kitchen.cancelTickets(raw, order);
+        // The cloud can only cancel an order it still owns (acceptance happens at the hub).
+        const ticketEvents =
+          order.status === 'CANCELLED' ? await this.kitchen.cancelTickets(raw, order) : [];
         await this.changes.record(raw, { ticketIds: ticketIdsOf(ticketEvents) });
         await tx.syncOperation.updateMany({
           where: { id: { in: unsent.map((o) => o.id) } },
@@ -80,7 +82,10 @@ export class InboundOrdersService {
         });
         return {
           outcome: 'cancelled-in-cloud' as const,
-          events: [this.event('order.cancelled', order), ...ticketEvents],
+          events: [
+            this.event(order.status === 'CANCELLED' ? 'order.cancelled' : 'order.updated', order),
+            ...ticketEvents,
+          ],
         };
       }
       if (handedOver && (await this.mergePayments(tx, order))) {

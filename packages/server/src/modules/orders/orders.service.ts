@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import {
   DomainError,
   assertEditableByStaff,
@@ -8,6 +8,7 @@ import {
   businessDateFor,
   derivePaymentStatus,
   canModifyItems,
+  isAwaitingAcceptance,
   isVoidedOnCancel,
   formatOrderNumber,
   paymentTotals,
@@ -22,6 +23,7 @@ import type {
   updateOrderSchema,
 } from '@pos/validation';
 import type { z } from 'zod';
+import { SERVER_MODE, type ServerMode } from '../../common/auth/managed-in-cloud';
 import type { Principal } from '../../common/auth/principal';
 import { RequestContext } from '../../common/context/request-context';
 import { ChangeRecorder, ticketIdsOf } from '../../prisma/change-recorder';
@@ -72,6 +74,7 @@ export class OrdersService {
     private readonly bus: RealtimeBus,
     private readonly dialect: SqlDialect,
     private readonly changes: ChangeRecorder,
+    @Inject(SERVER_MODE) private readonly mode: ServerMode,
   ) {}
 
   /**
@@ -373,6 +376,13 @@ export class OrdersService {
     });
     if (rule.permission) assertPermissions(principal.assignments, locationId, [rule.permission]);
     assertWebOrderDecision(current, input.to, new Date());
+    if (this.mode === 'cloud' && isAwaitingAcceptance(current)) {
+      // The restaurant accepts or rejects at its hub, where the kitchen is; the cloud's only
+      // decision is the acceptance timeout, which also voids the payment (ADR 0013).
+      throw new DomainError('INVALID_ORDER_STATE', 'Website orders are decided at the restaurant', {
+        reason: 'DECIDED_AT_RESTAURANT',
+      });
+    }
     if (input.to === 'CANCELLED') {
       // Online payments of a website order not yet accepted are voided by the cloud (ADR 0013).
       const held = current.payments.filter((p) => !isVoidedOnCancel(current, p));

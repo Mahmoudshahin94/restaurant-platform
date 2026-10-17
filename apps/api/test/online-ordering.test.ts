@@ -786,14 +786,15 @@ describe('acceptance timeout', () => {
 // --- Staff in the cloud --------------------------------------------------------------------------
 
 describe('website orders handled by staff in the cloud', () => {
-  it('cannot be edited before acceptance; acceptance is announced on the feed', async () => {
-    const { order } = await place();
-    const staff = owner;
+  it('cannot be edited, accepted or rejected in the cloud while it waits', async () => {
+    const { order } = await place({
+      payment: { option: 'ONLINE_CARD', cardToken: 'tok_mock_visa' },
+    });
     const current = (
       await app.inject({
         method: 'GET',
         url: `/api/v1/locations/${tenant.locationA}/orders/${order.id}`,
-        headers: staff,
+        headers: owner,
       })
     ).json<{ version: number; fulfillmentType: string; acceptBy: string }>();
     expect(current.fulfillmentType).toBe('PICKUP');
@@ -801,23 +802,27 @@ describe('website orders handled by staff in the cloud', () => {
     const edit = await app.inject({
       method: 'PUT',
       url: `/api/v1/locations/${tenant.locationA}/orders/${order.id}`,
-      headers: staff,
+      headers: owner,
       payload: { version: current.version, channel: 'TAKEAWAY', items: [menu.colaLine()] },
     });
     expect(edit.statusCode).toBe(409);
     expect(edit.json()).toMatchObject({ details: { reason: 'AWAITING_ACCEPTANCE' } });
 
-    const { cursor } = await pull('');
-    const accept = await app.inject({
-      method: 'POST',
-      url: `/api/v1/locations/${tenant.locationA}/orders/${order.id}/transitions`,
-      headers: staff,
-      payload: { to: 'CONFIRMED' },
+    // The restaurant accepts or rejects at its hub, where the kitchen is.
+    for (const payload of [{ to: 'CONFIRMED' }, { to: 'CANCELLED', reason: 'Customer called' }]) {
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/v1/locations/${tenant.locationA}/orders/${order.id}/transitions`,
+        headers: owner,
+        payload,
+      });
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toMatchObject({ details: { reason: 'DECIDED_AT_RESTAURANT' } });
+    }
+    expect(await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).toMatchObject({
+      status: 'PLACED',
+      paymentStatus: 'PAID',
     });
-    expect(accept.statusCode).toBe(200);
-    expect((await pull(cursor)).changes).toEqual([
-      expect.objectContaining({ topic: 'ORDER', entityId: order.id }),
-    ]);
   });
 });
 

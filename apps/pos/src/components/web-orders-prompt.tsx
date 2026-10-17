@@ -57,7 +57,7 @@ function usePendingWebOrders(locationId: string) {
   });
 }
 
-function WebOrderDetails({
+export function WebOrderDetails({
   order,
   now,
   timeZone,
@@ -147,7 +147,9 @@ function WebOrderDetails({
         {order.items.map((item) => (
           <li key={item.id} className="flex justify-between gap-3 px-3 py-2">
             <span>
-              <bdi dir="ltr" className="ltr-nums me-1 font-semibold">{item.quantity}×</bdi>
+              <bdi dir="ltr" className="ltr-nums me-1 font-semibold">
+                {item.quantity}×
+              </bdi>
               {pickLocalized(item, 'name', locale)}
               {item.variantNameEn ? (
                 <span className="text-muted-foreground">

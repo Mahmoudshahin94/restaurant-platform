@@ -3,8 +3,10 @@
 **Status:** implemented. Phase 5 built the hub, pairing (device credentials), provisioning by
 location snapshot and the outbox; Phase 6 built the sync engine: push with exactly-once
 application in the cloud, the change feed with long polling, retries, conflict detection, the POS
-indicator and synchronization screen, and the cloud's record of refused operations. Design
-decisions: [ADR 0006](adr/0006-sync-protocol.md) and [ADR 0012](adr/0012-sync-engine.md).
+indicator and synchronization screen, and the cloud's record of refused operations. Phase 7 added
+website orders: the `ORDER` topic of the change feed and the ownership hand-over on acceptance.
+Design decisions: [ADR 0006](adr/0006-sync-protocol.md), [ADR 0012](adr/0012-sync-engine.md) and
+[ADR 0013](adr/0013-online-ordering.md).
 
 ## Actors
 
@@ -64,6 +66,7 @@ because some changes (a second partial payment) do not bump the row's version.
       "entityId": "…",
       "operationType": "ORDER_UPSERT",
       "entityVersion": 3,
+      "baseVersion": 1,
       "payload": {}
     }
   ],
@@ -83,6 +86,9 @@ because some changes (a second partial payment) do not bump the row's version.
   Cash movements caused by a payment travel inside the payment, so shifts never wait for orders.
 - Up to 25 operations per request. The push runs whenever the outbox grows (debounced), when the
   cloud comes back, and on "Sync now".
+
+`baseVersion` is sent only for orders the hub received from the cloud (website orders, hub-only
+table `inbound_orders`): the cloud version the hub's change was based on (see the hand-over below).
 
 **What the cloud does** (`apps/api/src/modules/sync`): operations are processed **in order**,
 each in its own PostgreSQL transaction:
@@ -124,8 +130,11 @@ bigserial sequence, **never by timestamps**:
 
 ```json
 {
-  "changes": [{ "seq": "42", "topic": "CONFIG", "entityId": null, "createdAt": "…" }],
-  "cursor": "42",
+  "changes": [
+    { "seq": "42", "topic": "CONFIG", "entityId": null, "createdAt": "…" },
+    { "seq": "43", "topic": "ORDER", "entityId": "<order id>", "createdAt": "…" }
+  ],
+  "cursor": "43",
   "hasMore": false
 }
 ```
@@ -134,10 +143,17 @@ bigserial sequence, **never by timestamps**:
   change for the restaurant in the writing transaction (one per transaction; writes that change
   nothing, or only `updated_at`/`last_login_at`, are ignored). No code path can forget it. The
   triggers hold a per-restaurant advisory lock until commit, so `seq` order is commit order and a
-  cursor never passes a change that commits late. Website orders join the feed in Phase 7.
-- **Consumer.** The hub refreshes its snapshot when a `CONFIG` change arrives, then stores the new
-  cursor in `hub_state`. If the snapshot cannot be fetched, the cursor stays and the change is
-  seen again.
+  cursor never passes a change that commits late.
+- **Producers (`ORDER`, Phase 7).** The cloud's `ChangeRecorder` (`WebOrderChangeRecorder`)
+  appends one `ORDER` entry per website order a transaction created or changed (creation, the
+  acceptance timeout, a cloud staff action, a void after a rejection), with the order's
+  `locationId`, under the same advisory lock. Orders pushed by hubs are not echoed back.
+- **Consumer.** The hub handles a page in order: if it holds a `CONFIG` change it refreshes its
+  snapshot first; then it fetches each announced website order once (`GET /sync/orders/:id`, the
+  outbox payload shape; 404 for another location's order, which is skipped) and stores it (below).
+  Then it stores the new cursor in `hub_state`. If anything cannot be fetched, the cursor stays
+  and the page is seen again. An order whose products the hub does not have yet triggers one more
+  snapshot refresh before it is stored.
 - **Long poll** instead of a WebSocket "poke": with `wait`, the cloud holds the request until a
   change arrives (checking every second) or the wait ends. The hub keeps one such request open,
   so configuration changes arrive within seconds. Outbound HTTP only, no inbound port at the
@@ -172,7 +188,7 @@ bigserial sequence, **never by timestamps**:
 | Menu, prices, taxes, roles, configuration  | Cloud                          | The hub applies pulled changes; it never pushes them.                                                                                                                                |
 | Item availability ("86") at a location     | Hub                            | Pushed as operational state; the cloud accepts it.                                                                                                                                   |
 | Orders, shifts, tickets created at the hub | Hub (owner)                    | Applied if new to the cloud, or if the cloud's copy is what this hub last pushed (row `version` equals the ledger's); otherwise, or if `entity_version` goes backwards → `CONFLICT`. |
-| Website orders                             | Cloud until accepted, then hub | Accepting transfers ownership; the cloud rejects hub edits before acceptance.                                                                                                        |
+| Website orders                             | Cloud until accepted, then hub | The hub's first push hands the order over (accept or reject, on `baseVersion`); anything else before that is `CONFLICT` (see below).                                                 |
 | Payments, refunds, cash transactions       | Append-only                    | Idempotent inserts keyed by id, so they cannot conflict.                                                                                                                             |
 | Completed orders                           | Immutable                      | Only explicit refund/correction operations may follow.                                                                                                                               |
 
@@ -180,6 +196,34 @@ Timestamps never decide a conflict or identify duplicates: duplicates are recogn
 `operationId`, ownership by the ledger, ordering by `entity_version` and the feed's `seq`.
 Shifts have no `version` column, so a shift changed in the cloud itself is not detected; nothing
 in the cloud changes hub shifts today.
+
+## Website orders (Phase 7)
+
+```
+Customer web ── POST /orders ──▶ Cloud: order PLACED (+ ORDER entry, + online payment)
+                                   │ change feed (long poll)
+Hub ◀── GET /sync/orders/:id ──────┘  stores it, inbound_orders.cloudVersion = v
+ │ POS: accept → CONFIRMED (+ kitchen tickets) or reject → CANCELLED (reason)
+ └── POST /sync/push { …, baseVersion: v } ──▶ Cloud: hand-over → hub owns it from now on
+```
+
+- **While the cloud owns the order** (it is `PLACED` and the hub has not pushed it), each `ORDER`
+  entry replaces the hub's copy with the cloud's. The hub refuses staff edits of it
+  (`AWAITING_ACCEPTANCE`) and acceptances after `acceptBy` (`ACCEPTANCE_EXPIRED`).
+- **Hand-over.** The cloud accepts the hub's first write of a cloud-created row only if the row
+  is a website order of that location, still `PLACED`, at exactly `baseVersion`, and the pushed
+  state is no longer `PLACED` (the restaurant decided). The ledger then holds the hub's version and
+  ordinary ownership applies. No or a different `baseVersion`, an edit while `PLACED`, or an order
+  the cloud already decided are `CONFLICT`; a hub-invented website order is `REJECTED`.
+- **The cloud decided first** (it cancelled the order at the acceptance deadline while the hub was
+  offline and accepted it): the hub's push is a `CONFLICT`; when the cancellation arrives on the
+  feed the hub adopts the cloud's copy, cancels the kitchen tickets it opened, and marks its own
+  unsent operations of the order `COMPLETED` with `SYNC_SUPERSEDED`. Nothing waits for a manager.
+- **After the hand-over** the hub owns the order. The cloud still settles its online payments: a
+  rejection voids the charge (an append-only `REFUND` row) and announces the order; the hub merges
+  only those payment rows and re-derives the payment status, without an outbox row.
+- The acceptance timeout runs in the cloud (`WEB_ORDER_TIMEOUT_SWEEP_SECONDS`), 30 s after
+  `acceptBy`, locking the order row first, so it and a hand-over never both win.
 
 ## Identifiers
 

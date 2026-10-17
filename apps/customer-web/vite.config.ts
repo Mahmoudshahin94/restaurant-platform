@@ -18,7 +18,13 @@ export default defineConfig({
       output: {
         manualChunks: {
           react: ['react', 'react-dom', 'react-router'],
-          data: ['@tanstack/react-query', 'zustand', 'zod', 'react-hook-form', '@hookform/resolvers'],
+          data: [
+            '@tanstack/react-query',
+            'zustand',
+            'zod',
+            'react-hook-form',
+            '@hookform/resolvers',
+          ],
           i18n: ['i18next', 'react-i18next'],
         },
       },

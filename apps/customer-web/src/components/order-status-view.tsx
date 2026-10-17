@@ -144,7 +144,9 @@ export function OrderStatusView({ order }: { order: PublicOrder }) {
             {order.items.map((item) => (
               <li key={item.id} className="flex justify-between gap-3 py-2 text-sm">
                 <span>
-                  <bdi dir="ltr" className="ltr-nums me-1">{item.quantity}×</bdi>
+                  <bdi dir="ltr" className="ltr-nums me-1">
+                    {item.quantity}×
+                  </bdi>
                   {pickLocalized(item, 'name', locale)}
                   {item.variantNameEn ? (
                     <span className="text-muted-foreground">
