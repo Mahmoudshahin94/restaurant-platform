@@ -1,6 +1,8 @@
 import {
   ActionSource,
   CashTransactionType,
+  KitchenTicketStatus,
+  TicketPriority,
   DiscountType,
   OrderChannel,
   OrderStatus,
@@ -33,6 +35,8 @@ describe('Prisma enums mirror @pos/shared-types', () => {
     ['PaymentRecordStatus', $Enums.PaymentRecordStatus, PaymentRecordStatus],
     ['ShiftStatus', $Enums.ShiftStatus, ShiftStatus],
     ['CashTransactionType', $Enums.CashTransactionType, CashTransactionType],
+    ['KitchenTicketStatus', $Enums.KitchenTicketStatus, KitchenTicketStatus],
+    ['TicketPriority', $Enums.TicketPriority, TicketPriority],
   ])('%s', (_name, prismaEnum, sharedEnum) => {
     expect(Object.values(prismaEnum).sort()).toEqual(Object.values(sharedEnum).sort());
   });

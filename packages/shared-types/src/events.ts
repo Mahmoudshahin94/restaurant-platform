@@ -1,4 +1,10 @@
-import type { KitchenTicketStatus, OnlineOrderingState, OrderChannel, OrderStatus } from './enums';
+import type {
+  KitchenTicketStatus,
+  OnlineOrderingState,
+  OrderChannel,
+  OrderStatus,
+  PaymentStatus,
+} from './enums';
 
 /**
  * Typed realtime events, used on the hub LAN WebSocket (POS/KDS) and the cloud socket.
@@ -10,13 +16,17 @@ export interface OrderEventPayload {
   orderNumber: string;
   channel: OrderChannel;
   status: OrderStatus;
+  paymentStatus: PaymentStatus;
+  version: number;
 }
 
 export interface KitchenTicketEventPayload {
   ticketId: string;
   orderId: string;
+  orderNumber: string;
   stationId: string;
   status: KitchenTicketStatus;
+  version: number;
 }
 
 export interface EventMap {
@@ -28,6 +38,9 @@ export interface EventMap {
   'kitchen.ticket_started': KitchenTicketEventPayload;
   'kitchen.ticket_ready': KitchenTicketEventPayload;
   'kitchen.ticket_completed': KitchenTicketEventPayload;
+  /** Items changed (order edited before the kitchen started), priority changed, or recalled. */
+  'kitchen.ticket_updated': KitchenTicketEventPayload;
+  'kitchen.ticket_cancelled': KitchenTicketEventPayload;
   'sync.completed': { processed: number; pending: number };
   'sync.failed': { failed: number; lastError: string };
   'restaurant.status_changed': { locationId: string; state: OnlineOrderingState };

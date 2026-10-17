@@ -13,6 +13,8 @@ import { FloorModule } from './modules/floor/floor.module';
 import { MenuModule } from './modules/menu/menu.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { KitchenModule } from './modules/kitchen/kitchen.module';
+import { RealtimeModule } from './modules/realtime/realtime.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { ShiftsModule } from './modules/shifts/shifts.module';
 import { PricingConfigModule } from './modules/pricing-config/pricing-config.module';
@@ -29,6 +31,7 @@ export class AppModule {
         PrismaModule,
         AuditModule,
         AuthModule,
+        RealtimeModule,
         RestaurantsModule,
         LocationsModule,
         MenuModule,
@@ -38,6 +41,7 @@ export class AppModule {
         PaymentsModule,
         ShiftsModule,
         ReportsModule,
+        KitchenModule,
       ],
       controllers: [HealthController],
       providers: [

@@ -190,7 +190,7 @@ The cloud is never in this path. Event names and payloads are typed in
 | 1     | Menu: categories, products, variants, modifier groups/modifiers, kitchen stations, location availability/price overrides, published menu, admin menu UI | ✅ Done |
 | 2     | POS order creation, pricing engine, taxes, discounts, order state machine, tables, Tauri shell                                                          | ✅ Done |
 | 3     | Payments (provider abstraction, cash, split), shifts, cash drawer                                                                                       | ✅ Done |
-| 4     | KDS app, kitchen tickets, station routing                                                                                                               | ⏳      |
+| 4     | KDS app, kitchen tickets, station routing                                                                                                               | ✅ Done |
 | 5     | Location hub with SQLite, offline POS                                                                                                                   | ⏳      |
 | 6     | Synchronization engine                                                                                                                                  | ⏳      |
 | 7     | Customer website, online ordering availability                                                                                                          | ⏳      |
@@ -260,6 +260,36 @@ See [ADR 0009](adr/0009-payment-providers-and-raster-receipts.md).
 - The `test:tools` script previously passed directory arguments to `node --test`, which ran no
   test files. It now uses a glob, and both tool tests run.
 
+**Phase 4 verification (2026-10-17):** `turbo run build typecheck lint test --force` with 52/52
+tasks green. That covers 318 unit and integration tests (domain 117, API 97, i18n 23, database 16,
+validation 16, api-client 11, POS 11, receipts 8, KDS 7, app-kit 5, admin 5, ui 2) and 16
+Playwright E2E tests (admin 3; POS 9, now including the kitchen marking an order ready and the
+POS showing it live before handover; KDS 4: a POS order reaching each station live and moving
+through start, strike, ready, bump and recall; a cancellation that must be acknowledged; rush
+ordering; Arabic RTL). The API suite covers routing to several stations, derived order statuses
+under two stations finishing at once, edits and cancellations after dispatch, and the realtime
+socket (authentication, close codes, no leaks between locations). Also `pnpm test:tools`, the
+Rust shell checks, a clean `migrate status`, and manual runs of the KDS and POS against the
+development API.
+
+### Phase 4 decisions
+
+See [ADR 0010](adr/0010-kitchen-tickets-and-realtime.md).
+
+- **Orders reach the kitchen when confirmed.** The POS now creates orders as `CONFIRMED`; `PLACED`
+  is kept for orders awaiting acceptance (web, Phase 7).
+- **One ticket per order and station**, items routed to every station of their product; items
+  without a station are not sent.
+- **The order's PREPARING/READY follow its tickets** as system transitions, with the order row
+  locked so concurrent stations derive them once. Handover (COMPLETED) stays at the POS and
+  clears ready tickets; completing a confirmed order with kitchen work left is refused.
+- **KDS** (`apps/kds`, web app for tablets and wall screens): dark theme, large type, status shown
+  with icon and words (never colour alone), running timers with per-location warn/late
+  thresholds, station filter and expo view, rush, line strike, undo, recall, cancellation
+  acknowledgement, chime on new tickets (after one tap, as browsers require).
+- **Realtime socket** on the API with token-in-first-message authentication; the POS and KDS
+  refresh on events, and polling became a 30–60 s fallback.
+
 Known gaps carried forward:
 
 - The admin UI does not yet expose per-product modifier min/max overrides. The API supports them
@@ -277,7 +307,14 @@ Known gaps carried forward:
 - Drafts are supported by the API (`status: DRAFT`) but not exposed in the POS UI yet.
 - A configurable business-day start hour (for venues open past midnight) is not implemented; the
   business day is the calendar date in the location's timezone.
-- Order lists refresh by polling (15 s). Realtime WebSocket updates come with the KDS and hub.
+- The KDS signs in with a staff account (Kitchen role); device registration and credentials
+  come with the hub (Phase 5). The kitchen still depends on the cloud until then.
+- Realtime delivery is in-process in the API: one instance only until the hub carries LAN
+  traffic or a shared channel (e.g. Postgres LISTEN/NOTIFY) is added.
+- No kitchen printer output yet for stations without a screen (hub printer service, Phase 5),
+  and no bump-bar/keyboard control on the KDS.
+- KDS thresholds (`kdsWarnMinutes`/`kdsLateMinutes`) are set through the API; the admin screen
+  for them comes in Phase 8. Prep-time reporting comes with reporting (Phase 9).
 - Restaurants are provisioned by seed only; there is no platform-operator UI yet.
 
 ## Architectural decisions and open questions
@@ -305,6 +342,8 @@ Recorded as ADRs in [adr/](adr/):
 9. [0009](adr/0009-payment-providers-and-raster-receipts.md): payment provider abstraction,
    externally approved cards, shift-bound payments, and receipts printed as ESC/POS raster
    images.
+10. [0010](adr/0010-kitchen-tickets-and-realtime.md): kitchen tickets per station, order status
+    derived from tickets, handover at the POS, and the authenticated realtime socket.
 
 Open items to revisit:
 

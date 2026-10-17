@@ -48,7 +48,8 @@ export function useFloor(locationId: string) {
   return useQuery({
     queryKey: ['floor', locationId],
     queryFn: () => api.floor.get(locationId),
-    refetchInterval: 15_000,
+    // Realtime events refresh this immediately; polling only covers a dropped connection.
+    refetchInterval: 60_000,
   });
 }
 
@@ -56,7 +57,7 @@ export function useOrders(locationId: string, filter: OrderListFilter) {
   return useQuery({
     queryKey: ['orders', locationId, filter],
     queryFn: () => api.orders.list(locationId, filter),
-    refetchInterval: 15_000,
+    refetchInterval: 60_000,
   });
 }
 
@@ -110,6 +111,9 @@ export function useDailySummary(locationId: string) {
   });
 }
 
+/** Query families that show order state; refreshed after writes and on realtime events. */
+export const ORDER_QUERY_ROOTS = ['orders', 'floor', 'shift', 'cash-registers', 'daily-summary'];
+
 /** Order writes refresh order lists, table occupancy, shift totals and the daily summary. */
 export function useOrderMutation<TVariables, TResult>(
   fn: (variables: TVariables) => Promise<TResult>,
@@ -119,10 +123,7 @@ export function useOrderMutation<TVariables, TResult>(
     mutationFn: fn,
     onSuccess: () =>
       client.invalidateQueries({
-        predicate: (q) =>
-          ['orders', 'floor', 'shift', 'cash-registers', 'daily-summary'].includes(
-            String(q.queryKey[0]),
-          ),
+        predicate: (q) => ORDER_QUERY_ROOTS.includes(String(q.queryKey[0])),
       }),
   });
 }

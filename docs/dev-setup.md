@@ -39,7 +39,18 @@ pnpm --filter @pos/pos tauri:build         # installable app; set VITE_API_URL f
 pnpm --filter @pos/pos rust:check          # cargo fmt --check, clippy -D warnings, cargo test
 ```
 
-Sign in as the cashier (`SEED_CASHIER_*`). Keyboard shortcuts: F2 order, F4 orders, F6 tables,
+Run the kitchen display (KDS):
+
+```bash
+pnpm --filter @pos/kds dev        # http://localhost:5174 (proxies /api, incl. the realtime socket)
+```
+
+Sign in as the kitchen user (`SEED_KITCHEN_*`). The screen remembers its location, the stations
+it shows (none = all, the expo view) and whether to chime for new tickets; browsers only play
+sound after one tap on "Turn on sound alerts". Orders placed at the POS appear on the KDS within a
+second through the realtime socket.
+
+Sign in to the POS as the cashier (`SEED_CASHIER_*`). Keyboard shortcuts: F2 order, F4 orders, F6 tables,
 `/` search, Ctrl/⌘+Enter place order. A production Tauri build calls the API cross-origin, so
 add its origin (`tauri://localhost` on macOS/Linux, `http://tauri.localhost` on Windows) to
 `CORS_ORIGINS`.
@@ -63,14 +74,17 @@ add its origin (`tauri://localhost` on macOS/Linux, `http://tauri.localhost` on 
 ```bash
 createdb pos_kds_e2e            # once (admin suite; or set E2E_DATABASE_URL)
 createdb pos_kds_pos_e2e        # once (POS suite; or set POS_E2E_DATABASE_URL)
+createdb pos_kds_kds_e2e        # once (KDS suite; or set KDS_E2E_DATABASE_URL)
 pnpm --filter @pos/api build    # E2E runs the built API
 pnpm test:e2e
 ```
 
-Each app's `playwright.config.ts` starts the API (admin :3100, POS :3110) after
+Each app's `playwright.config.ts` starts the API (admin :3100, POS :3110, KDS :3120) after
 `tools/e2e/prepare-db.mjs` migrates the app's `*_e2e` database, clears previous runs' orders and
 seeds it. The script refuses any database whose name does not end in `_e2e`. It then starts the
-web UI (admin :5180, POS :1430).
+web UI (admin :5180, POS :1430, KDS :5190). The POS and KDS suites drive the other side of the
+kitchen flow through the API (the kitchen marks a POS order ready; the POS places orders for the
+KDS), using the seeded users.
 Locally it uses the installed Google Chrome (`PLAYWRIGHT_CHANNEL`, default `chrome`). In CI, run
 `pnpm exec playwright install chromium` first.
 

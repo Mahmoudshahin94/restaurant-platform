@@ -2,7 +2,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { PrismaClient } from '@pos/database';
 import { newId } from '@pos/domain';
 import type { ApiErrorBody, Permission } from '@pos/shared-types';
-import type { DailySummary, Order, OrderPayment, Shift } from '@pos/validation';
+import type { DailySummary, KitchenTicket, Order, OrderPayment, Shift } from '@pos/validation';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   type TenantFixture,
@@ -108,6 +108,22 @@ function refund(
     headers,
     payload: { id: newId(), ...payload },
   });
+}
+
+/** The kitchen marks every station of the order ready (completion needs that first). */
+async function kitchenReady(order: Order): Promise<void> {
+  const tickets = (
+    await app.inject({ method: 'GET', url: `${loc()}/kitchen/tickets`, headers: owner })
+  ).json<KitchenTicket[]>();
+  for (const ticket of tickets.filter((t) => t.orderId === order.id)) {
+    const res = await app.inject({
+      method: 'POST',
+      url: `${loc()}/kitchen/tickets/${ticket.id}/transitions`,
+      headers: owner,
+      payload: { to: 'READY', version: ticket.version },
+    });
+    expect(res.statusCode).toBe(200);
+  }
 }
 
 const transition = (order: Order, payload: Record<string, unknown>, headers = cashier) =>
@@ -355,6 +371,10 @@ describe('taking payments', () => {
       (await transition(order, { to: 'COMPLETED' })).json<ApiErrorBody>().details,
     ).toMatchObject({ reason: 'UNPAID' });
     await pay(order, { shiftId: shift.id, paymentMethodId: cash.id, amount: 2800 });
+    expect(
+      (await transition(order, { to: 'COMPLETED' })).json<ApiErrorBody>().details,
+    ).toMatchObject({ reason: 'KITCHEN_PENDING' });
+    await kitchenReady(order);
     const done = await transition(order, { to: 'COMPLETED' });
     expect(done.json<Order>()).toMatchObject({ status: 'COMPLETED', paymentStatus: 'PAID' });
   });
@@ -435,6 +455,7 @@ describe('refunds', () => {
         reference: 'AUTH77',
       })
     ).json<{ payment: OrderPayment }>();
+    await kitchenReady(order);
     await transition(order, { to: 'COMPLETED' });
 
     const res = await refund(order, payment.id, {

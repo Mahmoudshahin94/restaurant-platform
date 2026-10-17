@@ -45,6 +45,9 @@ export const ERROR_CODES = [
   'SHIFT_NOT_OPEN',
   'SHIFT_ALREADY_OPEN',
   'CASH_REGISTER_NOT_FOUND',
+  // kitchen
+  'KITCHEN_TICKET_NOT_FOUND',
+  'INVALID_TICKET_STATE',
   // sync / online ordering
   'SYNC_CONFLICT',
   'DUPLICATE_OPERATION',

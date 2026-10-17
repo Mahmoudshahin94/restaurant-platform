@@ -21,7 +21,15 @@ import type { Principal } from '../../common/auth/principal';
 import { RequestContext } from '../../common/context/request-context';
 import { PrismaService, type PrismaTx } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
-import { orderInclude, settledEntries, toOrderDto, toPaymentDto } from '../orders/orders.mappers';
+import { lockOrderRow } from '../orders/order-lock';
+import { RealtimeBus } from '../realtime/realtime.bus';
+import {
+  orderEventPayload,
+  orderInclude,
+  settledEntries,
+  toOrderDto,
+  toPaymentDto,
+} from '../orders/orders.mappers';
 import { PaymentProviderRegistry } from './providers/payment-provider.registry';
 
 type ChargeInput = z.output<typeof createPaymentSchema>;
@@ -43,6 +51,7 @@ export class PaymentsService {
     private readonly prisma: PrismaService,
     private readonly providers: PaymentProviderRegistry,
     private readonly audit: AuditService,
+    private readonly bus: RealtimeBus,
   ) {}
 
   async listMethods(restaurantId: string): Promise<PaymentMethod[]> {
@@ -69,8 +78,8 @@ export class PaymentsService {
     if (replay) return replay;
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
-        await this.lockOrder(tx, locationId, orderId);
+      const outcome = await this.prisma.$transaction(async (tx) => {
+        await lockOrderRow(tx, locationId, orderId);
         // A concurrent retry with the same id may have committed while we waited for the lock.
         const committed = await this.replayIn(tx, input.id, locationId, orderId, 'CHARGE');
         if (committed) return committed;
@@ -181,6 +190,8 @@ export class PaymentsService {
         );
         return { payment: toPaymentDto(payment), order: toOrderDto(updated) };
       });
+      this.publish(outcome);
+      return outcome;
     } catch (error) {
       const raced = await this.replayAfterRace(error, input.id, locationId, orderId, 'CHARGE');
       if (raced) return raced;
@@ -199,8 +210,8 @@ export class PaymentsService {
     if (replay) return replay;
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
-        await this.lockOrder(tx, locationId, orderId);
+      const outcome = await this.prisma.$transaction(async (tx) => {
+        await lockOrderRow(tx, locationId, orderId);
         const committed = await this.replayIn(tx, input.id, locationId, orderId, 'REFUND');
         if (committed) return committed;
         const order = await tx.order.findUniqueOrThrow({
@@ -315,6 +326,8 @@ export class PaymentsService {
         );
         return { payment: toPaymentDto(refund), order: toOrderDto(updated) };
       });
+      this.publish(outcome);
+      return outcome;
     } catch (error) {
       const raced = await this.replayAfterRace(error, input.id, locationId, orderId, 'REFUND');
       if (raced) return raced;
@@ -322,13 +335,23 @@ export class PaymentsService {
     }
   }
 
-  // --- helpers -------------------------------------------------------------------------------
-
-  private async lockOrder(tx: PrismaTx, locationId: string, orderId: string): Promise<void> {
-    const rows = await tx.$queryRaw<{ id: string }[]>`
-      SELECT id FROM orders WHERE id = ${orderId}::uuid AND location_id = ${locationId}::uuid FOR UPDATE`;
-    if (rows.length !== 1) throw new DomainError('ORDER_NOT_FOUND', 'Order not found', { orderId });
+  /** Tells POS screens the order's balance changed (after the transaction committed). */
+  private publish({ order }: PaymentOutcome): void {
+    const payload = orderEventPayload(order);
+    this.bus.publish([
+      this.bus.event('order.updated', order, payload),
+      ...(order.balanceDue === 0 && order.paymentStatus === 'PAID'
+        ? [
+            this.bus.event('order.payment_completed', order, {
+              ...payload,
+              paidAmount: order.paidTotal,
+            }),
+          ]
+        : []),
+    ]);
   }
+
+  // --- helpers -------------------------------------------------------------------------------
 
   private async requireOpenShift(tx: PrismaTx, locationId: string, shiftId: string): Promise<void> {
     const shift = await tx.shift.findFirst({

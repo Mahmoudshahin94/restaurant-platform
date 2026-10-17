@@ -1,0 +1,76 @@
+{
+  "title": "Kitchen display",
+  "nav": {
+    "active": "Active",
+    "completed": "Bumped",
+    "settings": "Settings",
+    "main": "Kitchen views"
+  },
+  "stations": {
+    "label": "Stations",
+    "all": "All stations",
+    "expo": "All stations (expo)"
+  },
+  "status": {
+    "NEW": "New",
+    "PREPARING": "Preparing",
+    "READY": "Ready",
+    "COMPLETED": "Bumped",
+    "CANCELLED": "Cancelled"
+  },
+  "actions": {
+    "start": "Start",
+    "ready": "Ready",
+    "bump": "Bump",
+    "notReady": "Not ready",
+    "recall": "Recall",
+    "dismiss": "Got it",
+    "rush": "Rush",
+    "normal": "Normal",
+    "itemDone": "Mark {{name}} done",
+    "itemUndone": "Mark {{name}} not done"
+  },
+  "ticket": {
+    "rush": "Rush",
+    "updated": "Updated",
+    "cancelled": "Cancelled — stop",
+    "table": "Table {{label}}",
+    "guests_one": "{{count}} guest",
+    "guests_other": "{{count}} guests",
+    "note": "Note",
+    "minutes": "{{count}} min",
+    "justNow": "New",
+    "received": "Received {{time}}",
+    "bumpedAt": "Bumped {{time}}"
+  },
+  "urgency": {
+    "ok": "On time",
+    "warn": "Getting late",
+    "late": "Late"
+  },
+  "counts": {
+    "new": "New {{count}}",
+    "preparing": "Preparing {{count}}",
+    "ready": "Ready {{count}}"
+  },
+  "empty": "No tickets right now. New orders appear here automatically.",
+  "emptyCompleted": "Nothing was bumped in the last 12 hours.",
+  "sound": {
+    "enable": "Turn on sound alerts",
+    "on": "Sound on",
+    "off": "Sound off"
+  },
+  "settings": {
+    "title": "Screen settings",
+    "stations": "Stations shown on this screen",
+    "stationsHint": "Choose none to show every station (expo).",
+    "sound": "Play a sound for new tickets",
+    "location": "Location",
+    "signOut": "Sign out",
+    "thresholds": "Tickets turn amber after {{warn}} min and red after {{late}} min."
+  },
+  "location": {
+    "title": "Choose location",
+    "none": "Your account has no kitchen access at any location."
+  }
+}

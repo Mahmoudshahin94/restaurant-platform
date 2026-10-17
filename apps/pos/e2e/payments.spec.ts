@@ -4,6 +4,7 @@ import { deflateSync } from 'node:zlib';
 import { type Page, expect, test } from '@playwright/test';
 // @ts-expect-error — plain ESM helper without type declarations
 import { decodeRasterJob as untypedDecode } from '../../../tools/printer-sim/decode.mjs';
+import { kitchenMarksReady } from './kitchen-api';
 
 interface DecodedImage {
   width: number;
@@ -75,7 +76,9 @@ test('cashier takes cash with change, completes the order and sees the receipt',
   await page.getByRole('button', { name: /^Fries/ }).click();
   await page.getByRole('button', { name: /^Fries/ }).click();
   await page.getByRole('button', { name: 'Place order' }).click();
-  await expect(page.getByText(/Order MAIN-\d+ placed/)).toBeVisible();
+  const placed = page.getByText(/Order MAIN-\d+ placed/);
+  await expect(placed).toBeVisible();
+  const orderNumber = /MAIN-\d+/.exec((await placed.textContent()) ?? '')?.[0] ?? '';
 
   await page.getByRole('button', { name: 'Take payment' }).click();
   const dialog = page.getByRole('dialog');
@@ -95,8 +98,13 @@ test('cashier takes cash with change, completes the order and sees the receipt',
   await expect(receipt).toContainText(/Change\s*SAR\s2\.00/);
   await page.keyboard.press('Escape');
 
-  // New → Confirmed (accepted for preparation) → Completed (handed over, fully paid).
-  await page.getByRole('button', { name: 'Confirm', exact: true }).click();
+  // Placed at the POS = confirmed and sent to the kitchen. It can only be handed over once the
+  // kitchen marks it ready, which reaches this screen through the realtime socket.
+  await expect(page.getByText('Fryer · Waiting')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Complete order' })).toBeHidden();
+  await kitchenMarksReady(page.request, orderNumber);
+  await expect(page.getByText(`Order ${orderNumber} is ready`)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText('Fryer · Ready')).toBeVisible();
   await page.getByRole('button', { name: 'Complete order' }).click();
   await expect(page.getByRole('button', { name: 'Complete order' })).toBeHidden();
 

@@ -11,7 +11,8 @@ export default defineConfig({
   server: {
     port: 1420,
     strictPort: true,
-    proxy: { '/api': { target: API_TARGET, changeOrigin: false } },
+    // `ws: true` forwards the realtime socket (/api/v1/realtime) as well.
+    proxy: { '/api': { target: API_TARGET, changeOrigin: false, ws: true } },
   },
   envPrefix: ['VITE_', 'TAURI_ENV_'],
   build: {

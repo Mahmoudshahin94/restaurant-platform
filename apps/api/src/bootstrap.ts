@@ -10,6 +10,7 @@ import type { FastifyRequest } from 'fastify';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/errors/all-exceptions.filter';
 import { PinoNestLogger, createRootLogger } from './common/logging/logger';
+import { RealtimeGateway } from './modules/realtime/realtime.gateway';
 import type { AppConfig } from './config/env';
 
 export const API_PREFIX = 'api/v1';
@@ -66,6 +67,7 @@ export async function createApp(config: AppConfig): Promise<NestFastifyApplicati
   });
 
   const fastify = app.getHttpAdapter().getInstance();
+  await app.get(RealtimeGateway).register(fastify, `/${API_PREFIX}/realtime`);
   fastify.addHook('onSend', async (request, reply) => {
     void reply.header('x-request-id', request.id);
   });

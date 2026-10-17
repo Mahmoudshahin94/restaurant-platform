@@ -65,6 +65,8 @@ export const locationSchema = z.object({
   taxInclusive: z.boolean(),
   onlineOrderingState: onlineOrderingStateSchema,
   cashRoundingIncrement: z.int().nullable(),
+  kdsWarnMinutes: z.int(),
+  kdsLateMinutes: z.int(),
   addressLine: z.string().nullable(),
   phone: z.string().nullable(),
   isActive: z.boolean(),
@@ -95,6 +97,9 @@ export const updateLocationSchema = createLocationSchema
     isActive: z.boolean(),
     /** Smallest coin for cash rounding (minor units, e.g. 5 = 0.05); null turns rounding off. */
     cashRoundingIncrement: z.int().min(1).max(10_000).nullable(),
+    /** Kitchen screen age thresholds in minutes (warn must be below late). */
+    kdsWarnMinutes: z.int().min(1).max(240),
+    kdsLateMinutes: z.int().min(2).max(480),
   })
   .partial()
   .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' });

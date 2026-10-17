@@ -7,6 +7,7 @@ import {
 } from '@pos/shared-types';
 import { z } from 'zod';
 import { idSchema, isoDateTimeSchema } from './common';
+import { orderTicketSummarySchema } from './kitchen';
 import { orderPaymentSchema } from './payments';
 import { discountTypeSchema } from './pricing-config';
 
@@ -91,8 +92,11 @@ export const createOrderSchema = z
     /** Client-generated UUIDv7 — the idempotency key: resending the same id never duplicates. */
     id: idSchema,
     channel: staffOrderChannelSchema,
-    /** DRAFT keeps the order open for editing without sending it on. */
-    status: z.enum(['DRAFT', 'PLACED']).default('PLACED'),
+    /**
+     * DRAFT keeps the order open without sending it on; PLACED waits for acceptance; CONFIRMED
+     * (what the POS sends) accepts it at once and sends it to the kitchen.
+     */
+    status: z.enum(['DRAFT', 'PLACED', 'CONFIRMED']).default('PLACED'),
     ...orderContentFields,
   })
   .superRefine(channelRules);
@@ -224,6 +228,8 @@ export const orderSchema = z.object({
     }),
   ),
   payments: z.array(orderPaymentSchema),
+  /** Kitchen progress per station (empty until the order is confirmed). */
+  tickets: z.array(orderTicketSummarySchema),
   /** Charges minus refunds are reconciled against the total by the server. */
   paidTotal: z.int(),
   refundedTotal: z.int(),

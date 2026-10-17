@@ -10,6 +10,8 @@ const ROOT_ENV = resolve(import.meta.dirname, '../../.env');
 if (existsSync(ROOT_ENV)) process.loadEnvFile(ROOT_ENV);
 
 const API_PORT = 3110;
+// The kitchen helper (e2e/kitchen-api.ts) talks to this API directly.
+process.env.POS_E2E_API_PORT = String(API_PORT);
 const WEB_PORT = 1430;
 const e2eDatabaseUrl =
   process.env.POS_E2E_DATABASE_URL ??

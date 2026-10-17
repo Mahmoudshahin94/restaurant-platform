@@ -1,8 +1,9 @@
-import { LanguageSwitcher, useCurrentLocale } from '@pos/app-kit';
+import { LanguageSwitcher, RealtimeIndicator, useCurrentLocale, useRealtime } from '@pos/app-kit';
 import { pickLocalized } from '@pos/i18n';
 import { Button, cn } from '@pos/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  BellRing,
   ClipboardList,
   Grid3x3,
   LogOut,
@@ -11,11 +12,11 @@ import {
   ShoppingBasket,
   Wallet,
 } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { appInfo, isTauri } from '../lib/device';
-import { useLocations } from '../lib/queries';
+import { ORDER_QUERY_ROOTS, useLocations } from '../lib/queries';
 import { session, useSession } from '../lib/session';
 import { usePreferences } from '../stores/preferences';
 import { FOCUS_SEARCH_EVENT } from './product-grid';
@@ -64,7 +65,7 @@ function useShortcuts(): void {
 }
 
 export function PosShell() {
-  const { t } = useTranslation(['pos', 'common']);
+  const { t } = useTranslation(['pos', 'common', 'orders']);
   const locale = useCurrentLocale();
   const user = useSession((s) => s.user);
   const { locationId, setLocale } = usePreferences();
@@ -74,6 +75,27 @@ export function PosShell() {
   const navigate = useNavigate();
   const info = useQuery({ queryKey: ['app-info'], queryFn: appInfo, staleTime: Infinity });
   useShortcuts();
+  const [readyNotice, setReadyNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!readyNotice) return;
+    const id = setTimeout(() => {
+      setReadyNotice(null);
+    }, 10_000);
+    return () => {
+      clearTimeout(id);
+    };
+  }, [readyNotice]);
+
+  // Live order changes from other terminals and the kitchen; polling remains as a fallback.
+  const realtime = useRealtime(session, locationId, (event) => {
+    if (!event.type.startsWith('order.')) return;
+    void queryClient.invalidateQueries({
+      predicate: (q) => ORDER_QUERY_ROOTS.includes(String(q.queryKey[0])),
+    });
+    if (event.type === 'order.updated' && 'status' in event.payload) {
+      if (event.payload.status === 'READY') setReadyNotice(event.payload.orderNumber);
+    }
+  });
 
   const signOut = async () => {
     await session.signOut();
@@ -127,10 +149,20 @@ export function PosShell() {
           </Button>
         </div>
       </header>
-      <main className="min-h-0 flex-1 p-3">
+      <main className="relative min-h-0 flex-1 p-3">
+        {readyNotice ? (
+          <div
+            role="status"
+            className="absolute end-4 top-4 z-10 flex items-center gap-2 rounded-lg bg-success px-4 py-3 text-lg font-semibold text-success-foreground shadow-lg"
+          >
+            <BellRing aria-hidden className="size-5" />
+            {t('orders:kitchen.ready', { number: readyNotice })}
+          </div>
+        ) : null}
         <Outlet />
       </main>
-      <footer className="flex h-7 shrink-0 items-center justify-end border-t px-3 text-xs text-muted-foreground">
+      <footer className="flex h-7 shrink-0 items-center justify-between border-t px-3 text-xs text-muted-foreground">
+        <RealtimeIndicator status={realtime} />
         {isTauri() && info.data
           ? t('pos:device.version', { version: info.data.version })
           : t('pos:device.browser')}
