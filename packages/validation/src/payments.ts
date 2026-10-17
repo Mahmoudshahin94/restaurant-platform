@@ -36,7 +36,8 @@ export const orderPaymentSchema = z.object({
   reference: z.string().nullable(),
   refundOfId: idSchema.nullable(),
   reason: z.string().nullable(),
-  shiftId: idSchema,
+  /** Null for online payments (they touch no drawer). */
+  shiftId: idSchema.nullable(),
   createdAt: isoDateTimeSchema,
 });
 export type OrderPayment = z.infer<typeof orderPaymentSchema>;

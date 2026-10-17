@@ -48,6 +48,21 @@ export function settledEntries(payments: readonly PaymentRow[]) {
     .map((p) => ({ id: p.id, type: p.type, amount: p.amount, refundOfId: p.refundOfId }));
 }
 
+const textOrNull = (value: unknown) => (typeof value === 'string' ? value : null);
+
+/** A stored delivery address (JSON column) in its API shape. */
+export function toDeliveryAddress(value: Prisma.JsonValue | null): Order['deliveryAddress'] {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const line1 = textOrNull(value.line1);
+  if (line1 === null) return null;
+  return {
+    line1,
+    line2: textOrNull(value.line2),
+    city: textOrNull(value.city),
+    notes: textOrNull(value.notes),
+  };
+}
+
 export function toOrderDto(row: OrderRow): Order {
   const totals = paymentTotals(row.total, settledEntries(row.payments));
   return {
@@ -65,6 +80,9 @@ export function toOrderDto(row: OrderRow): Order {
     customerName: row.customerName,
     customerPhone: row.customerPhone,
     guestCount: row.guestCount,
+    customerEmail: row.customerEmail,
+    fulfillmentType: row.fulfillmentType,
+    deliveryAddress: toDeliveryAddress(row.deliveryAddress),
     notes: row.notes,
     currencyCode: row.currencyCode,
     taxInclusive: row.taxInclusive,
@@ -76,6 +94,7 @@ export function toOrderDto(row: OrderRow): Order {
     version: row.version,
     createdById: row.createdById,
     placedAt: isoOrNull(row.placedAt),
+    acceptBy: isoOrNull(row.acceptBy),
     completedAt: isoOrNull(row.completedAt),
     cancelledAt: isoOrNull(row.cancelledAt),
     cancelReason: row.cancelReason,

@@ -1,5 +1,6 @@
-import type { Prisma } from '@pos/database';
+import { Prisma } from '@pos/database';
 import type { PrismaTx } from '@pos/server';
+import { WebRejectReason } from '@pos/shared-types';
 import type { ErrorCode } from '@pos/shared-types';
 import type { SyncKitchenTicket, SyncOperation, SyncOrder, SyncShift } from '@pos/validation';
 import type { AuthenticatedDevice } from '../devices/device.guard';
@@ -20,11 +21,24 @@ const conflict = (message: string) => new SyncRefusal('CONFLICT', 'SYNC_CONFLICT
 const outOfScope = (message: string) => new SyncRefusal('REJECTED', 'SYNC_SCOPE_MISMATCH', message);
 
 const date = (value: string) => new Date(value);
+const json = (value: Record<string, unknown> | null) =>
+  value === null ? Prisma.DbNull : (value as Prisma.InputJsonValue);
 const dateOrNull = (value: string | null) => (value === null ? null : new Date(value));
 
 /** What `apply` did; `rowVersion` is the entity's own version column, when it has one. */
 export interface Applied {
   rowVersion: number | null;
+}
+
+/** Cloud-side effects the push path needs for website orders (ADR 0013). */
+export interface ApplyHooks {
+  /** Voids the online payments of a website order the restaurant rejected. */
+  voidOnlinePayments(tx: PrismaTx, orderId: string, reason: string): Promise<number>;
+  /** Tells the hub (change feed) that the cloud changed the order after applying the push. */
+  recordOrderChange(
+    tx: PrismaTx,
+    order: { id: string; restaurantId: string; locationId: string },
+  ): Promise<void>;
 }
 
 /**
@@ -35,6 +49,7 @@ export async function applyOperation(
   tx: PrismaTx,
   device: AuthenticatedDevice,
   op: SyncOperation,
+  hooks: ApplyHooks,
 ): Promise<Applied> {
   if (op.payload.id !== op.entityId) throw reject('entityId does not match the payload id');
   if (
@@ -45,7 +60,7 @@ export async function applyOperation(
   }
   switch (op.operationType) {
     case 'ORDER_UPSERT':
-      return applyOrder(tx, device, op.entityVersion, op.payload);
+      return applyOrder(tx, device, op, op.payload, hooks);
     case 'SHIFT_UPSERT':
       return applyShift(tx, device, op.entityVersion, op.payload);
     case 'KITCHEN_TICKET_UPSERT':
@@ -59,6 +74,10 @@ type Table = 'orders' | 'shifts' | 'kitchen_tickets';
  * Ownership without timestamps: the hub may write an entity the cloud does not have, or one whose
  * cloud copy is exactly what this location's hub last pushed. Locks the cloud row (if any) so two
  * deliveries for one entity cannot interleave. Returns whether the row exists.
+ *
+ * `handOver` covers the one entity the cloud gives away: a website order, owned by the cloud until
+ * the restaurant decides on it (ADR 0013). It is consulted only while the hub has never written the
+ * entity, and either allows the write or throws why not.
  */
 async function claim(
   tx: PrismaTx,
@@ -68,6 +87,7 @@ async function claim(
   entityId: string,
   entityVersion: number,
   currentRowVersion: (id: string) => Promise<number | null>,
+  handOver?: () => Promise<boolean>,
 ): Promise<boolean> {
   const locked = await tx.$queryRawUnsafe<{ id: string }[]>(
     `SELECT id FROM "${table}" WHERE id = $1::uuid FOR UPDATE`,
@@ -81,6 +101,7 @@ async function claim(
     select: { entityVersion: true, rowVersion: true },
   });
   if (!last) {
+    if (handOver && (await handOver())) return true;
     throw conflict(`${entityType} exists in the cloud but was never synchronized from this hub`);
   }
   if (entityVersion <= last.entityVersion) {
@@ -115,6 +136,9 @@ function orderScalars(o: SyncOrder): Prisma.OrderUncheckedCreateInput {
     customerName: o.customerName,
     customerPhone: o.customerPhone,
     guestCount: o.guestCount,
+    customerEmail: o.customerEmail,
+    fulfillmentType: o.fulfillmentType,
+    deliveryAddress: json(o.deliveryAddress),
     notes: o.notes,
     currencyCode: o.currencyCode,
     taxInclusive: o.taxInclusive,
@@ -126,6 +150,7 @@ function orderScalars(o: SyncOrder): Prisma.OrderUncheckedCreateInput {
     version: o.version,
     createdById: o.createdById,
     placedAt: dateOrNull(o.placedAt),
+    acceptBy: dateOrNull(o.acceptBy),
     completedAt: dateOrNull(o.completedAt),
     cancelledAt: dateOrNull(o.cancelledAt),
     cancelReason: o.cancelReason,
@@ -153,17 +178,64 @@ function checkOrderChildren(o: SyncOrder, device: AuthenticatedDevice): void {
   }
 }
 
+/**
+ * The hand-over of a website order (ADR 0013). The cloud owns it while it waits for the
+ * restaurant; the hub's first change of it must be the restaurant's decision (accept or reject)
+ * made on exactly the version the cloud handed out (`baseVersion`). Anything else crosses
+ * ownership: the cloud already decided (e.g. cancelled it at the acceptance deadline), changed it
+ * since, or the hub tried to edit it before deciding.
+ */
+async function webOrderHandOver(
+  tx: PrismaTx,
+  device: AuthenticatedDevice,
+  baseVersion: number | undefined,
+  o: SyncOrder,
+): Promise<boolean> {
+  const cloud = await tx.order.findUniqueOrThrow({
+    where: { id: o.id },
+    select: { channel: true, status: true, version: true, locationId: true },
+  });
+  if (cloud.channel !== 'WEBSITE') return false;
+  if (cloud.locationId !== device.locationId) {
+    throw outOfScope('The website order belongs to another location');
+  }
+  if (cloud.status !== 'PLACED') {
+    throw conflict(`The website order was already ${cloud.status} in the cloud`);
+  }
+  if (baseVersion !== cloud.version) {
+    throw conflict('The website order changed in the cloud since the hub received it');
+  }
+  if (o.status === 'PLACED' || o.status === 'DRAFT') {
+    throw conflict('The cloud owns this website order until the restaurant accepts or rejects it');
+  }
+  return true;
+}
+
 async function applyOrder(
   tx: PrismaTx,
   device: AuthenticatedDevice,
-  entityVersion: number,
+  op: SyncOperation,
   o: SyncOrder,
+  hooks: ApplyHooks,
 ): Promise<Applied> {
   checkOrderChildren(o, device);
-  const exists = await claim(tx, device, 'orders', 'Order', o.id, entityVersion, async (id) => {
-    const row = await tx.order.findUnique({ where: { id }, select: { version: true } });
-    return row?.version ?? null;
-  });
+  const ownership = { handedOver: false };
+  const exists = await claim(
+    tx,
+    device,
+    'orders',
+    'Order',
+    o.id,
+    op.entityVersion,
+    async (id) => {
+      const row = await tx.order.findUnique({ where: { id }, select: { version: true } });
+      return row?.version ?? null;
+    },
+    async () => (ownership.handedOver = await webOrderHandOver(tx, device, op.baseVersion, o)),
+  );
+  if (!exists && o.channel === 'WEBSITE') {
+    throw reject('Website orders are created by the cloud only');
+  }
 
   const scalars = orderScalars(o);
   if (exists) await tx.order.update({ where: { id: o.id }, data: scalars });
@@ -229,6 +301,17 @@ async function applyOrder(
         skipDuplicates: true,
       });
     }
+  }
+
+  // The restaurant rejected a website order: the cloud voids what the customer paid online, and
+  // tells the hub (which owns the order now, but not its online payments).
+  if (ownership.handedOver && o.status === 'CANCELLED') {
+    const voided = await hooks.voidOnlinePayments(
+      tx,
+      o.id,
+      o.cancelReason ?? WebRejectReason.OTHER,
+    );
+    if (voided > 0) await hooks.recordOrderChange(tx, o);
   }
   return { rowVersion: o.version };
 }

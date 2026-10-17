@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { Prisma } from '@pos/database';
-import { PrismaService, isPrismaKnownError, isUniqueViolation } from '@pos/server';
+import {
+  OnlinePaymentsService,
+  PrismaService,
+  isPrismaKnownError,
+  isUniqueViolation,
+} from '@pos/server';
 import type { ErrorCode } from '@pos/shared-types';
 import {
   type SyncOperationResult,
@@ -9,7 +14,8 @@ import {
   syncOperationSchema,
 } from '@pos/validation';
 import type { AuthenticatedDevice } from '../devices/device.guard';
-import { SyncRefusal, applyOperation } from './apply-operation';
+import { type ApplyHooks, SyncRefusal, applyOperation } from './apply-operation';
+import { recordOrderChange } from './web-order-change.recorder';
 
 type Envelope = SyncPushRequest['operations'][number];
 
@@ -32,8 +38,17 @@ const result = (
 @Injectable()
 export class SyncPushService {
   private readonly logger = new Logger(SyncPushService.name);
+  private readonly hooks: ApplyHooks;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    payments: OnlinePaymentsService,
+  ) {
+    this.hooks = {
+      voidOnlinePayments: (tx, orderId, reason) => payments.voidAll(tx, orderId, reason),
+      recordOrderChange,
+    };
+  }
 
   async push(device: AuthenticatedDevice, request: SyncPushRequest): Promise<SyncPushResponse> {
     const results: SyncOperationResult[] = [];
@@ -67,7 +82,7 @@ export class SyncPushService {
             return result(op.operationId, 'REJECTED', 'SYNC_REJECTED', message);
           }
           if (previous?.status === 'APPLIED') return result(op.operationId, 'DUPLICATE');
-          const applied = await applyOperation(tx, device, op);
+          const applied = await applyOperation(tx, device, op, this.hooks);
           const row = {
             status: 'APPLIED' as const,
             rowVersion: applied.rowVersion,

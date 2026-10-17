@@ -1,5 +1,6 @@
 import {
   ActionSource,
+  FulfillmentType,
   OrderChannel,
   OrderStatus,
   PaymentStatus,
@@ -190,6 +191,17 @@ export const orderSchema = z.object({
   customerName: z.string().nullable(),
   customerPhone: z.string().nullable(),
   guestCount: z.int().nullable(),
+  /** Website orders: how they reach the customer, the delivery address and the e-mail given. */
+  customerEmail: z.string().nullable(),
+  fulfillmentType: z.enum(enumValues(FulfillmentType)).nullable(),
+  deliveryAddress: z
+    .object({
+      line1: z.string(),
+      line2: z.string().nullable(),
+      city: z.string().nullable(),
+      notes: z.string().nullable(),
+    })
+    .nullable(),
   notes: z.string().nullable(),
   currencyCode: z.string(),
   taxInclusive: z.boolean(),
@@ -201,6 +213,8 @@ export const orderSchema = z.object({
   version: z.int(),
   createdById: idSchema.nullable(),
   placedAt: isoDateTimeSchema.nullable(),
+  /** Website orders: the restaurant must accept before this, or the order is cancelled. */
+  acceptBy: isoDateTimeSchema.nullable(),
   completedAt: isoDateTimeSchema.nullable(),
   cancelledAt: isoDateTimeSchema.nullable(),
   cancelReason: z.string().nullable(),

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -50,6 +50,42 @@ describe('hub migrations', () => {
     await expect(migrateHubDatabase(client, migrations)).rejects.toThrow(
       /changed after it was applied/,
     );
+  });
+
+  it('upgrades a hub that already holds orders, payments and cash (online ordering)', async () => {
+    const { client, dir } = fresh();
+    await client.$executeRawUnsafe('PRAGMA foreign_keys = ON');
+    // The hub as Phase 6 left it: every migration before online ordering.
+    const before = join(dir, 'before');
+    for (const name of readdirSync(hubMigrationsDir()).filter((n) => n < '20261017133550')) {
+      cpSync(join(hubMigrationsDir(), name), join(before, name), { recursive: true });
+    }
+    await migrateHubDatabase(client, before);
+    const now = new Date().toISOString();
+    for (const sql of [
+      `INSERT INTO restaurants (id, slug, name_en, name_ar, currency_code, default_locale, timezone, created_at, updated_at) VALUES ('r', 'r', 'R', 'R', 'SAR', 'en', 'UTC', '${now}', '${now}')`,
+      `INSERT INTO locations (id, restaurant_id, code, name_en, name_ar, timezone, tax_inclusive, created_at, updated_at) VALUES ('l', 'r', 'MAIN', 'L', 'L', 'UTC', 1, '${now}', '${now}')`,
+      `INSERT INTO cash_registers (id, location_id, name_en, name_ar, created_at, updated_at) VALUES ('c', 'l', 'D', 'D', '${now}', '${now}')`,
+      `INSERT INTO payment_methods (id, restaurant_id, type, name_en, name_ar, created_at, updated_at) VALUES ('m', 'r', 'CASH', 'Cash', 'Cash', '${now}', '${now}')`,
+      `INSERT INTO shifts (id, restaurant_id, location_id, cash_register_id, status, open_register_id, opening_float, opened_by_id, opened_at, created_at, updated_at) VALUES ('s', 'r', 'l', 'c', 'OPEN', 'c', 0, 'u', '${now}', '${now}', '${now}')`,
+      `INSERT INTO orders (id, restaurant_id, location_id, order_number, business_date, channel, status, source, currency_code, tax_inclusive, subtotal, discount_total, tax_total, fee_total, total, created_at, updated_at) VALUES ('o', 'r', 'l', 'MAIN-001', '${now}', 'TAKEAWAY', 'CONFIRMED', 'POS', 'SAR', 1, 100, 0, 13, 0, 100, '${now}', '${now}')`,
+      `INSERT INTO payments (id, restaurant_id, location_id, order_id, shift_id, payment_method_id, method_type, method_name_en, method_name_ar, type, status, provider, amount, created_at, updated_at) VALUES ('p', 'r', 'l', 'o', 's', 'm', 'CASH', 'Cash', 'Cash', 'CHARGE', 'CAPTURED', 'cash', 100, '${now}', '${now}')`,
+      `INSERT INTO cash_transactions (id, shift_id, type, amount, payment_id, created_at) VALUES ('t', 's', 'SALE', 100, 'p', '${now}')`,
+    ]) {
+      await client.$executeRawUnsafe(sql);
+    }
+
+    // The tables it rebuilds (locations, payments) keep their rows and references.
+    expect(await migrateHubDatabase(client)).toEqual(['20261017133550_online_ordering']);
+    expect(await client.$queryRawUnsafe('PRAGMA foreign_key_check')).toEqual([]);
+    expect(await client.payment.findUnique({ where: { id: 'p' } })).toMatchObject({ shiftId: 's' });
+    expect(await client.cashTransaction.findUnique({ where: { id: 't' } })).toMatchObject({
+      paymentId: 'p',
+    });
+    expect(await client.location.findUnique({ where: { id: 'l' } })).toMatchObject({
+      onlineAcceptMinutes: 10,
+      openingHours: [],
+    });
   });
 
   it('rolls back a migration that fails halfway', async () => {

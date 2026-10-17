@@ -1,11 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import {
   DomainError,
+  assertEditableByStaff,
   assertPermissions,
   assertTransition,
+  assertWebOrderDecision,
   businessDateFor,
   derivePaymentStatus,
   canModifyItems,
+  isVoidedOnCancel,
   formatOrderNumber,
   paymentTotals,
   quoteOrder,
@@ -244,6 +247,7 @@ export class OrdersService {
         reason: 'NOT_MODIFIABLE',
       });
     }
+    assertEditableByStaff(current);
     this.assertVersion(current, input.version);
 
     const { location, menu } = await this.menus.resolve(locationId);
@@ -368,8 +372,11 @@ export class OrdersService {
       reason: input.reason,
     });
     if (rule.permission) assertPermissions(principal.assignments, locationId, [rule.permission]);
+    assertWebOrderDecision(current, input.to, new Date());
     if (input.to === 'CANCELLED') {
-      const { paid, refunded } = paymentTotals(current.total, settledEntries(current.payments));
+      // Online payments of a website order not yet accepted are voided by the cloud (ADR 0013).
+      const held = current.payments.filter((p) => !isVoidedOnCancel(current, p));
+      const { paid, refunded } = paymentTotals(current.total, settledEntries(held));
       if (paid - refunded > 0) {
         throw new DomainError('INVALID_ORDER_STATE', 'Refund the payments before cancelling', {
           reason: 'REFUND_FIRST',

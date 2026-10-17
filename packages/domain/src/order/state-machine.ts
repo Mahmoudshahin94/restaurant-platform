@@ -40,6 +40,8 @@ export const ORDER_TRANSITIONS: readonly TransitionRule[] = [
 
   rule('PLACED', 'CONFIRMED'),
   rule('PLACED', 'CANCELLED', { permission: 'orders.cancel', requiresReason: true }),
+  // A website order the restaurant did not accept in time is cancelled by the cloud (ADR 0013).
+  rule('PLACED', 'CANCELLED', { trigger: 'SYSTEM', permission: null, requiresReason: true }),
 
   rule('CONFIRMED', 'PREPARING', { trigger: 'SYSTEM', permission: null }),
   rule('CONFIRMED', 'CANCELLED', { permission: 'orders.cancel', requiresReason: true }),
@@ -67,8 +69,17 @@ export function canModifyItems(status: OrderStatus): boolean {
   return MODIFIABLE.has(status);
 }
 
-export function findTransition(from: OrderStatus, to: OrderStatus): TransitionRule | undefined {
-  return ORDER_TRANSITIONS.find((r) => r.from === from && r.to === to);
+/**
+ * The rule for a status change, preferring the one for the given trigger (PLACED → CANCELLED
+ * exists for staff and for the system).
+ */
+export function findTransition(
+  from: OrderStatus,
+  to: OrderStatus,
+  trigger?: TransitionTrigger,
+): TransitionRule | undefined {
+  const matching = ORDER_TRANSITIONS.filter((r) => r.from === from && r.to === to);
+  return matching.find((r) => r.trigger === trigger) ?? matching[0];
 }
 
 export function allowedTransitions(from: OrderStatus, trigger: TransitionTrigger): OrderStatus[] {
@@ -89,7 +100,7 @@ export interface TransitionRequest {
  */
 export function assertTransition(request: TransitionRequest): TransitionRule {
   const { from, to } = request;
-  const found = findTransition(from, to);
+  const found = findTransition(from, to, request.trigger);
   if (!found) {
     throw new DomainError('INVALID_ORDER_STATE', `Cannot move order from ${from} to ${to}`, {
       from,

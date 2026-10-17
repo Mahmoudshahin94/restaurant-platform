@@ -1,7 +1,9 @@
 import {
+  type SyncOrder,
   type SyncPullResponse,
   type SyncPushRequest,
   type SyncPushResponse,
+  syncOrderSchema,
   syncPullResponseSchema,
   syncPushResponseSchema,
 } from '@pos/validation';
@@ -48,6 +50,13 @@ export class CloudClient {
     return this.call('GET', `/api/v1/sync/pull?${query.toString()}`, syncPullResponseSchema, {
       signal,
       timeoutMs: this.timeoutMs + waitSeconds * 1000,
+    });
+  }
+
+  /** A website order announced on the change feed (`ORDER` topic). */
+  order(orderId: string, signal?: AbortSignal): Promise<SyncOrder> {
+    return this.call('GET', `/api/v1/sync/orders/${encodeURIComponent(orderId)}`, syncOrderSchema, {
+      signal,
     });
   }
 

@@ -10,6 +10,9 @@ import { RequestContext } from '../context/request-context';
 export const LOG_REDACT_PATHS = [
   'req.headers.authorization',
   'req.headers.cookie',
+  'req.headers["x-tracking-token"]',
+  '*.trackingToken',
+  '*.cardToken',
   'res.headers["set-cookie"]',
   '*.password',
   '*.passwordHash',

@@ -4,6 +4,7 @@ import {
   CashTransactionType,
   ChangeTopic,
   DiscountType,
+  FulfillmentType,
   KitchenTicketStatus,
   OrderChannel,
   OrderStatus,
@@ -50,7 +51,8 @@ export const syncPaymentSchema = z.object({
   restaurantId: idSchema,
   locationId: idSchema,
   orderId: idSchema,
-  shiftId: idSchema,
+  /** Null only for ONLINE payments (no drawer). */
+  shiftId: idSchema.nullable(),
   paymentMethodId: idSchema,
   methodType: z.enum(enumValues(PaymentMethodType)),
   methodNameEn: text,
@@ -159,6 +161,10 @@ export const syncOrderSchema = z.object({
   customerName: text.nullable(),
   customerPhone: text.nullable(),
   guestCount: int.nullable(),
+  /** Website orders (Phase 7); absent in operations queued by an older hub. */
+  customerEmail: text.nullable().default(null),
+  fulfillmentType: z.enum(enumValues(FulfillmentType)).nullable().default(null),
+  deliveryAddress: z.record(z.string(), z.unknown()).nullable().default(null),
   notes: text.nullable(),
   currencyCode: z.string().length(3),
   taxInclusive: z.boolean(),
@@ -170,6 +176,7 @@ export const syncOrderSchema = z.object({
   version: int.min(1),
   createdById: idSchema.nullable(),
   placedAt: at.nullable(),
+  acceptBy: at.nullable().default(null),
   completedAt: at.nullable(),
   cancelledAt: at.nullable(),
   cancelReason: text.nullable(),
@@ -247,6 +254,11 @@ const operationBase = {
   operationId: idSchema,
   entityId: idSchema,
   entityVersion: z.int().min(1),
+  /**
+   * For a website order received from the cloud: the cloud version the hub's change was based on.
+   * The cloud hands the order over only if its copy is still exactly that version (ADR 0013).
+   */
+  baseVersion: z.int().min(1).optional(),
 };
 
 /** One outbox row as sent to the cloud; the operation type decides the payload shape. */
@@ -287,6 +299,7 @@ export const syncPushRequestSchema = z.object({
         entityId: idSchema,
         operationType: z.string().max(40),
         entityVersion: z.int().min(1),
+        baseVersion: z.int().min(1).optional(),
         payload: z.unknown(),
       }),
     )

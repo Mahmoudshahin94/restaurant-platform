@@ -7,7 +7,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService, RealtimeBus } from '@pos/server';
 import type { EventMap, SyncConnectionState } from '@pos/shared-types';
-import type { SyncOperation as WireOperation } from '@pos/validation';
+import { isPrismaKnownError } from '@pos/server';
+import type { ChangeEntry, SyncOperation as WireOperation } from '@pos/validation';
 import { HUB_CONFIG, type HubConfig } from '../config';
 import { asHubTx } from '../database/hub-database';
 import { HubStateService, type Pairing } from '../hub-state.service';
@@ -18,6 +19,7 @@ import {
   CloudRequestRejected,
   CloudUnavailable,
 } from './cloud-client';
+import { InboundOrdersService } from './inbound-orders.service';
 import { OutboxSignal } from './outbox-signal';
 import {
   type OutboxEntry,
@@ -28,6 +30,10 @@ import {
   isSendable,
   planBatch,
 } from './plan-batch';
+
+const isForeignKeyError = (error: unknown) =>
+  isPrismaKnownError(error, 'P2003') ||
+  (error instanceof Error && error.message.includes('FOREIGN KEY constraint failed'));
 
 /** Operations per push request (the cloud accepts up to 50). */
 const BATCH_SIZE = 25;
@@ -91,6 +97,7 @@ export class SyncEngineService implements OnApplicationBootstrap, OnModuleDestro
     private readonly snapshots: SnapshotSyncService,
     private readonly bus: RealtimeBus,
     private readonly signal: OutboxSignal,
+    private readonly inbound: InboundOrdersService,
     @Inject(HUB_CONFIG) private readonly config: HubConfig,
   ) {}
 
@@ -261,6 +268,16 @@ export class SyncEngineService implements OnApplicationBootstrap, OnModuleDestro
       .filter((id): id is string => id !== undefined);
     const rows = await this.db.syncOperation.findMany({ where: { id: { in: candidates } } });
     const byId = new Map(rows.map((r) => [r.id, r]));
+    // Website orders received from the cloud: the version the hub's change is based on (ADR 0013).
+    const inbound = new Map(
+      (
+        await this.db.inboundOrder.findMany({
+          where: {
+            orderId: { in: rows.filter((r) => r.entityType === 'Order').map((r) => r.entityId) },
+          },
+        })
+      ).map((i) => [i.orderId, i.cloudVersion]),
+    );
     const deps = new Map(rows.map((r) => [r.id, dependenciesOf(r.entityType, r.payload)]));
     return planBatch(entries, deps, now, BATCH_SIZE).flatMap((planned) => {
       const row = byId.get(planned.sendId);
@@ -271,6 +288,9 @@ export class SyncEngineService implements OnApplicationBootstrap, OnModuleDestro
         entityId: row.entityId,
         operationType: row.operationType,
         entityVersion: row.entityVersion,
+        ...(row.entityType === 'Order' && inbound.has(row.entityId)
+          ? { baseVersion: inbound.get(row.entityId) }
+          : {}),
         payload: row.payload,
       } as WireOperation;
       return [{ planned, op }];
@@ -462,10 +482,44 @@ export class SyncEngineService implements OnApplicationBootstrap, OnModuleDestro
       if (wake.aborted && !this.stopping.signal.aborted) return;
       throw error;
     }
-    // CONFIG is the only topic until website orders join the feed (Phase 7).
-    if (page.changes.length > 0) await this.refreshConfiguration();
+    await this.handleChanges(client, page.changes, signal);
     await this.state.set('cursor', page.cursor);
     this.onCloudSuccess();
+  }
+
+  /**
+   * Applies one page of the feed: a configuration change refreshes the snapshot (once per page,
+   * first, so website orders find the products they reference); each website order announced is
+   * fetched and stored once, at its newest state. A failure leaves the cursor where it was, so the
+   * page is handled again.
+   */
+  private async handleChanges(
+    client: CloudClient,
+    changes: readonly ChangeEntry[],
+    signal: AbortSignal,
+  ): Promise<void> {
+    if (changes.some((c) => c.topic === 'CONFIG')) await this.refreshConfiguration();
+    const orderIds = [
+      ...new Set(changes.flatMap((c) => (c.topic === 'ORDER' && c.entityId ? [c.entityId] : []))),
+    ];
+    for (const orderId of orderIds) {
+      let order;
+      try {
+        order = await client.order(orderId, signal);
+      } catch (error) {
+        // Not (or no longer) this location's order: nothing to store.
+        if (error instanceof CloudRequestRejected && error.status === 404) continue;
+        throw error;
+      }
+      try {
+        await this.inbound.ingest(order);
+      } catch (error) {
+        if (!isForeignKeyError(error)) throw error;
+        // The order references catalog rows this hub does not have yet: refresh, then retry.
+        await this.refreshConfiguration();
+        await this.inbound.ingest(order);
+      }
+    }
   }
 
   private async refreshConfiguration(): Promise<void> {

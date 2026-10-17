@@ -19,10 +19,19 @@ const AUTH_RATE_LIMITED_ROUTES = new Set([
   `/${API_PREFIX}/auth/refresh`,
   `/${API_PREFIX}/auth/pin`,
 ]);
+const WEB_ORDER_ROUTE = `/${API_PREFIX}/orders`;
+const TRACKING_ROUTE = `/${API_PREFIX}/orders/track`;
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9._-]{8,128}$/;
 
-function isAuthRoute(request: FastifyRequest): boolean {
-  return AUTH_RATE_LIMITED_ROUTES.has(request.routeOptions.url ?? '');
+type RateBudget = 'auth' | 'web-order' | 'tracking' | 'all';
+
+/** Credential and public customer endpoints get their own, smaller budgets per client IP. */
+function budgetOf(request: FastifyRequest): RateBudget {
+  const route = request.routeOptions.url ?? '';
+  if (AUTH_RATE_LIMITED_ROUTES.has(route)) return 'auth';
+  if (route === WEB_ORDER_ROUTE && request.method === 'POST') return 'web-order';
+  if (route === TRACKING_ROUTE) return 'tracking';
+  return 'all';
 }
 
 export interface ServerAppOptions {
@@ -67,10 +76,19 @@ export async function createServerApp(
   await app.register(cookie);
   await app.register(rateLimit, {
     timeWindow: '1 minute',
-    // Credential endpoints get a much smaller, separate budget per client IP.
-    max: (request) =>
-      isAuthRoute(request) ? config.AUTH_RATE_LIMIT_PER_MINUTE : config.RATE_LIMIT_PER_MINUTE,
-    keyGenerator: (request) => `${isAuthRoute(request) ? 'auth' : 'all'}:${request.ip}`,
+    max: (request) => {
+      switch (budgetOf(request)) {
+        case 'auth':
+          return config.AUTH_RATE_LIMIT_PER_MINUTE;
+        case 'web-order':
+          return config.WEB_ORDER_RATE_LIMIT_PER_MINUTE;
+        case 'tracking':
+          return config.TRACKING_RATE_LIMIT_PER_MINUTE;
+        default:
+          return config.RATE_LIMIT_PER_MINUTE;
+      }
+    },
+    keyGenerator: (request) => `${budgetOf(request)}:${request.ip}`,
     errorResponseBuilder: (_request, context) => ({
       statusCode: 429,
       code: 'RATE_LIMITED',

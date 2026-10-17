@@ -21,6 +21,7 @@ import { HubStateService } from './hub-state.service';
 import { HubController } from './hub.controller';
 import { ProvisionedGuard } from './provisioned.guard';
 import { SnapshotSyncService } from './snapshot/snapshot-sync.service';
+import { InboundOrdersService } from './sync/inbound-orders.service';
 import { OutboxSignal } from './sync/outbox-signal';
 import { OutboxRecorder } from './sync/outbox.recorder';
 import { SyncEngineService } from './sync/sync-engine.service';
@@ -74,6 +75,7 @@ export class HubModule {
         { provide: HUB_CONFIG, useValue: config.hub },
         HubStateService,
         SnapshotSyncService,
+        InboundOrdersService,
         SyncEngineService,
         { provide: APP_GUARD, useClass: ProvisionedGuard },
       ],

@@ -43,3 +43,14 @@ model HubState {
 
   @@map("hub_state")
 }
+
+/// Website orders received from the cloud's change feed, with the cloud version the hub last
+/// stored. Until the hub's first change of such an order is accepted by the cloud, the cloud owns
+/// it; that first push names this version (`baseVersion`) so the cloud can hand it over (ADR 0013).
+model InboundOrder {
+  orderId      String   @id @map("order_id")
+  cloudVersion Int      @map("cloud_version")
+  receivedAt   DateTime @default(now()) @map("received_at")
+
+  @@map("inbound_orders")
+}

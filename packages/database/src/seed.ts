@@ -25,6 +25,14 @@ interface SeedFile {
     taxInclusive: boolean;
     addressLine: string | null;
     phone: string | null;
+    /** Online ordering at creation (later changes are the restaurant's, ADR 0013). */
+    online?: {
+      state: 'OPEN' | 'PAUSED' | 'CLOSED';
+      acceptMinutes: number;
+      pickupEnabled: boolean;
+      deliveryEnabled: boolean;
+      deliveryFee: number;
+    };
   }[];
   roles: { name: string; description: string; isSystem: boolean; permissions: '*' | string[] }[];
   menu?: SeedMenu;
@@ -153,13 +161,14 @@ async function seedConfiguration(
   if (file.discounts && (await prisma.discount.count({ where: { restaurantId } })) === 0) {
     await prisma.discount.createMany({ data: file.discounts.map((d) => ({ ...d, restaurantId })) });
   }
-  if (
-    file.paymentMethods &&
-    (await prisma.paymentMethod.count({ where: { restaurantId } })) === 0
-  ) {
-    await prisma.paymentMethod.createMany({
-      data: file.paymentMethods.map((m, i) => ({ ...m, restaurantId, sortOrder: i })),
+  // Methods are added when missing (by type and name), so a new one reaches existing databases.
+  for (const [i, method] of (file.paymentMethods ?? []).entries()) {
+    const found = await prisma.paymentMethod.count({
+      where: { restaurantId, type: method.type, nameEn: method.nameEn },
     });
+    if (found === 0) {
+      await prisma.paymentMethod.create({ data: { ...method, restaurantId, sortOrder: i } });
+    }
   }
   for (const [code, registers] of Object.entries(file.cashRegisters ?? {})) {
     const locationId = locationIds.get(code);
@@ -210,11 +219,23 @@ export async function seed(prisma: PrismaClient, file: SeedFile): Promise<void> 
   });
 
   const locationIds = new Map<string, string>();
-  for (const loc of file.locations) {
+  for (const { online, ...loc } of file.locations) {
     const location = await prisma.location.upsert({
       where: { restaurantId_code: { restaurantId: restaurant.id, code: loc.code } },
       update: {},
-      create: { ...loc, restaurantId: restaurant.id },
+      create: {
+        ...loc,
+        restaurantId: restaurant.id,
+        ...(online
+          ? {
+              onlineOrderingState: online.state,
+              onlineAcceptMinutes: online.acceptMinutes,
+              onlinePickupEnabled: online.pickupEnabled,
+              onlineDeliveryEnabled: online.deliveryEnabled,
+              onlineDeliveryFee: online.deliveryFee,
+            }
+          : {}),
+      },
     });
     locationIds.set(loc.code, location.id);
   }
