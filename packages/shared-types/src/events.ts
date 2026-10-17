@@ -4,6 +4,7 @@ import type {
   OrderChannel,
   OrderStatus,
   PaymentStatus,
+  SyncConnectionState,
 } from './enums';
 
 /**
@@ -41,8 +42,12 @@ export interface EventMap {
   /** Items changed (order edited before the kitchen started), priority changed, or recalled. */
   'kitchen.ticket_updated': KitchenTicketEventPayload;
   'kitchen.ticket_cancelled': KitchenTicketEventPayload;
+  /** The hub's sync engine delivered operations to the cloud. */
   'sync.completed': { processed: number; pending: number };
+  /** The cloud refused operations; they wait in the outbox as FAILED. */
   'sync.failed': { failed: number; lastError: string };
+  /** The hub's indicator state changed (e.g. the cloud became unreachable or came back). */
+  'sync.status_changed': { state: SyncConnectionState; pending: number; failed: number };
   'restaurant.status_changed': { locationId: string; state: OnlineOrderingState };
   'menu.updated': { locationId: string; version: string };
 }

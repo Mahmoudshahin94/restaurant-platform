@@ -22,11 +22,15 @@ export interface CloudLink {
   status: 'ONLINE' | 'OFFLINE' | 'UNKNOWN';
   lastAttemptAt: string | null;
   lastError: string | null;
+  /** The cloud refused the hub's credential: nothing syncs until the hub is paired again. */
+  credentialRejected: boolean;
 }
 
 interface StateShape {
   pairing: Pairing;
   snapshot: SnapshotState;
+  /** Last change-feed sequence the hub handled (docs/sync.md). */
+  cursor: string;
 }
 
 /** Durable key/value state of the hub (`hub_state`), cached in memory after first read. */
@@ -34,7 +38,12 @@ interface StateShape {
 export class HubStateService {
   private readonly cache = new Map<keyof StateShape, unknown>();
   /** Volatile: reachability of the cloud as last observed by this process. */
-  cloud: CloudLink = { status: 'UNKNOWN', lastAttemptAt: null, lastError: null };
+  cloud: CloudLink = {
+    status: 'UNKNOWN',
+    lastAttemptAt: null,
+    lastError: null,
+    credentialRejected: false,
+  };
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -63,6 +72,20 @@ export class HubStateService {
   }
 
   markCloud(status: 'ONLINE' | 'OFFLINE', error: string | null = null): void {
-    this.cloud = { status, lastAttemptAt: new Date().toISOString(), lastError: error };
+    this.cloud = {
+      status,
+      lastAttemptAt: new Date().toISOString(),
+      lastError: error,
+      credentialRejected: false,
+    };
+  }
+
+  markCredentialRejected(message: string): void {
+    this.cloud = {
+      status: 'ONLINE',
+      lastAttemptAt: new Date().toISOString(),
+      lastError: message,
+      credentialRejected: true,
+    };
   }
 }

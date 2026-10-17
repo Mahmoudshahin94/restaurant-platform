@@ -1,6 +1,8 @@
 import {
+  type HubSyncOperationsQuery,
   type PinLoginRequest,
   hubStatusSchema,
+  hubSyncOperationListSchema,
   type DismissTicketRequest,
   type OrderKitchenPriorityRequest,
   type TicketItemDoneRequest,
@@ -119,9 +121,21 @@ export function createApiClient(options: HttpClientOptions) {
       /** Answers only on a location hub (the cloud returns 404): pairing, cloud link, outbox. */
       status: () =>
         http.request('GET', `${API}/hub/status`, { schema: hubStatusSchema, noRetry: true }),
-      /** Pulls the latest configuration from the cloud now. */
-      refresh: () =>
+      /** "Sync now": sends the outbox and checks the cloud for configuration changes. */
+      sync: () =>
         http.request('POST', `${API}/hub/sync`, { schema: hubStatusSchema, noRetry: true }),
+      /** The outbox, for the synchronization screen. */
+      operations: (query: HubSyncOperationsQuery = {}) =>
+        http.request('GET', `${API}/hub/sync/operations`, {
+          query: { status: query.status, limit: query.limit },
+          schema: hubSyncOperationListSchema,
+        }),
+      /** Puts a failed operation back in the queue (needs `sync.view`). */
+      retry: (operationRowId: string) =>
+        http.request('POST', `${API}/hub/sync/operations/${operationRowId}/retry`, {
+          schema: hubStatusSchema,
+          noRetry: true,
+        }),
     },
     restaurants: {
       get: (restaurantId: string) =>

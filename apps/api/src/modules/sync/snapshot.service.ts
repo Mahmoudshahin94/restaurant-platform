@@ -79,6 +79,11 @@ export class SnapshotService {
       diningTables: await db.diningTable.findMany({ where: { locationId }, orderBy: byId }),
       paymentMethods: await db.paymentMethod.findMany({ where: { restaurantId }, orderBy: byId }),
       cashRegisters: await db.cashRegister.findMany({ where: { locationId }, orderBy: byId }),
+      // Orders taken through the cloud before the hub was paired keep their numbers (ADR 0012).
+      orderCounters: await db.orderCounter.findMany({
+        where: { locationId, businessDate: { gte: new Date(Date.now() - 2 * 24 * 60 * 60_000) } },
+        orderBy: { businessDate: 'asc' },
+      }),
     };
 
     // JSON round trip: dates become ISO strings, exactly as the hub receives them.

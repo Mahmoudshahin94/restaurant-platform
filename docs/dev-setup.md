@@ -40,10 +40,15 @@ pnpm --filter @pos/gateway start   # http://localhost:4000; data in apps/gateway
 ```
 
 Pairing asks for the owner's password (or reads `HUB_PAIR_PASSWORD`), registers the hub as a
-device and downloads the location snapshot. The hub keeps working when the API is stopped; it
-refreshes the snapshot every `HUB_SNAPSHOT_INTERVAL_SECONDS` when the API is reachable. To start
-over, stop it and delete `apps/gateway/.hub-data/`. `GET http://localhost:4000/api/v1/hub/status`
-shows the pairing, cloud link and outbox size.
+device and downloads the location snapshot. The hub keeps working when the API is stopped. While
+the API runs, the sync engine sends the hub's outbox to it and follows its change feed, so menu
+and settings changes made in the admin reach the hub within seconds (`HUB_*` sync settings in
+`.env`, see [sync.md](sync.md)). To start over, stop it and delete `apps/gateway/.hub-data/`.
+`GET http://localhost:4000/api/v1/hub/status` shows the pairing, cloud link and sync state; the
+POS shows the same in its footer and on its synchronization screen (`/sync`).
+
+To try offline operation: stop the API, take orders on the POS (footer: "Offline · N pending"),
+start the API again and press "Sync now" on the synchronization screen (or wait up to a minute).
 
 Run the POS:
 

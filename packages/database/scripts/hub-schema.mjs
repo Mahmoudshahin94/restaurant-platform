@@ -3,7 +3,7 @@
 // The hub runs the same application services as the cloud API, so both databases must have the
 // same models, fields and enums (src/hub-schema.contract.test.ts compares the generated clients).
 // The transform only switches the provider, drops PostgreSQL column types (`@db.*`), removes
-// models marked `/// @cloud-only`, and appends the hub-only models.
+// models and enums marked `/// @cloud-only`, and appends the hub-only models.
 //
 //   node scripts/hub-schema.mjs           write the file
 //   node scripts/hub-schema.mjs --check   fail if the committed file is out of date
@@ -34,8 +34,8 @@ export function toHubSchema(schema, extra) {
       '\n',
     ),
   );
-  // Cloud-only models: a `/// @cloud-only` line directly above `model X {`.
-  out = out.replace(/\/\/\/ @cloud-only\n(?:\/\/\/.*\n)*model \w+ \{[\s\S]*?\n\}\n?/g, '');
+  // Cloud-only models and enums: a `/// @cloud-only` line directly above `model X {`/`enum X {`.
+  out = out.replace(/\/\/\/ @cloud-only\n(?:\/\/\/.*\n)*(?:model|enum) \w+ \{[\s\S]*?\n\}\n?/g, '');
   // PostgreSQL native column types have no SQLite equivalent; Prisma's defaults apply.
   out = out.replace(/\s@db\.\w+(\([^)]*\))?/g, '');
   const header = [

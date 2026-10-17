@@ -185,6 +185,7 @@ export async function buildSnapshot() {
       { id: ids.card, restaurantId, type: 'CARD', nameEn: 'Mada', nameAr: 'مدى' },
     ],
     cashRegisters: [{ id: ids.drawer, locationId, nameEn: 'Drawer', nameAr: 'الدرج' }],
+    orderCounters: [] as { locationId: string; businessDate: string; lastNumber: number }[],
   };
   return { ids, tables };
 }

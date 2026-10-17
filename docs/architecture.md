@@ -17,7 +17,7 @@ codebase; there was no legacy code to preserve.
 Customer Web ─┐                          ┌─ Admin
               ▼                          ▼
         Cloud API (NestJS + Fastify, modular monolith) ── PostgreSQL (source of truth for synced data)
-              ▲   ▲  outbound WebSocket "poke" (hub → cloud; the restaurant opens no inbound ports)
+              ▲   ▲  outbound HTTP long poll (hub → cloud; the restaurant opens no inbound ports)
    REST push  │   │  REST pull (cursor-based change feed)
               │   │
         Location Hub (apps/gateway, Node) ── SQLite (operational source of truth while offline)
@@ -124,12 +124,13 @@ Summary (full protocol in [sync.md](sync.md)):
 
 - The hub writes every cloud-bound mutation to `sync_operations` (the outbox) **in the same
   SQLite transaction** as the change.
-- **Push:** `POST /api/v1/sync/push` with batches of operations keyed by `operationId`. The cloud
-  records each one in `ProcessedOperation` (primary key `operationId`) inside the transaction
-  that applies it. A replay returns the stored result, so duplicates are impossible even when
-  requests race.
+- **Push:** `POST /api/v1/sync/push` with batches of operations keyed by `operationId`, each
+  carrying an aggregate's full state (newest per entity, dependencies first). The cloud records
+  each one in `ProcessedOperation` (primary key `operationId`) inside the transaction that applies
+  it. A replay answers `DUPLICATE`, so duplicates are impossible even when requests race.
 - **Pull:** `GET /api/v1/sync/pull?cursor=` reads a monotonic `ChangeLog` sequence, never
-  timestamps. Cloud pokes trigger immediate pulls.
+  timestamps, filled by database triggers on configuration tables. The hub keeps a long poll open,
+  so changes arrive within seconds, and refreshes its snapshot on a `CONFIG` change.
 - **Retries:** transient failures use exponential backoff with full jitter. Permanent failures
   become `FAILED`, are shown to administrators, and are never dropped. Ordering is per entity.
 - **Conflicts** follow explicit ownership rules (menu → cloud; 86/availability → hub; local
@@ -176,7 +177,7 @@ The cloud is never in this path. Event names and payloads are typed in
 3. The cloud validates products, modifiers and availability, then **recalculates** prices, tax,
    discounts, fees and the total with the shared pricing engine. Browser totals are ignored.
 4. It creates the order (`PLACED`, owner = cloud) and a payment intent through the
-   `PaymentProvider` abstraction, appends to the change log and pokes the hub.
+   `PaymentProvider` abstraction and appends to the change log, which the hub is long-polling.
 5. The hub pulls the order and the POS asks staff to accept or reject it. Accept → `CONFIRMED`,
    which is pushed to the cloud, and tickets go to the KDS.
 6. The customer sees status changes by polling or SSE. An order still unaccepted after a
@@ -192,7 +193,7 @@ The cloud is never in this path. Event names and payloads are typed in
 | 3     | Payments (provider abstraction, cash, split), shifts, cash drawer                                                                                       | ✅ Done |
 | 4     | KDS app, kitchen tickets, station routing                                                                                                               | ✅ Done |
 | 5     | Location hub with SQLite, offline POS                                                                                                                   | ✅ Done |
-| 6     | Synchronization engine                                                                                                                                  | ⏳      |
+| 6     | Synchronization engine                                                                                                                                  | ✅ Done |
 | 7     | Customer website, online ordering availability                                                                                                          | ⏳      |
 | 8     | Admin portal completion                                                                                                                                 | ⏳      |
 | 9     | Reporting                                                                                                                                               | ⏳      |
@@ -322,13 +323,65 @@ See [ADR 0011](adr/0011-one-server-codebase-on-two-databases.md).
 - **POS/KDS** talk to the hub in development and tests; the POS offers PIN sign-in with an on-screen
   keypad and shows the hub's cloud link and pending changes.
 
+**Phase 6 verification (2026-10-17):** `turbo run build typecheck lint test` with 60/60 tasks
+green, covering 391 unit and integration tests (domain 119, API 123, gateway 34, i18n 23,
+database 21, validation 16, api-client 11, POS 11, receipts 8, KDS 7, server 6, app-kit 5,
+admin 5, ui 2), and 20 Playwright E2E tests (admin 3, POS 13, KDS 4). New: the cloud's push/pull suite (exactly once under repeated and
+concurrent delivery, line replacement with append-only history, payments and cash movements,
+ticket dependencies, conflicts for stale, cloud-changed and cloud-owned entities, scope and
+validation refusals per operation, database rules, a refused operation applied after its cause was
+fixed, Phase 5-format operations, device authentication, the trigger-fed change feed with paging and
+long polling, and a contract test that the payload schemas match the database models); the hub's
+engine suite (offline then reconnect, coalescing, dependency order, FAILED holding back only its
+entity, manager retry, RETRY backoff and give-up, HTTP 500 and refused credentials, crash recovery
+with DUPLICATE answers, cursor handling, the background loops) and batch planner unit tests; and a
+POS E2E test of the specification's acceptance flow against the real cloud: the cloud is down, an
+order is taken, the cloud comes back, "Sync now", the order is in the cloud exactly once, and a
+second sync duplicates nothing. Starting the cloud in that test also uploads everything the other
+POS suites recorded offline (payments, refunds, shift closes, kitchen tickets) with no refusal.
+Also `pnpm test:tools`, a clean `migrate status`, and a manual run on the dev hub: its Phase 5
+offline backlog was sent, two orders were refused as `SYNC_CONFLICT` because the dev cloud had
+already numbered `MAIN-001`/`MAIN-002` that day (shown as "Sync error · 2 failed" with the reason),
+and a new order continued the cloud's numbering (`MAIN-006`) and synchronized within seconds.
+
+### Phase 6 decisions
+
+See [ADR 0012](adr/0012-sync-engine.md) and [sync.md](sync.md).
+
+- **State-based push:** each operation carries the aggregate's full state; the hub sends the
+  newest per entity (coalescing) with dependencies first, the cloud stores it after scope,
+  ownership and schema checks without re-running commands.
+- **Exactly once:** the `processed_operations` ledger (primary key `operationId`) is written in the
+  applying transaction; repeats and racing deliveries answer `DUPLICATE`. Refusals are kept for
+  administrators (`GET /locations/:lid/sync/issues`).
+- **Ownership without timestamps:** an entity is written only if new to the cloud or unchanged since
+  this hub last pushed it (row `version` versus the ledger); a backwards outbox sequence is a
+  conflict. `entityVersion` became a per-entity outbox sequence.
+- **Change feed:** PostgreSQL triggers on every snapshot table record one `CONFIG` change per
+  transaction, serialised per restaurant so cursors never skip a late commit; the hub long-polls
+  `GET /sync/pull` and refreshes its snapshot on a change (safety-net refresh now every 30 minutes).
+- **Failure handling:** unreachable cloud → `OFFLINE` with full-jitter backoff (2 s to 60 s);
+  `CONFLICT`/`REJECTED` → `FAILED`, holding back only that entity, retried by a manager; `RETRY`
+  answers back off per operation and fail after 10.
+- **POS:** footer indicator (`Online · 12 synchronized`, `Offline · 3 pending`, `Syncing · 5
+pending`, `Sync error · 2 failed`) and a synchronization screen with "Sync now", figures and the
+  outbox, in English and Arabic.
+- **Order numbers:** the snapshot carries the cloud's order counters of recent days, so a hub paired
+  mid-day continues the cloud's numbering instead of reusing it.
+
 Known gaps carried forward:
 
 - The admin UI does not yet expose per-product modifier min/max overrides. The API supports them
   and the UI preserves existing values.
-- **Nothing reaches the cloud yet from the hub**: orders, payments and shifts made at the hub stay
-  in its outbox until the sync engine (Phase 6). Cloud reports and the admin portal therefore do
-  not include hub activity yet, and configuration arrives by full snapshot, not change feed.
+- **Resolving a sync conflict needs a person and a tool**: the POS shows refused changes and a
+  manager can retry them, and the cloud lists them (`/sync/issues`), but there is no admin screen
+  yet to inspect or fix the conflicting data (Phase 8). Hub audit-log rows are not uploaded yet
+  (Phase 10). Website orders join the change feed in Phase 7.
+- Shifts have no `version` column, so a shift changed in the cloud itself would not be detected as a
+  conflict; nothing in the cloud edits hub shifts today.
+- The change feed's waiting requests poll PostgreSQL once a second each; `LISTEN/NOTIFY` should
+  replace this before many hubs share one API instance.
+- The POS top bar overflows on screens narrower than about 1100 px (seen at 1024 px).
 - The POS keeps its refresh token in memory (sign in again after a restart); OS-keychain storage
   is still to do. Employees and PINs are provisioned by seed; their admin screen comes in Phase 8.
 - The hub runs as a separate Node process; packaging it as a Tauri sidecar for single-terminal
@@ -384,6 +437,9 @@ Recorded as ADRs in [adr/](adr/):
 11. [0011](adr/0011-one-server-codebase-on-two-databases.md): one server codebase on PostgreSQL
     (cloud) and SQLite (hub), generated hub schema with a contract test, pairing and snapshot
     provisioning, outbox capture.
+12. [0012](adr/0012-sync-engine.md): the sync engine: state-based push with coalescing and
+    dependencies, exactly-once ledger, ownership by version history instead of timestamps,
+    trigger-fed configuration change feed read by long polling.
 
 Open items to revisit:
 

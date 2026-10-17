@@ -4,32 +4,110 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import type { LocationSnapshot } from '@pos/validation';
+import type {
+  ChangeEntry,
+  LocationSnapshot,
+  SyncOperationResult,
+  SyncPushRequest,
+} from '@pos/validation';
 import { createHub } from '../src/bootstrap';
 import { loadHubConfig } from '../src/config';
 import { HubStateService } from '../src/hub-state.service';
 import { SnapshotSyncService } from '../src/snapshot/snapshot-sync.service';
+import { SyncEngineService } from '../src/sync/sync-engine.service';
 
-/** A stand-in for the cloud's snapshot endpoint, switchable between up, down and rejecting. */
+type PushOperation = SyncPushRequest['operations'][number];
+
+/**
+ * A stand-in for the cloud's `/sync/*` endpoints: snapshot, push (answers APPLIED unless told
+ * otherwise, DUPLICATE for repeats) and the change feed. Switchable between up, down (stopped),
+ * failing (HTTP 500) and rejecting the credential.
+ */
 export class FakeCloud {
   snapshot: LocationSnapshot | null = null;
-  mode: 'up' | 'reject' = 'up';
+  mode: 'up' | 'reject' | 'error' = 'up';
   requests = 0;
+  /** Every push request received, in order. */
+  pushes: SyncPushRequest[] = [];
+  /** Operation ids the cloud has applied (to answer DUPLICATE). */
+  readonly applied = new Set<string>();
+  /** Override the answer for an operation; default APPLIED (or DUPLICATE). */
+  answer: (op: PushOperation) => Partial<SyncOperationResult> | null = () => null;
+  /** The change feed; seq numbers are the array index + 1. */
+  readonly changes: ChangeEntry[] = [];
   readonly credential = 'device-id.secret-value';
   private server: Server | null = null;
   url = '';
 
+  addChange(topic: ChangeEntry['topic'] = 'CONFIG'): void {
+    this.changes.push({
+      seq: String(this.changes.length + 1),
+      topic,
+      entityId: null,
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  /** Operations of every push, flattened. */
+  get pushed(): PushOperation[] {
+    return this.pushes.flatMap((p) => p.operations);
+  }
+
   async start(): Promise<void> {
     this.server = createServer((req, res) => {
       this.requests += 1;
-      if (req.url !== '/api/v1/sync/snapshot') return void res.writeHead(404).end();
+      const url = new URL(req.url ?? '/', 'http://cloud');
+      const json = (status: number, body: unknown) =>
+        res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(body));
       if (this.mode === 'reject' || req.headers.authorization !== `Device ${this.credential}`) {
-        return void res.writeHead(401).end('{"code":"UNAUTHENTICATED"}');
+        return void json(401, { code: 'UNAUTHENTICATED' });
       }
-      const etag = `"${this.snapshot?.version ?? ''}"`;
-      if (req.headers['if-none-match'] === etag) return void res.writeHead(304).end();
-      res.writeHead(200, { 'content-type': 'application/json', etag });
-      res.end(JSON.stringify(this.snapshot));
+      if (this.mode === 'error') return void json(500, { code: 'INTERNAL_ERROR' });
+      switch (url.pathname) {
+        case '/api/v1/sync/snapshot': {
+          const etag = `"${this.snapshot?.version ?? ''}"`;
+          if (req.headers['if-none-match'] === etag) return void res.writeHead(304).end();
+          res.writeHead(200, { 'content-type': 'application/json', etag });
+          return void res.end(JSON.stringify(this.snapshot));
+        }
+        case '/api/v1/sync/pull': {
+          const cursor = url.searchParams.get('cursor');
+          if (cursor === null) {
+            return void json(200, {
+              changes: [],
+              cursor: String(this.changes.length),
+              hasMore: false,
+            });
+          }
+          const changes = this.changes.slice(Number(cursor));
+          return void json(200, {
+            changes,
+            cursor: changes.at(-1)?.seq ?? cursor,
+            hasMore: false,
+          });
+        }
+        case '/api/v1/sync/push': {
+          let body = '';
+          req.on('data', (chunk: Buffer) => (body += chunk.toString('utf8')));
+          req.on('end', () => {
+            const request = JSON.parse(body) as SyncPushRequest;
+            this.pushes.push(request);
+            const results = request.operations.map((op) => {
+              const custom = this.answer(op);
+              if (custom) {
+                return { operationId: op.operationId, code: null, message: null, ...custom };
+              }
+              const status = this.applied.has(op.operationId) ? 'DUPLICATE' : 'APPLIED';
+              this.applied.add(op.operationId);
+              return { operationId: op.operationId, status, code: null, message: null };
+            });
+            void json(200, { results });
+          });
+          return;
+        }
+        default:
+          return void json(404, { code: 'NOT_FOUND' });
+      }
     });
     await new Promise<void>((done) => this.server?.listen(0, '127.0.0.1', done));
     this.url = `http://127.0.0.1:${String((this.server.address() as AddressInfo).port)}`;
@@ -53,12 +131,15 @@ export interface TestHub {
   app: NestFastifyApplication;
   state: HubStateService;
   snapshots: SnapshotSyncService;
+  engine: SyncEngineService;
   dataDir: string;
   close: () => Promise<void>;
 }
 
+/** Starts a hub on a temporary data directory. Its background sync loops are off unless asked. */
 export async function startHub(
   dataDir = mkdtempSync(join(tmpdir(), 'pos-hub-')),
+  env: Record<string, string> = {},
 ): Promise<TestHub> {
   const config = loadHubConfig({
     ...process.env,
@@ -68,12 +149,18 @@ export async function startHub(
     HUB_CLOUD_TIMEOUT_MS: '2000',
     HUB_CORS_ORIGINS: 'http://localhost:5174',
     AUTH_RATE_LIMIT_PER_MINUTE: '1000',
+    HUB_SYNC_ENABLED: 'false',
+    HUB_PULL_WAIT_SECONDS: '0',
+    HUB_SYNC_RETRY_BASE_MS: '20',
+    HUB_SYNC_RETRY_MAX_MS: '200',
+    ...env,
   });
   const app = await createHub(config);
   return {
     app,
     state: app.get(HubStateService),
     snapshots: app.get(SnapshotSyncService),
+    engine: app.get(SyncEngineService),
     dataDir,
     close: async () => {
       await app.close();

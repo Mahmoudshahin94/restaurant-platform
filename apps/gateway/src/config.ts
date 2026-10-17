@@ -11,9 +11,24 @@ const hubEnvSchema = z.object({
   HUB_DATA_DIR: z.string().default('.hub-data'),
   /** Browser origins of LAN clients using cookie sessions (KDS). */
   HUB_CORS_ORIGINS: z.string().default(''),
-  /** How often to refresh the location snapshot from the cloud while online; 0 = never. */
-  HUB_SNAPSHOT_INTERVAL_SECONDS: z.coerce.number().int().min(0).default(300),
+  /**
+   * Safety-net refresh of the location snapshot; configuration changes normally arrive through the
+   * change feed within seconds. 0 = never.
+   */
+  HUB_SNAPSHOT_INTERVAL_SECONDS: z.coerce.number().int().min(0).default(1800),
   HUB_CLOUD_TIMEOUT_MS: z.coerce.number().int().min(500).default(10_000),
+  /** Run the sync engine (push the outbox, follow the change feed). Off only in tests. */
+  HUB_SYNC_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
+  /** Long-poll wait of the change feed. */
+  HUB_PULL_WAIT_SECONDS: z.coerce.number().int().min(0).max(30).default(25),
+  /** Backoff while the cloud is unreachable: full jitter between these bounds. */
+  HUB_SYNC_RETRY_BASE_MS: z.coerce.number().int().min(10).default(2000),
+  HUB_SYNC_RETRY_MAX_MS: z.coerce.number().int().min(100).default(60_000),
+  /** Completed outbox rows keep their payload this long, then only the row itself is kept. */
+  HUB_OUTBOX_RETENTION_DAYS: z.coerce.number().int().min(1).default(30),
   /** Optional fixed signing key; otherwise one is generated on first start and kept in the data dir. */
   HUB_JWT_SECRET: z.string().min(32).optional(),
 });
@@ -23,6 +38,13 @@ export interface HubConfig {
   databaseFile: string;
   snapshotIntervalSeconds: number;
   cloudTimeoutMs: number;
+  sync: {
+    enabled: boolean;
+    pullWaitSeconds: number;
+    retryBaseMs: number;
+    retryMaxMs: number;
+    retentionDays: number;
+  };
 }
 
 export const HUB_CONFIG = Symbol('HUB_CONFIG');
@@ -70,6 +92,13 @@ export function loadHubConfig(env: NodeJS.ProcessEnv = process.env): {
       databaseFile,
       snapshotIntervalSeconds: hubEnv.HUB_SNAPSHOT_INTERVAL_SECONDS,
       cloudTimeoutMs: hubEnv.HUB_CLOUD_TIMEOUT_MS,
+      sync: {
+        enabled: hubEnv.HUB_SYNC_ENABLED,
+        pullWaitSeconds: hubEnv.HUB_PULL_WAIT_SECONDS,
+        retryBaseMs: hubEnv.HUB_SYNC_RETRY_BASE_MS,
+        retryMaxMs: hubEnv.HUB_SYNC_RETRY_MAX_MS,
+        retentionDays: hubEnv.HUB_OUTBOX_RETENTION_DAYS,
+      },
     },
   };
 }

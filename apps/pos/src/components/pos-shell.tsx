@@ -16,11 +16,12 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { appInfo, isTauri } from '../lib/device';
-import { ORDER_QUERY_ROOTS, useHubStatus, useLocations } from '../lib/queries';
+import { ORDER_QUERY_ROOTS, SYNC_QUERY_ROOTS, useHubStatus, useLocations } from '../lib/queries';
 import { session, useSession } from '../lib/session';
 import { usePreferences } from '../stores/preferences';
 import { FOCUS_SEARCH_EVENT } from './product-grid';
 import { PLACE_ORDER_EVENT } from './cart-panel';
+import { SyncIndicator } from './sync-indicator';
 
 const NAV = [
   { to: '/order', key: 'nav.order', icon: ShoppingBasket, shortcut: 'F2' },
@@ -104,6 +105,13 @@ export function PosShell() {
       });
       return;
     }
+    if (event.type.startsWith('sync.')) {
+      // The hub's sync engine made progress or the cloud link changed.
+      void queryClient.invalidateQueries({
+        predicate: (q) => SYNC_QUERY_ROOTS.includes(String(q.queryKey[0])),
+      });
+      return;
+    }
     if (!event.type.startsWith('order.')) return;
     void queryClient.invalidateQueries({
       predicate: (q) => ORDER_QUERY_ROOTS.includes(String(q.queryKey[0])),
@@ -122,29 +130,29 @@ export function PosShell() {
   return (
     <div className="flex h-full flex-col bg-background">
       <header className="flex h-16 shrink-0 items-center gap-3 border-b bg-card px-3">
-        <nav aria-label={t('pos:nav.main')} className="flex gap-1">
+        <nav aria-label={t('pos:nav.main')} className="flex shrink-0 gap-1">
           {NAV.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
                 cn(
-                  'flex h-12 items-center gap-2 rounded-lg px-4 text-base font-semibold',
+                  'flex h-12 min-w-12 items-center justify-center gap-2 rounded-lg px-3 text-base font-semibold xl:px-4',
                   isActive ? 'bg-primary text-primary-foreground' : 'hover:bg-muted',
                 )
               }
             >
-              <item.icon aria-hidden className="size-5" />
-              {t(`pos:${item.key}`)}
-              <kbd className="hidden text-xs opacity-60 lg:inline">{item.shortcut}</kbd>
+              <item.icon aria-hidden className="size-5 shrink-0" />
+              <span className="sr-only lg:not-sr-only">{t(`pos:${item.key}`)}</span>
+              <kbd className="hidden text-xs opacity-60 xl:inline">{item.shortcut}</kbd>
             </NavLink>
           ))}
         </nav>
-        <div className="ms-auto flex items-center gap-3">
+        <div className="ms-auto flex min-w-0 items-center gap-2 xl:gap-3">
           {location ? (
-            <Button variant="ghost" onClick={() => void navigate('/location')}>
+            <Button variant="ghost" className="min-w-0" onClick={() => void navigate('/location')}>
               <MapPin aria-hidden />
-              {pickLocalized(location, 'name', locale)}
+              <span className="max-w-48 truncate">{pickLocalized(location, 'name', locale)}</span>
             </Button>
           ) : null}
           <LanguageSwitcher className="h-10 w-auto" onLocaleChange={setLocale} />
@@ -156,12 +164,12 @@ export function PosShell() {
           >
             <Settings aria-hidden />
           </Button>
-          <span className="hidden text-sm text-muted-foreground md:inline">
+          <span className="hidden max-w-40 truncate text-sm text-muted-foreground xl:inline">
             {user?.displayName}
           </span>
-          <Button variant="outline" onClick={() => void signOut()}>
+          <Button variant="outline" className="shrink-0" onClick={() => void signOut()}>
             <LogOut aria-hidden className="rtl:-scale-x-100" />
-            {t('common:actions.signOut')}
+            <span className="sr-only lg:not-sr-only">{t('common:actions.signOut')}</span>
           </Button>
         </div>
       </header>
@@ -180,21 +188,7 @@ export function PosShell() {
       <footer className="flex h-7 shrink-0 items-center justify-between border-t px-3 text-xs text-muted-foreground">
         <span className="flex items-center gap-4">
           <RealtimeIndicator status={realtime} />
-          {hub.data ? (
-            <span
-              role="status"
-              className={hub.data.cloud === 'OFFLINE' ? 'font-semibold text-foreground' : ''}
-            >
-              {hub.data.cloud === 'ONLINE'
-                ? t('pos:hub.cloudOnline')
-                : hub.data.cloud === 'OFFLINE'
-                  ? t('pos:hub.cloudOffline')
-                  : t('pos:hub.cloudUnknown')}
-              {hub.data.pendingOperations > 0
-                ? ` · ${t('pos:hub.pending', { count: hub.data.pendingOperations })}`
-                : ''}
-            </span>
-          ) : null}
+          {hub.data ? <SyncIndicator status={hub.data} /> : null}
         </span>
         {isTauri() && info.data
           ? t('pos:device.version', { version: info.data.version })

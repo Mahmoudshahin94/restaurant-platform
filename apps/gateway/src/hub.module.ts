@@ -1,4 +1,4 @@
-import { type DynamicModule, Module } from '@nestjs/common';
+import { type DynamicModule, Global, Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import {
   type AppConfig,
@@ -21,11 +21,19 @@ import { HubStateService } from './hub-state.service';
 import { HubController } from './hub.controller';
 import { ProvisionedGuard } from './provisioned.guard';
 import { SnapshotSyncService } from './snapshot/snapshot-sync.service';
+import { OutboxSignal } from './sync/outbox-signal';
 import { OutboxRecorder } from './sync/outbox.recorder';
+import { SyncEngineService } from './sync/sync-engine.service';
+
+/** Global so the outbox recorder, created inside the database module, can raise it. */
+@Global()
+@Module({ providers: [OutboxSignal], exports: [OutboxSignal] })
+class OutboxSignalModule {}
 
 /**
  * The location hub: the same server modules as the cloud, on SQLite, in hub mode (cloud-managed
- * settings are read-only, PIN sign-in is available, every change goes to the outbox).
+ * settings are read-only, PIN sign-in is available, every change goes to the outbox and the sync
+ * engine delivers it).
  */
 @Module({})
 export class HubModule {
@@ -33,6 +41,7 @@ export class HubModule {
     return {
       module: HubModule,
       imports: [
+        OutboxSignalModule,
         ServerCoreModule.forRoot({
           config: config.app,
           mode: 'hub',
@@ -65,6 +74,7 @@ export class HubModule {
         { provide: HUB_CONFIG, useValue: config.hub },
         HubStateService,
         SnapshotSyncService,
+        SyncEngineService,
         { provide: APP_GUARD, useClass: ProvisionedGuard },
       ],
     };

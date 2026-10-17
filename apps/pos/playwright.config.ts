@@ -21,6 +21,9 @@ const e2eDatabaseUrl =
   process.env.POS_E2E_DATABASE_URL ??
   (process.env.DATABASE_URL ?? '').replace(/\/[^/?]+(\?|$)/, '/pos_kds_pos_e2e$1');
 const hubDataDir = resolve(tmpdir(), 'pos-kds-e2e-hub-pos');
+// The sync test (e2e/sync.spec.ts) brings the cloud back on this port and database.
+process.env.POS_E2E_CLOUD_PORT = String(CLOUD_PORT);
+process.env.POS_E2E_CLOUD_DATABASE_URL = e2eDatabaseUrl;
 
 export default defineConfig({
   testDir: './e2e',
@@ -51,6 +54,8 @@ export default defineConfig({
         // Tries the (stopped) cloud at start-up, so the POS shows it is offline.
         HUB_SNAPSHOT_INTERVAL_SECONDS: '3600',
         HUB_CLOUD_TIMEOUT_MS: '1000',
+        // Reconnect quickly once the sync test starts the cloud again.
+        HUB_SYNC_RETRY_MAX_MS: '3000',
         AUTH_RATE_LIMIT_PER_MINUTE: '1000',
       },
     },

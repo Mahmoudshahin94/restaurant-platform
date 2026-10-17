@@ -126,6 +126,23 @@ describe('location snapshot', () => {
     expect(body.tables.locations.some((l) => l.id === tenant.locationB)).toBe(false);
   });
 
+  it('includes the location’s recent order counters, so a hub paired mid-day continues them', async () => {
+    const { credential } = await pair();
+    const today = new Date(new Date().toISOString().slice(0, 10));
+    const old = new Date(today.getTime() - 10 * 24 * 60 * 60_000);
+    await prisma.orderCounter.createMany({
+      data: [
+        { locationId: tenant.locationA, businessDate: today, lastNumber: 41 },
+        { locationId: tenant.locationA, businessDate: old, lastNumber: 90 },
+        { locationId: tenant.locationB, businessDate: today, lastNumber: 7 },
+      ],
+    });
+    const body = (await snapshot(credential)).json<LocationSnapshot>();
+    expect(body.tables.orderCounters).toEqual([
+      { locationId: tenant.locationA, businessDate: today.toISOString(), lastNumber: 41 },
+    ]);
+  });
+
   it('answers 304 when the hub already has the current version', async () => {
     const { credential } = await pair();
     const first = await snapshot(credential);

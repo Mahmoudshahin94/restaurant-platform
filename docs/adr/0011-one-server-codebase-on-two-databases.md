@@ -35,8 +35,8 @@ column, `instanceof` checks on the PostgreSQL client's error class, and `skipDup
   the cloud records nothing.
 - **Provisioning before the change feed:** the hub is paired once (a pairing command issues it a
   device credential) and pulls a location snapshot (configuration, catalog, floor, staff with credential
-  hashes) at start-up and periodically, applying it in one transaction. Phase 6 replaces this
-  with the incremental change feed and pushes the outbox.
+  hashes) at start-up and periodically, applying it in one transaction. Phase 6 pushes the outbox
+  and makes the snapshot the payload of the cloud's change feed (ADR 0012).
 
 ## Consequences
 

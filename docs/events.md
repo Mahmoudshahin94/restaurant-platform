@@ -30,7 +30,9 @@ payloads carry `{ ticketId, orderId, orderNumber, stationId, status, version }`.
 | `kitchen.ticket_started` / `_ready` / `_completed` | Kitchen action, or handover at the POS (`_completed`)            | KDS, POS                              | Phase 4 |
 | `kitchen.ticket_updated`                           | Items edited, priority, line struck, undo/recall, dismissed      | KDS                                   | Phase 4 |
 | `kitchen.ticket_cancelled`                         | Order cancelled, or an edit removed the station's items          | KDS                                   | Phase 4 |
-| `sync.completed` / `sync.failed`                   | Push/pull cycle finished                                         | POS sync indicator, admin             | Phase 6 |
+| `sync.completed`                                   | The hub's push delivered operations (`processed`, `pending`)     | POS sync indicator and screen         | Phase 6 |
+| `sync.failed`                                      | The cloud refused operations (`failed`, `lastError`)             | POS sync indicator and screen         | Phase 6 |
+| `sync.status_changed`                              | The hub's indicator state changed (`state`, `pending`, `failed`) | POS sync indicator and screen         | Phase 6 |
 | `restaurant.status_changed`                        | Online ordering state changed                                    | POS, customer web                     | Phase 7 |
 | `menu.updated`                                     | The hub applied a new configuration snapshot                     | POS, KDS, customer web                | Phase 5 |
 
