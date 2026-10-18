@@ -8,6 +8,8 @@ coverage/
 !.env.example
 *.tsbuildinfo
 .DS_Store
+# Editor settings (JetBrains IDEs)
+.idea/
 playwright-report/
 test-results/
 packages/database/generated/
