@@ -67,3 +67,22 @@ export function formatTime(
     timeZone,
   }).format(new Date(isoUtc));
 }
+
+/**
+ * A business date (YYYY-MM-DD, already the location's calendar day) as a localized date. It is
+ * formatted in UTC so no time-zone conversion can move it to another day.
+ */
+export function formatBusinessDate(date: string, locale: Locale, options?: FormatOptions): string {
+  return new Intl.DateTimeFormat(localeTag(locale, options), {
+    dateStyle: 'medium',
+    timeZone: 'UTC',
+  }).format(new Date(`${date}T00:00:00Z`));
+}
+
+/** Basis points as a localized percentage (2500 → "25%", 4523 → "45.2%"). */
+export function formatBps(bps: number, locale: Locale, options?: FormatOptions): string {
+  return new Intl.NumberFormat(localeTag(locale, options), {
+    style: 'percent',
+    maximumFractionDigits: 1,
+  }).format(bps / 10_000);
+}
