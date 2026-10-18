@@ -11,3 +11,4 @@ export * from './hub';
 export * from './sync';
 export * from './online-ordering';
 export * from './admin';
+export * from './reports';

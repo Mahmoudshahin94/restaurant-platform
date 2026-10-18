@@ -1,7 +1,7 @@
 import { ERROR_CODES } from '@pos/shared-types';
 import { describe, expect, it } from 'vitest';
 import { directionFor } from './direction';
-import { formatMoney } from './format';
+import { formatBps, formatBusinessDate, formatMoney } from './format';
 import { initI18n } from './init';
 import { pickLocalized } from './localized';
 import { NAMESPACES, resources } from './resources';
@@ -88,6 +88,18 @@ describe('direction and formatting', () => {
     expect(formatMoney(1500, 'KWD', 'en')).toContain('1.500');
     expect(formatMoney(1850, 'SAR', 'ar')).toContain('18.50');
     expect(formatMoney(1850, 'SAR', 'ar', { digits: 'arab' })).toContain('١٨');
+  });
+
+  it('formats business dates without shifting the day', () => {
+    expect(formatBusinessDate('2026-10-11', 'en')).toBe('Oct 11, 2026');
+    expect(formatBusinessDate('2026-10-11', 'ar')).toContain('2026');
+    expect(formatBusinessDate('2026-01-01', 'en')).toBe('Jan 1, 2026');
+  });
+
+  it('formats basis points as percentages', () => {
+    expect(formatBps(4_523, 'en')).toBe('45.2%');
+    expect(formatBps(10_000, 'en')).toBe('100%');
+    expect(formatBps(0, 'ar')).toContain('0');
   });
 
   it('places explicit signs per locale', () => {

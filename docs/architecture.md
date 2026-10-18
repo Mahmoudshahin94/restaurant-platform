@@ -3,8 +3,8 @@
 Restaurant platform: offline-first POS, Kitchen Display System (KDS), customer online ordering,
 admin portal, cloud API, and a per-restaurant location hub. Arabic and English with full RTL.
 
-> Status: Phases 0–8 (foundations, menu, POS, payments, KDS, location hub, sync engine, customer
-> website and online ordering, admin portal) are implemented. See the
+> Status: Phases 0–9 (foundations, menu, POS, payments, KDS, location hub, sync engine, customer
+> website and online ordering, admin portal, reporting) are implemented. See the
 > [phase checklist](#10-development-phases) at the end.
 
 ## 1. Starting point
@@ -52,7 +52,7 @@ owns the local database.
 ```
 apps/
   api/            NestJS + Fastify cloud API                         (Phase 0–1: implemented)
-  admin/          React admin portal                                 (Phases 1, 8)
+  admin/          React admin portal                                 (Phases 1, 8, 9)
   gateway/        Location hub: SQLite, sync engine, LAN WS, printers (Phase 5–6)
   pos/            Tauri 2 + React point of sale                      (Phase 2: order entry)
   kds/            React kitchen display                              (Phase 4)
@@ -207,7 +207,7 @@ and [sync.md](sync.md#website-orders-phase-7).
 | 6     | Synchronization engine                                                                                                                                  | ✅ Done |
 | 7     | Customer website, online ordering availability                                                                                                          | ✅ Done |
 | 8     | Admin portal completion                                                                                                                                 | ✅ Done |
-| 9     | Reporting                                                                                                                                               | ⏳      |
+| 9     | Reporting                                                                                                                                               | ✅ Done |
 | 10    | Hardening, full E2E suite                                                                                                                               | ⏳      |
 
 Gate after every phase: tests, typecheck, lint, migration status, build, and docs updated.
@@ -504,6 +504,51 @@ See [ADR 0014](adr/0014-admin-portal-and-conflict-resolution.md).
   methods, drawers, devices, sync decisions) are recorded in the cloud; actions taken at the hub
   are recorded on the hub (upload in Phase 10).
 
+**Phase 9 verification (2026-10-18):** `pnpm build && pnpm typecheck && pnpm lint && pnpm test`
+green (turbo: build 16/16, typecheck, lint and test 26/26 tasks), covering 553 unit, integration
+and component tests (API 193, domain 149, gateway 48, admin 26, i18n 26, database 23,
+validation 20, POS 13, customer-web 12, api-client 11, server 10, receipts 8, KDS 7, app-kit 5,
+ui 2), and 29 Playwright E2E tests (admin 8, POS 14, KDS 4, customer-web 3). New: the cloud's report suite against a seeded history whose figures were
+worked out by hand: two locations (VAT 15% included and added), all five channels, a 10% and a
+fixed discount, a cancelled prepaid order, a fully refunded website order with a delivery fee,
+partial card refunds on a later day, an order still in the kitchen, and an order and payment just
+after midnight local time (21:30Z the day before) — asserting every daily, channel, payment,
+product, category, tax, discount, shift and prep-time figure, channel and location filters, the
+time-zone day boundaries, a 366-day leap year, validation, `404` for another location and `403`
+without `reports.view`, a KWD restaurant (3 decimals, largest-remainder refund split), and an
+order taken, paid, refunded and handed over through the real API appearing exactly as priced;
+domain tests for `splitRefund`, averages, shares and date ranges; admin component tests (daily
+sales and its chart, filters in the URL and the request, switching report, an inverted period
+refused before any request, empty and error states, Arabic RTL, CSV content and period presets);
+and an admin E2E test in which a takeaway order goes through the kitchen, cash payment and
+hand-over and the owner reads it in daily sales (and its downloaded CSV), orders by channel and
+prep times, then again in Arabic. Also `pnpm test:tools`, `prettier --check`, a clean
+`migrate status` on the development and test databases, the hub schema check (views are not
+Prisma models, so the hub schema is unchanged), and a manual run of every report against the
+development database in English and Arabic.
+
+### Phase 9 decisions
+
+See [ADR 0015](adr/0015-reporting.md).
+
+- **Cloud-only reports over PostgreSQL views** (`report_sales_orders`, `report_payments`,
+  `report_refunds`, `report_kitchen_tickets`), filtered and summed with parameterized SQL in
+  `apps/api/src/modules/reports`; no warehouse, extracts or caches. Nine reports under
+  `/restaurants/:rid/reports/*`, `reports.view`, scoped to the caller's locations, over business
+  dates (each location's calendar day), at most 366 days, with a channel filter.
+- **Sales are completed orders** (also when refunded later) on their business date;
+  `netSales = total − tax − fees` in both price modes; open, draft and cancelled orders are not
+  sales.
+- **Refunds count on the day they were made** and are split over the refunded order's taxes,
+  fees and net sales in proportion (`splitRefund`, largest remainder), giving net sales and tax
+  after refunds. Refunds of orders cancelled afterwards are money, not sales.
+- **Money reports** (payment summary, shift summary) date money by when it moved and include every
+  order; the shift summary reuses the POS's cash formula and the stored close-out.
+- **Prep time** = ticket reaching the kitchen → READY, per station, with the wait until started,
+  median, 90th percentile and the location's late threshold.
+- **Admin Reports section** with filters in the URL, headline figures, tables with totals, a small
+  net-sales chart, locale-free CSV export (UTF-8 BOM), and English/Arabic with RTL.
+
 Known gaps carried forward:
 
 - Hub audit-log rows are not uploaded yet (Phase 10): actions taken at the restaurant (PIN
@@ -523,8 +568,6 @@ Known gaps carried forward:
   sites, an installer/service wrapper and disk encryption of its data are hardening work.
 - The hub's SQLite tables have no CHECK constraints (the cloud's do); rules are enforced by the
   shared services.
-- The admin portal shows shifts read-only and a small dashboard; daily and shift reports beyond
-  that come with reporting (Phase 9).
 - Card payments are recorded after approval on a standalone terminal; no integrated terminal or
   online gateway is wired yet. Receipt QR blocks are placeholders until a market's e-invoicing
   rules are chosen.
@@ -538,7 +581,6 @@ Known gaps carried forward:
 - Realtime delivery is in-process: fine for the hub (one per site); several cloud API instances
   would need a shared channel (e.g. Postgres LISTEN/NOTIFY) behind `RealtimeBus`.
 - No bump-bar/keyboard control on the KDS.
-- Prep-time reporting comes with reporting (Phase 9).
 - Restaurants are provisioned by seed only; there is no platform-operator UI yet.
 - **Online ordering (Phase 7):** no customer accounts, saved addresses, delivery zones or radius,
   scheduled orders, promo codes or tips; customers (and support staff in the cloud) cannot cancel
@@ -564,6 +606,13 @@ Known gaps carried forward:
   password change, password reset by e-mail or second factor; the audit log has no free-text search
   or export; pairing a hub still needs the command on the hub machine (the portal shows it);
   location and restaurant time zones are typed as IANA names, not picked from a list.
+
+- **Reports (Phase 9):** reports read live views (no materialized views, replica or warehouse
+  yet); there are no scheduled or e-mailed reports, no PDF/print layout (CSV only), no hourly or
+  day-part breakdown, and no staff, table or customer reports. Product and category sales are not
+  net of refunds (refunds name no lines). The location hub has only its shift-close daily summary,
+  so reports need the cloud and show what hubs have uploaded. Comparisons between periods and
+  locations side by side are not built.
 
 ## Architectural decisions and open questions
 
@@ -606,6 +655,10 @@ Recorded as ADRs in [adr/](adr/):
     escalation in staff management, hub-owned orders changed only at the POS (online refunds stay
     in the cloud), and resolving refused hub changes by an explicit, audited decision
     (`RESOLUTION` change-feed topic).
+15. [0015](adr/0015-reporting.md): reporting: cloud-only reports over PostgreSQL views, sales =
+    completed orders on their business date, refunds on the day they were made and split in
+    proportion to the order, money reports dated by when money moved, prep time from ticket
+    timestamps.
 
 Open items to revisit:
 

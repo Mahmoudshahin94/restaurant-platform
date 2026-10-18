@@ -541,6 +541,60 @@ A method's `type` cannot change; the last active cash method cannot be archived
   number) `409 CONFLICT` `APPLY_FAILED` and the issue stays open. Audit: `sync.issue_resolved`
   (with the cloud's previous copy for `APPLY_HUB`), `sync.resend_requested`.
 
+## Reports (Phase 9, cloud only)
+
+Cloud-only reports (`apps/api/src/modules/reports`, [ADR 0015](adr/0015-reporting.md)) over
+PostgreSQL views. Every route needs `reports.view` (at some location) and answers for the
+locations where the caller holds it.
+
+| Method | Path                                    | Report                                            |
+| ------ | --------------------------------------- | ------------------------------------------------- |
+| GET    | `/restaurants/:rid/reports/daily-sales` | Sales per business date (every day of the period) |
+| GET    | `/restaurants/:rid/reports/channels`    | Sales per channel with share of net sales         |
+| GET    | `/restaurants/:rid/reports/payments`    | Money per payment method and per channel          |
+| GET    | `/restaurants/:rid/reports/products`    | Line sales per product and size                   |
+| GET    | `/restaurants/:rid/reports/categories`  | Line sales per category                           |
+| GET    | `/restaurants/:rid/reports/taxes`       | Per tax, rate and price mode, refunds netted      |
+| GET    | `/restaurants/:rid/reports/discounts`   | Per discount as applied                           |
+| GET    | `/restaurants/:rid/reports/shifts`      | Shifts opened in the period, cash and tenders     |
+| GET    | `/restaurants/:rid/reports/prep-times`  | Kitchen prep and wait times per station           |
+
+- **Query:** `from`, `to` (business dates `YYYY-MM-DD`, inclusive, required, at most 366 days),
+  `locationIds` (comma-separated; default every permitted location; another location answers
+  `404 LOCATION_NOT_FOUND`), `channels` (comma-separated `DINE_IN,TAKEAWAY,PHONE,WEBSITE,DELIVERY`;
+  default all; ignored by the shift report). Invalid periods or values answer
+  `400 VALIDATION_FAILED`.
+- **Every answer** echoes `from`, `to`, `currencyCode`, `locationIds`, `channels` (null = all) and
+  `generatedAt`, then `rows` and `totals`. Amounts are integer minor units of the restaurant
+  currency; shares are basis points; durations are whole seconds.
+- **Sales** (daily, channels) are completed orders (`COMPLETED`, or `REFUNDED` afterwards) on their
+  business date: `orders`, `grossSales` (Σ subtotal as charged), `discounts`, `netSales`
+  (total − tax − fees), `tax`, `fees`, `totalSales`, `averageNetSale`, `refunds`
+  (`{ count, amount, tax, fees, netSales }`: refunds of sales made in the period, split in
+  proportion to the refunded order), `netSalesAfterRefunds`, `taxAfterRefunds` and
+  `cancelledOrders`.
+- **Payments:** captured charges and refunds (`charges`, `chargeCount`, `refunds`, `refundCount`,
+  `net`, `roundingAdjustment`) per method, plus `byChannel`, on the business day the money moved,
+  for every order (also open or cancelled ones).
+- **Products / categories:** `quantity`, `orders`, `grossSales`, `discounts` (allocated), `tax`,
+  `netSales` (line total − line tax) and `shareBps`, best sellers first; categories add the number
+  of distinct `products`.
+- **Taxes:** per `taxId`, `rateBps` and `taxInclusive`: `orders`, `taxableAmount` (excluding the
+  tax), `tax`, `refundedTax`, `netTax`; totals omit the taxable amount (bases overlap when an order
+  carries several taxes).
+- **Discounts:** per discount, type and value: `applications`, `orders`, `amount`; totals add
+  `grossSales` and `shareOfGrossBps`.
+- **Shifts:** per shift (newest first): drawer, status, opened/closed by and at, `openingFloat`,
+  `cashSales`, `cashRefunds`, `payIns`, `payOuts`, `expectedCash` (stored at close, live while
+  open), `countedCash`, `cashDifference` (negative = short), `charges`, `refunds`,
+  `netCollected`, `orders` and `byMethod`.
+- **Prep times:** per kitchen station: `tickets` (reached READY), `averagePrepSeconds`,
+  `medianPrepSeconds`, `p90PrepSeconds`, `maxPrepSeconds` (created → ready),
+  `averageWaitSeconds` (created → started), `lateTickets` (slower than the location's
+  `kdsLateMinutes`) and `lateShareBps`.
+- The hub keeps its shift-close `GET /locations/:lid/reports/daily-summary` (Phase 3,
+  `shifts.manage`); it is not one of these reports.
+
 ## Security headers and limits
 
 - `@fastify/helmet` defaults, CORS allowlist from `CORS_ORIGINS` (credentials enabled), a 1 MB

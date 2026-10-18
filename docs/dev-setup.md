@@ -160,6 +160,9 @@ with Preview) under `tools/printer-sim/out/`.
   `hub-schema.contract` test fail while the two schemas differ. Avoid PostgreSQL-only Prisma
   features in shared code (`String[]`, `mode: 'insensitive'` outside admin-only modules,
   `skipDuplicates`, raw SQL outside `SqlDialect`).
+- **Cloud-only SQL** (the Phase 9 reporting views, ADR 0015) goes in a cloud migration as plain
+  SQL that Prisma does not model, and is read only by cloud-only modules (`apps/api`). Views need
+  no hub change; a change that alters a Prisma model still does.
 
 ## Troubleshooting
 

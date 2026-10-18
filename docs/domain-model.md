@@ -21,6 +21,7 @@ mirrors the operational subset.
 | Kitchen   | KitchenTicket, KitchenTicketItem                                                                                                  | ✅ Phase 4                         |
 | Sync      | SyncOperation, HubState, InboundOrder (hub); ProcessedOperation, ChangeLog (cloud)                                                | ✅ Phases 5–8                      |
 | Online    | WebOrderCounter (cloud); website fields on Order and Location                                                                     | ✅ Phase 7                         |
+| Reporting | Views `report_sales_orders`, `report_payments`, `report_refunds`, `report_kitchen_tickets` (cloud, not Prisma models)             | ✅ Phase 9                         |
 | Customers | Customer, Address (accounts)                                                                                                      | ⏳ deferred (guest checkout only)  |
 | Inventory | InventoryItem, Recipe, StockMovement                                                                                              | ⏳ module boundary only            |
 
@@ -208,6 +209,14 @@ historical orders.
   for `ONLINE` by a CHECK constraint); a void is a `REFUND` row.
 - Whether a branch takes orders is computed (`onlineOrderingStatus` in `@pos/domain`) from the
   switch, the opening hours and the hub's heartbeat (`Device.lastSeenAt`).
+
+**Reporting** (Phase 9, [ADR 0015](adr/0015-reporting.md)): cloud-only PostgreSQL views, created
+by migration and not modelled in Prisma (so the hub schema is unaffected). `report_sales_orders`:
+orders with status `COMPLETED`/`REFUNDED` and `net_sales = total − tax_total − fee_total`;
+`report_payments`: captured payments with the business date (location time zone) they were made on
+and the order's channel; `report_refunds`: refunds of sales with the refunded order's total, fees
+and per-tax amounts (split in proportion by `splitRefund` in `@pos/domain`);
+`report_kitchen_tickets`: tickets that reached READY with prep and wait seconds and a late flag.
 
 **Location hub** (Phase 5): the hub's SQLite database has the same models (generated schema,
 `prisma/hub/schema.prisma`, guarded by a contract test) plus two of its own:

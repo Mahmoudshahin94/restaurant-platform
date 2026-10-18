@@ -10,6 +10,7 @@ import {
   type OrderSearchQuery,
   type PairDeviceRequest,
   type PaymentSearchQuery,
+  type ReportQuery,
   type ResolveSyncIssueRequest,
   type RoleAssignmentInput,
   type SyncIssuesQuery,
@@ -19,6 +20,15 @@ import {
   type UpdateRoleRequest,
   type UpdateUserRequest,
   adminDeviceSchema,
+  categoryReportSchema,
+  channelReportSchema,
+  dailySalesReportSchema,
+  discountReportSchema,
+  paymentReportSchema,
+  prepTimeReportSchema,
+  productReportSchema,
+  shiftReportSchema,
+  taxReportSchema,
   adminSyncIssueSchema,
   auditLogPageSchema,
   cashRegisterAdminSchema,
@@ -47,10 +57,25 @@ type Query = Record<string, string | number | boolean | undefined>;
 const list = (values?: readonly string[]) =>
   values && values.length > 0 ? values.join(',') : undefined;
 
-/** The admin portal's cloud-only endpoints (Phase 8). */
+/** Report filters for the query string. */
+const reportQuery = (q: ReportQuery): Query => ({
+  from: q.from,
+  to: q.to,
+  locationIds: list(q.locationIds),
+  channels: list(q.channels),
+});
+
+/** The admin portal's cloud-only endpoints (Phases 8–9). */
 export function adminApi(http: HttpClient) {
   const restaurant = (rid: string) => `${API}/restaurants/${rid}`;
   const location = (lid: string) => `${API}/locations/${lid}`;
+  const report =
+    <T extends z.ZodType>(name: string, schema: T) =>
+    (rid: string, q: ReportQuery) =>
+      http.request('GET', `${restaurant(rid)}/reports/${name}`, {
+        query: reportQuery(q),
+        schema,
+      });
   return {
     dashboard: (rid: string) =>
       http.request('GET', `${restaurant(rid)}/dashboard`, { schema: dashboardSchema }),
@@ -187,6 +212,19 @@ export function adminApi(http: HttpClient) {
         body,
         schema: paymentListItemSchema,
       }),
+    /** Reports (Phase 9): `reports.view`, over business dates. */
+    reports: {
+      dailySales: report('daily-sales', dailySalesReportSchema),
+      channels: report('channels', channelReportSchema),
+      payments: report('payments', paymentReportSchema),
+      products: report('products', productReportSchema),
+      categories: report('categories', categoryReportSchema),
+      taxes: report('taxes', taxReportSchema),
+      discounts: report('discounts', discountReportSchema),
+      shifts: report('shifts', shiftReportSchema),
+      prepTimes: report('prep-times', prepTimeReportSchema),
+    },
+
     auditLogs: (rid: string, q: AuditLogQuery = {}) =>
       http.request('GET', `${restaurant(rid)}/audit-logs`, {
         query: q as Query,

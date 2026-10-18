@@ -43,6 +43,7 @@ export const keys = {
   syncIssue: (locationId: string, operationId: string) =>
     ['sync-issue', locationId, operationId] as const,
   auditLogs: (rid: string, query: AuditLogQuery) => ['audit-logs', rid, query] as const,
+  report: (rid: string, kind: string, query: object) => ['report', rid, kind, query] as const,
 };
 
 export function useRestaurantId(): string {

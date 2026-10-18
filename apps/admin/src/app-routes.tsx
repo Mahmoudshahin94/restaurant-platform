@@ -32,6 +32,7 @@ import { AuditLogPage } from './routes/system/audit-log-page';
 import { DevicesPage } from './routes/system/devices-page';
 import { SyncIssuePage, SyncPage } from './routes/system/sync-page';
 import { NotFoundPage } from './routes/not-found-page';
+import { ReportsIndex, ReportsPage } from './routes/reports/reports-page';
 
 /** A page behind a permission (checked again by the API). */
 function guarded(path: string, permission: Permission, element: ReactNode, restaurantWide = false) {
@@ -58,6 +59,8 @@ export function AppRoutes() {
           }
         >
           <Route index element={<DashboardPage />} />
+          {guarded('reports', 'reports.view', <ReportsIndex />)}
+          {guarded('reports/:kind', 'reports.view', <ReportsPage />)}
           {guarded('operations/orders', 'orders.view', <OrdersPage />)}
           {guarded('operations/orders/:locationId/:orderId', 'orders.view', <OrderDetailPage />)}
           {guarded('operations/customers', 'customers.view', <CustomersPage />)}

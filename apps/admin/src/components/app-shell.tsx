@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   BadgePercent,
   Banknote,
+  BarChart3,
   Building2,
   ChefHat,
   Contact,
@@ -61,7 +62,10 @@ interface NavGroup {
 const NAV: NavGroup[] = [
   {
     labelKey: 'overview',
-    items: [{ to: '/', labelKey: 'dashboard', icon: LayoutDashboard }],
+    items: [
+      { to: '/', labelKey: 'dashboard', icon: LayoutDashboard },
+      { to: '/reports', labelKey: 'reports', icon: BarChart3, permission: 'reports.view' },
+    ],
   },
   {
     labelKey: 'operations',
