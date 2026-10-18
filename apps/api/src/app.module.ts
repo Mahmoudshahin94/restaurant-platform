@@ -17,6 +17,7 @@ import {
 } from '@pos/server';
 import { AdminModule } from './modules/admin/admin.module';
 import { DevicesModule } from './modules/devices/devices.module';
+import { CloudReportsModule } from './modules/reports/reports.module';
 import { SyncModule } from './modules/sync/sync.module';
 import { WebOrderChangeRecorder } from './modules/sync/web-order-change.recorder';
 
@@ -53,6 +54,8 @@ export class AppModule {
         SyncModule,
         // Cloud-only: the admin portal's staff, payment setup, overviews and audit log.
         AdminModule,
+        // Cloud-only: reports over PostgreSQL views (Phase 9).
+        CloudReportsModule,
       ],
     };
   }
