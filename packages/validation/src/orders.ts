@@ -65,9 +65,8 @@ function channelRules(
   },
   ctx: z.RefinementCtx,
 ): void {
-  if (order.channel === 'DINE_IN' && !order.tableId) {
-    ctx.addIssue({ code: 'custom', path: ['tableId'], message: 'Dine-in orders need a table' });
-  }
+  // Whether dine-in needs a table depends on the location's TABLES module (ADR 0018): the
+  // server checks it, the POS asks only where tables exist.
   if (order.channel !== 'DINE_IN' && order.tableId) {
     ctx.addIssue({
       code: 'custom',

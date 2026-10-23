@@ -59,6 +59,26 @@ describe('resolveLocationMenu', () => {
       maxSelect: 3,
     });
   });
+
+  it('sells products without modifier groups where the MODIFIERS module is off', () => {
+    const plain = resolveLocationMenu(sampleCatalog(), [], { modifiers: false });
+    const burger = findMenuProduct(plain, 'prod-burger')!;
+    expect(burger.modifierGroups).toEqual([]);
+    // Nothing is required any more, and a modifier is no longer part of the menu.
+    expect(
+      validateSelection(burger, { productId: 'prod-burger', variantId: null, modifierIds: [] })
+        .modifiers,
+    ).toEqual([]);
+    expectDomainError(
+      () =>
+        validateSelection(burger, {
+          productId: 'prod-burger',
+          variantId: null,
+          modifierIds: ['mod-cheese'],
+        }),
+      'INVALID_MODIFIER_SELECTION',
+    );
+  });
 });
 
 describe('validateSelection', () => {

@@ -13,9 +13,10 @@ describe('order schemas', () => {
   });
 
   it('enforces channel rules', () => {
+    // A table is required only where the TABLES module is on: the server decides (ADR 0018).
     expect(
       createOrderSchema.safeParse({ id: id(9), channel: 'DINE_IN', items: [item] }).success,
-    ).toBe(false);
+    ).toBe(true);
     expect(
       createOrderSchema.safeParse({ id: id(9), channel: 'TAKEAWAY', tableId: id(3), items: [item] })
         .success,

@@ -6,6 +6,7 @@ import type {
   Order,
   PublishedMenu,
   Shift,
+  TenantContextDto,
   TokenResponse,
 } from '@pos/validation';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -493,5 +494,88 @@ describe('configuration from the cloud', () => {
     ).json<HubStatus>();
     expect(status.lastError).toMatch(/re-pair/);
     expect((await pinSignIn()).statusCode).toBe(200);
+  });
+});
+
+describe('modules at the hub (ADR 0018)', () => {
+  beforeEach(async () => {
+    const { tenantId, locationId } = fixture.ids;
+    // The tenant has no kitchen display, this location no tables, and its plan no modifiers.
+    fixture.tables.featureOverrides = [
+      {
+        id: newId(),
+        tenantId,
+        locationId: null,
+        deviceId: null,
+        scope: 'tenant',
+        feature: 'KDS',
+        enabled: false,
+      },
+      {
+        id: newId(),
+        tenantId,
+        locationId,
+        deviceId: null,
+        scope: `location:${locationId}`,
+        feature: 'TABLES',
+        enabled: false,
+      },
+    ];
+    fixture.tables.tenantEntitlements = [
+      { tenantId, feature: 'MODIFIERS', entitled: false, tenantConfigurable: false },
+    ];
+    cloud.snapshot = withVersion(fixture.ids, fixture.tables);
+    await provision();
+  });
+
+  it('enforces the cloud’s modules with the cloud unreachable', async () => {
+    await cloud.stop();
+    expect(await hub.snapshots.syncNow()).toBe('offline');
+    const owner = await signIn('owner@hub.test');
+
+    const context = await hub.app.inject({
+      method: 'GET',
+      url: `${api}/tenants/${fixture.ids.tenantId}/context?locationId=${fixture.ids.locationId}`,
+      headers: owner,
+    });
+    const { features } = context.json<TenantContextDto>();
+    expect(features.KDS).toMatchObject({ enabled: false, source: 'TENANT' });
+    expect(features.TABLES).toMatchObject({ enabled: false, source: 'LOCATION' });
+    expect(features.MODIFIERS).toMatchObject({ enabled: false, entitled: false });
+
+    for (const url of [`${loc()}/kitchen/tickets`, `${loc()}/floor`]) {
+      const refused = await hub.app.inject({ method: 'GET', url, headers: owner });
+      expect(refused.statusCode, url).toBe(403);
+      expect(refused.json<ApiErrorBody>().code).toBe('FEATURE_DISABLED');
+    }
+
+    // Dine-in without a table, a burger without its required doneness, and no kitchen ticket.
+    const res = await hub.app.inject({
+      method: 'POST',
+      url: `${loc()}/orders`,
+      headers: owner,
+      payload: {
+        id: newId(),
+        channel: 'DINE_IN',
+        status: 'CONFIRMED',
+        items: [{ id: newId(), productId: fixture.ids.burger, quantity: 1 }],
+      },
+    });
+    expect(res.statusCode, res.body).toBe(201);
+    expect(res.json<Order>().tickets).toEqual([]);
+    await cloud.start();
+  });
+
+  it('follows the cloud when the modules change', async () => {
+    fixture.tables.featureOverrides = [];
+    cloud.snapshot = withVersion(fixture.ids, fixture.tables);
+    expect(await hub.snapshots.syncNow()).toBe('applied');
+    const owner = await signIn('owner@hub.test');
+    const tickets = await hub.app.inject({
+      method: 'GET',
+      url: `${loc()}/kitchen/tickets`,
+      headers: owner,
+    });
+    expect(tickets.statusCode).toBe(200);
   });
 });
