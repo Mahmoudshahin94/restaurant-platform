@@ -72,5 +72,10 @@
   "location": {
     "title": "Choose location",
     "none": "Your account has no kitchen access at any location."
+  },
+  "moduleDisabled": {
+    "title": "The kitchen display is off here",
+    "description": "The kitchen display module (KDS) is not enabled for this location. An administrator can turn it on under Settings → Modules.",
+    "changeLocation": "Choose another location"
   }
 }

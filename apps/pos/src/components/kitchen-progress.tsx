@@ -1,6 +1,6 @@
-import { useCurrentLocale } from '@pos/app-kit';
+import { useCurrentLocale, useFeature } from '@pos/app-kit';
 import { pickLocalized } from '@pos/i18n';
-import type { KitchenTicketStatus } from '@pos/shared-types';
+import { Feature, type KitchenTicketStatus } from '@pos/shared-types';
 import { Badge, Button } from '@pos/ui';
 import type { Order } from '@pos/validation';
 import {
@@ -28,7 +28,10 @@ const TICKET: Record<
 export const hasLiveTickets = (order: Order): boolean =>
   order.tickets.some((t) => t.status === 'NEW' || t.status === 'PREPARING' || t.status === 'READY');
 
-/** Where each station is with this order; the cashier can rush it everywhere at once. */
+/**
+ * Where each station is with this order; the cashier can rush it everywhere at once. Shown only
+ * where the KDS module is on (ADR 0018).
+ */
 export function KitchenProgress({
   order,
   canRush,
@@ -42,7 +45,8 @@ export function KitchenProgress({
 }) {
   const { t } = useTranslation('orders');
   const locale = useCurrentLocale();
-  if (order.status === 'DRAFT' || order.status === 'PLACED') return null;
+  const kitchenOn = useFeature(Feature.KDS);
+  if (!kitchenOn || order.status === 'DRAFT' || order.status === 'PLACED') return null;
   const rushed = order.tickets.some((ticket) => ticket.priority === 'RUSH');
 
   return (

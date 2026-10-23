@@ -4,11 +4,13 @@ import {
   tKey,
   useCurrentLocale,
   useErrorText,
+  useFeature,
   useMoneyFormat,
   usePermissionChecks,
 } from '@pos/app-kit';
 import { allowedTransitions, canModifyItems, refundableAmount } from '@pos/domain';
 import { formatDateTime, pickLocalized } from '@pos/i18n';
+import { Feature } from '@pos/shared-types';
 import type { Order, OrderPayment } from '@pos/validation';
 import { Alert, Button, Card, Dialog, DialogContent, EmptyState, cn } from '@pos/ui';
 import { useState } from 'react';
@@ -180,6 +182,7 @@ function OrderDetail({ order, timeZone }: { order: Order; timeZone: string }) {
   const { format } = useMoneyFormat(order.currencyCode);
   const user = useSession((s) => s.user);
   const { canAt } = usePermissionChecks(user);
+  const kitchenOn = useFeature(Feature.KDS);
   const loadOrder = useCart((s) => s.loadOrder);
   const navigate = useNavigate();
   const [dialog, setDialog] = useState<DetailDialog>(null);
@@ -209,11 +212,12 @@ function OrderDetail({ order, timeZone }: { order: Order; timeZone: string }) {
   const canEdit = canModifyItems(order.status) && canAt(order.locationId, 'orders.update');
   const canPay =
     PAYABLE.has(order.status) && order.balanceDue > 0 && canAt(order.locationId, 'payments.create');
-  // A confirmed order may skip READY only when the kitchen has nothing of it left.
+  // A confirmed order may skip READY only when the kitchen has nothing of it left (without a
+  // kitchen display, nothing is waited for).
   const canComplete =
     next.includes('COMPLETED') &&
     order.paymentStatus === 'PAID' &&
-    !(order.status === 'CONFIRMED' && hasLiveTickets(order)) &&
+    !(order.status === 'CONFIRMED' && kitchenOn && hasLiveTickets(order)) &&
     canAt(order.locationId, 'orders.update');
   const rush = useOrderMutation((priority: 'RUSH' | 'NORMAL') =>
     api.orders.kitchenPriority(order.locationId, order.id, { priority }),

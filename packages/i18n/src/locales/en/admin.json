@@ -22,6 +22,7 @@
     "payments": "Payments",
     "shifts": "Shifts",
     "tenant": "Business",
+    "modules": "Modules",
     "onlineOrdering": "Online ordering",
     "paymentMethods": "Payment methods",
     "cashRegisters": "Cash drawers",
@@ -251,6 +252,90 @@
       "CLOTHING": "Clothing store",
       "RETAIL": "Retail store",
       "OTHER": "Other"
+    }
+  },
+  "modules": {
+    "title": "Modules",
+    "description": "Choose which modules your business uses. A location can differ from the business; anything you do not set is inherited.",
+    "scope": "Applies to",
+    "scopeTenant": "The whole business",
+    "scopeLocation": "Location: {{name}}",
+    "choice": "{{module}} setting",
+    "inherit": "Inherit ({{value}})",
+    "on": "On",
+    "off": "Off",
+    "enabled": "On",
+    "disabled": "Off",
+    "source": "From: {{source}}",
+    "empty": "No module can be changed here. Your plan's modules are managed by MADAR.",
+    "hiddenNote": "Modules outside your plan, or managed by MADAR, are not listed.",
+    "offTitle": "This module is off",
+    "offDescription": "{{module}} is not enabled here. You can turn it on under Settings → Modules.",
+    "openModules": "Open modules",
+    "layers": {
+      "PLATFORM": "MADAR default",
+      "BUSINESS_TYPE": "Business type default",
+      "TENANT": "Business setting",
+      "LOCATION": "Location setting",
+      "DEVICE": "Device setting"
+    },
+    "features": {
+      "POS": {
+        "name": "Point of sale",
+        "description": "Take orders and payments at the counter."
+      },
+      "KDS": {
+        "name": "Kitchen display",
+        "description": "Confirmed orders become kitchen tickets on the kitchen screen."
+      },
+      "KITCHEN_PRINTER": {
+        "name": "Kitchen printer",
+        "description": "Print kitchen chits per station."
+      },
+      "ONLINE_ORDERING": {
+        "name": "Online ordering",
+        "description": "Customers order and track orders on your website."
+      },
+      "BARCODE": {
+        "name": "Barcodes",
+        "description": "Scan product barcodes at the till."
+      },
+      "INVENTORY": {
+        "name": "Inventory",
+        "description": "Track stock levels and movements."
+      },
+      "TABLES": {
+        "name": "Tables",
+        "description": "Floor plan, tables, and dine-in orders served at a table."
+      },
+      "MODIFIERS": {
+        "name": "Modifiers",
+        "description": "Extras, removals and choices on products."
+      },
+      "PRODUCT_VARIANTS": {
+        "name": "Product variants",
+        "description": "Sell products in sizes or colours."
+      },
+      "DELIVERY": {
+        "name": "Delivery",
+        "description": "Deliver orders to customers."
+      },
+      "SELF_CHECKOUT": {
+        "name": "Self-checkout",
+        "description": "Customers order and pay at a kiosk."
+      },
+      "CUSTOMER_DISPLAY": {
+        "name": "Customer display",
+        "description": "A screen facing the customer at the till."
+      },
+      "LOYALTY": {
+        "name": "Loyalty",
+        "description": "Reward returning customers."
+      },
+      "ADVANCED_REPORTING": {
+        "name": "Advanced reporting",
+        "description": "Reports beyond the daily summary."
+      }
     }
   },
   "locations": {

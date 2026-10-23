@@ -1,6 +1,7 @@
-import { useCurrentLocale, useMoneyFormat } from '@pos/app-kit';
+import { useCurrentLocale, useFeature, useMoneyFormat } from '@pos/app-kit';
 import { isDomainError, validateSelection } from '@pos/domain';
 import { pickLocalized } from '@pos/i18n';
+import { Feature } from '@pos/shared-types';
 import type { PublishedMenuProduct } from '@pos/validation';
 import {
   Button,
@@ -33,8 +34,20 @@ interface OptionsDialogProps {
  * Size and option picker. Validity and price come from the domain's validateSelection, the same
  * rule the server enforces, so the cashier cannot submit a selection the server would reject.
  */
-export function OptionsDialog({ product, currency, initial, mode, onConfirm }: OptionsDialogProps) {
+export function OptionsDialog({
+  product: menuProduct,
+  currency,
+  initial,
+  mode,
+  onConfirm,
+}: OptionsDialogProps) {
   const { t } = useTranslation(['pos', 'common', 'orders']);
+  // Without the MODIFIERS module the product is sold plain (the hub's menu has no groups then).
+  const modifiersOn = useFeature(Feature.MODIFIERS);
+  const product = useMemo(
+    () => (modifiersOn ? menuProduct : { ...menuProduct, modifierGroups: [] }),
+    [menuProduct, modifiersOn],
+  );
   const locale = useCurrentLocale();
   const { format } = useMoneyFormat(currency);
   const [variantId, setVariantId] = useState<string | null>(

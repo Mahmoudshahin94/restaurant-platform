@@ -1,8 +1,8 @@
 import type { PublishedMenuProduct } from '@pos/validation';
 import { Dialog } from '@pos/ui';
-import { screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '../test/render';
 import { OptionsDialog } from './options-dialog';
 
@@ -45,6 +45,8 @@ const burger: PublishedMenuProduct = {
   ],
 };
 
+afterEach(cleanup);
+
 describe('OptionsDialog', () => {
   it('blocks adding until required choices are made, then prices the selection', async () => {
     const onConfirm = vi.fn();
@@ -80,6 +82,20 @@ describe('OptionsDialog', () => {
       'aria-checked',
       'true',
     );
+  });
+
+  it('sells the product plain where the MODIFIERS module is off', async () => {
+    const onConfirm = vi.fn();
+    await renderWithProviders(
+      <Dialog open>
+        <OptionsDialog product={burger} currency="SAR" mode="add" onConfirm={onConfirm} />
+      </Dialog>,
+      { features: { MODIFIERS: false } },
+    );
+    expect(screen.queryByRole('radio', { name: 'Medium' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Extras')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Add to order · SAR\s25\.00/ }));
+    expect(onConfirm).toHaveBeenCalledWith({ variantId: null, modifierIds: [], notes: null });
   });
 
   it('is fully translated in Arabic', async () => {
