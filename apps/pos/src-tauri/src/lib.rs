@@ -5,6 +5,7 @@ use serde::Serialize;
 use std::time::Duration;
 
 pub mod printing;
+pub mod secure_store;
 
 /// Facts about the running build and host, shown on the POS status bar and sent with device
 /// registration so support can see what is installed where.
@@ -42,10 +43,27 @@ async fn print_raw(host: String, port: u16, data: Vec<u8>) -> Result<(), String>
     .map_err(|e| e.to_string())
 }
 
+/// The refresh token kept in OS secure storage, read once when the POS starts.
+#[tauri::command]
+fn secure_token_get() -> Result<Option<String>, String> {
+    secure_store::read().map_err(|e| e.to_string())
+}
+
+/// Stores the rotated refresh token, or removes it (`null`) on sign-out.
+#[tauri::command]
+fn secure_token_set(token: Option<String>) -> Result<(), String> {
+    secure_store::write(token.as_deref()).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![app_info, print_raw])
+        .invoke_handler(tauri::generate_handler![
+            app_info,
+            print_raw,
+            secure_token_get,
+            secure_token_set
+        ])
         .run(tauri::generate_context!())
         .expect("error while running the POS application");
 }

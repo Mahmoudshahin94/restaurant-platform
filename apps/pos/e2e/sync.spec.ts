@@ -63,7 +63,7 @@ async function startCloud(): Promise<void> {
 /** The Internet drops: the cloud goes away while the restaurant keeps working. */
 async function stopCloud(): Promise<void> {
   const running = cloud;
-  if (running?.exitCode !== null || !running) return;
+  if (!running || running.exitCode !== null) return;
   const exited = new Promise((done) => running.once('exit', done));
   running.kill('SIGTERM');
   await exited;
