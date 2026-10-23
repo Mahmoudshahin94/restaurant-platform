@@ -10,13 +10,17 @@ import {
   ticketPriorityRequestSchema,
   transitionTicketSchema,
 } from '@pos/validation';
+import { Feature } from '@pos/shared-types';
 import type { z } from 'zod';
 import { CurrentPrincipal, type Principal, RequirePermissions } from '../../common/auth/decorators';
+import { RequireFeature } from '../../common/auth/require-feature';
 import { ZodValidationPipe } from '../../common/validation/zod-validation.pipe';
 import { KitchenService } from './kitchen.service';
 
 const id = new ZodValidationPipe(idSchema);
 
+/** The kitchen display and kitchen priorities: only where the KDS module is on (ADR 0018). */
+@RequireFeature(Feature.KDS)
 @Controller('locations/:locationId')
 export class KitchenController {
   constructor(private readonly kitchen: KitchenService) {}

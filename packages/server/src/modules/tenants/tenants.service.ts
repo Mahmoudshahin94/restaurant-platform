@@ -1,10 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import type { Tenant as TenantRow } from '@pos/database';
-import { DomainError } from '@pos/domain';
+import { DomainError, currencyExponent } from '@pos/domain';
 import type { BusinessType, Locale } from '@pos/shared-types';
-import { type Tenant, type UpdateTenantRequest, supportedLocalesSchema } from '@pos/validation';
+import {
+  type Tenant,
+  type TenantContextDto,
+  type UpdateTenantRequest,
+  supportedLocalesSchema,
+} from '@pos/validation';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { FeatureService } from '../features/feature.service';
 
 export function toTenantDto(row: TenantRow): Tenant {
   return {
@@ -29,7 +35,38 @@ export class TenantsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly features: FeatureService,
   ) {}
+
+  /**
+   * What an app needs to render for the tenant (ADR 0018): identity, branding, money, languages
+   * and the modules resolved for `locationId` (or the tenant as a whole). Served by the cloud
+   * and, from its snapshot, by the location hub.
+   */
+  async context(tenantId: string, locationId: string | null): Promise<TenantContextDto> {
+    const row = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!row) throw new DomainError('TENANT_NOT_FOUND', 'Tenant not found');
+    if (locationId) {
+      const found = await this.prisma.location.count({ where: { id: locationId, tenantId } });
+      if (found !== 1) throw new DomainError('LOCATION_NOT_FOUND', 'Location not found');
+    }
+    return {
+      tenant: {
+        id: row.id,
+        slug: row.slug,
+        nameEn: row.nameEn,
+        nameAr: row.nameAr,
+        businessType: row.businessType as BusinessType,
+        status: row.status,
+        timezone: row.timezone,
+      },
+      branding: { nameEn: row.nameEn, nameAr: row.nameAr },
+      currency: { code: row.currencyCode, exponent: currencyExponent(row.currencyCode) },
+      locales: { default: row.defaultLocale, supported: supportedLocalesOf(row) },
+      locationId,
+      features: await this.features.resolve({ tenantId, locationId }),
+    };
+  }
 
   async get(tenantId: string): Promise<Tenant> {
     const row = await this.prisma.tenant.findUnique({ where: { id: tenantId } });

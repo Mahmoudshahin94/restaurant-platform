@@ -1,10 +1,13 @@
-import { Body, Controller, Get, Param, Patch } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Query } from '@nestjs/common';
 import {
   type Tenant,
+  type TenantContextDto,
   type UpdateTenantRequest,
   idSchema,
+  tenantContextQuerySchema,
   updateTenantSchema,
 } from '@pos/validation';
+import type { z } from 'zod';
 import { ManagedInCloud } from '../../common/auth/managed-in-cloud';
 import { RequirePermissions } from '../../common/auth/decorators';
 import { ZodValidationPipe } from '../../common/validation/zod-validation.pipe';
@@ -20,6 +23,20 @@ export class TenantsController {
   @Get()
   get(@Param('tenantId', new ZodValidationPipe(idSchema)) tenantId: string): Promise<Tenant> {
     return this.tenants.get(tenantId);
+  }
+
+  /**
+   * The tenant as every app renders it: branding, currency, locales and the modules resolved for
+   * `?locationId` (ADR 0018). Any member may read it, on the cloud and on the hub.
+   */
+  @RequirePermissions([])
+  @Get('context')
+  context(
+    @Param('tenantId', new ZodValidationPipe(idSchema)) tenantId: string,
+    @Query(new ZodValidationPipe(tenantContextQuerySchema))
+    query: z.output<typeof tenantContextQuerySchema>,
+  ): Promise<TenantContextDto> {
+    return this.tenants.context(tenantId, query.locationId ?? null);
   }
 
   @RequirePermissions(['settings.manage'])

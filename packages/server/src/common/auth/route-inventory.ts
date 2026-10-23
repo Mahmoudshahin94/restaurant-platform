@@ -1,8 +1,9 @@
 import { RequestMethod, type INestApplication } from '@nestjs/common';
 import { GUARDS_METADATA, METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
-import { ModulesContainer } from '@nestjs/core';
-import type { Permission } from '@pos/shared-types';
+import { ModulesContainer, Reflector } from '@nestjs/core';
+import type { Feature, Permission } from '@pos/shared-types';
 import { IS_PUBLIC_KEY, PERMISSIONS_KEY, type PermissionRequirement } from './decorators';
+import { requiredFeaturesOf } from './require-feature';
 
 /**
  * How a route is protected:
@@ -20,6 +21,8 @@ export interface RouteEntry {
   path: string;
   access: RouteAccess;
   permissions: readonly Permission[];
+  /** Modules the route needs (`@RequireFeature`); refused with FEATURE_DISABLED while off. */
+  features: readonly Feature[];
   /** Class names of route-specific guards (e.g. `DeviceGuard`). */
   guards: string[];
   handler: string;
@@ -47,6 +50,7 @@ function guardNames(...targets: object[]): string[] {
 /** Every HTTP route the application's controllers declare, with how it is protected. */
 export function listRoutes(app: INestApplication): RouteEntry[] {
   const routes: RouteEntry[] = [];
+  const reflector = new Reflector();
   for (const module of app.get(ModulesContainer).values()) {
     for (const wrapper of module.controllers.values()) {
       const controller = wrapper.metatype as (new (...args: never[]) => object) | null;
@@ -76,6 +80,7 @@ export function listRoutes(app: INestApplication): RouteEntry[] {
           path: joinPath(base, firstPath(Reflect.getMetadata(PATH_METADATA, handler))),
           access,
           permissions: requirement?.permissions ?? [],
+          features: requiredFeaturesOf(reflector, [handler, controller]),
           guards,
           handler: `${controller.name}.${name}`,
         });

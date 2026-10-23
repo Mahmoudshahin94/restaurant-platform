@@ -1,8 +1,16 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { PrismaClient } from '@pos/database';
 import { newId } from '@pos/domain';
-import { PrismaService, type RouteEntry, listRoutes, loadConfig, loggableError } from '@pos/server';
-import type { ApiErrorBody } from '@pos/shared-types';
+import {
+  PrismaService,
+  type RouteEntry,
+  TrackingTokens,
+  listRoutes,
+  loadConfig,
+  loggableError,
+  trackingSecret,
+} from '@pos/server';
+import type { ApiErrorBody, Feature } from '@pos/shared-types';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   ORIGIN,
@@ -50,6 +58,36 @@ const PUBLIC_ROUTES = [
 ];
 
 const key = (r: RouteEntry) => `${r.method} ${r.path}`;
+
+/**
+ * Routes that need a module (ADR 0018), with the module. Adding a gate must be a deliberate change
+ * here, and every route listed is called with its module off below.
+ */
+const FEATURE_ROUTES: Record<string, Feature> = {
+  'GET /locations/:locationId/floor': 'TABLES',
+  'GET /locations/:locationId/kitchen/settings': 'KDS',
+  'GET /locations/:locationId/kitchen/tickets': 'KDS',
+  'GET /locations/:locationId/kitchen/tickets/:ticketId': 'KDS',
+  'GET /locations/:locationId/online-ordering': 'ONLINE_ORDERING',
+  'GET /orders/track': 'ONLINE_ORDERING',
+  'GET /public/locations/:locationId': 'ONLINE_ORDERING',
+  'GET /public/locations/:locationId/menu': 'ONLINE_ORDERING',
+  'GET /public/tenants/:slug': 'ONLINE_ORDERING',
+  'PATCH /locations/:locationId/floor/sections/:sectionId': 'TABLES',
+  'PATCH /locations/:locationId/floor/tables/:tableId': 'TABLES',
+  'POST /locations/:locationId/floor/sections': 'TABLES',
+  'POST /locations/:locationId/floor/sections/:sectionId/archive': 'TABLES',
+  'POST /locations/:locationId/floor/tables': 'TABLES',
+  'POST /locations/:locationId/floor/tables/:tableId/archive': 'TABLES',
+  'POST /locations/:locationId/floor/tables/:tableId/restore': 'TABLES',
+  'POST /locations/:locationId/kitchen/tickets/:ticketId/dismiss': 'KDS',
+  'POST /locations/:locationId/kitchen/tickets/:ticketId/items/:itemId/done': 'KDS',
+  'POST /locations/:locationId/kitchen/tickets/:ticketId/priority': 'KDS',
+  'POST /locations/:locationId/kitchen/tickets/:ticketId/transitions': 'KDS',
+  'POST /locations/:locationId/orders/:orderId/kitchen-priority': 'KDS',
+  'POST /orders': 'ONLINE_ORDERING',
+  'PUT /locations/:locationId/online-ordering': 'ONLINE_ORDERING',
+};
 
 /** A concrete URL for a route: the given tenant's ids, a fresh id for any other parameter. */
 function urlOf(route: RouteEntry, ids: { tenantId: string; locationId: string }): string {
@@ -157,6 +195,116 @@ describe('refusals on every protected route', () => {
       if (res.statusCode !== 404 || !['TENANT_NOT_FOUND', 'LOCATION_NOT_FOUND'].includes(code)) {
         failures.push(`${key(route)} → ${String(res.statusCode)} ${code}`);
       }
+    }
+    expect(failures).toEqual([]);
+  });
+});
+
+describe('modules on every gated route (ADR 0018)', () => {
+  let tenant: TenantFixture;
+  let ownerToken: string;
+  let slug: string;
+  let trackingToken: string;
+
+  beforeAll(async () => {
+    await resetDatabase(prisma);
+    tenant = await createTenant(prisma);
+    ownerToken = await login(app, tenant.owner.email);
+    slug = (await prisma.tenant.findUniqueOrThrow({ where: { id: tenant.tenantId } })).slug;
+    // A tracked website order, so tracking reaches its module check with a valid token.
+    const orderId = newId();
+    await prisma.order.create({
+      data: {
+        id: orderId,
+        tenantId: tenant.tenantId,
+        locationId: tenant.locationA,
+        orderNumber: 'W-001',
+        businessDate: new Date('2026-10-23T00:00:00Z'),
+        channel: 'WEBSITE',
+        fulfillmentType: 'PICKUP',
+        customerName: 'Guest',
+        customerPhone: '+970 59 000 0000',
+        status: 'PLACED',
+        source: 'WEBSITE',
+        currencyCode: 'SAR',
+        taxInclusive: true,
+        subtotal: 0,
+        discountTotal: 0,
+        taxTotal: 0,
+        feeTotal: 0,
+        total: 0,
+      },
+    });
+    trackingToken = new TrackingTokens(trackingSecret(testConfig())).issue(orderId);
+  });
+
+  /** The tenant switches every module off (the platform still entitles it to them). */
+  async function switchOff(features: readonly Feature[]) {
+    await prisma.featureOverride.createMany({
+      data: features.map((feature) => ({
+        tenantId: tenant.tenantId,
+        scope: 'tenant',
+        feature,
+        enabled: false,
+      })),
+      skipDuplicates: true,
+    });
+  }
+
+  /** A request that reaches the route's module check: valid ids, body and token. */
+  function requestFor(route: RouteEntry) {
+    const ids = { tenantId: tenant.tenantId, locationId: tenant.locationA };
+    const url = urlOf(route, ids).replace('no-such-tenant', slug);
+    switch (key(route)) {
+      case 'GET /orders/track':
+        return { url, headers: { 'x-tracking-token': trackingToken } };
+      case 'POST /orders':
+        return {
+          url,
+          payload: {
+            id: newId(),
+            locationId: tenant.locationA,
+            fulfillment: 'PICKUP',
+            customer: { name: 'Guest', phone: '+970 59 000 0000' },
+            items: [{ id: newId(), productId: newId(), quantity: 1 }],
+            payment: { option: 'PAY_AT_PICKUP' },
+          },
+        };
+      default:
+        return route.access === 'public' ? { url } : { url, headers: bearer(ownerToken) };
+    }
+  }
+
+  it('records the module of every gated route in the inventory', () => {
+    const gated = Object.fromEntries(
+      routes.filter((r) => r.features.length > 0).map((r) => [key(r), r.features.join(',')]),
+    );
+    expect(gated).toEqual(FEATURE_ROUTES);
+  });
+
+  it('answers 403 FEATURE_DISABLED on every gated route while its module is off', async () => {
+    await switchOff(['KDS', 'TABLES', 'ONLINE_ORDERING']);
+    const failures: string[] = [];
+    for (const route of routes.filter((r) => r.features.length > 0)) {
+      const res = await app.inject({ method: methodOf(route), ...requestFor(route) });
+      const body = res.json<ApiErrorBody>();
+      if (
+        res.statusCode !== 403 ||
+        body.code !== 'FEATURE_DISABLED' ||
+        body.details.feature !== FEATURE_ROUTES[key(route)]
+      ) {
+        failures.push(`${key(route)} → ${String(res.statusCode)} ${body.code}`);
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
+  it('serves the same routes again once the module is back on', async () => {
+    await prisma.featureOverride.deleteMany({ where: { tenantId: tenant.tenantId } });
+    const failures: string[] = [];
+    for (const route of routes.filter((r) => r.features.length > 0)) {
+      const res = await app.inject({ method: methodOf(route), ...requestFor(route) });
+      if (res.statusCode === 403) failures.push(`${key(route)} → 403 ${res.body}`);
     }
     expect(failures).toEqual([]);
   });
