@@ -1,4 +1,5 @@
-import { Controller, Get, HttpCode, ServiceUnavailableException } from '@nestjs/common';
+import { Controller, Get, HttpCode } from '@nestjs/common';
+import { DomainError } from '@pos/domain';
 import { Public } from '../common/auth/decorators';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -19,7 +20,7 @@ export class HealthController {
     try {
       await this.prisma.$queryRaw`SELECT 1`;
     } catch {
-      throw new ServiceUnavailableException('Database unavailable');
+      throw new DomainError('SERVICE_UNAVAILABLE', 'Database unavailable');
     }
     return { status: 'ready', database: 'ok' };
   }

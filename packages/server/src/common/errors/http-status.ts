@@ -7,6 +7,7 @@ export const HTTP_STATUS_BY_ERROR_CODE = {
   CONFLICT: 409,
   RATE_LIMITED: 429,
   INTERNAL_ERROR: 500,
+  SERVICE_UNAVAILABLE: 503,
   UNAUTHENTICATED: 401,
   INVALID_CREDENTIALS: 401,
   TOKEN_EXPIRED: 401,
@@ -76,6 +77,8 @@ export function errorCodeForHttpStatus(status: number): ErrorCode {
       return 'CONFLICT';
     case 429:
       return 'RATE_LIMITED';
+    case 503:
+      return 'SERVICE_UNAVAILABLE';
     default:
       return 'INTERNAL_ERROR';
   }

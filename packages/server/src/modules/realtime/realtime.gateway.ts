@@ -7,6 +7,7 @@ import type { FastifyInstance } from 'fastify';
 import type { WebSocket } from '@fastify/websocket';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AccessService } from '../auth/access.service';
+import { loggableError } from '../../common/logging/logger';
 import { TokenService } from '../auth/token.service';
 import { RealtimeBus } from './realtime.bus';
 
@@ -114,7 +115,10 @@ export class RealtimeGateway {
           const forbidden =
             isDomainError(error) &&
             (error.code === 'LOCATION_NOT_FOUND' || error.code === 'INSUFFICIENT_PERMISSION');
-          if (!isDomainError(error)) this.logger.error(error);
+          if (!isDomainError(error)) {
+            const { message, stack } = loggableError(error);
+            this.logger.error(message, stack);
+          }
           socket.close(
             forbidden ? REALTIME_CLOSE.FORBIDDEN : REALTIME_CLOSE.UNAUTHENTICATED,
             forbidden ? 'Forbidden' : 'Unauthenticated',

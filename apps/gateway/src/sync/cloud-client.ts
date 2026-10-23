@@ -27,6 +27,20 @@ export class CloudRequestRejected extends Error {
   }
 }
 
+/**
+ * What the hub keeps of a refusal: the status and the error envelope's code and message, never the
+ * raw body (it is logged and shown on the hub's status, which the LAN can read without signing in).
+ */
+async function rejectionSummary(response: Response): Promise<string> {
+  const body = (await response.json().catch(() => null)) as {
+    code?: unknown;
+    message?: unknown;
+  } | null;
+  const code = typeof body?.code === 'string' ? body.code.slice(0, 64) : null;
+  const message = typeof body?.message === 'string' ? body.message.slice(0, 200) : null;
+  return [String(response.status), code, message].filter((part) => part !== null).join(' ');
+}
+
 /** The hub's HTTP client for the cloud's `/sync/*` endpoints, authenticated as the device. */
 export class CloudClient {
   constructor(
@@ -102,8 +116,7 @@ export class CloudClient {
       throw new CloudUnavailable(`Cloud answered ${String(response.status)}`);
     }
     if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      throw new CloudRequestRejected(response.status, text.slice(0, 500));
+      throw new CloudRequestRejected(response.status, await rejectionSummary(response));
     }
     return schema.parse(await response.json());
   }

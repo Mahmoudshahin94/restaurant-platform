@@ -24,7 +24,37 @@ export const LOG_REDACT_PATHS = [
   '*.secret',
   '*.cardNumber',
   '*.cvv',
+  '*.credential',
+  '*.credentialHash',
+  // One level deeper, for objects logged under a key (e.g. `{ body: { password } }`).
+  '*.*.password',
+  '*.*.pin',
+  '*.*.refreshToken',
+  '*.*.accessToken',
+  '*.*.token',
+  '*.*.secret',
+  '*.*.cardNumber',
+  '*.*.cvv',
+  '*.*.credential',
 ];
+
+/**
+ * What may be logged of an unexpected error. Prisma's messages can quote the arguments of the
+ * failed query (a password hash, a customer's phone), so for its errors only the kind, the code
+ * and the stack frames are kept; other errors keep their message.
+ */
+export function loggableError(error: unknown): { message: string; stack?: string } {
+  if (!(error instanceof Error)) return { message: 'Non-error thrown' };
+  if (!error.name.startsWith('PrismaClient')) {
+    return { message: error.message, ...(error.stack ? { stack: error.stack } : {}) };
+  }
+  const code = (error as { code?: unknown }).code;
+  const frames = (error.stack ?? '').split('\n').filter((line) => /^\s+at /.test(line));
+  return {
+    message: typeof code === 'string' ? `${error.name} ${code}` : error.name,
+    stack: frames.join('\n'),
+  };
+}
 
 export function createRootLogger(config: AppConfig, service = 'api'): Logger {
   return pino({
@@ -50,8 +80,10 @@ export class PinoNestLogger implements LoggerService {
         ? {
             requestId: store.requestId,
             userId: store.userId,
+            deviceId: store.deviceId,
             restaurantId: store.restaurantId,
             locationId: store.locationId,
+            orderId: store.orderId,
           }
         : {}),
     };

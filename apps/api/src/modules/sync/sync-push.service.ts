@@ -5,6 +5,7 @@ import {
   PrismaService,
   isPrismaKnownError,
   isUniqueViolation,
+  loggableError,
 } from '@pos/server';
 import type { ErrorCode } from '@pos/shared-types';
 import {
@@ -149,7 +150,8 @@ export class SyncPushService {
         new SyncRefusal('REJECTED', 'SYNC_REJECTED', 'The data breaks a database rule'),
       );
     }
-    this.logger.error(error);
+    const { message, stack } = loggableError(error);
+    this.logger.error(message, stack);
     return result(op.operationId, 'RETRY', 'INTERNAL_ERROR', 'Unexpected error; retry later');
   }
 

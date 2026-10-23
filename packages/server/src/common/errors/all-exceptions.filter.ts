@@ -10,6 +10,7 @@ import type { ApiErrorBody } from '@pos/shared-types';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { HTTP_STATUS_BY_ERROR_CODE, errorCodeForHttpStatus } from './http-status';
 import { isPrismaKnownError } from '../../prisma/errors';
+import { loggableError } from '../logging/logger';
 
 interface Mapped {
   status: number;
@@ -40,10 +41,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const mapped = this.map(exception);
 
     if (mapped.status >= 500) {
-      this.logger.error(
-        exception instanceof Error ? exception.message : 'Non-error thrown',
-        exception instanceof Error ? exception.stack : undefined,
-      );
+      const { message, stack } = loggableError(exception);
+      this.logger.error(message, stack);
     }
 
     const body: ApiErrorBody = { ...mapped.body, requestId: request.id };

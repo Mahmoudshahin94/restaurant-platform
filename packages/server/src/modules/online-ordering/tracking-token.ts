@@ -16,6 +16,7 @@ export class TrackingTokens {
 
   /** The order id of a valid token, or null. */
   verify(token: string): string | null {
+    if (token.length > 200) return null;
     const [orderId, signature, ...rest] = token.split('.');
     if (!orderId || !signature || rest.length > 0 || !UUID.test(orderId)) return null;
     const expected = Buffer.from(this.sign(orderId));

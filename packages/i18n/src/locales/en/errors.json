@@ -4,6 +4,7 @@
   "CONFLICT": "This conflicts with an existing record (for example, a duplicate code).",
   "RATE_LIMITED": "Too many attempts. Please wait a moment and try again.",
   "INTERNAL_ERROR": "The server could not complete the request. Please try again.",
+  "SERVICE_UNAVAILABLE": "The service is temporarily unavailable. Please try again shortly.",
   "UNAUTHENTICATED": "Please sign in to continue.",
   "INVALID_CREDENTIALS": "Incorrect email or password.",
   "TOKEN_EXPIRED": "Your session expired. Please sign in again.",

@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+/** `scheme://host[:port]`: http(s) for browsers, plus the Tauri shells' custom schemes. */
+const ORIGIN = /^(https?|tauri):\/\/[a-z0-9.-]+(:\d{1,5})?$/i;
+
 const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -18,6 +21,11 @@ const envSchema = z
      * revoking the session. Later reuse revokes the whole token family.
      */
     REFRESH_REUSE_GRACE_SECONDS: z.coerce.number().int().min(0).max(60).default(10),
+    /**
+     * Browser origins allowed to call the API with credentials (comma-separated). Each must be a
+     * bare origin (`scheme://host[:port]`); `*` and paths are refused, so a typo cannot open the
+     * API to every site.
+     */
     CORS_ORIGINS: z
       .string()
       .default('')
@@ -26,7 +34,14 @@ const envSchema = z
           .split(',')
           .map((origin) => origin.trim())
           .filter((origin) => origin.length > 0),
-      ),
+      )
+      .pipe(z.array(z.string().regex(ORIGIN, 'CORS_ORIGINS entries must be bare origins'))),
+    /**
+     * Number of reverse proxies in front of the server whose `X-Forwarded-For` is trusted (0 =
+     * none). Rate limits are per client IP, so behind a load balancer this must be set or every
+     * client shares one budget.
+     */
+    TRUST_PROXY: z.coerce.number().int().min(0).max(10).default(0),
     RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(600),
     AUTH_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(10),
     // --- Online ordering (cloud only, ADR 0013) ---
