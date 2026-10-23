@@ -225,7 +225,7 @@ describe('the Branding API', () => {
     expect((await context('?surface=website')).branding.primaryColor).toBe('#16a34a');
 
     const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: 'branding.updated' } });
-    expect(audit.metadata).toMatchObject({ changed: expect.arrayContaining(['primaryColor']) });
+    expect((audit.metadata as { changed: string[] }).changed).toContain('primaryColor');
   });
 
   it('refuses unreadable colours, naming each one and what it disappears into', async () => {
@@ -236,7 +236,7 @@ describe('the Branding API', () => {
     expect(res.statusCode).toBe(422);
     const body = res.json<ApiErrorBody>();
     expect(body.code).toBe('BRANDING_UNREADABLE');
-    expect(body.details?.issues).toEqual([
+    expect(body.details.issues).toEqual([
       expect.objectContaining({ path: ['primaryColor'], against: 'DARK' }),
       expect.objectContaining({ path: ['surfaces', 'kds', 'accentColor'], against: 'LIGHT' }),
     ]);

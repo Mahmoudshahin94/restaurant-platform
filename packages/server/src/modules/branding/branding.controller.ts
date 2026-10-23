@@ -1,9 +1,5 @@
 import { Body, Controller, Get, Param, Put } from '@nestjs/common';
-import {
-  type TenantBrandingDto,
-  idSchema,
-  updateBrandingSchema,
-} from '@pos/validation';
+import { type TenantBrandingDto, idSchema, updateBrandingSchema } from '@pos/validation';
 import type { z } from 'zod';
 import { RequirePermissions } from '../../common/auth/decorators';
 import { ManagedInCloud } from '../../common/auth/managed-in-cloud';

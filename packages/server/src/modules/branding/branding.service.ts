@@ -1,11 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { TenantBranding as BrandingRow } from '@pos/database';
-import {
-  DomainError,
-  brandingContrastIssues,
-  brandingFileIds,
-  resolveBranding,
-} from '@pos/domain';
+import { DomainError, brandingContrastIssues, brandingFileIds, resolveBranding } from '@pos/domain';
 import {
   BRANDING_KEYS,
   BRAND_SURFACES,
@@ -60,7 +55,7 @@ function compactSurfaces(surfaces: SurfaceOverridesDto): SurfaceOverrides {
     const layer = surfaces[surface];
     if (!layer) continue;
     const set = Object.fromEntries(
-      Object.entries(layer).filter(([, value]) => value !== null && value !== undefined),
+      Object.entries(layer).filter(([, value]) => (value as unknown) != null),
     ) as BrandingLayer;
     if (Object.keys(set).length > 0) out[surface] = set;
   }

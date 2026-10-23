@@ -23,7 +23,7 @@ export const hexColourSchema = z
   .regex(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i, 'Enter a colour as #rrggbb')
   .transform((value) => {
     const hex = value.slice(1).toLowerCase();
-    return `#${hex.length === 3 ? [...hex].map((d) => d + d).join('') : hex}`;
+    return `#${hex.length === 3 ? hex.replace(/./g, (d) => d + d) : hex}`;
   });
 
 export const themeModeSchema = z.enum(enumValues(ThemeMode));

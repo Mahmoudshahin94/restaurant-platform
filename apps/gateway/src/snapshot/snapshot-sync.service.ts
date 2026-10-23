@@ -5,7 +5,12 @@ import {
   type OnApplicationBootstrap,
   type OnModuleDestroy,
 } from '@nestjs/common';
-import { PrismaService, RealtimeBus, TENANT_FILE_STORAGE, type TenantFileStorage } from '@pos/server';
+import {
+  PrismaService,
+  RealtimeBus,
+  TENANT_FILE_STORAGE,
+  type TenantFileStorage,
+} from '@pos/server';
 import { locationSnapshotSchema } from '@pos/validation';
 import { HUB_CONFIG, type HubConfig } from '../config';
 import { asHubTx } from '../database/hub-database';

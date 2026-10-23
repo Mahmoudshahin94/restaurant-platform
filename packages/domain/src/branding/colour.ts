@@ -41,8 +41,10 @@ export function parseColour(value: string): LinearRgb {
   const trimmed = value.trim();
   const hex = HEX.exec(trimmed)?.[1];
   if (hex) {
-    const full = hex.length === 3 ? [...hex].map((d) => d + d).join('') : hex;
-    return [0, 2, 4].map((i) => toLinear(parseInt(full.slice(i, i + 2), 16) / 255)) as unknown as LinearRgb;
+    const full = hex.length === 3 ? hex.replace(/./g, (d) => d + d) : hex;
+    return [0, 2, 4].map((i) =>
+      toLinear(parseInt(full.slice(i, i + 2), 16) / 255),
+    ) as unknown as LinearRgb;
   }
   const oklch = OKLCH.exec(trimmed);
   if (oklch) {
@@ -69,5 +71,5 @@ export function contrastRatio(a: string, b: string): number {
 export function normalizeHex(value: string): string {
   const hex = HEX.exec(value.trim())?.[1];
   if (!hex) throw new Error(`Not a hex colour: ${value}`);
-  return `#${(hex.length === 3 ? [...hex].map((d) => d + d).join('') : hex).toLowerCase()}`;
+  return `#${(hex.length === 3 ? hex.replace(/./g, (d) => d + d) : hex).toLowerCase()}`;
 }

@@ -49,7 +49,12 @@ export const TENANT_FILE_KINDS = Object.values(TenantFileKind) as readonly Tenan
  * Image types accepted for branding files. Raster only: an SVG can carry script, so it is never
  * accepted. The bytes must match the declared type.
  */
-export const BRANDING_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/x-icon'] as const;
+export const BRANDING_IMAGE_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/x-icon',
+] as const;
 export type BrandingImageType = (typeof BRANDING_IMAGE_TYPES)[number];
 
 /** Largest accepted upload of each kind, in bytes. */

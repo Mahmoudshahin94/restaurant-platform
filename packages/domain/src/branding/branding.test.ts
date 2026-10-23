@@ -47,7 +47,11 @@ describe('readable foregrounds', () => {
 describe('contrast validation', () => {
   it('accepts brand colours readable on both themes', () => {
     expect(
-      colourContrastIssues({ primaryColor: '#2563eb', accentColor: '#dc2626', secondaryColor: '#f59e0b' }),
+      colourContrastIssues({
+        primaryColor: '#2563eb',
+        accentColor: '#dc2626',
+        secondaryColor: '#f59e0b',
+      }),
     ).toEqual([]);
   });
 
@@ -123,7 +127,12 @@ describe('resolveBranding', () => {
     const tenant = { themeMode: 'LIGHT' as const };
     const server = resolveBranding({ tenantNames: names, tenant, surface: 'pos' });
     expect(withDeviceThemeMode(server, 'DARK')).toEqual(
-      resolveBranding({ tenantNames: names, tenant, surface: 'pos', device: { themeMode: 'DARK' } }),
+      resolveBranding({
+        tenantNames: names,
+        tenant,
+        surface: 'pos',
+        device: { themeMode: 'DARK' },
+      }),
     );
   });
 

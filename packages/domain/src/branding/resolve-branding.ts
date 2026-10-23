@@ -14,19 +14,18 @@ import { type LayerValues, resolveLayered } from '../config/resolve-layered';
  * MADAR's defaults for every tenant: the theme's own colours (null) on a dark screen, solid
  * cards, the bundled typeface. Display names default to the tenant's own names.
  */
-export const PLATFORM_BRANDING_DEFAULTS: Omit<BrandingValues, 'displayNameEn' | 'displayNameAr'> =
-  {
-    logoFileId: null,
-    faviconFileId: null,
-    primaryColor: null,
-    secondaryColor: null,
-    accentColor: null,
-    fontFamily: 'INTER',
-    logoSize: 'MEDIUM',
-    themeMode: 'DARK',
-    surfaceStyle: 'SOLID',
-    borderRadius: 8,
-  };
+export const PLATFORM_BRANDING_DEFAULTS: Omit<BrandingValues, 'displayNameEn' | 'displayNameAr'> = {
+  logoFileId: null,
+  faviconFileId: null,
+  primaryColor: null,
+  secondaryColor: null,
+  accentColor: null,
+  fontFamily: 'INTER',
+  logoSize: 'MEDIUM',
+  themeMode: 'DARK',
+  surfaceStyle: 'SOLID',
+  borderRadius: 8,
+};
 
 export interface BrandingInput {
   /** The tenant's registered names: the display names when nothing else is set. */

@@ -1,6 +1,11 @@
 import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
-import { BrandingService, PrismaService, TENANT_FILE_STORAGE, type TenantFileStorage } from '@pos/server';
+import {
+  BrandingService,
+  PrismaService,
+  TENANT_FILE_STORAGE,
+  type TenantFileStorage,
+} from '@pos/server';
 import type { LocationSnapshot, SnapshotTable } from '@pos/validation';
 import type { AuthenticatedDevice } from '../devices/device.guard';
 

@@ -86,7 +86,10 @@ describe('platform brand', () => {
       )
       .filter((f) => relative(root, f) !== BRAND_FILE);
     assert.ok(files.length > 100, 'expected to scan the apps and packages');
-    assert.deepEqual(offenders(files, (f) => withoutComments(readFileSync(f, 'utf8'))), []);
+    assert.deepEqual(
+      offenders(files, (f) => withoutComments(readFileSync(f, 'utf8'))),
+      [],
+    );
   });
 
   it('is never spelled out in a translation', () => {
@@ -113,7 +116,9 @@ describe('platform brand', () => {
   });
 
   it('matches the POS app bundle', () => {
-    const tauri = JSON.parse(readFileSync(join(root, 'apps/pos/src-tauri/tauri.conf.json'), 'utf8'));
+    const tauri = JSON.parse(
+      readFileSync(join(root, 'apps/pos/src-tauri/tauri.conf.json'), 'utf8'),
+    );
     assert.equal(tauri.productName, brand.pos);
     assert.equal(tauri.identifier, brand.identifier);
     for (const window of tauri.app.windows) assert.equal(window.title, brand.pos);
