@@ -23,6 +23,7 @@
     "shifts": "الورديات",
     "tenant": "المنشأة",
     "modules": "الوحدات",
+    "branding": "الهوية البصرية",
     "onlineOrdering": "الطلب عبر الإنترنت",
     "paymentMethods": "طرق الدفع",
     "cashRegisters": "أدراج النقد",
@@ -338,6 +339,90 @@
         "description": "تقارير تتجاوز الملخص اليومي."
       }
     }
+  },
+  "branding": {
+    "title": "الهوية البصرية",
+    "description": "اسم منشأتك وشعارها وألوانها ومظهرها على كل شاشة: نقطة البيع وشاشة المطبخ وشاشات تسجيل الدخول وموقعك الإلكتروني.",
+    "identity": "الاسم والشعار",
+    "displayNameEn": "الاسم المعروض (بالإنجليزية)",
+    "displayNameAr": "الاسم المعروض (بالعربية)",
+    "displayNameHint": "اتركه فارغًا لاستخدام اسم منشأتك: {{name}}",
+    "logo": "الشعار",
+    "logoHint": "PNG أو JPEG أو WebP، حتى {{size}}. يُفضّل شعار عريض بخلفية شفافة.",
+    "favicon": "أيقونة المتصفح",
+    "faviconHint": "PNG أو JPEG أو WebP أو ICO، حتى {{size}}. مربعة، ‏32 × 32 بكسل على الأقل.",
+    "upload": "رفع",
+    "replace": "استبدال",
+    "remove": "إزالة",
+    "uploading": "جارٍ الرفع…",
+    "none": "لا يوجد",
+    "logoSize": "حجم الشعار",
+    "logoSizes": {
+      "SMALL": "صغير",
+      "MEDIUM": "متوسط",
+      "LARGE": "كبير"
+    },
+    "colours": "الألوان",
+    "coloursHint": "يُختار للنص على كل لون أسود أو أبيض مقروء تلقائيًا. تُرفض الألوان التي يصعب قراءتها على الشاشات الفاتحة أو الداكنة.",
+    "primaryColor": "اللون الأساسي",
+    "primaryHint": "الأزرار الرئيسية والعناصر المحددة والروابط وإطارات التركيز.",
+    "secondaryColor": "اللون الثانوي",
+    "secondaryHint": "الأزرار الثانوية.",
+    "accentColor": "لون التمييز",
+    "accentHint": "الإبرازات والشارات.",
+    "colourValue": "{{colour}} (رمز hex)",
+    "useThemeColour": "استخدام لون المظهر",
+    "unreadable": {
+      "FOREGROUND": "سيصعب قراءة النص على هذا اللون ({{ratio}}:1، والمطلوب {{required}}:1).",
+      "DARK": "داكن جدًا للشاشات الداكنة ({{ratio}}:1 مقابل الصفحة، والمطلوب {{required}}:1). اختر درجة أفتح.",
+      "LIGHT": "فاتح جدًا للشاشات الفاتحة ({{ratio}}:1 مقابل الصفحة، والمطلوب {{required}}:1). اختر درجة أغمق."
+    },
+    "look": "المظهر",
+    "themeMode": "فاتح أو داكن",
+    "themeModeHint": "يمكن لكل شاشة أن تختار مظهرها من إعداد المظهر.",
+    "themeModes": {
+      "LIGHT": "فاتح",
+      "DARK": "داكن",
+      "SYSTEM": "حسب الجهاز"
+    },
+    "surfaceStyle": "البطاقات",
+    "surfaceStyles": {
+      "SOLID": "مصمتة",
+      "GLASS": "زجاجية (شفافة)"
+    },
+    "borderRadius": "استدارة الزوايا",
+    "borderRadiusValue": "{{value}} بكسل",
+    "fontFamily": "الخط",
+    "fontFamilies": {
+      "INTER": "Inter (الافتراضي)",
+      "SYSTEM": "خط الجهاز",
+      "SERIF": "خط مذيّل"
+    },
+    "inherit": "الافتراضي ({{value}})",
+    "screens": "الشاشات",
+    "screensHint": "امنح شاشة واحدة مظهرًا مختلفًا. ما يُترك على \"مثل المنشأة\" يتبع الإعدادات أعلاه.",
+    "screen": "الشاشة",
+    "screenSetting": "{{setting}} · {{screen}}",
+    "surfaces": {
+      "login": "شاشات تسجيل الدخول",
+      "pos": "نقطة البيع",
+      "kds": "شاشة المطبخ",
+      "kiosk": "كشك الخدمة الذاتية",
+      "website": "الموقع الإلكتروني"
+    },
+    "sameAsBusiness": "مثل المنشأة",
+    "sameAsBusinessValue": "مثل المنشأة ({{value}})",
+    "preview": "معاينة",
+    "previewMode": "المعاينة في",
+    "previewButton": "دفع",
+    "previewSecondary": "تعليق",
+    "previewBadge": "جاهز",
+    "previewText": "الطلب 042 · عنصران",
+    "save": "حفظ الهوية البصرية",
+    "saved": "تم حفظ الهوية البصرية. تتحدّث الشاشات المفتوحة خلال دقيقة.",
+    "source": "المصدر: {{source}}",
+    "fileTooLarge": "هذا الملف أكبر من {{size}}.",
+    "fileType": "نوع هذا الملف غير مقبول هنا."
   },
   "locations": {
     "title": "الفروع",

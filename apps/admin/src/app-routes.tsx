@@ -19,6 +19,7 @@ import { OrderDetailPage } from './routes/operations/order-detail-page';
 import { OrdersPage } from './routes/operations/orders-page';
 import { PaymentsPage } from './routes/operations/payments-page';
 import { ShiftDetailPage, ShiftsPage } from './routes/operations/shifts-page';
+import { BrandingPage } from './routes/settings/branding-page';
 import { CashRegistersPage } from './routes/settings/cash-registers-page';
 import { DiscountsPage } from './routes/settings/discounts-page';
 import { LocationsPage } from './routes/settings/locations-page';
@@ -109,6 +110,7 @@ export function AppRoutes() {
           </Route>
           {guarded('settings/tenant', 'settings.manage', <TenantPage />, true)}
           {guarded('settings/modules', 'settings.manage', <ModulesPage />, true)}
+          {guarded('settings/branding', 'settings.manage', <BrandingPage />, true)}
           {guarded('settings/locations', 'locations.view', <LocationsPage />)}
           {moduleGuarded(
             [Feature.ONLINE_ORDERING],

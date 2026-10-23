@@ -17,7 +17,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router';
 import { z } from 'zod';
 import { LanguageSwitcher } from '../components/language-switcher';
 import { session } from '../lib/api';
-import { tKey, useErrorText } from '@pos/app-kit';
+import { PlatformFooter, ThemeSwitcher, tKey, useErrorText } from '@pos/app-kit';
 import { useSession } from '../stores/session';
 
 const loginForm = z.object({
@@ -60,6 +60,7 @@ export function LoginPage() {
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
+          <p className="text-lg font-semibold tracking-tight">{t('common:appName')}</p>
           <CardTitle>{t('auth:signIn.title')}</CardTitle>
           <CardDescription>{t('auth:signIn.subtitle')}</CardDescription>
         </CardHeader>
@@ -89,7 +90,11 @@ export function LoginPage() {
           </form>
         </CardContent>
       </Card>
-      <LanguageSwitcher />
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <LanguageSwitcher />
+        <ThemeSwitcher />
+      </div>
+      <PlatformFooter app="admin" />
     </div>
   );
 }

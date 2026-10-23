@@ -13,9 +13,10 @@
  *   data-theme="system"  follows the operating system (prefers-color-scheme)
  * A tenant's branding (applyTenantTheme) overrides the brand colours and their foregrounds, the
  * radius and the typeface as inline variables on <html>; `data-surface="glass"` makes cards
- * translucent. The light palette is declared twice (light, and system on a light OS):
- * theme.test.ts keeps both copies equal, and the page colours equal to the ones branding is
- * checked against (`THEME_BACKGROUNDS` in @pos/domain).
+ * translucent. Each palette is declared twice (dark: the default and `[data-theme='dark']`, for
+ * a dark preview inside a light page; light: light, and system on a light OS):
+ * theme-tokens.test.ts keeps the copies equal, and the page colours equal to the ones branding
+ * is checked against (`THEME_BACKGROUNDS` in @pos/domain).
  *
  * RTL: components only use logical utilities (ms-/me-/ps-/pe-/start-/end-/text-start), so
  * setting dir="rtl" on <html> mirrors layout. Directional icons use the `rtl:` variant.
@@ -73,6 +74,35 @@
   /* Cards and panels (the `surface` utility): solid unless the tenant chose glass. */
   --surface-alpha: 100%;
   --surface-backdrop: none;
+}
+
+/* The dark palette again, for an element that shows the dark theme inside a light page (the
+   admin's branding preview). */
+[data-theme='dark'] {
+  color-scheme: dark;
+  --page-glow: color-mix(in oklch, var(--color-primary) 9%, transparent);
+  --color-background: oklch(0.16 0.006 265);
+  --color-foreground: oklch(0.965 0.003 265);
+  --color-card: oklch(0.2 0.007 265);
+  --color-card-foreground: oklch(0.965 0.003 265);
+  --color-muted: oklch(0.245 0.008 265);
+  --color-muted-foreground: oklch(0.72 0.012 265);
+  --color-border: oklch(0.3 0.008 265);
+  --color-input: oklch(0.36 0.008 265);
+  --color-ring: oklch(0.74 0.13 250);
+  --color-overlay: oklch(0.08 0.004 265 / 0.72);
+  --color-primary: oklch(0.74 0.13 250);
+  --color-primary-foreground: oklch(0.18 0.03 260);
+  --color-secondary: oklch(0.27 0.008 265);
+  --color-secondary-foreground: oklch(0.965 0.003 265);
+  --color-accent: oklch(0.8 0.11 170);
+  --color-accent-foreground: oklch(0.2 0.03 180);
+  --color-destructive: oklch(0.56 0.2 25);
+  --color-destructive-foreground: oklch(0.99 0 0);
+  --color-success: oklch(0.72 0.15 155);
+  --color-success-foreground: oklch(0.18 0.04 155);
+  --color-warning: oklch(0.82 0.15 80);
+  --color-warning-foreground: oklch(0.22 0.04 75);
 }
 
 [data-theme='light'] {
@@ -136,6 +166,10 @@
 [data-surface='glass'] {
   --surface-alpha: 78%;
   --surface-backdrop: blur(18px) saturate(1.4);
+}
+[data-surface='solid'] {
+  --surface-alpha: 100%;
+  --surface-backdrop: none;
 }
 
 /* A card or panel: the card colour, translucent and frosted when the surface style is glass. */

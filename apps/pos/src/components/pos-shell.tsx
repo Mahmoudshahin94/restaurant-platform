@@ -1,5 +1,6 @@
 import {
   LanguageSwitcher,
+  TenantLogo,
   RealtimeIndicator,
   useCurrentLocale,
   useFeatures,
@@ -149,7 +150,8 @@ export function PosShell() {
 
   return (
     <div className="flex h-full flex-col bg-background">
-      <header className="flex h-16 shrink-0 items-center gap-3 border-b bg-card px-3">
+      <header className="surface flex h-16 shrink-0 items-center gap-3 border-b px-3">
+        <TenantLogo className="hidden shrink-0 lg:block" />
         <nav aria-label={t('pos:nav.main')} className="flex shrink-0 gap-1">
           {nav.map((item) => (
             <NavLink

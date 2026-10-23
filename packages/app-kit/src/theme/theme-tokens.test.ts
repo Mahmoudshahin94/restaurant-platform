@@ -25,6 +25,7 @@ function tokensAfter(selector: string): Record<string, string> {
 }
 
 const dark = tokensAfter('@theme {');
+const darkAttribute = tokensAfter("[data-theme='dark'] {");
 const light = tokensAfter("[data-theme='light'] {");
 const systemLight = tokensAfter(
   "@media (prefers-color-scheme: light) {\n  [data-theme='system'] {",
@@ -44,9 +45,10 @@ const PAIRS: [fg: string, bgs: string[]][] = [
 ];
 
 describe('design tokens', () => {
-  it('declares the same light palette for light and for system on a light OS', () => {
+  it('declares each palette the same way in both of its places', () => {
     expect(Object.keys(light).length).toBeGreaterThan(15);
     expect(systemLight).toEqual(light);
+    expect(darkAttribute).toEqual(dark);
   });
 
   it('gives the light theme every colour of the dark one', () => {
