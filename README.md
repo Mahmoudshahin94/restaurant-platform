@@ -9,6 +9,7 @@ with full RTL.
 - Sync protocol: [docs/sync.md](docs/sync.md)
 - API: [docs/api.md](docs/api.md) · Events: [docs/events.md](docs/events.md)
 - i18n / RTL rules: [docs/i18n.md](docs/i18n.md)
+- Testing and the critical E2E flows: [docs/testing.md](docs/testing.md) · Release checklist: [docs/release.md](docs/release.md)
 - Decisions: [docs/adr/](docs/adr/)
 - **Getting started: [docs/dev-setup.md](docs/dev-setup.md)**
 

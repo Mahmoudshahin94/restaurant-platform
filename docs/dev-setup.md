@@ -90,7 +90,9 @@ sound after one tap on "Turn on sound alerts". Orders placed at the POS appear o
 second through the realtime socket.
 
 Sign in to the POS as the cashier with employee code `1001` and `SEED_CASHIER_PIN` (or with
-`SEED_CASHIER_EMAIL`/`PASSWORD` on the Email tab). To point the POS or KDS at the cloud API
+`SEED_CASHIER_EMAIL`/`PASSWORD` on the Email tab). The desktop app keeps the session's refresh token in the
+operating system's keychain, so it stays signed in across a restart until someone signs out; in a
+browser the session lasts until the page is reloaded. To point the POS or KDS at the cloud API
 directly, set `VITE_API_PROXY_TARGET=http://localhost:3000`. Keyboard shortcuts: F2 order, F4 orders, F6 tables,
 `/` search, Ctrl/⌘+Enter place order. A production Tauri build calls the API cross-origin, so
 add its origin (`tauri://localhost` on macOS/Linux, `http://tauri.localhost` on Windows) to
@@ -104,7 +106,8 @@ add its origin (`tauri://localhost` on macOS/Linux, `http://tauri.localhost` on 
 | `pnpm typecheck`                             | `tsc --noEmit` everywhere                                       |
 | `pnpm lint`                                  | ESLint (type-aware + i18n rule)                                 |
 | `pnpm test`                                  | Unit + integration tests (integration uses `TEST_DATABASE_URL`) |
-| `pnpm test:e2e`                              | Playwright end-to-end tests                                     |
+| `pnpm e2e`                                   | Every Playwright suite, one after another (19 critical flows)   |
+| `pnpm test:e2e`                              | Playwright end-to-end tests (suites in parallel)                |
 | `pnpm test:tools`                            | Tests for repository tools (lint rule, printer decoder)         |
 | `pnpm printer:sim`                           | Simulated ESC/POS network printer on port 9100                  |
 | `pnpm db:migrate`                            | Create/apply a migration in development (`prisma migrate dev`)  |
@@ -118,17 +121,26 @@ createdb pos_kds_pos_e2e        # once (POS suite; or set POS_E2E_DATABASE_URL)
 createdb pos_kds_kds_e2e        # once (KDS suite; or set KDS_E2E_DATABASE_URL)
 createdb pos_kds_web_e2e        # once (customer website suite; or set WEB_E2E_DATABASE_URL)
 pnpm build                      # E2E runs the built API and hub
-pnpm test:e2e
+pnpm e2e                        # all four suites, one after another (a few minutes)
 ```
+
+[testing.md](testing.md) maps the specification's 19 critical scenarios to the tests and explains
+the other test layers; `pnpm test:tools` checks that every test named there exists. Run one suite
+with `pnpm --filter @pos/pos test:e2e`, one file with
+`pnpm --filter @pos/pos exec playwright test e2e/sync.spec.ts`.
 
 The admin suite starts the cloud API (:3100) and the admin UI (:5180). The POS and KDS suites run
 like a restaurant: `tools/e2e/prepare-hub.mjs` prepares the app's `*_e2e` cloud database,
 starts the cloud API just long enough to pair a fresh hub and give it its snapshot, **stops the
 cloud**, and then the hub (POS :4110, KDS :4120) and the web UI (POS :1430, KDS :5190) start.
-Every POS and KDS test therefore runs without the cloud. The customer-website suite runs
+Every POS and KDS test therefore runs without the cloud. The POS suite also serves the KDS
+(:5191) from its hub, and its last file, `sync.spec.ts`, starts and stops the cloud itself: an
+order taken offline syncs once, the Internet dropping mid-service still gets the order to the
+kitchen, and a resent copy of the hub's push is answered `DUPLICATE`. The customer-website suite runs
 everything at once: the cloud (:3130) stays up, `tools/e2e/pair-hub.mjs` pairs a hub (:4130) with
-it, and the POS (:1440, served by that hub) and the website (:5195) start; a website order then
-travels cloud → hub → POS and back. `tools/e2e/prepare-db.mjs` refuses any database whose name
+it, and the POS (:1440) and KDS (:5196), both served by that hub, and the website (:5195) start;
+a website order then travels cloud → hub → POS and back, and `journey.spec.ts` follows one through
+every app to its hand-over. `tools/e2e/prepare-db.mjs` refuses any database whose name
 does not end in `_e2e`.
 Locally it uses the installed Google Chrome (`PLAYWRIGHT_CHANNEL`, default `chrome`). In CI, run
 `pnpm exec playwright install chromium` first.

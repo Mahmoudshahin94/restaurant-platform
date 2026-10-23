@@ -14,8 +14,9 @@ Base path `/api/v1`. Health endpoints are unversioned: `GET /health` (liveness) 
 - **Request ids:** send `x-request-id` (8–128 chars `[A-Za-z0-9._-]`) to correlate; otherwise
   one is generated. It is always echoed in the `x-request-id` response header and the error
   body.
-- **Client source:** send `x-client-source: POS | KDS | WEBSITE | ADMIN | HUB` so audit entries
-  record where an action came from (default `ADMIN`).
+- **Client source:** send `x-client-source: POS | KDS | WEBSITE | ADMIN` so audit entries
+  record where an action came from (default `ADMIN`). `HUB` is honoured only from a paired hub
+  (device credential) and `SYSTEM` never (Phase 10); other values fall back to `ADMIN`.
 
 ## Errors
 
@@ -34,7 +35,9 @@ Every error response has the same shape:
 `apps/api/src/common/errors/http-status.ts`. Clients show `t('errors:<code>')`. `message` is for
 developers and may change. Validation failures (`400 VALIDATION_FAILED`) list
 `details.issues[] = { path, code, message }`. Unexpected failures return
-`500 INTERNAL_ERROR` without internals; the stack is logged server-side with the request id.
+`500 INTERNAL_ERROR` without internals; the stack is logged server-side with the request id
+(for database errors only their kind and code, never the query's arguments). `GET /ready` answers
+`503 SERVICE_UNAVAILABLE` when the database cannot be reached.
 
 ## Authentication
 
@@ -406,7 +409,10 @@ a label (the order number), status, retry count, next retry, error code and mess
   `@pos/validation`): restaurant, its location, roles and grants, staff of this location (with
   password and PIN hashes), catalog, taxes, discounts, floor, payment methods, drawers. Rows of
   other locations are excluded. `ETag` = content version; `If-None-Match` answers `304`.
-- **Push** `{ operations: [≤ 50, each optionally with baseVersion], outbox?: { pending, failed } }` → `{ results: [{ operationId,
+- **Push** `{ operations: [≤ 50, each optionally with baseVersion], outbox?: { pending, failed } }`
+  (operation types `ORDER_UPSERT`, `SHIFT_UPSERT`, `KITCHEN_TICKET_UPSERT` and, since Phase 10,
+  `AUDIT_LOG_APPEND`: an audit entry written at the restaurant, stored once under the hub's
+  location) → `{ results: [{ operationId,
 status: APPLIED|DUPLICATE|CONFLICT|REJECTED|RETRY, code, message }] }`, one per operation, in
   order. Each operation is applied exactly once (see [sync.md](sync.md#push)); a malformed one is
   `REJECTED` without failing the others. An empty or malformed envelope is `400`.
@@ -597,16 +603,36 @@ locations where the caller holds it.
 
 ## Security headers and limits
 
-- `@fastify/helmet` defaults, CORS allowlist from `CORS_ORIGINS` (credentials enabled), a 1 MB
-  body limit.
-- A global rate limit of `RATE_LIMIT_PER_MINUTE` per IP, plus the separate auth budget above.
+- `@fastify/helmet` defaults (HSTS, `X-Content-Type-Options`, `X-Frame-Options: SAMEORIGIN`, a
+  `default-src 'self'` CSP, `Referrer-Policy: no-referrer`), a 1 MB body limit.
+- CORS allowlist from `CORS_ORIGINS` (credentials enabled). Entries must be bare origins
+  (`https://admin.example.com`, `tauri://localhost`); `*` or a path stops the server at start-up.
+- A global rate limit of `RATE_LIMIT_PER_MINUTE` per client IP, plus separate budgets for sign-in
+  and refresh (`AUTH_RATE_LIMIT_PER_MINUTE`), website orders and order tracking. Behind a reverse
+  proxy or load balancer set `TRUST_PROXY` to the number of proxies, so the client address comes
+  from `X-Forwarded-For`; otherwise every client shares the proxy's budget.
+- **Every route is protected server-side.** The server refuses to start if a route has neither
+  `@Public()` nor `@RequirePermissions` (Phase 10); `apps/api/test/security.test.ts` and
+  `apps/gateway/test/security.test.ts` call every route and expect `401` without a token, `403`
+  for a member without the permission, `404` for another tenant's ids, and the device credential
+  on `/sync/*`. Public routes: `/health`, `/ready`, sign-in (`/auth/login|pin|refresh|logout`),
+  the storefront (`/public/*`), website order creation and tracking (`/orders`, `/orders/track`)
+  and, on the hub only, `/hub/status`.
+- All SQL is parameterized (Prisma queries and tagged `$queryRaw` templates); the only
+  `$queryRawUnsafe` interpolates a table name from a fixed union.
 
 ## Observability
 
-Structured JSON logs (pino) include `reqId`, `userId`, `restaurantId` and `locationId`.
-Authorization headers, cookies, passwords, tokens, PINs and card fields are redacted. Audit
+Structured JSON logs (pino) include `reqId`, `userId`, `restaurantId`, `locationId`, `orderId`
+(routes naming an order) and `deviceId` (a hub calling `/sync/*`, whose restaurant and location
+are logged too), also on Fastify's request-completed line. Authorization headers, cookies,
+passwords, tokens, PINs, credentials and card fields are redacted, also one level down
+(`body.password`); database errors are logged without the query's arguments. The hub logs the
+same fields (`service: "hub"`) and serves the same `/health` and `/ready`. Audit
 entries record actor, source, request id and redacted metadata for: login, failed login, logout,
 refresh-token reuse, restaurant/location changes, catalog changes including price changes,
 orders (creation, discounts, edits, status changes, cancellations), payments (captures, refunds,
 voids), shifts and cash movements, online-ordering settings, devices, staff and permission
-changes, payment setup and sync decisions (the admin portal's audit log, `audit.view`).
+changes, payment setup and sync decisions (the admin portal's audit log, `audit.view`). Since Phase 10 the
+audit log also holds what happened at the restaurant: the hub uploads its entries (PIN sign-ins,
+shifts and cash, payments and refunds at the till, kitchen actions) through the sync outbox.

@@ -91,6 +91,15 @@ describe('hub routes', () => {
     ).toBeUndefined();
   });
 
+  it('serves liveness and readiness outside the versioned prefix', async () => {
+    expect((await hub.app.inject({ method: 'GET', url: '/health' })).json()).toEqual({
+      status: 'ok',
+    });
+    const ready = await hub.app.inject({ method: 'GET', url: '/ready' });
+    expect(ready.json()).toEqual({ status: 'ready', database: 'ok' });
+    expect(ready.headers['x-request-id']).toBeTruthy();
+  });
+
   it('keeps credentials out of its public status', async () => {
     const res = await hub.app.inject({ method: 'GET', url: '/api/v1/hub/status' });
     expect(res.statusCode).toBe(200);
