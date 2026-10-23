@@ -1,4 +1,4 @@
-import { TenantContextProvider, tenantContextFixture } from '@pos/app-kit';
+import { TenantContextProvider, ThemeProvider, tenantContextFixture } from '@pos/app-kit';
 import type { Feature, Locale } from '@pos/shared-types';
 import { DirectionProvider } from '@pos/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -27,9 +27,11 @@ export async function renderWithProviders(
     <I18nextProvider i18n={i18n}>
       <DirectionProvider dir={i18n.dir(locale)}>
         <QueryClientProvider client={client}>
-          <TenantContextProvider value={tenantContextFixture(features)}>
-            <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
-          </TenantContextProvider>
+          <ThemeProvider app="pos" surface="pos">
+            <TenantContextProvider value={tenantContextFixture(features)}>
+              <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
+            </TenantContextProvider>
+          </ThemeProvider>
         </QueryClientProvider>
       </DirectionProvider>
     </I18nextProvider>,

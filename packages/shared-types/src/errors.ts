@@ -27,6 +27,14 @@ export const ERROR_CODES = [
   'FEATURE_DISABLED',
   /** The module is not the tenant's to switch: not in its plan, or managed by the platform. */
   'FEATURE_NOT_CONFIGURABLE',
+  // branding and tenant files (ADR 0019)
+  /** No such file of this tenant (another tenant's file is not found either). */
+  'FILE_NOT_FOUND',
+  /** Not a PNG, JPEG, WebP or ICO image, or the bytes are not the declared type. */
+  'FILE_TYPE_NOT_ALLOWED',
+  'FILE_TOO_LARGE',
+  /** A brand colour would make text or controls unreadable (details.issues). */
+  'BRANDING_UNREADABLE',
   // staff and devices (Phase 8)
   'USER_NOT_FOUND',
   'ROLE_NOT_FOUND',

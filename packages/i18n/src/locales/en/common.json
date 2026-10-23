@@ -1,5 +1,5 @@
 {
-  "appName": "Restaurant Platform",
+  "poweredBy": "Powered by $t(common:platform.company)",
   "actions": {
     "save": "Save",
     "cancel": "Cancel",
@@ -30,6 +30,13 @@
     "no": "No",
     "optional": "Optional",
     "required": "Required"
+  },
+  "theme": {
+    "label": "Appearance",
+    "inherit": "Business default",
+    "LIGHT": "Light",
+    "DARK": "Dark",
+    "SYSTEM": "System"
   },
   "language": {
     "label": "Language",

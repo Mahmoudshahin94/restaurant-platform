@@ -68,6 +68,9 @@ export const SNAPSHOT_TABLES = [
   /** Modules (ADR 0018): the platform's entitlements and the overrides of this location. */
   'tenantEntitlements',
   'featureOverrides',
+  /** Branding (ADR 0019): the files it shows, then the tenant's branding row. */
+  'tenantFiles',
+  'tenantBranding',
   /** The cloud's order numbers of recent business days: a hub paired mid-day continues them. */
   'orderCounters',
 ] as const;
@@ -76,9 +79,9 @@ export type SnapshotTable = (typeof SNAPSHOT_TABLES)[number];
 export const locationSnapshotSchema = z.object({
   /**
    * Bumped when the snapshot format changes incompatibly (2: the tenant rename, ADR 0017; 3: the
-   * modules a hub must enforce, ADR 0018).
+   * modules a hub must enforce, ADR 0018; 4: branding and its files, ADR 0019).
    */
-  format: z.literal(3),
+  format: z.literal(4),
   tenantId: idSchema,
   locationId: idSchema,
   generatedAt: isoDateTimeSchema,
@@ -87,6 +90,11 @@ export const locationSnapshotSchema = z.object({
   tables: z.object(
     Object.fromEntries(SNAPSHOT_TABLES.map((t) => [t, rows])) as Record<SnapshotTable, typeof rows>,
   ),
+  /**
+   * The bytes of every file in `tables.tenantFiles` (base64): the logos and favicons the hub
+   * serves offline. Checked against each row's SHA-256 before they are stored.
+   */
+  files: z.array(z.object({ id: idSchema, content: z.base64() })),
 });
 export type LocationSnapshot = z.infer<typeof locationSnapshotSchema>;
 

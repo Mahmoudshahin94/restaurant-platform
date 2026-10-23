@@ -1,4 +1,4 @@
-import { RealtimeIndicator, useCurrentLocale, useRealtime } from '@pos/app-kit';
+import { RealtimeIndicator, TenantLogo, useCurrentLocale, useRealtime } from '@pos/app-kit';
 import { pickLocalized } from '@pos/i18n';
 import type { EventType, RealtimeEvent } from '@pos/shared-types';
 import { Button, cn } from '@pos/ui';
@@ -61,8 +61,9 @@ export function KdsShell() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-card px-4 py-2">
+      <header className="surface flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-2">
         <div className="flex items-center gap-2">
+          <TenantLogo className="shrink-0" />
           <ChefHat aria-hidden className="size-7" />
           <span className="text-xl font-bold">{t('kds:title')}</span>
         </div>

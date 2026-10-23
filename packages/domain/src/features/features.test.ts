@@ -35,7 +35,14 @@ describe('resolveLayered', () => {
   });
 
   it('applies the layers in the documented order', () => {
-    expect(CONFIG_LAYERS).toEqual(['PLATFORM', 'BUSINESS_TYPE', 'TENANT', 'LOCATION', 'DEVICE']);
+    expect(CONFIG_LAYERS).toEqual([
+      'PLATFORM',
+      'BUSINESS_TYPE',
+      'TENANT',
+      'SURFACE',
+      'LOCATION',
+      'DEVICE',
+    ]);
     const result = resolveLayered(['k'] as const, {
       DEVICE: { k: 'device' },
       LOCATION: { k: 'location' },

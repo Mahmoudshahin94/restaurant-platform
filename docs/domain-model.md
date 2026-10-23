@@ -11,6 +11,7 @@ mirrors the operational subset.
 | Tenancy   | Tenant, Location                                                                                                                  | ✅ 0001                            |
 | Identity  | User, Role, Permission, RolePermission, UserRole, RefreshToken, Employee                                                          | ✅ 0001                            |
 | Modules   | TenantEntitlement, FeatureOverride                                                                                                | ✅ Phase M2                        |
+| Branding  | TenantBranding, TenantFile                                                                                                        | ✅ Phase M3                        |
 | Devices   | Device                                                                                                                            | ✅ 0001                            |
 | Audit     | AuditLog                                                                                                                          | ✅ 0001                            |
 | Catalog   | Category, Product, ProductVariant, ModifierGroup, Modifier, ProductModifierGroup, KitchenStation, ProductStation, LocationProduct | ✅ 0002                            |
@@ -43,6 +44,9 @@ erDiagram
   Tenant ||--o{ FeatureOverride : switches
   Location |o--o{ FeatureOverride : "scopes (null = tenant)"
   Device |o--o{ FeatureOverride : "scopes (null = location)"
+  Tenant ||--o| TenantBranding : "is branded by"
+  Tenant ||--o{ TenantFile : uploads
+  TenantFile |o--o{ TenantBranding : "logo / favicon"
 
   Role ||--o{ RolePermission : grants
   Permission ||--o{ RolePermission : "granted by"
@@ -123,6 +127,21 @@ device, capped by the platform's entitlement. Both tables store the feature as t
 
 Code asks for capabilities, never for the business type: a lint rule keeps `businessType`
 comparisons in `features/defaults.ts`.
+
+**Branding** ([ADR 0019](adr/0019-branding-and-theme.md)): resolution goes MADAR's defaults →
+tenant → surface (`login`, `pos`, `kds`, `kiosk`, `website`) → the device's light/dark choice.
+
+- `TenantBranding` (key: tenant; absent until first saved): display names, logo and favicon file
+  ids, `#rrggbb` primary/secondary/accent colours, typeface, logo size, theme mode, surface style
+  and corner radius, each null to inherit. `surfaces` (JSON) holds the per-surface overrides,
+  validated by `surfaceOverridesSchema`. Colours are checked for contrast on save.
+- `TenantFile`: a logo or favicon the tenant uploaded. Immutable; `storageKey`
+  (`tenants/<tenantId>/<kind>/<id>.<ext>`, unique, kept inside the tenant's folder by a check
+  constraint) names the bytes in the tenant file storage, `contentType` is the type the bytes
+  were verified to be (PNG, JPEG, WebP, ICO), `sha256` lets a hub check its copy.
+
+The platform's own brand (MADAR · Powered by JudyTech) is not data: it is `PLATFORM_BRAND` in
+`@pos/shared-types`.
 
 **Location**: a branch or store. `code` is unique per tenant and prefixes hub-generated order
 numbers.

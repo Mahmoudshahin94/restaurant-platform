@@ -190,6 +190,8 @@ export async function buildSnapshot() {
     cashRegisters: [{ id: ids.drawer, locationId, nameEn: 'Drawer', nameAr: 'الدرج' }],
     tenantEntitlements: [] as Record<string, unknown>[],
     featureOverrides: [] as Record<string, unknown>[],
+    tenantFiles: [] as Record<string, unknown>[],
+    tenantBranding: [] as Record<string, unknown>[],
     orderCounters: [] as { locationId: string; businessDate: string; lastNumber: number }[],
   };
   return { ids, tables };
@@ -198,14 +200,16 @@ export async function buildSnapshot() {
 export function withVersion(
   ids: { tenantId: string; locationId: string },
   tables: Record<SnapshotTable, Record<string, unknown>[]>,
+  files: LocationSnapshot['files'] = [],
 ): LocationSnapshot {
   const json = JSON.parse(JSON.stringify(tables)) as LocationSnapshot['tables'];
   return {
-    format: 3,
+    format: 4,
     tenantId: ids.tenantId,
     locationId: ids.locationId,
     generatedAt: new Date().toISOString(),
     version: createHash('sha256').update(JSON.stringify(json)).digest('hex').slice(0, 32),
     tables: json,
+    files,
   };
 }

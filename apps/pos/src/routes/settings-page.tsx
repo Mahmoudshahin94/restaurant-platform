@@ -1,4 +1,4 @@
-import { tKey, useCurrentLocale } from '@pos/app-kit';
+import { ThemeSwitcher, tKey, useCurrentLocale } from '@pos/app-kit';
 import { PAPER_WIDTH_DOTS, type PaperWidth, type ReceiptDocument } from '@pos/receipts';
 import {
   Button,
@@ -61,6 +61,14 @@ export function SettingsPage() {
 
   return (
     <div className="mx-auto grid max-w-xl gap-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('common:theme.label')}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ThemeSwitcher className="h-12 w-full text-base" />
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader>
           <CardTitle>{t('payments:printer.title')}</CardTitle>

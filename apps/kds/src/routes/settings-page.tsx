@@ -1,4 +1,4 @@
-import { LanguageSwitcher, QueryState, useCurrentLocale } from '@pos/app-kit';
+import { LanguageSwitcher, QueryState, ThemeSwitcher, useCurrentLocale } from '@pos/app-kit';
 import { pickLocalized } from '@pos/i18n';
 import { Button, Card, CardContent, CardHeader, CardTitle, Checkbox, Label, Switch } from '@pos/ui';
 import { useQueryClient } from '@tanstack/react-query';
@@ -101,7 +101,10 @@ export function SettingsPage() {
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <LanguageSwitcher className="h-12 w-auto" onLocaleChange={setLocale} />
+            <div className="flex flex-wrap gap-3">
+              <LanguageSwitcher className="h-12 w-auto" onLocaleChange={setLocale} />
+              <ThemeSwitcher className="h-12 w-auto" />
+            </div>
             <Button variant="outline" className="h-12" onClick={() => void signOut()}>
               <LogOut aria-hidden className="rtl:-scale-x-100" />
               {t('kds:settings.signOut')}

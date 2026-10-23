@@ -1,18 +1,12 @@
-import {
-  ConfigLayer,
-  FEATURES,
-  type Feature,
-  type ResolvedFeatures,
-  enumValues,
-} from '@pos/shared-types';
+import { FEATURES, type Feature, type ResolvedFeatures } from '@pos/shared-types';
 import { z } from 'zod';
-import { idSchema, localeSchema } from './common';
+import { brandSurfaceSchema, resolvedBrandingSchema } from './branding';
+import { configLayerSchema, idSchema, localeSchema } from './common';
 import { businessTypeSchema, tenantStatusSchema } from './tenancy';
 
 // --- Modules (ADR 0018) ------------------------------------------------------------------------
 
 export const featureSchema = z.enum(FEATURES as [Feature, ...Feature[]]);
-export const configLayerSchema = z.enum(enumValues(ConfigLayer));
 
 export const resolvedFeatureSchema = z.object({
   feature: featureSchema,
@@ -76,8 +70,8 @@ export const tenantContextSchema = z.object({
     status: tenantStatusSchema,
     timezone: z.string(),
   }),
-  /** The tenant's names until Phase M3 adds logos, colours and themes. */
-  branding: z.object({ nameEn: z.string(), nameAr: z.string() }),
+  /** The tenant's branding, resolved for the requested surface (ADR 0019). */
+  branding: resolvedBrandingSchema,
   currency: z.object({ code: z.string(), exponent: z.int() }),
   locales: z.object({ default: localeSchema, supported: z.array(localeSchema) }),
   /** The location the modules were resolved for; null: the tenant as a whole. */
@@ -86,5 +80,9 @@ export const tenantContextSchema = z.object({
 });
 export type TenantContextDto = z.infer<typeof tenantContextSchema>;
 
-export const tenantContextQuerySchema = z.object({ locationId: idSchema.optional() });
+export const tenantContextQuerySchema = z.object({
+  locationId: idSchema.optional(),
+  /** The screen asking: its branding overrides apply (ADR 0019). */
+  surface: brandSurfaceSchema.optional(),
+});
 export type TenantContextQuery = z.input<typeof tenantContextQuerySchema>;

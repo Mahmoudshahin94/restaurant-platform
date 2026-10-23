@@ -11,6 +11,7 @@ import {
   tenantContextFixture,
   useFeature,
 } from './tenant-context';
+import { ThemeProvider } from './theme/theme-provider';
 
 afterEach(cleanup);
 
@@ -65,13 +66,16 @@ describe('TenantProvider', () => {
     const api = { tenants: { context } } as unknown as ApiClient;
     render(
       <QueryClientProvider client={new QueryClient()}>
-        <TenantProvider api={api} tenantId="tenant" locationId="loc">
-          <KitchenLabel />
-        </TenantProvider>
+        <ThemeProvider app="kds" surface="kds">
+          <TenantProvider api={api} tenantId="tenant" locationId="loc">
+            <KitchenLabel />
+          </TenantProvider>
+        </ThemeProvider>
       </QueryClientProvider>,
     );
     expect(screen.queryByText(/kitchen/)).not.toBeInTheDocument();
     expect(await screen.findByText('kitchen off')).toBeInTheDocument();
-    expect(context).toHaveBeenCalledWith('tenant', 'loc');
+    // The branding asked for is the surface of the ThemeProvider above (ADR 0019).
+    expect(context).toHaveBeenCalledWith('tenant', 'loc', 'kds');
   });
 });

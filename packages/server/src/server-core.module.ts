@@ -10,6 +10,7 @@ import type { AppConfig } from './config/env';
 import { HealthController } from './health/health.controller';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { BrandingModule } from './modules/branding/branding.module';
 import { FeaturesModule } from './modules/features/features.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { type DatabaseOptions, PrismaModule } from './prisma/prisma.module';
@@ -23,7 +24,7 @@ export interface ServerCoreOptions {
 
 /**
  * Infrastructure every server deployment needs: configuration, database, audit, authentication,
- * deny-by-default authorization, modules, request context, realtime and health checks. Feature modules
+ * deny-by-default authorization, modules, branding, request context, realtime and health checks. Feature modules
  * (orders, payments, kitchen, …) are added by each app.
  */
 @Module({})
@@ -39,6 +40,7 @@ export class ServerCoreModule {
         AuditModule,
         AuthModule,
         FeaturesModule,
+        BrandingModule,
         RealtimeModule,
       ],
       controllers: [HealthController],

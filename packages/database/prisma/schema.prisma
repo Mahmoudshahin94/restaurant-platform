@@ -231,6 +231,8 @@ model Tenant {
   paymentMethods   PaymentMethod[]
   entitlements     TenantEntitlement[]
   featureOverrides FeatureOverride[]
+  branding         TenantBranding?
+  files            TenantFile[]
 
   @@map("tenants")
 }
@@ -491,6 +493,68 @@ model FeatureOverride {
   @@unique([tenantId, scope, feature])
   @@index([locationId])
   @@map("feature_overrides")
+}
+
+// ---------------------------------------------------------------------------
+// Branding (ADR 0019)
+// ---------------------------------------------------------------------------
+
+/// A tenant's branding: one row per tenant, absent until it is first saved. A null column
+/// inherits MADAR's default (docs/configuration.md); `surfaces` holds the per-surface overrides.
+model TenantBranding {
+  tenantId       String   @id @map("tenant_id") @db.Uuid
+  displayNameEn  String?  @map("display_name_en")
+  displayNameAr  String?  @map("display_name_ar")
+  logoFileId     String?  @map("logo_file_id") @db.Uuid
+  faviconFileId  String?  @map("favicon_file_id") @db.Uuid
+  /// `#rrggbb`, checked for contrast when saved.
+  primaryColor   String?  @map("primary_color")
+  secondaryColor String?  @map("secondary_color")
+  accentColor    String?  @map("accent_color")
+  /// @pos/shared-types FontFamily, LogoSize, ThemeMode and SurfaceStyle, stored as text.
+  fontFamily     String?  @map("font_family")
+  logoSize       String?  @map("logo_size")
+  themeMode      String?  @map("theme_mode")
+  surfaceStyle   String?  @map("surface_style")
+  /// Corner radius in pixels.
+  borderRadius   Int?     @map("border_radius")
+  /// Per-surface overrides (`login`, `pos`, `kds`, `kiosk`, `website`), validated by
+  /// @pos/validation `surfaceOverridesSchema`. File ids in it refer to `tenant_files`.
+  surfaces       Json     @default("{}")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenant  Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  logo    TenantFile? @relation("BrandingLogo", fields: [logoFileId], references: [id], onDelete: SetNull)
+  favicon TenantFile? @relation("BrandingFavicon", fields: [faviconFileId], references: [id], onDelete: SetNull)
+
+  @@index([logoFileId])
+  @@index([faviconFileId])
+  @@map("tenant_branding")
+}
+
+/// A file a tenant uploaded (logos and favicons). Immutable: a new upload is a new file. The
+/// bytes live in the tenant file storage under `storageKey`, which always starts with
+/// `tenants/<tenantId>/` (a check constraint in the cloud).
+model TenantFile {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  /// @pos/shared-types TenantFileKind.
+  kind        String
+  storageKey  String   @unique @map("storage_key")
+  /// The verified image type (PNG, JPEG, WebP or ICO; never SVG).
+  contentType String   @map("content_type")
+  sizeBytes   Int      @map("size_bytes")
+  /// Hex SHA-256 of the bytes: the hub checks the copy it receives against it.
+  sha256      String
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  brandingLogo    TenantBranding[] @relation("BrandingLogo")
+  brandingFavicon TenantBranding[] @relation("BrandingFavicon")
+
+  @@index([tenantId, createdAt])
+  @@map("tenant_files")
 }
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 // @ts-check
 import noBusinessTypeBranching from './no-business-type-branching.js';
+import noRawColors from './no-raw-colors.js';
 import noUnscopedPrisma from './no-unscoped-prisma.js';
 import noUntranslatedJsx from './no-untranslated-jsx.js';
 
@@ -8,6 +9,7 @@ export default {
   meta: { name: 'pos-local' },
   rules: {
     'no-business-type-branching': noBusinessTypeBranching,
+    'no-raw-colors': noRawColors,
     'no-unscoped-prisma': noUnscopedPrisma,
     'no-untranslated-jsx': noUntranslatedJsx,
   },

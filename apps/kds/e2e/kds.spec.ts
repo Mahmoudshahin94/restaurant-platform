@@ -121,7 +121,7 @@ test('the kitchen screen works in Arabic (RTL)', async ({ page, request }) => {
   const pos = await posSession(request);
   const order = await placeOrder(request, pos, [{ product: 'Kunafa' }]);
   await page.getByRole('link', { name: 'Settings' }).click();
-  await page.getByRole('combobox').selectOption('ar');
+  await page.getByRole('combobox', { name: 'Language' }).selectOption('ar');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await page.getByRole('link', { name: 'النشطة' }).click();
   const card = page.getByRole('article', { name: order.orderNumber });

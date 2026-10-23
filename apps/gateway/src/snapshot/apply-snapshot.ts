@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { type TenantFileStorage, sniffImageType } from '@pos/server';
 import { SNAPSHOT_TABLES, type LocationSnapshot, type SnapshotTable } from '@pos/validation';
 import type { HubTx } from '../database/hub-database';
 
@@ -13,6 +15,8 @@ const REPLACED: ReadonlySet<SnapshotTable> = new Set([
   'locationProducts',
   'tenantEntitlements',
   'featureOverrides',
+  'tenantFiles',
+  'tenantBranding',
 ]);
 
 const DELEGATE: Record<SnapshotTable, string> = {
@@ -42,6 +46,8 @@ const DELEGATE: Record<SnapshotTable, string> = {
   cashRegisters: 'cashRegister',
   tenantEntitlements: 'tenantEntitlement',
   featureOverrides: 'featureOverride',
+  tenantFiles: 'tenantFile',
+  tenantBranding: 'tenantBranding',
   orderCounters: 'orderCounter',
 };
 
@@ -66,6 +72,36 @@ export function belongsToTenant(snapshot: LocationSnapshot, tenantId: string): b
       table === 'tenants' ? row.id === tenantId : !('tenantId' in row) || row.tenantId === tenantId,
     ),
   );
+}
+
+/**
+ * Stores the bytes of the snapshot's tenant files (logos, favicons; ADR 0019) in the hub's file
+ * storage, before the rows that name them are written. Each copy must match its row (SHA-256,
+ * size and image type), or the whole snapshot is refused. Files are immutable: a file the hub
+ * already has is not written again. Returns false when a copy does not match.
+ */
+export async function storeSnapshotFiles(
+  storage: TenantFileStorage,
+  snapshot: LocationSnapshot,
+): Promise<boolean> {
+  const content = new Map(snapshot.files.map((f) => [f.id, f.content]));
+  for (const row of snapshot.tables.tenantFiles as Row[]) {
+    const tenantId = String(row.tenantId);
+    const key = String(row.storageKey);
+    const base64 = content.get(String(row.id));
+    if (base64 === undefined || (await storage.has(tenantId, key))) continue;
+    const bytes = Buffer.from(base64, 'base64');
+    const sha256 = createHash('sha256').update(bytes).digest('hex');
+    if (
+      sha256 !== row.sha256 ||
+      bytes.length !== row.sizeBytes ||
+      sniffImageType(bytes) !== row.contentType
+    ) {
+      return false;
+    }
+    await storage.put(tenantId, key, bytes);
+  }
+  return true;
 }
 
 /**

@@ -24,6 +24,24 @@ import enAuth from './locales/en/auth.json';
 import enCommon from './locales/en/common.json';
 import enErrors from './locales/en/errors.json';
 import enMenu from './locales/en/menu.json';
+import { PLATFORM_BRAND } from '@pos/shared-types';
+
+/**
+ * The platform's names, from `PLATFORM_BRAND` (ADR 0019), never spelled out in a translation:
+ * `common:appName` and `common:platform.*`, nested into other strings as
+ * `$t(common:platform.name)`.
+ */
+function platformStrings(locale: 'en' | 'ar') {
+  const name = locale === 'ar' ? PLATFORM_BRAND.nameAr : PLATFORM_BRAND.name;
+  return {
+    appName: name,
+    platform: {
+      name,
+      company: PLATFORM_BRAND.company,
+      products: PLATFORM_BRAND.products,
+    },
+  };
+}
 
 /**
  * Translation resources. English is the reference language: its JSON shape is the type that
@@ -31,7 +49,7 @@ import enMenu from './locales/en/menu.json';
  */
 export const resources = {
   en: {
-    common: enCommon,
+    common: { ...enCommon, ...platformStrings('en') },
     errors: enErrors,
     auth: enAuth,
     admin: enAdmin,
@@ -46,7 +64,7 @@ export const resources = {
     customer: enCustomer,
   },
   ar: {
-    common: arCommon,
+    common: { ...arCommon, ...platformStrings('ar') },
     errors: arErrors,
     auth: arAuth,
     admin: arAdmin,

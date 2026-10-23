@@ -1,3 +1,4 @@
+import { ThemeProvider } from '@pos/app-kit';
 import type { Locale } from '@pos/shared-types';
 import { DirectionProvider } from '@pos/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -22,15 +23,17 @@ export async function renderWithProviders(
     <I18nextProvider i18n={i18n}>
       <DirectionProvider dir={i18n.dir(locale)}>
         <QueryClientProvider client={client}>
-          <MemoryRouter initialEntries={[route]}>
-            {path ? (
-              <Routes>
-                <Route path={path} element={ui} />
-              </Routes>
-            ) : (
-              ui
-            )}
-          </MemoryRouter>
+          <ThemeProvider app="website" surface="website">
+            <MemoryRouter initialEntries={[route]}>
+              {path ? (
+                <Routes>
+                  <Route path={path} element={ui} />
+                </Routes>
+              ) : (
+                ui
+              )}
+            </MemoryRouter>
+          </ThemeProvider>
         </QueryClientProvider>
       </DirectionProvider>
     </I18nextProvider>,

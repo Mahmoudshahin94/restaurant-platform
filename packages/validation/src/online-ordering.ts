@@ -7,6 +7,7 @@ import {
   enumValues,
 } from '@pos/shared-types';
 import { z } from 'zod';
+import { resolvedBrandingSchema } from './branding';
 import { idSchema, isoDateTimeSchema, localeSchema, minorUnitsSchema } from './common';
 import { orderItemInputSchema } from './orders';
 
@@ -98,6 +99,8 @@ export const publicTenantSchema = z.object({
   defaultLocale: localeSchema,
   timezone: z.string(),
   locations: z.array(publicLocationSchema),
+  /** The website's branding (surface `website`, ADR 0019); its files are public. */
+  branding: resolvedBrandingSchema,
 });
 export type PublicTenant = z.infer<typeof publicTenantSchema>;
 

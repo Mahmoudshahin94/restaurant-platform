@@ -1,5 +1,5 @@
 {
-  "appName": "منصة المطاعم",
+  "poweredBy": "بدعم من $t(common:platform.company)",
   "actions": {
     "save": "حفظ",
     "cancel": "إلغاء",
@@ -30,6 +30,13 @@
     "no": "لا",
     "optional": "اختياري",
     "required": "مطلوب"
+  },
+  "theme": {
+    "label": "المظهر",
+    "inherit": "افتراضي المنشأة",
+    "LIGHT": "فاتح",
+    "DARK": "داكن",
+    "SYSTEM": "حسب النظام"
   },
   "language": {
     "label": "اللغة",

@@ -11,6 +11,8 @@ import type {
 import type { z } from 'zod';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { BrandingService } from '../branding/branding.service';
+import { TenantFilesService } from '../files/tenant-files.service';
 import { PublishedMenuService } from '../menu/published-menu.service';
 import { OnlinePaymentsService } from './online-payments.service';
 import { OnlineStatusService } from './online-status.service';
@@ -25,6 +27,8 @@ export class StorefrontService {
     private readonly status: OnlineStatusService,
     private readonly payments: OnlinePaymentsService,
     private readonly audit: AuditService,
+    private readonly branding: BrandingService,
+    private readonly files: TenantFilesService,
   ) {}
 
   async tenant(slug: string): Promise<PublicTenant> {
@@ -48,7 +52,19 @@ export class StorefrontService {
       defaultLocale: tenant.defaultLocale,
       timezone: tenant.timezone,
       locations,
+      branding: await this.branding.resolve(tenant.id, 'website'),
     };
+  }
+
+  /**
+   * A file the tenant's branding shows (its logo, its favicon), to anyone: the website and the
+   * login screens show them before anybody signs in. Its other files stay private.
+   */
+  async brandingFile(tenantId: string, fileId: string) {
+    if (!(await this.branding.fileIds(tenantId)).includes(fileId)) {
+      throw new DomainError('FILE_NOT_FOUND', 'File not found', { fileId });
+    }
+    return this.files.content(tenantId, fileId);
   }
 
   async location(locationId: string): Promise<PublicLocation> {

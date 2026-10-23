@@ -347,3 +347,76 @@ test('the owner switches a module off for one location and its pages follow', as
     ((await reset.json()) as { features: { TABLES: { enabled: boolean } } }).features.TABLES,
   ).toMatchObject({ enabled: true });
 });
+
+/** A real 1×1 PNG: the logo the owner uploads. */
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNQTX4NAAIkAXSaGkHUAAAAAElFTkSuQmCC',
+  'base64',
+);
+
+test('the owner brands the business and its screens follow', async ({ page, request }) => {
+  const { headers, tenantId } = await ownerContext(request);
+  const reset = () =>
+    request.put(`${API}/tenants/${tenantId}/branding`, {
+      headers,
+      data: {
+        displayNameEn: null,
+        displayNameAr: null,
+        logoFileId: null,
+        faviconFileId: null,
+        primaryColor: null,
+        secondaryColor: null,
+        accentColor: null,
+        fontFamily: null,
+        logoSize: null,
+        themeMode: null,
+        surfaceStyle: null,
+        borderRadius: null,
+        surfaces: {},
+      },
+    });
+  expect((await reset()).ok()).toBe(true);
+  await signIn(page);
+  // MADAR's look until the business has its own: dark, and the platform in the footer.
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(page.getByText('MADAR Admin · Powered by JudyTech')).toBeVisible();
+
+  await page.getByRole('link', { name: 'Branding' }).click();
+  await expect(page.getByRole('heading', { name: 'Branding' })).toBeVisible();
+  await page
+    .locator('input[type="file"][accept="image/png,image/jpeg,image/webp"]')
+    .first()
+    .setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: PNG });
+  await expect(page.getByRole('button', { name: 'Replace' }).first()).toBeVisible();
+
+  // An unreadable accent is refused before it can be saved.
+  await page.getByLabel('Accent colour (hex)').fill('#fde047');
+  await expect(page.getByText(/Too light for light screens/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save branding' })).toBeDisabled();
+  await page.getByLabel('Accent colour (hex)').fill('');
+
+  await page.getByLabel('Primary colour (hex)').fill('#2563eb');
+  await page.getByLabel('Light or dark', { exact: true }).selectOption('LIGHT');
+  await page.getByRole('tab', { name: 'Kitchen display' }).click();
+  await page.getByLabel('Light or dark · Kitchen display').selectOption('DARK');
+  await page.getByRole('button', { name: 'Save branding' }).click();
+  await expect(page.getByText(/Branding saved/)).toBeVisible();
+
+  // The admin itself follows at once: light, the brand colour, the logo.
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await expect(page.locator('html')).toHaveAttribute('style', /--color-primary: #2563eb/);
+  await expect(page.locator('aside img').first()).toBeVisible();
+
+  // Every screen reads its own resolution: the kitchen stays dark.
+  const context = async (surface: string) =>
+    (
+      (await (
+        await request.get(`${API}/tenants/${tenantId}/context?surface=${surface}`, { headers })
+      ).json()) as { branding: { themeMode: string; primaryColor: string; logoFileId: string } }
+    ).branding;
+  expect(await context('pos')).toMatchObject({ themeMode: 'LIGHT', primaryColor: '#2563eb' });
+  expect((await context('kds')).themeMode).toBe('DARK');
+  expect((await context('pos')).logoFileId).toBeTruthy();
+
+  expect((await reset()).ok()).toBe(true);
+});

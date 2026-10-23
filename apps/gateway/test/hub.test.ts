@@ -1,5 +1,6 @@
+import { createHash } from 'node:crypto';
 import { newId } from '@pos/domain';
-import type { ApiErrorBody } from '@pos/shared-types';
+import type { ApiErrorBody, ResolvedBranding } from '@pos/shared-types';
 import type {
   HubStatus,
   KitchenTicket,
@@ -577,5 +578,103 @@ describe('modules at the hub (ADR 0018)', () => {
       headers: owner,
     });
     expect(tickets.statusCode).toBe(200);
+  });
+});
+
+describe('branding offline (ADR 0019)', () => {
+  /** A real 1×1 PNG, and the snapshot rows that show it as the tenant's logo on the KDS. */
+  const PNG = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNQTX4NAAIkAXSaGkHUAAAAAElFTkSuQmCC',
+    'base64',
+  );
+  const logoId = newId();
+
+  function withBranding(sha256 = createHash('sha256').update(PNG).digest('hex')) {
+    const { tenantId } = fixture.ids;
+    fixture.tables.tenantFiles = [
+      {
+        id: logoId,
+        tenantId,
+        kind: 'LOGO',
+        storageKey: `tenants/${tenantId}/logo/${logoId}.png`,
+        contentType: 'image/png',
+        sizeBytes: PNG.length,
+        sha256,
+        createdAt: new Date().toISOString(),
+      },
+    ];
+    fixture.tables.tenantBranding = [
+      {
+        tenantId,
+        displayNameEn: 'Hub Bistro',
+        primaryColor: '#2563eb',
+        themeMode: 'LIGHT',
+        surfaces: { kds: { themeMode: 'DARK', logoFileId: logoId }, login: { logoFileId: logoId } },
+        updatedAt: new Date().toISOString(),
+      },
+    ];
+    cloud.snapshot = withVersion(fixture.ids, fixture.tables, [
+      { id: logoId, content: PNG.toString('base64') },
+    ]);
+  }
+
+  it('serves the tenant’s branding and logo from its snapshot, without the cloud', async () => {
+    withBranding();
+    await provision();
+    await cloud.stop();
+    const owner = await signIn('owner@hub.test');
+    const context = (
+      await hub.app.inject({
+        method: 'GET',
+        url: `${api}/tenants/${fixture.ids.tenantId}/context?surface=kds`,
+        headers: owner,
+      })
+    ).json<TenantContextDto>();
+    expect(context.branding).toMatchObject({
+      displayNameEn: 'Hub Bistro',
+      primaryColor: '#2563eb',
+      themeMode: 'DARK',
+      logoFileId: logoId,
+    });
+    const logo = await hub.app.inject({
+      method: 'GET',
+      url: `${api}/tenants/${fixture.ids.tenantId}/files/${logoId}/content`,
+      headers: owner,
+    });
+    expect(logo.statusCode).toBe(200);
+    expect(logo.rawPayload.equals(PNG)).toBe(true);
+
+    // The sign-in screens, before anybody signs in.
+    const login = await hub.app.inject({ method: 'GET', url: `${api}/hub/branding` });
+    expect(login.json<ResolvedBranding>()).toMatchObject({
+      surface: 'login',
+      displayNameEn: 'Hub Bistro',
+      logoFileId: logoId,
+    });
+    const publicLogo = await hub.app.inject({
+      method: 'GET',
+      url: `${api}/hub/branding/files/${logoId}`,
+    });
+    expect(publicLogo.rawPayload.equals(PNG)).toBe(true);
+    expect(
+      (await hub.app.inject({ method: 'GET', url: `${api}/hub/branding/files/${newId()}` }))
+        .statusCode,
+    ).toBe(404);
+    await cloud.start();
+  });
+
+  it('refuses a snapshot whose file does not match its checksum', async () => {
+    withBranding('0'.repeat(64));
+    await pair(hub, cloud);
+    expect(await hub.snapshots.syncNow()).toBe('rejected');
+    const status = (
+      await hub.app.inject({ method: 'GET', url: `${api}/hub/status` })
+    ).json<HubStatus>();
+    expect(status.lastError).toMatch(/checksum/);
+  });
+
+  it('has no branding to show before its first snapshot', async () => {
+    const res = await hub.app.inject({ method: 'GET', url: `${api}/hub/branding` });
+    expect(res.statusCode).toBe(503);
   });
 });

@@ -58,6 +58,11 @@ const envSchema = z
      * the documented test adapter (refused in production).
      */
     ONLINE_PAYMENT_PROVIDER: z.enum(['none', 'mock']).default('none'),
+    /**
+     * Where tenant files (logos, favicons, ADR 0019) are kept by the local-disk storage. Keys
+     * below it are `tenants/<tenantId>/…`. An object store replaces it in production.
+     */
+    FILE_STORAGE_DIR: z.string().min(1).default('.data/files'),
     /** Key of the order tracking tokens; derived from JWT_ACCESS_SECRET when unset. */
     TRACKING_TOKEN_SECRET: z.string().min(32).optional(),
   })

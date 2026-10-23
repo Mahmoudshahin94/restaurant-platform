@@ -1,12 +1,23 @@
-import { Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { Controller, Get, HttpCode, Param, Post, Query, Res } from '@nestjs/common';
 import { DomainError } from '@pos/domain';
-import { Public, PrismaService, RequirePermissions, ZodValidationPipe } from '@pos/server';
+import {
+  BrandingService,
+  Public,
+  PrismaService,
+  RequirePermissions,
+  TenantFilesService,
+  ZodValidationPipe,
+  sendTenantFile,
+} from '@pos/server';
+import type { ResolvedBranding } from '@pos/shared-types';
 import {
   type HubStatus,
   type HubSyncOperation,
+  brandingSurfaceQuerySchema,
   hubSyncOperationsQuerySchema,
   idSchema,
 } from '@pos/validation';
+import type { FastifyReply } from 'fastify';
 import type { z } from 'zod';
 import { asHubTx } from './database/hub-database';
 import { HubStateService } from './hub-state.service';
@@ -25,6 +36,8 @@ export class HubController {
     private readonly state: HubStateService,
     private readonly engine: SyncEngineService,
     private readonly prisma: PrismaService,
+    private readonly branding: BrandingService,
+    private readonly files: TenantFilesService,
   ) {}
 
   /** Pairing, cloud link and outbox figures; no secrets. Also tells clients they talk to a hub. */
@@ -32,6 +45,35 @@ export class HubController {
   @Get('status')
   status(): Promise<HubStatus> {
     return this.build();
+  }
+
+  /**
+   * The paired tenant's branding for a screen nobody has signed in to yet (ADR 0019): the POS and
+   * KDS sign-in screens (surface `login` unless another is asked for). Public, like the
+   * customer website's: a name, colours and a logo.
+   */
+  @Public()
+  @Get('branding')
+  async brandingOf(
+    @Query(new ZodValidationPipe(brandingSurfaceQuerySchema))
+    query: z.output<typeof brandingSurfaceQuerySchema>,
+  ): Promise<ResolvedBranding> {
+    return this.branding.resolve(await this.pairedTenant(), query.surface ?? 'login');
+  }
+
+  /** A logo or favicon of that branding (nothing else the tenant uploaded). */
+  @Public()
+  @Get('branding/files/:fileId')
+  async brandingFile(
+    @Param('fileId', new ZodValidationPipe(idSchema)) fileId: string,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<Buffer> {
+    const tenantId = await this.pairedTenant();
+    if (!(await this.branding.fileIds(tenantId)).includes(fileId)) {
+      throw new DomainError('FILE_NOT_FOUND', 'File not found', { fileId });
+    }
+    const { file, bytes } = await this.files.content(tenantId, fileId);
+    return sendTenantFile(reply, file, bytes, 'public');
   }
 
   /** "Sync now": send the outbox and check the cloud for configuration changes. */
@@ -102,6 +144,15 @@ export class HubController {
       throw new DomainError('NOT_FOUND', 'No failed operation with this id', { id });
     }
     return this.build();
+  }
+
+  /** The tenant this hub serves, once it has its first snapshot. */
+  private async pairedTenant(): Promise<string> {
+    const pairing = await this.state.get('pairing');
+    if (!pairing || !(await this.state.get('snapshot'))) {
+      throw new DomainError('HUB_NOT_PROVISIONED', 'This hub has not been set up yet');
+    }
+    return pairing.tenantId;
   }
 
   private async build(): Promise<HubStatus> {

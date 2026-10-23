@@ -1,5 +1,13 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { LanguageSwitcher, tKey, useErrorText } from '@pos/app-kit';
+import {
+  LanguageSwitcher,
+  PlatformFooter,
+  TenantLogo,
+  ThemeSwitcher,
+  tKey,
+  useErrorText,
+  useHubSignInBranding,
+} from '@pos/app-kit';
 import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Field, Input, cn } from '@pos/ui';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -8,7 +16,7 @@ import { Navigate, useNavigate } from 'react-router';
 import { z } from 'zod';
 import { PinSignIn } from '../components/pin-sign-in';
 import { useHubStatus } from '../lib/queries';
-import { session, useSession } from '../lib/session';
+import { api, session, useSession } from '../lib/session';
 import { usePreferences } from '../stores/preferences';
 
 const loginForm = z.object({
@@ -32,6 +40,8 @@ export function LoginPage() {
   const hub = useHubStatus();
   const [mode, setMode] = useState<'pin' | 'email' | null>(null);
   const method = mode ?? (hub.data ? 'pin' : 'email');
+  // The location's business, from its hub (ADR 0019); MADAR's look without one.
+  useHubSignInBranding(api, Boolean(hub.data));
   const form = useForm<LoginForm>({
     resolver: zodResolver(loginForm),
     defaultValues: { email: '', password: '' },
@@ -53,7 +63,8 @@ export function LoginPage() {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-6 p-4">
       <Card className="w-full max-w-md">
-        <CardHeader>
+        <CardHeader className="items-center text-center">
+          <TenantLogo className="mb-2" />
           <CardTitle className="text-2xl">{t('auth:signIn.title')}</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4">
@@ -122,7 +133,11 @@ export function LoginPage() {
           )}
         </CardContent>
       </Card>
-      <LanguageSwitcher className="h-12 w-auto" onLocaleChange={setLocale} />
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <LanguageSwitcher className="h-12 w-auto" onLocaleChange={setLocale} />
+        <ThemeSwitcher className="h-12 w-auto" />
+      </div>
+      <PlatformFooter app="pos" />
     </div>
   );
 }

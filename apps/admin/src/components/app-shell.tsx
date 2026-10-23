@@ -18,6 +18,7 @@ import {
   ListChecks,
   LogOut,
   MapPin,
+  Palette,
   Puzzle,
   Receipt,
   RefreshCw,
@@ -37,7 +38,13 @@ import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { session } from '../lib/api';
-import { useCurrentLocale, useFeatures } from '@pos/app-kit';
+import {
+  PlatformFooter,
+  TenantLogo,
+  ThemeSwitcher,
+  useCurrentLocale,
+  useFeatures,
+} from '@pos/app-kit';
 import { usePermissions } from '../lib/permissions';
 import { useLocations } from '../lib/queries';
 import { usePreferences } from '../stores/preferences';
@@ -145,6 +152,13 @@ const NAV: NavGroup[] = [
         to: '/settings/modules',
         labelKey: 'modules',
         icon: Puzzle,
+        permission: 'settings.manage',
+        tenantWide: true,
+      },
+      {
+        to: '/settings/branding',
+        labelKey: 'branding',
+        icon: Palette,
         permission: 'settings.manage',
         tenantWide: true,
       },
@@ -277,11 +291,13 @@ export function AppShell() {
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
-      <aside className="border-b bg-card md:sticky md:top-0 md:h-screen md:w-64 md:shrink-0 md:overflow-y-auto md:border-e md:border-b-0">
-        <div className="flex h-14 items-center px-4 font-semibold">{t('common:appName')}</div>
+      <aside className="surface border-b md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:flex-col md:overflow-y-auto md:border-e md:border-b-0">
+        <div className="flex h-14 shrink-0 items-center px-4">
+          <TenantLogo fallback={<span className="font-semibold">{t('common:appName')}</span>} />
+        </div>
         <nav
           aria-label={t('admin:nav.mainNavigation')}
-          className="flex gap-4 overflow-x-auto px-2 pb-2 md:flex-col md:gap-3 md:pb-4"
+          className="flex shrink-0 gap-4 overflow-x-auto px-2 pb-2 md:flex-col md:gap-3 md:pb-4"
         >
           {NAV.map((group) => {
             const items = group.items.filter(
@@ -318,11 +334,13 @@ export function AppShell() {
             );
           })}
         </nav>
+        <PlatformFooter app="admin" className="mt-auto hidden px-4 py-3 md:block" />
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 flex-wrap items-center justify-end gap-3 border-b bg-card px-4">
+        <header className="surface flex h-14 flex-wrap items-center justify-end gap-3 border-b px-4">
           <LocationPicker />
           <LanguageSwitcher />
+          <ThemeSwitcher />
           <span className="hidden text-sm text-muted-foreground sm:inline">
             {t('admin:header.signedInAs', { name: user?.displayName ?? '' })}
           </span>

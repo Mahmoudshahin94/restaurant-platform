@@ -1,12 +1,20 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { LanguageSwitcher, tKey, useErrorText } from '@pos/app-kit';
+import {
+  LanguageSwitcher,
+  PlatformFooter,
+  TenantLogo,
+  ThemeSwitcher,
+  tKey,
+  useErrorText,
+  useHubSignInBranding,
+} from '@pos/app-kit';
 import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Field, Input } from '@pos/ui';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Navigate, useNavigate } from 'react-router';
 import { z } from 'zod';
-import { session, useSession } from '../lib/session';
+import { api, session, useSession } from '../lib/session';
 import { usePreferences } from '../stores/preferences';
 
 const loginForm = z.object({
@@ -31,6 +39,8 @@ export function LoginPage() {
     defaultValues: { email: '', password: '' },
   });
   const fieldError = (message?: string) => (message ? tKey(t, message) : undefined);
+  // The kitchen's business, from the location hub (ADR 0019); MADAR's look elsewhere.
+  useHubSignInBranding(api, true);
 
   if (status === 'authenticated') return <Navigate to="/" replace />;
 
@@ -47,7 +57,8 @@ export function LoginPage() {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-6 p-4">
       <Card className="w-full max-w-md">
-        <CardHeader>
+        <CardHeader className="items-center text-center">
+          <TenantLogo className="mb-2" />
           <CardTitle className="text-2xl">{t('auth:signIn.title')}</CardTitle>
         </CardHeader>
         <CardContent>
@@ -83,7 +94,11 @@ export function LoginPage() {
           </form>
         </CardContent>
       </Card>
-      <LanguageSwitcher className="h-12 w-auto" onLocaleChange={setLocale} />
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <LanguageSwitcher className="h-12 w-auto" onLocaleChange={setLocale} />
+        <ThemeSwitcher className="h-12 w-auto" />
+      </div>
+      <PlatformFooter app="kds" />
     </div>
   );
 }

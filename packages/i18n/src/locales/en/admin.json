@@ -23,6 +23,7 @@
     "shifts": "Shifts",
     "tenant": "Business",
     "modules": "Modules",
+    "branding": "Branding",
     "onlineOrdering": "Online ordering",
     "paymentMethods": "Payment methods",
     "cashRegisters": "Cash drawers",
@@ -267,15 +268,16 @@
     "enabled": "On",
     "disabled": "Off",
     "source": "From: {{source}}",
-    "empty": "No module can be changed here. Your plan's modules are managed by MADAR.",
-    "hiddenNote": "Modules outside your plan, or managed by MADAR, are not listed.",
+    "empty": "No module can be changed here. Your plan's modules are managed by $t(common:platform.name).",
+    "hiddenNote": "Modules outside your plan, or managed by $t(common:platform.name), are not listed.",
     "offTitle": "This module is off",
     "offDescription": "{{module}} is not enabled here. You can turn it on under Settings → Modules.",
     "openModules": "Open modules",
     "layers": {
-      "PLATFORM": "MADAR default",
+      "PLATFORM": "$t(common:platform.name) default",
       "BUSINESS_TYPE": "Business type default",
       "TENANT": "Business setting",
+      "SURFACE": "Screen setting",
       "LOCATION": "Location setting",
       "DEVICE": "Device setting"
     },
@@ -337,6 +339,90 @@
         "description": "Reports beyond the daily summary."
       }
     }
+  },
+  "branding": {
+    "title": "Branding",
+    "description": "Your business's name, logo, colours and look on every screen: the POS, the kitchen display, the sign-in screens and your website.",
+    "identity": "Name and logo",
+    "displayNameEn": "Display name (English)",
+    "displayNameAr": "Display name (Arabic)",
+    "displayNameHint": "Leave empty to use your business name: {{name}}",
+    "logo": "Logo",
+    "logoHint": "PNG, JPEG or WebP, up to {{size}}. A wide logo on a transparent background works best.",
+    "favicon": "Browser icon",
+    "faviconHint": "PNG, JPEG, WebP or ICO, up to {{size}}. Square, at least 32 × 32 pixels.",
+    "upload": "Upload",
+    "replace": "Replace",
+    "remove": "Remove",
+    "uploading": "Uploading…",
+    "none": "None",
+    "logoSize": "Logo size",
+    "logoSizes": {
+      "SMALL": "Small",
+      "MEDIUM": "Medium",
+      "LARGE": "Large"
+    },
+    "colours": "Colours",
+    "coloursHint": "Text on each colour gets a readable black or white automatically. Colours that would be hard to read on the light or dark screens are refused.",
+    "primaryColor": "Primary colour",
+    "primaryHint": "Main buttons, selected items, links and focus outlines.",
+    "secondaryColor": "Secondary colour",
+    "secondaryHint": "Secondary buttons.",
+    "accentColor": "Accent colour",
+    "accentHint": "Highlights and badges.",
+    "colourValue": "{{colour}} (hex)",
+    "useThemeColour": "Use the theme's colour",
+    "unreadable": {
+      "FOREGROUND": "Text on this colour would be hard to read ({{ratio}}:1, needs {{required}}:1).",
+      "DARK": "Too dark for dark screens ({{ratio}}:1 against the page, needs {{required}}:1). Choose a lighter shade.",
+      "LIGHT": "Too light for light screens ({{ratio}}:1 against the page, needs {{required}}:1). Choose a darker shade."
+    },
+    "look": "Look",
+    "themeMode": "Light or dark",
+    "themeModeHint": "Each screen can still choose its own under Appearance.",
+    "themeModes": {
+      "LIGHT": "Light",
+      "DARK": "Dark",
+      "SYSTEM": "Follow the device"
+    },
+    "surfaceStyle": "Cards",
+    "surfaceStyles": {
+      "SOLID": "Solid",
+      "GLASS": "Glass (translucent)"
+    },
+    "borderRadius": "Corner roundness",
+    "borderRadiusValue": "{{value}} px",
+    "fontFamily": "Typeface",
+    "fontFamilies": {
+      "INTER": "Inter",
+      "SYSTEM": "The device's own",
+      "SERIF": "Serif"
+    },
+    "inherit": "Default ({{value}})",
+    "screens": "Screens",
+    "screensHint": "Give one screen a different look. Anything left on \"same as the business\" follows the settings above.",
+    "screen": "Screen",
+    "screenSetting": "{{setting}} · {{screen}}",
+    "surfaces": {
+      "login": "Sign-in screens",
+      "pos": "POS",
+      "kds": "Kitchen display",
+      "kiosk": "Self-service kiosk",
+      "website": "Website"
+    },
+    "sameAsBusiness": "Same as the business",
+    "sameAsBusinessValue": "Same as the business ({{value}})",
+    "preview": "Preview",
+    "previewMode": "Preview in",
+    "previewButton": "Pay",
+    "previewSecondary": "Hold",
+    "previewBadge": "Ready",
+    "previewText": "Order 042 · 2 items",
+    "save": "Save branding",
+    "saved": "Branding saved. Open screens update within a minute.",
+    "source": "From: {{source}}",
+    "fileTooLarge": "This file is larger than {{size}}.",
+    "fileType": "This file type is not accepted here."
   },
   "locations": {
     "title": "Locations",

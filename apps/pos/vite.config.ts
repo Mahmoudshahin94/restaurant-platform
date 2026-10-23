@@ -1,4 +1,5 @@
 import tailwindcss from '@tailwindcss/vite';
+import { brandIndexHtml } from '@pos/shared-types';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
@@ -7,7 +8,12 @@ const API_TARGET = process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:4000';
 
 // Tauri expects a fixed dev port and serves the built `dist` folder in production.
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    // The page title and favicon come from PLATFORM_BRAND (ADR 0019).
+    { name: 'platform-brand', transformIndexHtml: (html) => brandIndexHtml(html, 'pos') },
+  ],
   clearScreen: false,
   server: {
     port: 1420,

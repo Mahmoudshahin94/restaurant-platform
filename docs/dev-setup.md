@@ -41,6 +41,12 @@ pnpm --filter @pos/admin dev      # http://localhost:5173  (proxies /api to :300
 
 Sign in to the admin with `SEED_OWNER_EMAIL` / `SEED_OWNER_PASSWORD` from your `.env`.
 
+Settings → Branding sets the business's name, logo, colours and look
+([ADR 0019](adr/0019-branding-and-theme.md)). Uploaded logos and favicons are kept by the
+local-disk tenant file storage in `FILE_STORAGE_DIR` (default `.data/files`, relative to the
+API's working directory, git-ignored); a hub keeps its copies in `<HUB_DATA_DIR>/files`. Each
+screen's Appearance choice (light, dark, system) is kept in that browser.
+
 Run the location hub (the POS and KDS talk to it, as in a restaurant). Pair it once with the
 running API, then start it:
 

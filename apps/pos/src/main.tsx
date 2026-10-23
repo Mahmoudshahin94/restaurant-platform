@@ -1,5 +1,5 @@
 import './app.css';
-import { DirectionBridge, initialLocale } from '@pos/app-kit';
+import { DirectionBridge, ThemeProvider, applyStoredThemeMode, initialLocale } from '@pos/app-kit';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -14,6 +14,8 @@ const queryClient = new QueryClient({
 });
 
 async function bootstrap(): Promise<void> {
+  // Light or dark before the first paint (the device's choice, else MADAR's default).
+  applyStoredThemeMode();
   // The stored refresh token must be in memory before the first session refresh.
   const [i18n] = await Promise.all([
     setupI18n(initialLocale(usePreferences.getState().locale)),
@@ -25,9 +27,11 @@ async function bootstrap(): Promise<void> {
     <StrictMode>
       <I18nextProvider i18n={i18n}>
         <DirectionBridge i18n={i18n}>
-          <QueryClientProvider client={queryClient}>
-            <AppRoutes />
-          </QueryClientProvider>
+          <ThemeProvider app="pos" surface="pos">
+            <QueryClientProvider client={queryClient}>
+              <AppRoutes />
+            </QueryClientProvider>
+          </ThemeProvider>
         </DirectionBridge>
       </I18nextProvider>
     </StrictMode>,

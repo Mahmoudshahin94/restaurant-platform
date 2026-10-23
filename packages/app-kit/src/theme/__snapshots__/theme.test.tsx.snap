@@ -1,0 +1,37 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`components per theme > branded glass, light 1`] = `
+{
+  "markup": "<div class="surface rounded-lg border text-card-foreground shadow-sm"><div class="p-6 pt-0"><h3 class="text-lg font-semibold leading-none"><span class="truncate font-semibold text-base">Demo</span></h3><button type="button" class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&amp;_svg]:size-4 [&amp;_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 text-sm">Pay</button><button type="button" class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&amp;_svg]:size-4 [&amp;_svg]:shrink-0 border border-input bg-card hover:bg-muted h-10 px-4 text-sm">Hold</button><span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold border-transparent bg-success text-success-foreground">Paid</span></div></div>",
+  "style": "--color-primary: #16a34a; --color-primary-foreground: #000000; --color-accent: #dc2626; --color-accent-foreground: #ffffff; --color-ring: #16a34a; --radius-sm: 11px; --radius-md: 14px; --radius-lg: 21px; --font-sans: 'Inter Variable', 'Noto Sans Arabic Variable', ui-sans-serif, system-ui, sans-serif;",
+  "surface": "glass",
+  "theme": "light",
+}
+`;
+
+exports[`components per theme > dark (MADAR default) 1`] = `
+{
+  "markup": "<div class="surface rounded-lg border text-card-foreground shadow-sm"><div class="p-6 pt-0"><h3 class="text-lg font-semibold leading-none"><span class="truncate font-semibold text-base">Demo</span></h3><button type="button" class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&amp;_svg]:size-4 [&amp;_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 text-sm">Pay</button><button type="button" class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&amp;_svg]:size-4 [&amp;_svg]:shrink-0 border border-input bg-card hover:bg-muted h-10 px-4 text-sm">Hold</button><span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold border-transparent bg-success text-success-foreground">Paid</span></div></div>",
+  "style": "--radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px; --font-sans: 'Inter Variable', 'Noto Sans Arabic Variable', ui-sans-serif, system-ui, sans-serif;",
+  "surface": "solid",
+  "theme": "dark",
+}
+`;
+
+exports[`components per theme > light 1`] = `
+{
+  "markup": "<div class="surface rounded-lg border text-card-foreground shadow-sm"><div class="p-6 pt-0"><h3 class="text-lg font-semibold leading-none"><span class="truncate font-semibold text-base">Demo</span></h3><button type="button" class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&amp;_svg]:size-4 [&amp;_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 text-sm">Pay</button><button type="button" class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&amp;_svg]:size-4 [&amp;_svg]:shrink-0 border border-input bg-card hover:bg-muted h-10 px-4 text-sm">Hold</button><span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold border-transparent bg-success text-success-foreground">Paid</span></div></div>",
+  "style": "--radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px; --font-sans: 'Inter Variable', 'Noto Sans Arabic Variable', ui-sans-serif, system-ui, sans-serif;",
+  "surface": "solid",
+  "theme": "light",
+}
+`;
+
+exports[`components per theme > system 1`] = `
+{
+  "markup": "<div class="surface rounded-lg border text-card-foreground shadow-sm"><div class="p-6 pt-0"><h3 class="text-lg font-semibold leading-none"><span class="truncate font-semibold text-base">Demo</span></h3><button type="button" class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&amp;_svg]:size-4 [&amp;_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 text-sm">Pay</button><button type="button" class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&amp;_svg]:size-4 [&amp;_svg]:shrink-0 border border-input bg-card hover:bg-muted h-10 px-4 text-sm">Hold</button><span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold border-transparent bg-success text-success-foreground">Paid</span></div></div>",
+  "style": "--radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px; --font-sans: 'Inter Variable', 'Noto Sans Arabic Variable', ui-sans-serif, system-ui, sans-serif;",
+  "surface": "solid",
+  "theme": "system",
+}
+`;
