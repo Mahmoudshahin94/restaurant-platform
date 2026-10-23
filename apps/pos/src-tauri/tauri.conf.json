@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Tenant POS",
+  "productName": "MADAR POS",
   "version": "0.1.0",
-  "identifier": "com.restaurantplatform.pos",
+  "identifier": "app.madar.pos",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Tenant POS",
+        "title": "MADAR POS",
         "width": 1366,
         "height": 900,
         "minWidth": 1024,
@@ -30,6 +30,6 @@
     "targets": "all",
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
     "category": "Business",
-    "shortDescription": "Tenant point of sale"
+    "shortDescription": "MADAR point of sale"
   }
 }

@@ -2,7 +2,8 @@
 //! Windows Credential Manager, the Linux kernel keyring), so a till restarted mid-shift does not
 //! sign its cashier out (ADR 0016). Nothing else is stored, and never in a plain file.
 
-const SERVICE: &str = "restaurant-pos";
+/// PLATFORM_BRAND.app.keychainService (`tools/brand.test.mjs` keeps them equal).
+const SERVICE: &str = "app.madar.pos";
 const ACCOUNT: &str = "refresh-token";
 /// Refresh tokens are short opaque strings; anything larger is not one.
 const MAX_TOKEN_LEN: usize = 512;

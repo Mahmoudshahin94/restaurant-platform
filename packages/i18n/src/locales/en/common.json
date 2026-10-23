@@ -1,5 +1,5 @@
 {
-  "appName": "Restaurant Platform",
+  "poweredBy": "Powered by $t(common:platform.company)",
   "actions": {
     "save": "Save",
     "cancel": "Cancel",
