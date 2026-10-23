@@ -7,7 +7,8 @@ import { defineConfig } from '@playwright/test';
  * Customer website end-to-end tests: the specification's acceptance steps 14–17. A customer orders
  * on the website (cloud API, `pos_kds_web_e2e`), the order reaches the restaurant's hub through the
  * change feed, the POS (served from the hub) accepts or rejects it, and the customer sees the new
- * status. Everything runs: cloud, hub, POS and website.
+ * status. Everything runs: cloud, hub, POS, kitchen display and website; journey.spec.ts follows
+ * one order through all of them.
  */
 const ROOT_ENV = resolve(import.meta.dirname, '../../.env');
 if (existsSync(ROOT_ENV)) process.loadEnvFile(ROOT_ENV);
@@ -16,6 +17,8 @@ const CLOUD_PORT = 3130;
 const HUB_PORT = 4130;
 const POS_PORT = 1440;
 const WEB_PORT = 5195;
+const KDS_PORT = 5196;
+process.env.WEB_E2E_KDS_URL = `http://localhost:${String(KDS_PORT)}`;
 process.env.WEB_E2E_CLOUD_PORT = String(CLOUD_PORT);
 process.env.WEB_E2E_HUB_PORT = String(HUB_PORT);
 process.env.WEB_E2E_POS_URL = `http://localhost:${String(POS_PORT)}`;
@@ -66,7 +69,7 @@ export default defineConfig({
         CLOUD_PORT: String(CLOUD_PORT),
         HUB_PORT: String(HUB_PORT),
         HUB_DATA_DIR: hubDataDir,
-        HUB_CORS_ORIGINS: `http://localhost:${String(POS_PORT)}`,
+        HUB_CORS_ORIGINS: `http://localhost:${String(POS_PORT)},http://localhost:${String(KDS_PORT)}`,
         HUB_CLOUD_TIMEOUT_MS: '3000',
         HUB_SYNC_RETRY_MAX_MS: '3000',
         AUTH_RATE_LIMIT_PER_MINUTE: '1000',
@@ -75,6 +78,14 @@ export default defineConfig({
     {
       command: `pnpm --filter @pos/pos exec vite --port ${String(POS_PORT)} --strictPort`,
       url: `http://localhost:${String(POS_PORT)}`,
+      reuseExistingServer: false,
+      timeout: 60_000,
+      env: { VITE_API_PROXY_TARGET: `http://localhost:${String(HUB_PORT)}` },
+    },
+    {
+      // The kitchen display, served like the POS from the hub (journey.spec.ts).
+      command: `pnpm --filter @pos/kds exec vite --port ${String(KDS_PORT)} --strictPort`,
+      url: `http://localhost:${String(KDS_PORT)}`,
       reuseExistingServer: false,
       timeout: 60_000,
       env: { VITE_API_PROXY_TARGET: `http://localhost:${String(HUB_PORT)}` },
