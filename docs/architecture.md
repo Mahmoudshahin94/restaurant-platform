@@ -1,7 +1,13 @@
 # Architecture
 
-Restaurant platform: offline-first POS, Kitchen Display System (KDS), customer online ordering,
-admin portal, cloud API, and a per-restaurant location hub. Arabic and English with full RTL.
+**MADAR** (powered by JudyTech): a multi-tenant, offline-first commerce platform. One codebase
+serves many independent tenants (restaurants, coffee shops, supermarkets, clothing and other
+stores) with a POS, Kitchen Display System (KDS), customer online ordering, admin portal, cloud
+API, and a per-location hub. Arabic and English with full RTL.
+
+> The platform began as a single-restaurant system (Phases 0–10 below). The MADAR expansion
+> generalizes it in ten further phases, M1–M10; see the
+> [migration plan](madar/migration-plan.md) and [§11](#11-madar-expansion).
 
 > Status: Phases 0–10 (foundations, menu, POS, payments, KDS, location hub, sync engine, customer
 > website and online ordering, admin portal, reporting, hardening with the full end-to-end suite)
@@ -19,7 +25,7 @@ codebase; there was no legacy code to preserve.
 Customer Web ─┐                          ┌─ Admin
               ▼                          ▼
         Cloud API (NestJS + Fastify, modular monolith) ── PostgreSQL (source of truth for synced data)
-              ▲   ▲  outbound HTTP long poll (hub → cloud; the restaurant opens no inbound ports)
+              ▲   ▲  outbound HTTP long poll (hub → cloud; the location opens no inbound ports)
    REST push  │   │  REST pull (cursor-based change feed)
               │   │
         Location Hub (apps/gateway, Node) ── SQLite (operational source of truth while offline)
@@ -30,7 +36,7 @@ Customer Web ─┐                          ┌─ Admin
 
 Principles:
 
-- **The restaurant never depends on the cloud.** POS and KDS talk only to the location hub.
+- **A location never depends on the cloud.** POS and KDS talk only to the location hub.
   The hub syncs with the cloud independently, retrying with backoff while the Internet is down.
 - **Business rules live in `packages/domain` only.** It is pure TypeScript with no I/O. The API,
   the hub and the UIs import the same functions: money, pricing, the order state machine, menu
@@ -90,7 +96,7 @@ See [domain-model.md](domain-model.md) for the ERD and per-entity notes. Convent
   offline, and the same id is used in the cloud ([ADR 0003](adr/0003-uuidv7-identifiers.md)).
 - Timestamps are `timestamptz` in **UTC**. Conversion to the location timezone happens only in
   the presentation layer (`@pos/i18n` `formatDateTime`).
-- Money is an **integer in minor units** of the restaurant currency. The exponent comes from
+- Money is an **integer in minor units** of the tenant currency. The exponent comes from
   ISO 4217, so it is 2 for SAR and 3 for KWD. Rates and percentage discounts are **basis points**
   (1500 = 15%). No floating-point arithmetic touches money
   ([ADR 0002](adr/0002-money-integer-minor-units.md)).
@@ -179,7 +185,7 @@ and [sync.md](sync.md#website-orders-phase-7).
 1. Customer web → `POST /api/v1/orders` (choices only: products, options, quantities, contact,
    pickup or delivery, payment option; idempotent by the browser-generated order id).
 2. The cloud checks the location's online-ordering state (`onlineOrderingStatus` in
-   `@pos/domain`): the restaurant's `OPEN/PAUSED/CLOSED`, then the opening hours, then `OFFLINE`
+   `@pos/domain`): the location's `OPEN/PAUSED/CLOSED`, then the opening hours, then `OFFLINE`
    when the hub's heartbeat is older than 3 minutes. Refusals are `ONLINE_ORDERING_DISABLED` or
    `LOCATION_OFFLINE`.
 3. The cloud validates products, modifiers and availability, then **recalculates** prices, tax,
@@ -370,7 +376,7 @@ See [ADR 0012](adr/0012-sync-engine.md) and [sync.md](sync.md).
   this hub last pushed it (row `version` versus the ledger); a backwards outbox sequence is a
   conflict. `entityVersion` became a per-entity outbox sequence.
 - **Change feed:** PostgreSQL triggers on every snapshot table record one `CONFIG` change per
-  transaction, serialised per restaurant so cursors never skip a late commit; the hub long-polls
+  transaction, serialised per tenant so cursors never skip a late commit; the hub long-polls
   `GET /sync/pull` and refreshes its snapshot on a change (safety-net refresh now every 30 minutes).
 - **Failure handling:** unreachable cloud → `OFFLINE` with full-jitter backoff (2 s to 60 s);
   `CONFLICT`/`REJECTED` → `FAILED`, holding back only that entity, retried by a manager; `RETRY`
@@ -415,13 +421,13 @@ See [ADR 0013](adr/0013-online-ordering.md).
 - **The cloud creates website orders** (cloud-only `OnlineOrderingModule` in `@pos/server`) and
   prices them with the shared engine; the browser sends choices only. They are `PLACED`, channel
   `WEBSITE`, numbered `W-NNN` from a cloud-only counter, idempotent by the browser's order id.
-- **Ordering status** comes from the domain: the restaurant's switch, then opening hours (weekly
+- **Ordering status** comes from the domain: the location's switch, then opening hours (weekly
   windows in the location timezone), then the hub heartbeat (stale after 3 minutes → `OFFLINE`).
   Settings at `PUT /locations/:lid/online-ordering` (`online_ordering.manage`).
 - **ORDER topic:** the cloud's `ChangeRecorder` appends an entry for every cloud change of a
   website order, in its transaction, under the feed's advisory lock; the hub fetches the order
   aggregate (`GET /sync/orders/:id`) and stores it.
-- **Hand-over:** the hub's first push of a website order must be the restaurant's decision on
+- **Hand-over:** the hub's first push of a website order must be the location's decision on
   exactly the version the cloud handed out (`baseVersion`, hub table `inbound_orders`); otherwise
   `SYNC_CONFLICT`. The hub refuses edits before acceptance and acceptances after the deadline.
 - **Timeout:** the cloud cancels unaccepted orders 30 s after `acceptBy` and voids their payment;
@@ -433,7 +439,7 @@ See [ADR 0013](adr/0013-online-ordering.md).
 - **Tracking token:** `<orderId>.<HMAC>`, nothing stored, sent in `x-tracking-token`; order
   creation and tracking have their own rate limits; the status page polls every 5 s.
 - **Customer website** (`apps/customer-web`): guest checkout only; cart and language in
-  localStorage, the placed order's token in sessionStorage; EN/AR with RTL; one restaurant per
+  localStorage, the placed order's token in sessionStorage; EN/AR with RTL; one tenant per
   deployment (`VITE_TENANT_SLUG`).
 - **POS:** a banner and an auto-opening dialog for each new website order (items, fulfillment,
   address, payment, countdown), accept or reject with a reason preset; online tenders are no
@@ -474,7 +480,7 @@ See [ADR 0014](adr/0014-admin-portal-and-conflict-resolution.md).
 
 - **Admin portal** (`apps/admin`) completed with grouped, permission-filtered navigation: dashboard;
   operations (orders with filters and detail, customers, payments with online refunds, shifts
-  read-only); menu (now with per-product modifier min/max overrides); settings (restaurant,
+  read-only); menu (now with per-product modifier min/max overrides); settings (business,
   locations with tax mode, cash rounding and kitchen timers, online ordering with opening hours,
   taxes, discounts, tables, payment methods, cash drawers); staff (users, roles with a permission
   matrix, employees with PINs); system (devices with pairing instructions, synchronization with
@@ -492,7 +498,7 @@ See [ADR 0014](adr/0014-admin-portal-and-conflict-resolution.md).
   and refunds of orders a hub owns (`OWNED_BY_LOCATION`); online card refunds stay with the cloud
   (append-only, no version change, announced to the hub).
 - **Conflict resolution:** refused hub changes keep their state; an administrator with
-  `sync.resolve` applies the restaurant's version (the cloud's copy goes to the audit log first),
+  `sync.resolve` applies the hub's version (the cloud's copy goes to the audit log first),
   keeps the cloud's version (orders only, never dropping a sale or a hub payment), or asks for a
   resend, with a required note. The decision reaches the hub on the change feed (`RESOLUTION`); a
   kept cloud version is enforced through `baseVersion`.
@@ -501,7 +507,7 @@ See [ADR 0014](adr/0014-admin-portal-and-conflict-resolution.md).
 - **Audit coverage** checked against the specification: login and logout, cancellation, refund
   (and online voids), discount, price change, product change, payment correction, shift open and
   close, permission change (user roles, role permissions, employee links and PINs) and
-  configuration change (restaurant, locations, online ordering, taxes, discounts, floor, payment
+  configuration change (tenant, locations, online ordering, taxes, discounts, floor, payment
   methods, drawers, devices, sync decisions) are recorded in the cloud; actions taken at the hub
   are recorded on the hub (upload in Phase 10).
 
@@ -516,7 +522,7 @@ partial card refunds on a later day, an order still in the kitchen, and an order
 after midnight local time (21:30Z the day before) — asserting every daily, channel, payment,
 product, category, tax, discount, shift and prep-time figure, channel and location filters, the
 time-zone day boundaries, a 366-day leap year, validation, `404` for another location and `403`
-without `reports.view`, a KWD restaurant (3 decimals, largest-remainder refund split), and an
+without `reports.view`, a KWD tenant (3 decimals, largest-remainder refund split), and an
 order taken, paid, refunded and handed over through the real API appearing exactly as priced;
 domain tests for `splitRefund`, averages, shares and date ranges; admin component tests (daily
 sales and its chart, filters in the URL and the request, switching report, an inverted period
@@ -592,12 +598,12 @@ See [ADR 0016](adr/0016-hardening.md), [testing.md](testing.md) and [release.md]
   SameSite=strict plus the Origin check. Clients can no longer label audit entries `HUB` or
   `SYSTEM`.
 - **Observability:** logs and audit context carry `orderId` and `deviceId` besides request, user,
-  restaurant and location; redaction goes one level deeper; database errors are logged without
+  tenant and location; redaction goes one level deeper; database errors are logged without
   their query arguments; `/ready` answers the typed `SERVICE_UNAVAILABLE`; the hub's public status
   keeps only the code and message of a cloud refusal.
 - **The hub's audit trail reaches the cloud** through the outbox (`AUDIT_LOG_APPEND`, append-only,
   exactly once, scoped to the hub's location), so the admin portal's audit log shows PIN sign-ins,
-  shifts, payments, refunds and kitchen actions taken at the restaurant.
+  shifts, payments, refunds and kitchen actions taken at the location.
 - **The POS desktop app stays signed in across a restart:** its refresh token lives in the OS
   keychain (Tauri `keyring`), never in web storage.
 - Raw SQL, input validation (every body, query and parameter through a Zod schema) and the
@@ -606,7 +612,7 @@ See [ADR 0016](adr/0016-hardening.md), [testing.md](testing.md) and [release.md]
 ### Known gaps
 
 Carried forward after Phase 10 (each was weighed in [ADR 0016](adr/0016-hardening.md); none blocks
-running a restaurant):
+running a location):
 
 - **Sync conflicts** (ADR 0014): an order-number clash (the same number twice on one business day,
   possible only with data from before Phase 6) cannot be settled by choosing a version; there is no
@@ -646,7 +652,7 @@ running a restaurant):
 - Tenants are provisioned by seed only; there is no platform-operator UI yet.
 - **Online ordering (Phase 7):** no customer accounts, saved addresses, delivery zones or radius,
   scheduled orders, promo codes or tips; customers (and support staff in the cloud) cannot cancel
-  a website order, only the restaurant (reject) or the acceptance timeout can; the delivery fee is
+  a website order, only the location (reject) or the acceptance timeout can; the delivery fee is
   flat and untaxed.
 - Online card payments use the mock adapter only; a real gateway (authorize at checkout, capture
   on acceptance, voids through an outbox instead of inside the database transaction) is still to
@@ -665,7 +671,7 @@ running a restaurant):
   happen at the POS) and cannot cancel or edit orders a hub owns; users have no self-service
   password change, password reset by e-mail or second factor; the audit log has no free-text search
   or export; pairing a hub still needs the command on the hub machine (the portal shows it);
-  location and restaurant time zones are typed as IANA names, not picked from a list. Audit
+  location and tenant time zones are typed as IANA names, not picked from a list. Audit
   entries of a conflict resolution keep the cloud's full copy of the order, customer contact
   details included (the undo record; erasure is the open privacy item below).
 
@@ -675,6 +681,50 @@ running a restaurant):
   net of refunds (refunds name no lines). The location hub has only its shift-close daily summary,
   so reports need the cloud and show what hubs have uploaded. Comparisons between periods and
   locations side by side are not built.
+
+## 11. MADAR expansion
+
+MADAR generalizes the platform into a multi-tenant commerce platform in ten phases, M1–M10. Each
+phase has its own branch, pull request and ADR (0017 onwards). See the
+[migration plan](madar/migration-plan.md) for the map of every existing component to its change.
+Configuration precedence is in [configuration.md](configuration.md).
+
+| Phase | Scope                                                                                                    | Status  |
+| ----- | -------------------------------------------------------------------------------------------------------- | ------- |
+| M1    | Multi-tenant foundation: Tenant root, profile, tenant context, tenant-scoped client, provisioning, tests | ✅ Done |
+| M2    | Feature/module system: catalog, business-type defaults, overrides, FeatureService, UI capability guards  | ⏳      |
+| M3    | Branding and theme: platform and tenant branding, design tokens, dark/light/system, tenant files         | ⏳      |
+| M4    | Currency and localization: currency configuration (ILS default), supported locales                       | ⏳      |
+| M5    | Retail: SKU, barcodes, generic product options and variants, scanner abstraction                         | ⏳      |
+| M6    | Self-service: kiosk app, terminal devices, shared order engine, self-checkout                            | ⏳      |
+| M7    | Multi-tenant website: host resolution, verified domains, configurable sections                           | ⏳      |
+| M8    | Payment configuration: per-tenant provider accounts, encrypted secrets                                   | ⏳      |
+| M9    | Platform admin: separate app and identity, tenants, health, support and repair tools                     | ⏳      |
+| M10   | Versioning: one MADAR version, device versions, release tracking                                         | ⏳      |
+
+### Phase M1 decisions
+
+See [ADR 0017](adr/0017-tenant-root-and-isolation.md).
+
+- **Restaurant → Tenant everywhere** by an in-place rename (table, columns, routes, token claim,
+  error codes, UI wording). The change-feed functions and report views are replaced in the same
+  migration; the hub renames its SQLite tables, columns and pairing record without copying data.
+  The snapshot format is 2.
+- **Tenant profile:** legal name, business type (text validated against `BusinessType`), status and
+  supported locales. The business type picks defaults only; staff cannot change it.
+- **Isolation by construction:** every service uses a Prisma client scoped to the tenant in scope.
+  It filters every tenant-owned model and refuses foreign writes. In the cloud, a tenant query
+  without a tenant is refused. Cross-tenant work is explicit (`runUnscoped`) and limited to
+  reviewed files by a lint rule. Public storefront routes find their tenant first. Raw SQL binds
+  the caller's own location or record ids.
+- **The hub holds one tenant:** it refuses snapshots carrying other tenants' rows. PIN codes
+  matching staff of two tenants sign nobody in.
+- **Provisioning** (`provisionTenant`) is shared by the seed and the future platform API. The seed
+  has one tenant per business type. ILS is supported.
+
+**Phase M1 verification (2026-10-23):** see the pull request. It covers
+`pnpm build typecheck lint test`, `pnpm test:tools`, `pnpm e2e`, a clean `migrate status` and the
+hub schema check.
 
 ## Architectural decisions and open questions
 
@@ -725,6 +775,9 @@ Recorded as ADRs in [adr/](adr/):
     (a cross-app journey, a mid-service disconnect, a resent push), routes protected by
     construction and tested route by route, CORS/proxy/log hardening, the hub's audit trail
     uploaded through the outbox, the POS refresh token in the OS keychain.
+17. [0017](adr/0017-tenant-root-and-isolation.md): MADAR: the tenant is the root (an in-place
+    rename), and tenant isolation is enforced by a tenant-scoped database client, with
+    cross-tenant work explicit and allowlisted.
 
 Open items to revisit:
 

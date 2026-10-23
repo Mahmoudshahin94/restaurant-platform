@@ -9,7 +9,7 @@ Base path `/api/v1`. Health endpoints are unversioned: `GET /health` (liveness) 
   `@pos/validation`. Response types are inferred from the same schemas and used by
   `@pos/api-client`, which can also validate responses at runtime.
 - **IDs** are UUIDs (v7 for new rows). Malformed ids answer `404`, the same as unknown ones.
-- **Money** is integer minor units of the restaurant currency (`1850` = 18.50 SAR).
+- **Money** is integer minor units of the tenant currency (`1850` = 18.50 SAR).
 - **Timestamps** are ISO-8601 UTC strings.
 - **Request ids:** send `x-request-id` (8–128 chars `[A-Za-z0-9._-]`) to correlate; otherwise
   one is generated. It is always echoed in the `x-request-id` response header and the error
@@ -67,30 +67,40 @@ developers and may change. Validation failures (`400 VALIDATION_FAILED`) list
 - **Deny by default.** A non-public route without `@RequirePermissions(...)` is rejected.
 - Permissions are re-read from the database on every request, never trusted from the token, so
   revocations apply immediately.
-- `:tenantId` must be the caller's restaurant, otherwise `404 TENANT_NOT_FOUND`.
+- `:tenantId` must be the caller's tenant, otherwise `404 TENANT_NOT_FOUND`.
   `:locationId` must belong to it and be reachable through the caller's roles, otherwise
   `404 LOCATION_NOT_FOUND`.
-- Scope: with `:locationId`, location-scoped and restaurant-wide roles both count. Without it,
-  only restaurant-wide roles count, so a branch manager cannot change restaurant-wide settings.
+- Scope: with `:locationId`, location-scoped and tenant-wide roles both count. Without it,
+  only tenant-wide roles count, so a branch manager cannot change tenant-wide settings.
   List endpoints marked `any-location` filter results to the caller's locations.
+- **Inside a handler** every query is limited to the caller's tenant by the tenant-scoped database
+  client ([ADR 0017](adr/0017-tenant-root-and-isolation.md)): an id of another tenant's row, also in
+  a body or under the caller's own `:locationId`, is simply not found. A `tenantId` sent in a body
+  is ignored.
 
 ## Tenancy endpoints
 
-| Method | Path                           | Permission                                                   |
-| ------ | ------------------------------ | ------------------------------------------------------------ |
-| GET    | `/tenants/:tenantId`           | any member                                                   |
-| PATCH  | `/tenants/:tenantId`           | `settings.manage` (restaurant-wide). Currency cannot change. |
-| GET    | `/tenants/:tenantId/locations` | `locations.view` (any location; filtered)                    |
-| POST   | `/tenants/:tenantId/locations` | `settings.manage` (restaurant-wide)                          |
-| GET    | `/locations/:locationId`       | `locations.view`                                             |
-| PATCH  | `/locations/:locationId`       | `settings.manage`                                            |
+| Method | Path                           | Permission                                               |
+| ------ | ------------------------------ | -------------------------------------------------------- |
+| GET    | `/tenants/:tenantId`           | any member                                               |
+| PATCH  | `/tenants/:tenantId`           | `settings.manage` (tenant-wide). Currency cannot change. |
+| GET    | `/tenants/:tenantId/locations` | `locations.view` (any location; filtered)                |
+| POST   | `/tenants/:tenantId/locations` | `settings.manage` (tenant-wide)                          |
+| GET    | `/locations/:locationId`       | `locations.view`                                         |
+| PATCH  | `/locations/:locationId`       | `settings.manage`                                        |
 
-Tenants are provisioned by the seed (development) or a future platform-operator flow. There
-is no self-service signup.
+A tenant answers its profile too: `legalName`, `businessType` (`RESTAURANT`, `COFFEE_SHOP`,
+`SUPERMARKET`, `GROCERY`, `CLOTHING`, `RETAIL`, `OTHER`), `status` and `supportedLocales`. `PATCH`
+accepts the names, `legalName`, `defaultLocale`, `supportedLocales` and `timezone`; the default
+locale must stay supported (`400 VALIDATION_FAILED`). The business type and status are the
+platform operator's (fields sent are ignored).
+
+Tenants are provisioned by the seed (development, through `provisionTenant`) or the platform
+operator (Phase M9). There is no self-service signup.
 
 ## Menu endpoints (Phase 1)
 
-Catalog definitions are restaurant-level. Availability ("86") and price overrides are
+Catalog definitions are tenant-level. Availability ("86") and price overrides are
 per location. Rows are **archived, never deleted**, because historical orders and sync
 operations reference them.
 
@@ -117,9 +127,9 @@ maxSelect? }` with optional per-product overrides) and `stationIds`. On `PATCH`,
 - **Modifier groups** use the same full-list semantics for `modifiers`. The resulting group must
   satisfy `0 ≤ minSelect ≤ #modifiers` and `maxSelect ∈ {null, ≥ max(1, minSelect)}`; otherwise
   the answer is `400 VALIDATION_FAILED`. The database enforces the same with CHECK constraints.
-- References (category, modifier groups, stations) must belong to the restaurant and not be
+- References (category, modifier groups, stations) must belong to the tenant and not be
   archived. Otherwise the answer is the specific `*_NOT_FOUND` code with the offending ids.
-- A duplicate `sku` (per restaurant) or station `code` answers `409 CONFLICT`.
+- A duplicate `sku` (per tenant) or station `code` answers `409 CONFLICT`.
 - **Location settings:** `{ isAvailable, priceOverride }`. Price overrides apply only to
   products without variants (`400`, `reason: PRICE_OVERRIDE_WITH_VARIANTS`).
 - **Published menu** (`GET /locations/:id/menu`) is built by `resolveLocationMenu()` in
@@ -195,7 +205,7 @@ guestCount, notes }`. The `id` is a client-generated UUID and the **idempotency 
   (`409 INVALID_ORDER_STATE`, `reason: AWAITING_ACCEPTANCE`) and cannot be accepted after
   `acceptBy` (`reason: ACCEPTANCE_EXPIRED`). Rejecting one (→ `CANCELLED` with a reason) is allowed
   even when it was paid online: the cloud voids that payment. The decision is made at the
-  restaurant's hub: in the cloud, staff transitions of a waiting website order answer
+  location's hub: in the cloud, staff transitions of a waiting website order answer
   `reason: DECIDED_AT_LOCATION` (the cloud's only decision is the acceptance timeout).
 
 ## Payments (Phase 3)
@@ -284,7 +294,7 @@ guestCount, notes }`. The `id` is a client-generated UUID and the **idempotency 
   Edits before the kitchen starts rewrite NEW tickets (their `revision` goes up only when what
   the cook sees changes), open tickets for new stations, and cancel tickets whose station lost
   all its items. Cancelling the order cancels its live tickets; completing it bumps READY ones.
-- **Settings** returns the restaurant's stations and the location's `warnMinutes`/`lateMinutes`
+- **Settings** returns the tenant's stations and the location's `warnMinutes`/`lateMinutes`
   (`Location.kdsWarnMinutes`/`kdsLateMinutes`, editable through `PATCH /locations/:lid`; late
   must be above warn).
 - **List:** `view=active` (default) returns NEW/PREPARING/READY tickets plus cancelled ones not yet
@@ -312,10 +322,13 @@ event list.
 ## Online ordering (Phase 7, cloud only)
 
 See [ADR 0013](adr/0013-online-ordering.md). Public endpoints need no token; they are rate limited.
+Each first finds the tenant of what it names (the slug, the location, the tracked order) and then
+works inside that tenant only ([ADR 0017](adr/0017-tenant-root-and-isolation.md)); an order for a
+location is priced from that location's tenant only.
 
 | Method | Path                              | Auth                           | Notes                                                                                           |
 | ------ | --------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------- |
-| GET    | `/public/tenants/:slug`           | public                         | Restaurant and its active locations with ordering status                                        |
+| GET    | `/public/tenants/:slug`           | public                         | Tenant and its active locations with ordering status                                            |
 | GET    | `/public/locations/:lid`          | public                         | One location (`PublicLocation`)                                                                 |
 | GET    | `/public/locations/:lid/menu`     | public                         | Published menu, `ETag` / `304` like the staff endpoint                                          |
 | POST   | `/orders`                         | public, own budget             | Place a website order (`CreateWebOrderRequest`)                                                 |
@@ -368,7 +381,7 @@ The hub (`apps/gateway`) serves the same API as the cloud to the POS and KDS on 
 (orders, payments, shifts, kitchen, menu, floor, realtime), from its SQLite database. Differences:
 
 - **Cloud-managed settings are read-only** on the hub: writes to menu, prices, taxes, discounts,
-  floor plan, locations and restaurant answer `403 MANAGED_IN_CLOUD`; reads work.
+  floor plan, locations and tenant answer `403 MANAGED_IN_CLOUD`; reads work.
 - **Until provisioned** (no snapshot yet) every call except `/hub/*` answers
   `503 HUB_NOT_PROVISIONED`.
 - **PIN sign-in** `POST /auth/pin` `{ employeeCode, pin, client? }` → same token response as
@@ -406,12 +419,12 @@ a label (the order number), status, retry count, next retry, error code and mess
 - **Device authentication:** `Authorization: Device <deviceId>.<secret>` (staff tokens are refused
   on `/sync/*`). `lastSeenAt` is refreshed at most once a minute.
 - **Snapshot:** everything the hub's location needs (see `SNAPSHOT_TABLES` in
-  `@pos/validation`): restaurant, its location, roles and grants, staff of this location (with
+  `@pos/validation`): tenant, its location, roles and grants, staff of this location (with
   password and PIN hashes), catalog, taxes, discounts, floor, payment methods, drawers. Rows of
   other locations are excluded. `ETag` = content version; `If-None-Match` answers `304`.
 - **Push** `{ operations: [≤ 50, each optionally with baseVersion], outbox?: { pending, failed } }`
   (operation types `ORDER_UPSERT`, `SHIFT_UPSERT`, `KITCHEN_TICKET_UPSERT` and, since Phase 10,
-  `AUDIT_LOG_APPEND`: an audit entry written at the restaurant, stored once under the hub's
+  `AUDIT_LOG_APPEND`: an audit entry written at the location, stored once under the hub's
   location) → `{ results: [{ operationId,
 status: APPLIED|DUPLICATE|CONFLICT|REJECTED|RETRY, code, message }] }`, one per operation, in
   order. Each operation is applied exactly once (see [sync.md](sync.md#push)); a malformed one is
@@ -439,7 +452,7 @@ locations (`any-location`) return only the locations where the caller holds the 
 lists take `page` (1…) and `pageSize` (1–100, default 25) and answer `{ items, page, pageSize,
 total }`.
 
-### Staff (restaurant-wide)
+### Staff (tenant-wide)
 
 | Method | Path                                      | Permission                       |
 | ------ | ----------------------------------------- | -------------------------------- |
@@ -467,7 +480,7 @@ userId, pin? }`; the PIN (4–8 digits) is stored hashed; responses only say `ha
 - **Refusals:** `403 INSUFFICIENT_PERMISSION` with `reason: ESCALATION` and the `missing`
   permissions (granting, removing, editing or deleting a role, or deactivating, resetting or
   linking a user, beyond what the caller holds at that scope); `409 CONFLICT` with `reason`
-  `SELF` (own roles or deactivation), `LAST_OWNER` (the last active restaurant-wide holder of a
+  `SELF` (own roles or deactivation), `LAST_OWNER` (the last active tenant-wide holder of a
   system role), `SYSTEM_ROLE`, `IN_USE` (deleting a role someone holds), `NAME_TAKEN`,
   `EMAIL_TAKEN`, `CODE_TAKEN`, `USER_LINKED`; `404 USER_NOT_FOUND`, `ROLE_NOT_FOUND`,
   `EMPLOYEE_NOT_FOUND`.
@@ -519,8 +532,8 @@ A method's `type` cannot change; the last active cash method cannot be archived
   `IN_STORE_METHOD` (cash and card are refunded at the POS) or `EXCEEDS_REFUNDABLE`;
   `409 INVALID_ORDER_STATE` (`AWAITING_ACCEPTANCE`). Audit: `payment.refunded`.
 - **Audit log:** `action` (exact, or a prefix ending in `.`), `entityType`, `entityId`, `actorId`,
-  `locationId`, `source`, `from`/`to` (UTC dates) → entries with the actor's name; restaurant-level
-  entries need `audit.view` restaurant-wide; metadata is redacted again when read.
+  `locationId`, `source`, `from`/`to` (UTC dates) → entries with the actor's name; tenant-level
+  entries need `audit.view` tenant-wide; metadata is redacted again when read.
 
 ### Synchronization issues (Phase 8)
 
@@ -571,7 +584,7 @@ locations where the caller holds it.
   default all; ignored by the shift report). Invalid periods or values answer
   `400 VALIDATION_FAILED`.
 - **Every answer** echoes `from`, `to`, `currencyCode`, `locationIds`, `channels` (null = all) and
-  `generatedAt`, then `rows` and `totals`. Amounts are integer minor units of the restaurant
+  `generatedAt`, then `rows` and `totals`. Amounts are integer minor units of the tenant
   currency; shares are basis points; durations are whole seconds.
 - **Sales** (daily, channels) are completed orders (`COMPLETED`, or `REFUNDED` afterwards) on their
   business date: `orders`, `grossSales` (Σ subtotal as charged), `discounts`, `netSales`
@@ -624,7 +637,7 @@ locations where the caller holds it.
 ## Observability
 
 Structured JSON logs (pino) include `reqId`, `userId`, `tenantId`, `locationId`, `orderId`
-(routes naming an order) and `deviceId` (a hub calling `/sync/*`, whose restaurant and location
+(routes naming an order) and `deviceId` (a hub calling `/sync/*`, whose tenant and location
 are logged too), also on Fastify's request-completed line. Authorization headers, cookies,
 passwords, tokens, PINs, credentials and card fields are redacted, also one level down
 (`body.password`); database errors are logged without the query's arguments. The hub logs the
@@ -634,5 +647,5 @@ refresh-token reuse, tenant/location changes, catalog changes including price ch
 orders (creation, discounts, edits, status changes, cancellations), payments (captures, refunds,
 voids), shifts and cash movements, online-ordering settings, devices, staff and permission
 changes, payment setup and sync decisions (the admin portal's audit log, `audit.view`). Since Phase 10 the
-audit log also holds what happened at the restaurant: the hub uploads its entries (PIN sign-ins,
+audit log also holds what happened at the location: the hub uploads its entries (PIN sign-ins,
 shifts and cash, payments and refunds at the till, kitchen actions) through the sync outbox.

@@ -17,9 +17,20 @@ pnpm install
 cp infrastructure/.env.example .env          # then adjust DATABASE_URL / TEST_DATABASE_URL
 createdb pos_kds_dev && createdb pos_kds_test # skip when using docker compose
 pnpm db:deploy                                # apply migrations
-pnpm db:seed                                  # demo restaurant + users from SEED_* variables
+pnpm db:seed                                  # demo tenants + users from SEED_* variables
 pnpm build
 ```
+
+The seed provisions four tenants, one per business type ([ADR 0017](adr/0017-tenant-root-and-isolation.md)):
+the demo restaurant `demo-kitchen` (owner, cashier and kitchen accounts from `SEED_OWNER_*`,
+`SEED_CASHIER_*`, `SEED_KITCHEN_*`), and in `packages/database/seed/tenants/` the coffee shop
+`ramallah-roasters`, the supermarket `al-balad-market` and the clothing store `nablus-style` (ILS,
+Asia/Hebron), whose owners are created only when `SEED_CAFE_OWNER_*`, `SEED_MARKET_OWNER_*` and
+`SEED_STYLE_OWNER_*` are set. Re-running the seed updates instead of duplicating.
+
+An existing development database from before MADAR is upgraded by `pnpm db:deploy` (the tenant
+rename keeps every row). A paired development hub upgrades its SQLite, including its pairing
+record, at start-up.
 
 Run the API and admin:
 
@@ -59,7 +70,7 @@ Run the customer website (online ordering; it talks to the cloud API):
 pnpm --filter @pos/customer-web dev        # http://localhost:5175 (proxies /api to :3000)
 ```
 
-It sells for the restaurant in `VITE_TENANT_SLUG` (default `demo-kitchen`, the seed). A
+It sells for the tenant in `VITE_TENANT_SLUG` (default `demo-kitchen`, the seed). A
 branch takes orders only when online ordering is OPEN (the seed opens `MAIN` when it creates it;
 otherwise `PUT /api/v1/locations/:lid/online-ordering { "state": "OPEN" }` as the owner), it is
 within its opening hours, and **its hub is running** (a hub silent for 3 minutes makes the

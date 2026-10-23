@@ -10,7 +10,7 @@ import type {
 } from '@pos/validation';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { asHubTx } from '../src/database/hub-database';
-import { PrismaService } from '@pos/server';
+import { PrismaService, TenantContext, TenantScopeError } from '@pos/server';
 import { CASHIER_PIN, PASSWORD, buildSnapshot, withVersion } from './snapshot-fixture';
 import { FakeCloud, type TestHub, bearer, pair, removeDir, startHub } from './harness';
 
@@ -349,6 +349,25 @@ describe('running a location on the hub', () => {
       headers: owner,
     });
     expect(read.statusCode).toBe(200);
+  });
+});
+
+describe('the tenant-scoped client on SQLite (ADR 0017)', () => {
+  beforeEach(provision);
+
+  it('limits queries to the tenant in scope and refuses writes for another', async () => {
+    const db = hub.app.get(PrismaService);
+    const { tenantId } = fixture.ids;
+    // Outside a request the hub works on its own (single-tenant) database.
+    const all = await db.product.count();
+    expect(all).toBeGreaterThan(0);
+    expect(await TenantContext.runInTenant(tenantId, () => db.product.count())).toBe(all);
+    expect(await TenantContext.runInTenant(newId(), () => db.product.count())).toBe(0);
+    await expect(
+      TenantContext.runInTenant(tenantId, () =>
+        db.category.create({ data: { tenantId: newId(), nameEn: 'x', nameAr: 'x' } }),
+      ),
+    ).rejects.toThrow(TenantScopeError);
   });
 });
 

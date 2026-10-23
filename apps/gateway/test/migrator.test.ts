@@ -72,6 +72,7 @@ describe('hub migrations', () => {
       `INSERT INTO orders (id, restaurant_id, location_id, order_number, business_date, channel, status, source, currency_code, tax_inclusive, subtotal, discount_total, tax_total, fee_total, total, created_at, updated_at) VALUES ('o', 'r', 'l', 'MAIN-001', '${now}', 'TAKEAWAY', 'CONFIRMED', 'POS', 'SAR', 1, 100, 0, 13, 0, 100, '${now}', '${now}')`,
       `INSERT INTO payments (id, restaurant_id, location_id, order_id, shift_id, payment_method_id, method_type, method_name_en, method_name_ar, type, status, provider, amount, created_at, updated_at) VALUES ('p', 'r', 'l', 'o', 's', 'm', 'CASH', 'Cash', 'Cash', 'CHARGE', 'CAPTURED', 'cash', 100, '${now}', '${now}')`,
       `INSERT INTO cash_transactions (id, shift_id, type, amount, payment_id, created_at) VALUES ('t', 's', 'SALE', 100, 'p', '${now}')`,
+      `INSERT INTO hub_state (key, value, updated_at) VALUES ('pairing', '{"deviceId":"d","restaurantId":"r","locationId":"l"}', '${now}')`,
     ]) {
       await client.$executeRawUnsafe(sql);
     }
@@ -93,6 +94,11 @@ describe('hub migrations', () => {
     });
     expect(await client.tenant.findUnique({ where: { id: 'r' } })).toMatchObject({ slug: 'r' });
     expect(await client.order.findUnique({ where: { id: 'o' } })).toMatchObject({ tenantId: 'r' });
+    expect((await client.hubState.findUnique({ where: { key: 'pairing' } }))?.value).toEqual({
+      deviceId: 'd',
+      tenantId: 'r',
+      locationId: 'l',
+    });
   });
 
   it('rolls back a migration that fails halfway', async () => {

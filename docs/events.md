@@ -1,7 +1,7 @@
 # Realtime events
 
 Typed in `packages/shared-types/src/events.ts` (`EventMap`, `RealtimeEvent<K>`). The cloud API and
-the location hub serve the same socket (shared server code); in a restaurant the POS and KDS
+the location hub serve the same socket (shared server code); at a location the POS and KDS
 connect to the hub on the LAN, so kitchen traffic never depends on the Internet.
 
 Envelope:

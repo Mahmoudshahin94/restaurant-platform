@@ -12,7 +12,7 @@ Design decisions: [ADR 0006](adr/0006-sync-protocol.md), [ADR 0012](adr/0012-syn
 
 ## Actors
 
-- **Location hub** (`apps/gateway`): one per restaurant site. It owns the local SQLite
+- **Location hub** (`apps/gateway`): one per tenant site. It owns the local SQLite
   database, the operational source of truth while offline.
 - **Cloud API** (`apps/api`): owns PostgreSQL, the source of truth for synchronized data.
 
@@ -40,7 +40,7 @@ transaction** as the mutation itself. If either fails, both roll back.
 failures, shifts and cash movements, payments and refunds at the till, cancellations, kitchen
 actions) also gets an `AUDIT_LOG_APPEND` operation (`entity_type` `AuditLog`) in the same
 transaction; entries recorded outside a transaction (a failed sign-in) open one for the pair. The
-cloud stores the entry once, under the hub's restaurant and location, with its metadata redacted
+cloud stores the entry once, under the hub's tenant and location, with its metadata redacted
 again; entries are append-only (a repeat answers `DUPLICATE`, a new operation for a stored entry
 changes nothing) and depend on nothing, so they never wait for another entity.
 
@@ -56,6 +56,12 @@ configuration change (below), and every `HUB_SNAPSHOT_INTERVAL_SECONDS` as a saf
 order, join tables and role grants are replaced, staff missing from the snapshot are deactivated,
 and nothing referenced by local orders is ever deleted. A `menu.updated` event tells screens to
 refresh. Without the cloud the hub keeps serving its last snapshot.
+
+The snapshot is `format: 2` since the tenant rename ([ADR 0017](adr/0017-tenant-root-and-isolation.md)).
+The hub holds exactly one tenant: a snapshot whose `tenantId`, or any row's `tenantId`, is not the
+tenant it was paired with is refused (`rejected`, "Snapshot for another tenant or location") and
+the last copy stays in use. The change feed's `change_log` rows, its lookup function
+(`change_log_tenant`) and its per-tenant advisory lock are keyed by `tenant_id`.
 
 Outbox payloads are full aggregate rows: an order with items, modifiers, taxes, discounts, status
 history and payments, each payment with the cash movements it caused (`ORDER_UPSERT`); a shift
@@ -106,7 +112,7 @@ each in its own PostgreSQL transaction:
 1. Lock the operation's ledger row in `processed_operations` (primary key `operation_id`). If it
    is `APPLIED`, answer `DUPLICATE` without touching data.
 2. Validate the payload against its schema (`@pos/validation` `syncOperationSchema`) and its
-   scope: the restaurant and location must be the hub's own, children must belong to the
+   scope: the tenant and location must be the hub's own, children must belong to the
    aggregate.
 3. Check ownership (below), lock the entity row, and store the state: scalar fields are written,
    lines, taxes, discounts and ticket items are replaced, status history, payments and cash
@@ -136,7 +142,7 @@ the hub retries later is applied if its cause was fixed (the ledger row then bec
 ## Pull (cloud → hub)
 
 `GET /api/v1/sync/pull?cursor=<seq>&limit=100&wait=25` returns `change_log` entries with
-`seq > cursor` for the hub's restaurant (location-wide or its own location), ordered by the
+`seq > cursor` for the hub's tenant (location-wide or its own location), ordered by the
 bigserial sequence, **never by timestamps**:
 
 ```json
@@ -151,9 +157,9 @@ bigserial sequence, **never by timestamps**:
 ```
 
 - **Producers.** PostgreSQL triggers on every table of the location snapshot record a `CONFIG`
-  change for the restaurant in the writing transaction (one per transaction; writes that change
+  change for the tenant in the writing transaction (one per transaction; writes that change
   nothing, or only `updated_at`/`last_login_at`, are ignored). No code path can forget it. The
-  triggers hold a per-restaurant advisory lock until commit, so `seq` order is commit order and a
+  triggers hold a per-tenant advisory lock until commit, so `seq` order is commit order and a
   cursor never passes a change that commits late.
 - **Producers (`ORDER`, Phase 7).** The cloud's `ChangeRecorder` (`WebOrderChangeRecorder`)
   appends one `ORDER` entry per website order a transaction created or changed (creation, the
@@ -171,7 +177,7 @@ bigserial sequence, **never by timestamps**:
 - **Long poll** instead of a WebSocket "poke": with `wait`, the cloud holds the request until a
   change arrives (checking every second) or the wait ends. The hub keeps one such request open,
   so configuration changes arrive within seconds. Outbound HTTP only, no inbound port at the
-  restaurant.
+  location.
 - **New hub.** Without a cursor the cloud answers with the head of the feed; the hub then takes a
   full snapshot and stores that head, so no change between the two is missed.
 
@@ -226,18 +232,18 @@ Administrator (sync.resolve) ── decision + note ──▶ ledger + audit log
 Hub ◀── GET /sync/resolutions/:operationId ── RESEND | ADOPT_CLOUD (+ the cloud's order)
 ```
 
-| Decision                       | When                                                                  | Cloud                                                                                                     | Hub                                                                                                         |
-| ------------------------------ | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Apply the restaurant's version | `CONFLICT` (`SYNC_CONFLICT`) with the hub's state kept                | audit log gets the cloud's copy; the hub's state is applied without the ownership check; ledger `APPLIED` | `RESEND`: failed operations of the entity go back to the queue; the cloud answers `DUPLICATE`               |
-| Keep the cloud's version       | orders the cloud has, whose hub copy holds no payment the cloud lacks | ledger keeps the hub's state, records `KEPT_CLOUD` and the cloud version as the new baseline              | `ADOPT_CLOUD`: stores the cloud's order, marks its unsent changes `SYNC_SUPERSEDED`, keeps its own payments |
-| Ask the hub to resend          | the cause was fixed elsewhere (not for a disabled hub)                | records the request; the issue stays open                                                                 | `RESEND` as above; the cloud judges the resend like any push                                                |
+| Decision                 | When                                                                  | Cloud                                                                                                     | Hub                                                                                                         |
+| ------------------------ | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Apply the hub's version  | `CONFLICT` (`SYNC_CONFLICT`) with the hub's state kept                | audit log gets the cloud's copy; the hub's state is applied without the ownership check; ledger `APPLIED` | `RESEND`: failed operations of the entity go back to the queue; the cloud answers `DUPLICATE`               |
+| Keep the cloud's version | orders the cloud has, whose hub copy holds no payment the cloud lacks | ledger keeps the hub's state, records `KEPT_CLOUD` and the cloud version as the new baseline              | `ADOPT_CLOUD`: stores the cloud's order, marks its unsent changes `SYNC_SUPERSEDED`, keeps its own payments |
+| Ask the hub to resend    | the cause was fixed elsewhere (not for a disabled hub)                | records the request; the issue stays open                                                                 | `RESEND` as above; the cloud judges the resend like any push                                                |
 
 - After **keep the cloud's version**, the hub's next change of the order must carry
   `baseVersion` = the kept version (the hub records it in `inbound_orders` when adopting), so a
   change made before adopting is a `CONFLICT` rather than overwriting the decision. A repeat of
   the settled operation answers `DUPLICATE` with code `SYNC_SUPERSEDED`. Payments the hub took
   that the cloud's copy lacks are kept and sent with a new change based on the adopted version.
-- **Apply the restaurant's version** keeps payments append-only (a payment differing from the
+- **Apply the hub's version** keeps payments append-only (a payment differing from the
   cloud's still refuses) and re-derives the payment status from every recorded payment; a clash
   with another record (e.g. the same order number twice on one day) leaves the issue open.
 - Refusals recorded before Phase 8 have no stored state: only a resend is possible for them.
@@ -259,7 +265,7 @@ Hub ◀── GET /sync/orders/:id ──────┘  stores it, inbound_ord
   (`AWAITING_ACCEPTANCE`) and acceptances after `acceptBy` (`ACCEPTANCE_EXPIRED`).
 - **Hand-over.** The cloud accepts the hub's first write of a cloud-created row only if the row
   is a website order of that location, still `PLACED`, at exactly `baseVersion`, and the pushed
-  state is no longer `PLACED` (the restaurant decided). The ledger then holds the hub's version and
+  state is no longer `PLACED` (the location decided). The ledger then holds the hub's version and
   ordinary ownership applies. No or a different `baseVersion`, an edit while `PLACED`, or an order
   the cloud already decided are `CONFLICT`; a hub-invented website order is `REJECTED`.
 - **The cloud decided first** (it cancelled the order at the acceptance deadline while the hub was

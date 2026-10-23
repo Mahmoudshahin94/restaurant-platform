@@ -51,3 +51,8 @@ DROP INDEX "users_restaurant_id_idx";
 CREATE INDEX "users_tenant_id_idx" ON "users"("tenant_id");
 DROP INDEX "restaurants_slug_key";
 CREATE UNIQUE INDEX "tenants_slug_key" ON "tenants"("slug");
+
+-- The hub's pairing record names its tenant too (hub_state, JSON).
+UPDATE "hub_state"
+SET "value" = json_set(json_remove("value", '$.restaurantId'), '$.tenantId', json_extract("value", '$.restaurantId'))
+WHERE "key" = 'pairing' AND json_extract("value", '$.restaurantId') IS NOT NULL;
