@@ -84,17 +84,34 @@ export function BrandingPage() {
   const { t } = useTranslation(['admin']);
   const tid = useTenantId();
   const branding = useQuery({ queryKey: keys.branding(tid), queryFn: () => api.branding.get(tid) });
+  // Kept here: the form starts afresh from what was saved.
+  const [saved, setSaved] = useState(false);
   return (
     <div className="grid max-w-6xl gap-6">
       <PageHeader title={t('admin:branding.title')} description={t('admin:branding.description')} />
       <QueryState query={branding}>
-        {(data) => <BrandingForm key={data.updatedAt ?? 'new'} initial={data} />}
+        {(data) => (
+          <BrandingForm
+            key={data.updatedAt ?? 'new'}
+            initial={data}
+            saved={saved}
+            onSaved={setSaved}
+          />
+        )}
       </QueryState>
     </div>
   );
 }
 
-function BrandingForm({ initial }: { initial: TenantBrandingDto }) {
+function BrandingForm({
+  initial,
+  saved,
+  onSaved,
+}: {
+  initial: TenantBrandingDto;
+  saved: boolean;
+  onSaved: (saved: boolean) => void;
+}) {
   const { t } = useTranslation(['admin', 'common']);
   const errorText = useAdminErrorText();
   const tid = useTenantId();
@@ -103,7 +120,7 @@ function BrandingForm({ initial }: { initial: TenantBrandingDto }) {
   const [screen, setScreen] = useState<BrandSurface>('pos');
   const [previewMode, setPreviewMode] = useState<'DARK' | 'LIGHT'>('DARK');
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const setSaved = onSaved;
   const save = useAdminMutation(
     (body: UpdateBrandingRequest) => api.branding.update(tid, body),
     ['branding', 'tenant-context'],
@@ -240,7 +257,7 @@ function BrandingForm({ initial }: { initial: TenantBrandingDto }) {
             <CardTitle>{t('admin:branding.colours')}</CardTitle>
             <CardDescription>{t('admin:branding.coloursHint')}</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-3">
+          <CardContent className="grid gap-4">
             {(['primaryColor', 'secondaryColor', 'accentColor'] as const).map((key) => (
               <ColourField
                 key={key}

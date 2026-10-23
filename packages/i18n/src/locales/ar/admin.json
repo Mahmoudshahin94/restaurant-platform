@@ -394,7 +394,7 @@
     "borderRadiusValue": "{{value}} بكسل",
     "fontFamily": "الخط",
     "fontFamilies": {
-      "INTER": "Inter (الافتراضي)",
+      "INTER": "Inter",
       "SYSTEM": "خط الجهاز",
       "SERIF": "خط مذيّل"
     },

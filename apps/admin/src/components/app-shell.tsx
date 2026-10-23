@@ -292,12 +292,12 @@ export function AppShell() {
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       <aside className="surface border-b md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:flex-col md:overflow-y-auto md:border-e md:border-b-0">
-        <div className="flex h-14 items-center px-4">
+        <div className="flex h-14 shrink-0 items-center px-4">
           <TenantLogo fallback={<span className="font-semibold">{t('common:appName')}</span>} />
         </div>
         <nav
           aria-label={t('admin:nav.mainNavigation')}
-          className="flex gap-4 overflow-x-auto px-2 pb-2 md:flex-col md:gap-3 md:pb-4"
+          className="flex shrink-0 gap-4 overflow-x-auto px-2 pb-2 md:flex-col md:gap-3 md:pb-4"
         >
           {NAV.map((group) => {
             const items = group.items.filter(

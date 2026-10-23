@@ -394,7 +394,7 @@
     "borderRadiusValue": "{{value}} px",
     "fontFamily": "Typeface",
     "fontFamilies": {
-      "INTER": "Inter (default)",
+      "INTER": "Inter",
       "SYSTEM": "The device's own",
       "SERIF": "Serif"
     },
