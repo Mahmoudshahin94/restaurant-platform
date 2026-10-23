@@ -33,7 +33,7 @@ its own cloud, hub and web servers on its own ports and databases — see
 
 ## Critical end-to-end scenarios
 
-The specification's 19 critical flows and the Playwright tests that run them. Every test runs
+The specification's 19 critical flows, and those MADAR adds, with the Playwright tests that run them. Every test runs
 against the real built cloud API and/or location hub (no mocks): the POS and KDS suites run on a
 hub whose cloud is **switched off** (it only runs to pair the hub, and in `sync.spec.ts` the test
 starts and stops it); the customer-website suite runs cloud, hub, POS, KDS and website together.
@@ -60,6 +60,7 @@ starts and stops it); the customer-website suite runs cloud, hub, POS, KDS and w
 | 17  | Customer sees updated status              | [online-ordering.spec.ts](../apps/customer-web/e2e/online-ordering.spec.ts) “in Arabic, right to left: a paid delivery order is rejected and the payment voided”; [journey.spec.ts](../apps/customer-web/e2e/journey.spec.ts) “one order through every app: website, cloud, hub, POS, kitchen and back”                                                                                                                                                                     |
 | 18  | Arabic RTL mode works                     | [pos.spec.ts](../apps/pos/e2e/pos.spec.ts) “the POS works in Arabic (RTL) and English (LTR)”; [kds.spec.ts](../apps/kds/e2e/kds.spec.ts) “the kitchen screen works in Arabic (RTL)”; [menu-and-rtl.spec.ts](../apps/admin/e2e/menu-and-rtl.spec.ts) “Arabic switches the whole UI to RTL and back to LTR”; [online-ordering.spec.ts](../apps/customer-web/e2e/online-ordering.spec.ts) “in Arabic, right to left: a paid delivery order is rejected and the payment voided” |
 | 19  | English LTR mode works                    | [pos.spec.ts](../apps/pos/e2e/pos.spec.ts) “the POS works in Arabic (RTL) and English (LTR)”; [menu-and-rtl.spec.ts](../apps/admin/e2e/menu-and-rtl.spec.ts) “Arabic switches the whole UI to RTL and back to LTR”; [reports.spec.ts](../apps/admin/e2e/reports.spec.ts) “the owner reads today’s sales, channels and kitchen times in English and Arabic”                                                                                                                  |
+| 20  | Tenant switches a module (MADAR M2)       | [admin-portal.spec.ts](../apps/admin/e2e/admin-portal.spec.ts) “the owner switches a module off for one location and its pages follow”                                                                                                                                                                                                                                                                                                                                      |
 
 Other end-to-end tests cover payments (split, card numbers refused, shift close-out, an Arabic
 ESC/POS receipt), kitchen cancellations and rush, admin roles and users, branch settings, order
@@ -80,6 +81,21 @@ Many tenants share one cloud, so isolation is tested at three levels:
 | Unscoped (cross-tenant) access only in reviewed files                                                                                                 | lint rule `pos-local/no-unscoped-prisma` (`tools/eslint-rules`)                                                 |
 
 Tenant files are covered when file storage arrives (Phase M3).
+
+## Modules (MADAR, ADR 0018)
+
+| What                                                                                                                                                | Where                                                                                                                                                                                                          |
+| --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Layer precedence, `false` versus unset, business-type defaults for every type, entitlement ceiling, non-configurable modules                        | `packages/domain/src/features/features.test.ts`                                                                                                                                                                |
+| Every gated route is in the inventory with its module, answers `403 FEATURE_DISABLED` with the module off and is served again when on               | `apps/api/test/security.test.ts` (staff and public routes)                                                                                                                                                     |
+| Context endpoint, tenant → location → device precedence, removing an override, audit, entitlement ceiling and platform-managed modules              | `apps/api/test/features.test.ts`                                                                                                                                                                               |
+| Behaviour by capability: no kitchen tickets without KDS, dine-in without a table without TABLES, no modifier groups without MODIFIERS               | `apps/api/test/features.test.ts`, `packages/domain/src/menu/menu.test.ts`                                                                                                                                      |
+| Modules reach the hubs: change feed for both tables, snapshot contents; the hub enforces them with the cloud unreachable and follows changes        | `apps/api/test/features.test.ts`, `apps/gateway/test/hub.test.ts`                                                                                                                                              |
+| UI gates: `useFeature`/`FeatureGate`/`TenantProvider`; POS options and kitchen progress; KDS "module disabled"; admin Modules page and module pages | `packages/app-kit/src/tenant-context.test.tsx`, `apps/pos/src/components/*.test.tsx`, `apps/kds/src/components/module-disabled.test.tsx`, `apps/admin/src/**/modules-page.test.tsx`, `require-module.test.tsx` |
+| No branching on the business type outside its defaults                                                                                              | lint rule `pos-local/no-business-type-branching` (`tools/eslint-rules`)                                                                                                                                        |
+
+Component tests render with a restaurant's modules (`tenantContextFixture`); pass
+`{ features: { KDS: false } }` to the render helper to test a screen without a module.
 
 ## Testing requirements (specification section 32)
 

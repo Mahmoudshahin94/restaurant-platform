@@ -57,7 +57,15 @@ order, join tables and role grants are replaced, staff missing from the snapshot
 and nothing referenced by local orders is ever deleted. A `menu.updated` event tells screens to
 refresh. Without the cloud the hub keeps serving its last snapshot.
 
-The snapshot is `format: 2` since the tenant rename ([ADR 0017](adr/0017-tenant-root-and-isolation.md)).
+The snapshot is `format: 3` since modules ([ADR 0018](adr/0018-feature-modules.md)); format 2
+came with the tenant rename ([ADR 0017](adr/0017-tenant-root-and-isolation.md)). It carries the
+tenant's module entitlements (`tenantEntitlements`) and the overrides of the tenant, this location
+and its devices (`featureOverrides`). Both are replaced wholesale on apply, so the hub resolves
+and enforces modules exactly like the cloud, also offline. It also carries the location's
+`devices`, for identity only: name, type and status, without the credential hash or last-seen
+time. Device overrides reference them. A device registration alone records no change; the device
+arrives with the next change or the periodic snapshot, and an override naming it is itself a
+change.
 The hub holds exactly one tenant: a snapshot whose `tenantId`, or any row's `tenantId`, is not the
 tenant it was paired with is refused (`rejected`, "Snapshot for another tenant or location") and
 the last copy stays in use. The change feed's `change_log` rows, its lookup function
@@ -156,7 +164,8 @@ bigserial sequence, **never by timestamps**:
 }
 ```
 
-- **Producers.** PostgreSQL triggers on every table of the location snapshot record a `CONFIG`
+- **Producers.** PostgreSQL triggers on every configuration table of the location snapshot
+  (modules included: `tenant_entitlements`, `feature_overrides`) record a `CONFIG`
   change for the tenant in the writing transaction (one per transaction; writes that change
   nothing, or only `updated_at`/`last_login_at`, are ignored). No code path can forget it. The
   triggers hold a per-tenant advisory lock until commit, so `seq` order is commit order and a

@@ -10,6 +10,7 @@ mirrors the operational subset.
 | --------- | --------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
 | Tenancy   | Tenant, Location                                                                                                                  | ✅ 0001                            |
 | Identity  | User, Role, Permission, RolePermission, UserRole, RefreshToken, Employee                                                          | ✅ 0001                            |
+| Modules   | TenantEntitlement, FeatureOverride                                                                                                | ✅ Phase M2                        |
 | Devices   | Device                                                                                                                            | ✅ 0001                            |
 | Audit     | AuditLog                                                                                                                          | ✅ 0001                            |
 | Catalog   | Category, Product, ProductVariant, ModifierGroup, Modifier, ProductModifierGroup, KitchenStation, ProductStation, LocationProduct | ✅ 0002                            |
@@ -38,6 +39,10 @@ erDiagram
   Tenant ||--o{ ModifierGroup : owns
   Tenant ||--o{ KitchenStation : owns
   Tenant ||--o{ Tax : defines
+  Tenant ||--o{ TenantEntitlement : "is entitled to"
+  Tenant ||--o{ FeatureOverride : switches
+  Location |o--o{ FeatureOverride : "scopes (null = tenant)"
+  Device |o--o{ FeatureOverride : "scopes (null = location)"
 
   Role ||--o{ RolePermission : grants
   Permission ||--o{ RolePermission : "granted by"
@@ -103,6 +108,21 @@ amount is in its minor units. `defaultLocale` is one of `supportedLocales` (JSON
 (`TenantContext`). It adds the tenant to every filter on a model holding a `tenantId` (and on
 `Tenant` by `id`) and refuses writes for another tenant. Child rows without a `tenantId` are reached
 through their scoped parent. See ADR 0017.
+
+**Modules** ([ADR 0018](adr/0018-feature-modules.md)): `Feature` (`@pos/shared-types`) lists
+the modules; resolution goes platform defaults → business-type defaults → tenant → location →
+device, capped by the platform's entitlement. Both tables store the feature as text.
+
+- `TenantEntitlement` (key: tenant + feature) is the platform operator's: `entitled` (without it
+  the module is off) and `tenantConfigurable` (without it the tenant's overrides are ignored). No
+  row means entitled and configurable.
+- `FeatureOverride` is the tenant administrator's `enabled` for the whole tenant, one location, or
+  one device (which also names its location). `scope` (`tenant`, `location:<id>`,
+  `device:<id>`) makes one override per scope unique on both databases; a check constraint keeps
+  it consistent with the ids.
+
+Code asks for capabilities, never for the business type: a lint rule keeps `businessType`
+comparisons in `features/defaults.ts`.
 
 **Location**: a branch or store. `code` is unique per tenant and prefixes hub-generated order
 numbers.
