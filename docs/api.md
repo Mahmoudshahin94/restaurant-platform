@@ -101,14 +101,22 @@ platform operator's (fields sent are ignored).
 Tenants are provisioned by the seed (development, through `provisionTenant`) or the platform
 operator (Phase M9). There is no self-service signup.
 
-`GET /tenants/:tenantId/context?locationId=` is what every app renders from
+`GET /tenants/:tenantId/context?locationId=&surface=` is what every app renders from
 ([ADR 0018](adr/0018-feature-modules.md)): `tenant` (id, slug, names, business type, status,
-time zone), `branding` (names until M3), `currency` (`code`, `exponent`), `locales` (`default`,
-`supported`), `locationId` and `features`. `features` holds every module, resolved for the
+time zone), `branding` (resolved for `surface`, see below), `currency` (`code`, `exponent`),
+`locales` (`default`, `supported`), `locationId` and `features`. `features` holds every module, resolved for the
 location (or the tenant):
 
 - `{ feature, enabled, source, entitled, configurable }`;
-- `source` is the deciding layer: `PLATFORM`, `BUSINESS_TYPE`, `TENANT`, `LOCATION` or `DEVICE`.
+- `source` is the deciding layer: `PLATFORM`, `BUSINESS_TYPE`, `TENANT`, `SURFACE`, `LOCATION`
+  or `DEVICE`.
+
+`branding` ([ADR 0019](adr/0019-branding-and-theme.md)) is the tenant's branding resolved for
+`surface` (`login`, `pos`, `kds`, `kiosk`, `website`; none: the tenant's defaults): display
+names, `logoFileId`, `faviconFileId`, `primaryColor`/`secondaryColor`/`accentColor` (`#rrggbb`
+or null for the theme's own), `fontFamily`, `logoSize`, `themeMode`, `surfaceStyle`,
+`borderRadius`, `surface`, and `sources` (the layer of each value: `PLATFORM`, `TENANT` or
+`SURFACE`). The device's own light/dark choice is applied by the app.
 
 A location of another tenant answers `404 LOCATION_NOT_FOUND`.
 
@@ -127,6 +135,44 @@ A location of another tenant answers `404 LOCATION_NOT_FOUND`.
   tenant's plan or managed by the platform answers `403 FEATURE_NOT_CONFIGURABLE`
   (`reason: NOT_ENTITLED | PLATFORM_MANAGED`). Audit: `feature.override_changed`.
 - Entitlements have no tenant API: the platform operator sets them (Phase M9).
+
+## Branding and tenant files (Phase M3)
+
+[ADR 0019](adr/0019-branding-and-theme.md).
+
+| Method | Path                                                        | Permission                      |
+| ------ | ----------------------------------------------------------- | ------------------------------- |
+| GET    | `/tenants/:tid/branding`                                    | `settings.manage` (tenant-wide) |
+| PUT    | `/tenants/:tid/branding` (cloud; hub `403`)                 | `settings.manage` (tenant-wide) |
+| POST   | `/tenants/:tid/files?kind=LOGO\|FAVICON` (cloud; hub `403`) | `settings.manage` (tenant-wide) |
+| GET    | `/tenants/:tid/files`                                       | `settings.manage` (tenant-wide) |
+| GET    | `/tenants/:tid/files/:fileId/content`                       | any member (cloud and hub)      |
+| GET    | `/public/tenants/:slug/files/:fileId`                       | public (`ONLINE_ORDERING`)      |
+| GET    | `/hub/branding?surface=` (hub only, default `login`)        | public                          |
+| GET    | `/hub/branding/files/:fileId` (hub only)                    | public                          |
+
+- **Branding** `GET` answers `{ tenant, surfaces, resolved, files, updatedAt }`: the tenant's own
+  values (null: inherited), the per-surface overrides, the tenant's defaults resolved, and the
+  files referred to. `PUT` replaces all of it: every value of the tenant layer (null to inherit)
+  and `surfaces` (`{ pos: { themeMode: 'LIGHT' }, … }`; unknown surfaces or settings are
+  `400`). Colours are `#rrggbb` (`#rgb` is expanded). A colour that would be unreadable answers
+  `422 BRANDING_UNREADABLE` with `details.issues: [{ path, colour, against: FOREGROUND | DARK |
+LIGHT, ratio, required }]`. A file that is not the tenant's answers `404 FILE_NOT_FOUND`; a
+  favicon used as a logo, `415 FILE_TYPE_NOT_ALLOWED`. Audit: `branding.updated`.
+- **Uploads** send the image itself as the body, its type as `Content-Type`: PNG, JPEG or WebP
+  logos up to 512 KB, the same or ICO (`image/x-icon`, `image/vnd.microsoft.icon`) favicons up
+  to 128 KB. The bytes must be what the type says: an SVG or anything else answers
+  `415 FILE_TYPE_NOT_ALLOWED`; a file too large, `413 FILE_TOO_LARGE`. The answer is the file
+  (`id`, `kind`, `contentType`, `sizeBytes`, `sha256`, `createdAt`). Audit:
+  `tenant_file.uploaded`. Files are immutable.
+- **Content** is served with its verified type, `X-Content-Type-Options: nosniff`,
+  `Content-Security-Policy: default-src 'none'; sandbox` and an `ETag` (the SHA-256). Another
+  tenant's file is not found.
+- **Public files**: only the files the tenant's branding refers to (logo, favicon, on any
+  surface), for the website (`/public/tenants/:slug/files/:id`, `Cross-Origin-Resource-Policy:
+cross-origin`) and the hub's sign-in screens (`/hub/branding/files/:id`). Other uploads answer
+  `404`. `GET /public/tenants/:slug` carries the `website` branding; `GET /hub/branding` the
+  paired tenant's (`503 HUB_NOT_PROVISIONED` before its first snapshot).
 
 ## Menu endpoints (Phase 1)
 

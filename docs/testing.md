@@ -61,6 +61,7 @@ starts and stops it); the customer-website suite runs cloud, hub, POS, KDS and w
 | 18  | Arabic RTL mode works                     | [pos.spec.ts](../apps/pos/e2e/pos.spec.ts) “the POS works in Arabic (RTL) and English (LTR)”; [kds.spec.ts](../apps/kds/e2e/kds.spec.ts) “the kitchen screen works in Arabic (RTL)”; [menu-and-rtl.spec.ts](../apps/admin/e2e/menu-and-rtl.spec.ts) “Arabic switches the whole UI to RTL and back to LTR”; [online-ordering.spec.ts](../apps/customer-web/e2e/online-ordering.spec.ts) “in Arabic, right to left: a paid delivery order is rejected and the payment voided” |
 | 19  | English LTR mode works                    | [pos.spec.ts](../apps/pos/e2e/pos.spec.ts) “the POS works in Arabic (RTL) and English (LTR)”; [menu-and-rtl.spec.ts](../apps/admin/e2e/menu-and-rtl.spec.ts) “Arabic switches the whole UI to RTL and back to LTR”; [reports.spec.ts](../apps/admin/e2e/reports.spec.ts) “the owner reads today’s sales, channels and kitchen times in English and Arabic”                                                                                                                  |
 | 20  | Tenant switches a module (MADAR M2)       | [admin-portal.spec.ts](../apps/admin/e2e/admin-portal.spec.ts) “the owner switches a module off for one location and its pages follow”                                                                                                                                                                                                                                                                                                                                      |
+| 21  | Tenant brands its screens (MADAR M3)      | [admin-portal.spec.ts](../apps/admin/e2e/admin-portal.spec.ts) “the owner brands the business and its screens follow”                                                                                                                                                                                                                                                                                                                                                       |
 
 Other end-to-end tests cover payments (split, card numbers refused, shift close-out, an Arabic
 ESC/POS receipt), kitchen cancellations and rush, admin roles and users, branch settings, order
@@ -80,7 +81,10 @@ Many tenants share one cloud, so isolation is tested at three levels:
 | The hub refuses another tenant's snapshot and ambiguous PIN codes; a pre-rename hub upgrades with its data                                            | `apps/gateway/test/hub.test.ts`, `apps/gateway/test/migrator.test.ts`                                           |
 | Unscoped (cross-tenant) access only in reviewed files                                                                                                 | lint rule `pos-local/no-unscoped-prisma` (`tools/eslint-rules`)                                                 |
 
-Tenant files are covered when file storage arrives (Phase M3).
+Tenant files (ADR 0019): `apps/api/test/tenant-isolation.test.ts` shows tenant A cannot read B's
+file through A's, B's or the public routes, cannot upload into B or show B's file as its own
+logo, cannot read, write or overwrite B's bytes in the storage (nor can B overwrite its own:
+files are immutable), and that a file row cannot point outside its tenant's folder.
 
 ## Modules (MADAR, ADR 0018)
 
@@ -96,6 +100,23 @@ Tenant files are covered when file storage arrives (Phase M3).
 
 Component tests render with a restaurant's modules (`tenantContextFixture`); pass
 `{ features: { KDS: false } }` to the render helper to test a screen without a module.
+
+## Branding and theme (MADAR, ADR 0019)
+
+| What                                                                                                                                        | Where                                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Layer precedence (platform → tenant → surface → device), contrast validation, readable foregrounds, colour arithmetic                       | `packages/domain/src/branding/branding.test.ts`                             |
+| Uploads (types by their bytes, SVG refused, sizes), serving headers, the Branding API, contrast refusals, context per surface, public files | `apps/api/test/branding.test.ts`                                            |
+| Branding reaches the hubs: change feed, snapshot with file bytes; the hub serves it offline and refuses a file that fails its checksum      | `apps/api/test/branding.test.ts`, `apps/gateway/test/hub.test.ts`           |
+| Tenant file isolation                                                                                                                       | `apps/api/test/tenant-isolation.test.ts`                                    |
+| Theme switching, tenant token application, RTL/LTR with branding, component snapshots per theme                                             | `packages/app-kit/src/theme/theme.test.tsx` (snapshots in `__snapshots__/`) |
+| Every token pair at WCAG AA in both themes, the palettes' copies equal, page colours equal to the domain's                                  | `packages/app-kit/src/theme/theme-tokens.test.ts`                           |
+| Admin Branding page: saving, preview, live contrast messages, Arabic RTL                                                                    | `apps/admin/src/routes/settings/branding-page.test.tsx`                     |
+| The platform's brand is never hardcoded; the POS bundle matches it                                                                          | `tools/brand/brand.test.mjs` (`pnpm test:tools`)                            |
+| No palette classes or colour literals outside the token files and receipts                                                                  | lint rule `pos-local/no-raw-colors` (`tools/eslint-rules`)                  |
+
+Component tests that render a shell or a logo get a `ThemeProvider` from the apps' render helpers;
+`tenantContextFixture(features, locationId, branding, surface)` gives them a tenant's branding.
 
 ## Testing requirements (specification section 32)
 

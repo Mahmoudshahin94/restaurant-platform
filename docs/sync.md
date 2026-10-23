@@ -57,8 +57,17 @@ order, join tables and role grants are replaced, staff missing from the snapshot
 and nothing referenced by local orders is ever deleted. A `menu.updated` event tells screens to
 refresh. Without the cloud the hub keeps serving its last snapshot.
 
-The snapshot is `format: 3` since modules ([ADR 0018](adr/0018-feature-modules.md)); format 2
-came with the tenant rename ([ADR 0017](adr/0017-tenant-root-and-isolation.md)). It carries the
+The snapshot is `format: 4` since branding ([ADR 0019](adr/0019-branding-and-theme.md)): it
+carries the tenant's `tenantBranding` row and the `tenantFiles` its branding refers to (both
+replaced wholesale on apply), plus a top-level `files` list with each of those files' bytes
+(base64). The hub checks every copy against its row (SHA-256, size and image type) and stores it
+in its file storage (`<HUB_DATA_DIR>/files`) before applying the rows; a copy that does not match
+refuses the whole snapshot ("Snapshot file does not match its checksum"). A file the hub already
+has is not written again (files are immutable). So the hub shows the tenant's look, logo and
+favicon offline, and serves its sign-in screens' branding publicly (`GET /hub/branding`).
+
+Format 3 came with modules ([ADR 0018](adr/0018-feature-modules.md)), format 2 with the tenant
+rename ([ADR 0017](adr/0017-tenant-root-and-isolation.md)). The snapshot also carries the
 tenant's module entitlements (`tenantEntitlements`) and the overrides of the tenant, this location
 and its devices (`featureOverrides`). Both are replaced wholesale on apply, so the hub resolves
 and enforces modules exactly like the cloud, also offline. It also carries the location's
@@ -165,7 +174,8 @@ bigserial sequence, **never by timestamps**:
 ```
 
 - **Producers.** PostgreSQL triggers on every configuration table of the location snapshot
-  (modules included: `tenant_entitlements`, `feature_overrides`) record a `CONFIG`
+  (modules included: `tenant_entitlements`, `feature_overrides`; branding: `tenant_branding`)
+  record a `CONFIG`
   change for the tenant in the writing transaction (one per transaction; writes that change
   nothing, or only `updated_at`/`last_login_at`, are ignored). No code path can forget it. The
   triggers hold a per-tenant advisory lock until commit, so `seq` order is commit order and a

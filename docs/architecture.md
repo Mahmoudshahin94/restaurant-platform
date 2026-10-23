@@ -230,7 +230,7 @@ tasks green. That covers 214 unit and integration tests (domain 79, API 63, i18n
 POS 9, database 9, api-client 6, app-kit 5, admin 5, ui 2), 8 Playwright E2E tests (admin 3; POS 5:
 dine-in order, takeaway order with server-confirmed total, lost-response retry without
 duplication, editing an open order, Arabic RTL ⇄ English LTR), and the Rust shell's `cargo fmt`,
-`clippy -D warnings` and tests. `tauri build --debug` produces `Tenant POS.app`.
+`clippy -D warnings` and tests. `tauri build --debug` produces `MADAR POS.app`.
 
 ### Phase 2 decisions
 
@@ -693,7 +693,7 @@ Configuration precedence is in [configuration.md](configuration.md).
 | ----- | -------------------------------------------------------------------------------------------------------- | ------- |
 | M1    | Multi-tenant foundation: Tenant root, profile, tenant context, tenant-scoped client, provisioning, tests | ✅ Done |
 | M2    | Feature/module system: catalog, business-type defaults, overrides, FeatureService, UI capability guards  | ✅ Done |
-| M3    | Branding and theme: platform and tenant branding, design tokens, dark/light/system, tenant files         | ⏳      |
+| M3    | Branding and theme: platform and tenant branding, design tokens, dark/light/system, tenant files         | ✅ Done |
 | M4    | Currency and localization: currency configuration (ILS default), supported locales                       | ⏳      |
 | M5    | Retail: SKU, barcodes, generic product options and variants, scanner abstraction                         | ⏳      |
 | M6    | Self-service: kiosk app, terminal devices, shared order engine, self-checkout                            | ⏳      |
@@ -772,6 +772,52 @@ and English: switching Tables off for the main location hid its navigation. Thro
 with the dev cloud, the POS lost its Tables screen, shortcut and table picker, and dine-in asked
 for guests only. Switching it back reached the POS through the change feed within seconds.
 
+### Phase M3 decisions
+
+See [ADR 0019](adr/0019-branding-and-theme.md) and
+[configuration.md](configuration.md#branding-and-theme-m3).
+
+- **The platform's brand has one source.** `PLATFORM_BRAND` (MADAR · Powered by JudyTech) feeds
+  the translations (`common:appName`, `$t(common:platform.name)`), every page title and favicon
+  (a Vite plugin fills `index.html`), the POS bundle ("MADAR POS", `app.madar.pos`, keychain
+  service included) and the footers of the sign-in screens and the admin sidebar.
+  `tools/brand/brand.test.mjs` fails on a hardcoded brand or a drifting bundle.
+- **Tenant branding is configuration:** `tenant_branding` (names, logo, favicon, three brand
+  colours, typeface, logo size, theme mode, surface style, radius) with per-surface overrides
+  (`login`, `pos`, `kds`, `kiosk`, `website`) as zod-validated JSON. `resolveBranding` runs
+  platform → tenant → surface (a new configuration layer) → the device's theme mode. A contrast
+  check refuses brand colours that would be unreadable on either theme.
+- **Tenant files:** a `TenantFileStorage` interface (local disk for development and the hub),
+  keys under `tenants/<tenantId>/`, immutable, raster images only, verified by their bytes
+  (no SVG), size-limited. Only files the branding shows are public (website, hub sign-in).
+- **Design tokens** are semantic only. Dark (charcoal, soft borders, a restrained glow) is the
+  default; light and system follow `data-theme`. `applyTenantTheme` writes the tenant's colours
+  with computed foregrounds; `ThemeProvider` puts the device's choice over the tenant's; glass
+  cards are a surface style. The KDS no longer forces dark. `pos-local/no-raw-colors` keeps
+  palette classes and colour literals out of everything but the token files and receipts.
+- **Reaching screens:** the tenant context carries the branding of the asking surface; the
+  website and the hub's sign-in screens read public branding. Branding has a change-feed trigger
+  and rides the snapshot (format 4) with its files' bytes, which the hub checks before storing,
+  so a hub shows the tenant's look offline.
+- **Admin:** Settings → Branding (EN/AR, RTL): names, logo and favicon uploads, colours with live
+  contrast messages, light or dark, cards, corners, typeface, per-screen overrides, and a preview
+  in either theme. Every screen has an Appearance choice (business default, light, dark, system).
+
+**Phase M3 verification (2026-10-23):** `pnpm build`, `typecheck`, `lint` and `test` green (720
+unit, integration and component tests: API 259, domain 178, gateway 63, admin 34, app-kit 29, i18n
+26, database 24, server 23, validation 22, POS 20, customer-web 12, api-client 11, KDS 9, receipts
+8, ui 2), `pnpm test:tools` (13, the brand test and the colour rule included), the hub schema check,
+a clean `migrate status`, and all 33 Playwright E2E tests (admin 10, POS 15, KDS 4, customer-web 4),
+including the new branding scenario. The first full run caught two stale tests, fixed: the KDS
+settings now has two selects (language, appearance), so its Arabic E2E test names the one it uses,
+and the TenantProvider test now expects the surface in the context request. A manual browser check
+against the dev cloud and a paired dev hub covered, in English and Arabic and in dark and light: the
+admin (Branding page with uploads, live contrast refusal, per-screen override and preview; the admin
+itself re-themed on save), the POS through the hub (the hub's public sign-in branding, then the POS
+surface's light override, then the device's dark choice winning over it), the KDS (dark by default
+without the old forced class, light by choice) and the customer website (public logo and favicon).
+An SVG upload was refused with `415`.
+
 ## Architectural decisions and open questions
 
 Recorded as ADRs in [adr/](adr/):
@@ -828,6 +874,10 @@ Recorded as ADRs in [adr/](adr/):
     (platform → business type → tenant → location → device) under the platform's entitlement,
     enforced by route guards and capability-driven services on the cloud and, from the snapshot,
     offline on the hub; code never branches on the business type.
+19. [0019](adr/0019-branding-and-theme.md): MADAR branding: one source for the platform's brand,
+    tenant branding resolved in layers (platform → tenant → surface → device theme mode) on
+    semantic design tokens with dark, light and system themes, contrast checked on save, and
+    tenant files in an isolated, immutable storage that reaches the hubs with the snapshot.
 
 Open items to revisit:
 
