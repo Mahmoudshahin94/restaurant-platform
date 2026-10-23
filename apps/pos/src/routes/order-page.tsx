@@ -1,4 +1,5 @@
-import { QueryState } from '@pos/app-kit';
+import { QueryState, useFeature } from '@pos/app-kit';
+import { Feature } from '@pos/shared-types';
 import type { PublishedMenuProduct } from '@pos/validation';
 import { Dialog } from '@pos/ui';
 import { useEffect, useState } from 'react';
@@ -15,7 +16,9 @@ export function OrderPage() {
   const locationId = useLocationId();
   const menu = useLocationMenu(locationId);
   const discounts = useDiscounts();
-  const floor = useFloor(locationId);
+  const tablesOn = useFeature(Feature.TABLES);
+  const modifiersOn = useFeature(Feature.MODIFIERS);
+  const floor = useFloor(locationId, tablesOn);
   const cart = useCart();
   const [picking, setPicking] = useState<Picking | null>(null);
 
@@ -24,7 +27,8 @@ export function OrderPage() {
   }, [cart, locationId]);
 
   const select = (product: PublishedMenuProduct) => {
-    if (product.variants.length === 0 && product.modifierGroups.length === 0) {
+    const groups = modifiersOn ? product.modifierGroups : [];
+    if (product.variants.length === 0 && groups.length === 0) {
       cart.addLine({ productId: product.id, variantId: null, modifierIds: [] });
     } else {
       setPicking({ product, lineId: null });

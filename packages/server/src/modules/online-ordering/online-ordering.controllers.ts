@@ -10,9 +10,11 @@ import {
   idSchema,
   updateOnlineOrderingSchema,
 } from '@pos/validation';
+import { Feature } from '@pos/shared-types';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { Public, RequirePermissions } from '../../common/auth/decorators';
+import { RequireFeature } from '../../common/auth/require-feature';
 import { TenantContext } from '../../common/tenancy/tenant-context';
 import { ZodValidationPipe } from '../../common/validation/zod-validation.pipe';
 import { PublicTenantResolver } from './public-tenant.resolver';
@@ -27,7 +29,11 @@ const slug = new ZodValidationPipe(
     .max(60),
 );
 
-/** The customer website's read API: no account, no token, rate limited like every route. */
+/**
+ * The customer website's read API: no account, no token, rate limited like every route. Its
+ * tenant is known only once the route resolves it, so `PublicTenantResolver` checks the module.
+ */
+@RequireFeature(Feature.ONLINE_ORDERING)
 @Public()
 @Controller('public')
 export class StorefrontController {
@@ -68,6 +74,7 @@ export class StorefrontController {
 }
 
 /** Website orders: placed by guests, followed with the tracking token (ADR 0013). */
+@RequireFeature(Feature.ONLINE_ORDERING)
 @Public()
 @Controller('orders')
 export class WebOrdersController {
@@ -101,6 +108,7 @@ export class WebOrdersController {
 }
 
 /** The tenant's online-ordering switch, hours and options (admin, cloud only). */
+@RequireFeature(Feature.ONLINE_ORDERING)
 @Controller('locations/:locationId/online-ordering')
 export class OnlineOrderingSettingsController {
   constructor(private readonly storefront: StorefrontService) {}

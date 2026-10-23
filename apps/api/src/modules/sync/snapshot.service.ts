@@ -30,6 +30,20 @@ export class SnapshotService {
     const tables: Record<SnapshotTable, unknown[]> = {
       tenants: await db.tenant.findMany({ where: { id: tenantId } }),
       locations: await db.location.findMany({ where: { id: locationId } }),
+      // Identity only: credentials and the last-seen time stay in the cloud.
+      devices: await db.device.findMany({
+        where: { locationId },
+        select: {
+          id: true,
+          tenantId: true,
+          locationId: true,
+          name: true,
+          type: true,
+          status: true,
+          createdAt: true,
+        },
+        orderBy: byId,
+      }),
       roles: await db.role.findMany({ where: { tenantId }, orderBy: byId }),
       rolePermissions: await db.rolePermission.findMany({
         where: { role: { tenantId } },
@@ -79,6 +93,16 @@ export class SnapshotService {
       diningTables: await db.diningTable.findMany({ where: { locationId }, orderBy: byId }),
       paymentMethods: await db.paymentMethod.findMany({ where: { tenantId }, orderBy: byId }),
       cashRegisters: await db.cashRegister.findMany({ where: { locationId }, orderBy: byId }),
+      // Modules (ADR 0018), so the hub enforces them offline: overrides of the tenant, this
+      // location and its devices (a device's override names its location too).
+      tenantEntitlements: await db.tenantEntitlement.findMany({
+        where: { tenantId },
+        orderBy: { feature: 'asc' },
+      }),
+      featureOverrides: await db.featureOverride.findMany({
+        where: { tenantId, OR: [{ locationId: null }, { locationId }] },
+        orderBy: byId,
+      }),
       // Orders taken through the cloud before the hub was paired keep their numbers (ADR 0012).
       orderCounters: await db.orderCounter.findMany({
         where: { locationId, businessDate: { gte: new Date(Date.now() - 2 * 24 * 60 * 60_000) } },
@@ -90,7 +114,7 @@ export class SnapshotService {
     const json = JSON.parse(JSON.stringify(tables)) as LocationSnapshot['tables'];
     const version = createHash('sha256').update(JSON.stringify(json)).digest('hex').slice(0, 32);
     return {
-      format: 2,
+      format: 3,
       tenantId,
       locationId,
       generatedAt: new Date().toISOString(),

@@ -44,10 +44,12 @@ export function useDiscounts() {
   });
 }
 
-export function useFloor(locationId: string) {
+/** The floor plan; `enabled` is false where the TABLES module is off (the hub refuses it then). */
+export function useFloor(locationId: string, enabled = true) {
   return useQuery({
     queryKey: ['floor', locationId],
     queryFn: () => api.floor.get(locationId),
+    enabled,
     // Realtime events refresh this immediately; polling only covers a dropped connection.
     refetchInterval: 60_000,
   });

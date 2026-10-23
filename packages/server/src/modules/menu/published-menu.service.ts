@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import type { Location } from '@pos/database';
 import { DomainError, type LocationMenu, resolveLocationMenu } from '@pos/domain';
+import { Feature } from '@pos/shared-types';
 import type {
   LocationProductSetting,
   PublishedMenu,
@@ -10,6 +11,7 @@ import type {
 import type { z } from 'zod';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { FeatureService } from '../features/feature.service';
 import {
   productInclude,
   toCatalogModifierGroup,
@@ -26,11 +28,13 @@ export class PublishedMenuService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly features: FeatureService,
   ) {}
 
   /**
    * The location and the domain menu it sells right now. Used for the published menu and, by
-   * the orders module, to validate and price orders on the server.
+   * the orders module, to validate and price orders on the server. Without the MODIFIERS module
+   * the menu has no modifier groups (ADR 0018), so orders cannot carry modifiers either.
    */
   async resolve(
     locationId: string,
@@ -41,6 +45,10 @@ export class PublishedMenuService {
     });
     if (!location) throw new DomainError('LOCATION_NOT_FOUND', 'Location not found');
     const live = { tenantId: location.tenantId, archivedAt: null };
+    const modifiers = await this.features.isEnabled(Feature.MODIFIERS, {
+      tenantId: location.tenantId,
+      locationId,
+    });
 
     const [categories, products, modifierGroups, kitchenStations, taxes, settings] =
       await Promise.all([
@@ -61,6 +69,7 @@ export class PublishedMenuService {
         taxes,
       },
       settings,
+      { modifiers },
     );
     return { location, currencyCode: location.tenant.currencyCode, menu };
   }

@@ -692,7 +692,7 @@ Configuration precedence is in [configuration.md](configuration.md).
 | Phase | Scope                                                                                                    | Status  |
 | ----- | -------------------------------------------------------------------------------------------------------- | ------- |
 | M1    | Multi-tenant foundation: Tenant root, profile, tenant context, tenant-scoped client, provisioning, tests | ✅ Done |
-| M2    | Feature/module system: catalog, business-type defaults, overrides, FeatureService, UI capability guards  | ⏳      |
+| M2    | Feature/module system: catalog, business-type defaults, overrides, FeatureService, UI capability guards  | ✅ Done |
 | M3    | Branding and theme: platform and tenant branding, design tokens, dark/light/system, tenant files         | ⏳      |
 | M4    | Currency and localization: currency configuration (ILS default), supported locales                       | ⏳      |
 | M5    | Retail: SKU, barcodes, generic product options and variants, scanner abstraction                         | ⏳      |
@@ -730,6 +730,47 @@ ui 2), `pnpm test:tools` (6, including the new lint rule), the hub schema check,
 the tenant-isolation suite, the scoped-client tests on PostgreSQL and SQLite, the change feed
 after the rename, the pre-rename hub upgrade, and the hub's tenant checks. A POS payment test
 failed once on a full run and passed on two reruns: a timing flake seen once, not reproduced.
+
+### Phase M2 decisions
+
+See [ADR 0018](adr/0018-feature-modules.md) and [configuration.md](configuration.md#modules-m2).
+
+- **Modules are capabilities.** `Feature` lists 14 modules. `resolveLayered` resolves platform
+  defaults → business-type defaults → tenant → location → device. Every value names its layer.
+  The platform's entitlement caps the result: a module outside the plan is off, and one the
+  platform manages ignores the tenant's layers.
+- **Data:** `tenant_entitlements` (the platform's) and `feature_overrides` (the tenant's, one per
+  scope through a derived `scope` column). Both get change-feed triggers and ride the snapshot
+  (format 3, with the location's devices). The hub migration was checked by hand.
+- **Enforcement:**
+  - `FeatureService` (memoized per request) answers on the cloud and on the hub.
+  - `@RequireFeature` and the global `FeatureGuard` protect the kitchen (`KDS`), floor (`TABLES`)
+    and online-ordering (`ONLINE_ORDERING`) routes. Public routes are checked by the storefront's
+    tenant resolver.
+  - The route inventory records each route's modules, and the security suite calls every gated
+    route with its module off.
+- **Behaviour follows capabilities:** without KDS no kitchen tickets and direct handover; without
+  TABLES dine-in needs no table; without MODIFIERS the published menu has no modifier groups. A
+  lint rule forbids branching on the business type outside its defaults.
+- **Apps:**
+  - `GET /tenants/:tenantId/context` (cloud and hub) feeds `TenantProvider`, `useFeature` and
+    `<FeatureGate>`.
+  - The POS hides tables, the table picker, modifiers and kitchen progress when their module is
+    off.
+  - The KDS says when its module is off.
+  - The admin hides module pages and gains Settings → Modules (EN/AR) to switch modules for the
+    business or a location.
+
+**Phase M2 verification (2026-10-23):** `pnpm build`, `typecheck`, `lint` and `test` green (663
+unit, integration and component tests: API 242, domain 164, gateway 60, admin 31, i18n 26, database
+24, server 23, validation 22, POS 20, customer-web 12, api-client 11, app-kit 9, KDS 9, receipts 8,
+ui 2), `pnpm test:tools`, the hub schema check, a clean `migrate status`, and all 32 Playwright E2E
+tests (admin 9, POS 15, KDS 4, customer-web 4), including the new module scenario. The last API
+test (an order seated before TABLES was switched off keeps its table) was added after the full run
+and passed with its suites. A manual browser check covered the admin Modules page in Arabic (RTL)
+and English: switching Tables off for the main location hid its navigation. Through a hub paired
+with the dev cloud, the POS lost its Tables screen, shortcut and table picker, and dine-in asked
+for guests only. Switching it back reached the POS through the change feed within seconds.
 
 ## Architectural decisions and open questions
 
@@ -783,6 +824,10 @@ Recorded as ADRs in [adr/](adr/):
 17. [0017](adr/0017-tenant-root-and-isolation.md): MADAR: the tenant is the root (an in-place
     rename), and tenant isolation is enforced by a tenant-scoped database client, with
     cross-tenant work explicit and allowlisted.
+18. [0018](adr/0018-feature-modules.md): MADAR modules: a capability catalog resolved in layers
+    (platform → business type → tenant → location → device) under the platform's entitlement,
+    enforced by route guards and capability-driven services on the cloud and, from the snapshot,
+    offline on the hub; code never branches on the business type.
 
 Open items to revisit:
 

@@ -3,11 +3,13 @@ import {
   tKey,
   useCurrentLocale,
   useErrorText,
+  useFeature,
   useMoneyFormat,
   usePermissionChecks,
 } from '@pos/app-kit';
 import { findMenuProduct } from '@pos/domain';
 import { pickLocalized } from '@pos/i18n';
+import { Feature } from '@pos/shared-types';
 import type {
   Discount,
   Order,
@@ -43,13 +45,17 @@ export function CartPanel({ locationId, menu, discounts, floor, onEditLine }: Ca
   const user = useSession((s) => s.user);
   const { canAt } = usePermissionChecks(user);
   const cart = useCart();
+  // Dine-in is served at a table only where the TABLES module is on (ADR 0018).
+  const tablesOn = useFeature(Feature.TABLES);
   const { quote, error: quoteError } = useCartQuote(menu, cart.lines, cart.discountIds, discounts);
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [placed, setPlaced] = useState<Order | null>(null);
   const [paying, setPaying] = useState<'pay' | 'receipt' | null>(null);
 
   const submit = useOrderMutation(async () => {
-    const body = cartToRequest(cart);
+    // Without TABLES a new order names no table (one remembered from before is dropped); an
+    // order seated before the module was switched off keeps its own.
+    const body = { ...cartToRequest(cart), ...(tablesOn || cart.editing ? {} : { tableId: null }) };
     if (cart.editing) {
       return {
         order: await api.orders.update(locationId, cart.editing.orderId, {
@@ -106,7 +112,7 @@ export function CartPanel({ locationId, menu, discounts, floor, onEditLine }: Ca
   const tables = floor.flatMap((s) =>
     s.tables.map((table) => ({ ...table, section: pickLocalized(s, 'name', locale) })),
   );
-  const needsTable = cart.channel === 'DINE_IN' && !cart.tableId;
+  const needsTable = tablesOn && cart.channel === 'DINE_IN' && !cart.tableId;
   const needsCustomer =
     (cart.channel === 'PHONE' || cart.channel === 'DELIVERY') &&
     !cart.customerName.trim() &&
@@ -168,22 +174,24 @@ export function CartPanel({ locationId, menu, discounts, floor, onEditLine }: Ca
           ))}
         </div>
         {cart.channel === 'DINE_IN' ? (
-          <div className="grid grid-cols-[1fr_6rem] gap-2">
-            <NativeSelect
-              aria-label={t('orders:fields.table')}
-              className="h-12 text-base"
-              value={cart.tableId ?? ''}
-              onChange={(e) => {
-                cart.setTable(e.target.value || null);
-              }}
-            >
-              <option value="">{t('pos:cart.chooseTable')}</option>
-              {tables.map((table) => (
-                <option key={table.id} value={table.id}>
-                  {table.label} · {table.section}
-                </option>
-              ))}
-            </NativeSelect>
+          <div className={cn('grid gap-2', tablesOn ? 'grid-cols-[1fr_6rem]' : 'grid-cols-1')}>
+            {tablesOn ? (
+              <NativeSelect
+                aria-label={t('orders:fields.table')}
+                className="h-12 text-base"
+                value={cart.tableId ?? ''}
+                onChange={(e) => {
+                  cart.setTable(e.target.value || null);
+                }}
+              >
+                <option value="">{t('pos:cart.chooseTable')}</option>
+                {tables.map((table) => (
+                  <option key={table.id} value={table.id}>
+                    {table.label} · {table.section}
+                  </option>
+                ))}
+              </NativeSelect>
+            ) : null}
             <Input
               aria-label={t('orders:fields.guestCount')}
               placeholder={t('orders:fields.guestCount')}

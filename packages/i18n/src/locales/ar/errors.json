@@ -14,6 +14,8 @@
   "CSRF_REJECTED": "تم حظر الطلب لأسباب أمنية.",
   "TENANT_NOT_FOUND": "المنشأة غير موجودة.",
   "LOCATION_NOT_FOUND": "الفرع غير موجود.",
+  "FEATURE_DISABLED": "هذه الوحدة غير مفعّلة لمنشأتك.",
+  "FEATURE_NOT_CONFIGURABLE": "هذه الوحدة تديرها مدار ولا يمكن تغييرها هنا.",
   "CATEGORY_NOT_FOUND": "الفئة غير موجودة.",
   "PRODUCT_NOT_FOUND": "المنتج غير موجود.",
   "PRODUCT_UNAVAILABLE": "هذا المنتج غير متوفر حاليًا.",

@@ -22,6 +22,11 @@ export const ERROR_CODES = [
   // tenancy
   'TENANT_NOT_FOUND',
   'LOCATION_NOT_FOUND',
+  // modules (ADR 0018)
+  /** The route or action needs a module that is off for this tenant, location or device. */
+  'FEATURE_DISABLED',
+  /** The module is not the tenant's to switch: not in its plan, or managed by the platform. */
+  'FEATURE_NOT_CONFIGURABLE',
   // staff and devices (Phase 8)
   'USER_NOT_FOUND',
   'ROLE_NOT_FOUND',

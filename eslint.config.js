@@ -81,6 +81,17 @@ export default tseslint.config(
     rules: { 'pos-local/no-unscoped-prisma': ['error', { allowed: true }] },
   },
   {
+    // Modules (ADR 0018): code asks for capabilities, never for the business type. The type's
+    // defaults are the one exception.
+    files: ['apps/*/src/**/*.{ts,tsx}', 'packages/*/src/**/*.{ts,tsx}'],
+    plugins: { 'pos-local': posLocal },
+    rules: { 'pos-local/no-business-type-branching': 'error' },
+  },
+  {
+    files: ['packages/domain/src/features/defaults.ts'],
+    rules: { 'pos-local/no-business-type-branching': 'off' },
+  },
+  {
     files: ['apps/*/src/**/*.tsx', 'packages/ui/src/**/*.tsx'],
     languageOptions: { globals: { ...globals.browser } },
     plugins: { 'react-hooks': reactHooks, 'pos-local': posLocal },

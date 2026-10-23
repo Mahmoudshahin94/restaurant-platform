@@ -1,4 +1,6 @@
 export * from './auth/permissions';
+export * from './config';
+export * from './features';
 export * from './errors';
 export * from './ids';
 export * from './money';

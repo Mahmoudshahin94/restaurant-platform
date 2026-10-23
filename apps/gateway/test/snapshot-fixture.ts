@@ -76,6 +76,7 @@ export async function buildSnapshot() {
         taxInclusive: true,
       },
     ],
+    devices: [] as Record<string, unknown>[],
     roles: [
       { id: ids.ownerRole, tenantId, name: 'Owner', isSystem: true },
       { id: ids.cashierRole, tenantId, name: 'Cashier' },
@@ -187,6 +188,8 @@ export async function buildSnapshot() {
       { id: ids.online, tenantId, type: 'ONLINE', nameEn: 'Online card', nameAr: 'بطاقة' },
     ],
     cashRegisters: [{ id: ids.drawer, locationId, nameEn: 'Drawer', nameAr: 'الدرج' }],
+    tenantEntitlements: [] as Record<string, unknown>[],
+    featureOverrides: [] as Record<string, unknown>[],
     orderCounters: [] as { locationId: string; businessDate: string; lastNumber: number }[],
   };
   return { ids, tables };
@@ -198,7 +201,7 @@ export function withVersion(
 ): LocationSnapshot {
   const json = JSON.parse(JSON.stringify(tables)) as LocationSnapshot['tables'];
   return {
-    format: 2,
+    format: 3,
     tenantId: ids.tenantId,
     locationId: ids.locationId,
     generatedAt: new Date().toISOString(),

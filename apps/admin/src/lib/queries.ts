@@ -12,6 +12,7 @@ import { api } from './api';
 /** Query keys are namespaced by tenant so data never leaks between sessions. */
 export const keys = {
   tenant: (tid: string) => ['tenant', tid] as const,
+  features: (tid: string, locationId: string | null) => ['features', tid, locationId] as const,
   locations: (tid: string) => ['locations', tid] as const,
   categories: (tid: string, archived: boolean) => ['categories', tid, archived] as const,
   stations: (tid: string, archived: boolean) => ['kitchen-stations', tid, archived] as const,

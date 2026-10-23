@@ -11,11 +11,14 @@ const REPLACED: ReadonlySet<SnapshotTable> = new Set([
   'productStations',
   'productTaxes',
   'locationProducts',
+  'tenantEntitlements',
+  'featureOverrides',
 ]);
 
 const DELEGATE: Record<SnapshotTable, string> = {
   tenants: 'tenant',
   locations: 'location',
+  devices: 'device',
   roles: 'role',
   rolePermissions: 'rolePermission',
   users: 'user',
@@ -37,6 +40,8 @@ const DELEGATE: Record<SnapshotTable, string> = {
   diningTables: 'diningTable',
   paymentMethods: 'paymentMethod',
   cashRegisters: 'cashRegister',
+  tenantEntitlements: 'tenantEntitlement',
+  featureOverrides: 'featureOverride',
   orderCounters: 'orderCounter',
 };
 

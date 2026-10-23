@@ -309,3 +309,41 @@ test('an administrator resolves a change the cloud refused from the hub', async 
   ).json()) as { action: string };
   expect(decision.action).toBe('RESEND');
 });
+
+test('the owner switches a module off for one location and its pages follow', async ({
+  page,
+  request,
+}) => {
+  const { headers, tenantId, locationId } = await ownerContext(request);
+  await signIn(page);
+  await expect(page.getByRole('link', { name: 'Tables' })).toBeVisible();
+
+  await page.getByRole('link', { name: 'Modules' }).click();
+  await expect(page.getByRole('heading', { name: 'Modules' })).toBeVisible();
+  await page.getByLabel('Applies to').selectOption(locationId);
+  const tables = page.getByRole('region', { name: 'Tables' });
+  await expect(tables.getByText('From: Business type default')).toBeVisible();
+  await tables.getByRole('radio', { name: 'Off' }).click();
+  await expect(tables.getByText('From: Location setting')).toBeVisible();
+
+  // The header's location (the main one) no longer offers its floor plan.
+  await expect(page.getByRole('link', { name: 'Tables' })).toBeHidden();
+  await page.goto('/settings/tables');
+  await expect(page.getByText('This module is off')).toBeVisible();
+  const floor = await request.get(`${API}/locations/${locationId}/floor`, { headers });
+  expect(floor.status()).toBe(403);
+  expect(((await floor.json()) as { code: string }).code).toBe('FEATURE_DISABLED');
+
+  // Back to what the business type gives.
+  await page.getByRole('link', { name: 'Open modules' }).click();
+  await page.getByLabel('Applies to').selectOption(locationId);
+  await tables.getByRole('radio', { name: /Inherit/ }).click();
+  await expect(tables.getByText('From: Business type default')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Tables' })).toBeVisible();
+  const reset = await request.get(`${API}/tenants/${tenantId}/context?locationId=${locationId}`, {
+    headers,
+  });
+  expect(
+    ((await reset.json()) as { features: { TABLES: { enabled: boolean } } }).features.TABLES,
+  ).toMatchObject({ enabled: true });
+});

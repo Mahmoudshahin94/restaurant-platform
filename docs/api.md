@@ -33,7 +33,9 @@ Every error response has the same shape:
 
 `code` is one of `ERROR_CODES` in `@pos/shared-types`; the HTTP status mapping is in
 `apps/api/src/common/errors/http-status.ts`. Clients show `t('errors:<code>')`. `message` is for
-developers and may change. Validation failures (`400 VALIDATION_FAILED`) list
+developers and may change. A route whose module is off for the tenant or location answers
+`403 FEATURE_DISABLED` with `details.feature` ([ADR 0018](adr/0018-feature-modules.md)).
+Validation failures (`400 VALIDATION_FAILED`) list
 `details.issues[] = { path, code, message }`. Unexpected failures return
 `500 INTERNAL_ERROR` without internals; the stack is logged server-side with the request id
 (for database errors only their kind and code, never the query's arguments). `GET /ready` answers
@@ -84,6 +86,7 @@ developers and may change. Validation failures (`400 VALIDATION_FAILED`) list
 | ------ | ------------------------------ | -------------------------------------------------------- |
 | GET    | `/tenants/:tenantId`           | any member                                               |
 | PATCH  | `/tenants/:tenantId`           | `settings.manage` (tenant-wide). Currency cannot change. |
+| GET    | `/tenants/:tenantId/context`   | any member (cloud and hub)                               |
 | GET    | `/tenants/:tenantId/locations` | `locations.view` (any location; filtered)                |
 | POST   | `/tenants/:tenantId/locations` | `settings.manage` (tenant-wide)                          |
 | GET    | `/locations/:locationId`       | `locations.view`                                         |
@@ -97,6 +100,33 @@ platform operator's (fields sent are ignored).
 
 Tenants are provisioned by the seed (development, through `provisionTenant`) or the platform
 operator (Phase M9). There is no self-service signup.
+
+`GET /tenants/:tenantId/context?locationId=` is what every app renders from
+([ADR 0018](adr/0018-feature-modules.md)): `tenant` (id, slug, names, business type, status,
+time zone), `branding` (names until M3), `currency` (`code`, `exponent`), `locales` (`default`,
+`supported`), `locationId` and `features`. `features` holds every module, resolved for the
+location (or the tenant):
+
+- `{ feature, enabled, source, entitled, configurable }`;
+- `source` is the deciding layer: `PLATFORM`, `BUSINESS_TYPE`, `TENANT`, `LOCATION` or `DEVICE`.
+
+A location of another tenant answers `404 LOCATION_NOT_FOUND`.
+
+## Modules (Phase M2)
+
+| Method | Path                                                 | Permission                      |
+| ------ | ---------------------------------------------------- | ------------------------------- |
+| GET    | `/tenants/:tid/features?locationId=&deviceId=`       | `settings.manage` (tenant-wide) |
+| PUT    | `/tenants/:tid/features/:feature` (cloud; hub `403`) | `settings.manage` (tenant-wide) |
+
+- **List** returns every module for the scope (the tenant, a location or a device) with
+  `inherited: { enabled, source }` (what the scope gets without its own override) and
+  `override` (`true`/`false`/`null`).
+- **Set** takes `{ locationId?, deviceId?, enabled: boolean | null }`; `null` removes the
+  override. A device's location is its own. It answers the refreshed list. A module outside the
+  tenant's plan or managed by the platform answers `403 FEATURE_NOT_CONFIGURABLE`
+  (`reason: NOT_ENTITLED | PLATFORM_MANAGED`). Audit: `feature.override_changed`.
+- Entitlements have no tenant API: the platform operator sets them (Phase M9).
 
 ## Menu endpoints (Phase 1)
 
@@ -138,6 +168,8 @@ maxSelect? }` with optional per-product overrides) and `stationIds`. On `PATCH`,
   show them as sold out. The response carries `version` (a content hash), equal to the `ETag`
   header. Send `If-None-Match` to get `304` when nothing changed. The POS/hub will poll it
   cheaply.
+  Where the location's `MODIFIERS` module is off, products have no modifier groups (none shown,
+  required or accepted in orders).
 - **Audit:** `category.*`, `kitchen_station.*`, `modifier_group.*`, `product.created/updated/
 archived/restored`, `product.price_changed` (base, variant and location override, with
   from/to), `modifier.price_changed`, and `location_product.updated`.
@@ -156,6 +188,8 @@ product's `taxIds`. Rate changes are audited as `tax.rate_changed` and affect on
 afterwards.
 
 ## Floor plan (Phase 2)
+
+Every floor route needs the `TABLES` module.
 
 | Method | Path                                                      | Permission                                      |
 | ------ | --------------------------------------------------------- | ----------------------------------------------- |
@@ -180,9 +214,12 @@ Mutations return the refreshed floor.
 modifierIds, quantity, notes }], discountIds, tableId, customerName, customerPhone,
 guestCount, notes }`. The `id` is a client-generated UUID and the **idempotency key**:
   resending it returns the existing order with `200` instead of `201` (concurrent duplicates
-  included). Channels: `DINE_IN` needs a table of the location; `PHONE`/`DELIVERY` need a
+  included). Channels: `DINE_IN` needs a table of the location where the `TABLES` module is on
+  (`400 VALIDATION_FAILED` without one); where it is off, dine-in has no table and naming one
+  answers `403 FEATURE_DISABLED`. `PHONE`/`DELIVERY` need a
   customer name or phone; `WEBSITE` is rejected (customer API, Phase 7). `CONFIRMED` (what the
-  POS sends since Phase 4) accepts the order at once and sends it to the kitchen; `PLACED` waits
+  POS sends since Phase 4) accepts the order at once and sends it to the kitchen (only where the
+  `KDS` module is on; otherwise it makes no ticket and can be completed directly); `PLACED` waits
   for acceptance.
 - **Prices are never accepted from clients.** Every create/update re-validates items against the
   location's published menu (`quoteOrder`) and re-prices with `priceOrder`. Unknown fields such
@@ -278,6 +315,8 @@ guestCount, notes }`. The `id` is a client-generated UUID and the **idempotency 
 
 ## Kitchen (Phase 4)
 
+Every kitchen route, the POS's kitchen priority included, needs the `KDS` module.
+
 | Method | Path                                                           | Permission       |
 | ------ | -------------------------------------------------------------- | ---------------- |
 | GET    | `/locations/:lid/kitchen/settings`                             | `kitchen.view`   |
@@ -324,7 +363,9 @@ event list.
 See [ADR 0013](adr/0013-online-ordering.md). Public endpoints need no token; they are rate limited.
 Each first finds the tenant of what it names (the slug, the location, the tracked order) and then
 works inside that tenant only ([ADR 0017](adr/0017-tenant-root-and-isolation.md)); an order for a
-location is priced from that location's tenant only.
+location is priced from that location's tenant only. Every route below needs the
+`ONLINE_ORDERING` module. A public route checks it as soon as it has found its tenant and location
+(`403 FEATURE_DISABLED`, [ADR 0018](adr/0018-feature-modules.md)).
 
 | Method | Path                              | Auth                           | Notes                                                                                           |
 | ------ | --------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------- |

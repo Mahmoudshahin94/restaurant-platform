@@ -1,5 +1,12 @@
-import { LanguageSwitcher, RealtimeIndicator, useCurrentLocale, useRealtime } from '@pos/app-kit';
+import {
+  LanguageSwitcher,
+  RealtimeIndicator,
+  useCurrentLocale,
+  useFeatures,
+  useRealtime,
+} from '@pos/app-kit';
 import { pickLocalized } from '@pos/i18n';
+import { Feature } from '@pos/shared-types';
 import { Button, cn } from '@pos/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -12,7 +19,7 @@ import {
   ShoppingBasket,
   Wallet,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { appInfo, isTauri } from '../lib/device';
@@ -27,9 +34,18 @@ import { WebOrdersPrompt } from './web-orders-prompt';
 const NAV = [
   { to: '/order', key: 'nav.order', icon: ShoppingBasket, shortcut: 'F2' },
   { to: '/orders', key: 'nav.orders', icon: ClipboardList, shortcut: 'F4' },
-  { to: '/tables', key: 'nav.tables', icon: Grid3x3, shortcut: 'F6' },
+  { to: '/tables', key: 'nav.tables', icon: Grid3x3, shortcut: 'F6', feature: Feature.TABLES },
   { to: '/shift', key: 'nav.shift', icon: Wallet, shortcut: 'F8' },
 ] as const;
+
+/** The screens this location offers: a screen whose module is off is not shown (ADR 0018). */
+function useNav() {
+  const features = useFeatures();
+  return useMemo(
+    () => NAV.filter((item) => !('feature' in item) || features[item.feature].enabled),
+    [features],
+  );
+}
 
 function isTyping(target: EventTarget | null): boolean {
   return (
@@ -42,11 +58,11 @@ function isTyping(target: EventTarget | null): boolean {
  * Keyboard shortcuts for fast entry: F2 order, F4 orders, F6 tables, "/" search the menu,
  * Ctrl/⌘+Enter place the order.
  */
-function useShortcuts(): void {
+function useShortcuts(nav: ReturnType<typeof useNav>): void {
   const navigate = useNavigate();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const route = NAV.find((n) => n.shortcut === e.key);
+      const route = nav.find((n) => n.shortcut === e.key);
       if (route) {
         e.preventDefault();
         void navigate(route.to);
@@ -63,7 +79,7 @@ function useShortcuts(): void {
     return () => {
       window.removeEventListener('keydown', onKey);
     };
-  }, [navigate]);
+  }, [navigate, nav]);
 }
 
 export function PosShell() {
@@ -76,7 +92,8 @@ export function PosShell() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const info = useQuery({ queryKey: ['app-info'], queryFn: appInfo, staleTime: Infinity });
-  useShortcuts();
+  const nav = useNav();
+  useShortcuts(nav);
   const hub = useHubStatus();
   const [readyNotice, setReadyNotice] = useState<string | null>(null);
   useEffect(() => {
@@ -92,8 +109,17 @@ export function PosShell() {
   // Live order changes from other terminals and the kitchen; polling remains as a fallback.
   const realtime = useRealtime(session, locationId, (event) => {
     if (event.type === 'menu.updated') {
-      // The hub applied new configuration from the cloud: menu, prices, discounts, tables.
-      const roots = ['menu', 'discounts', 'floor', 'payment-methods', 'cash-registers', 'tenant'];
+      // The hub applied new configuration from the cloud: menu, prices, discounts, tables and
+      // modules.
+      const roots = [
+        'menu',
+        'discounts',
+        'floor',
+        'payment-methods',
+        'cash-registers',
+        'tenant',
+        'tenant-context',
+      ];
       void queryClient.invalidateQueries({
         predicate: (q) => roots.includes(String(q.queryKey[0])),
       });
@@ -125,7 +151,7 @@ export function PosShell() {
     <div className="flex h-full flex-col bg-background">
       <header className="flex h-16 shrink-0 items-center gap-3 border-b bg-card px-3">
         <nav aria-label={t('pos:nav.main')} className="flex shrink-0 gap-1">
-          {NAV.map((item) => (
+          {nav.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}

@@ -41,7 +41,7 @@ Device configuration       one terminal, screen or kiosk differing from its loca
 | Default and supported locales                 | tenant                                                  | M1 ✅ |
 | Currency                                      | tenant (fixed at provisioning, ADR 0002)                | M1 ✅ |
 | Time zone, tax mode, cash rounding, KDS times | tenant time zone; location settings                     | ✅    |
-| Modules (POS, KDS, TABLES, BARCODE, …)        | platform → business type → tenant → location → device   | M2    |
+| Modules (POS, KDS, TABLES, BARCODE, …)        | platform → business type → tenant → location → device   | M2 ✅ |
 | Branding and theme                            | platform → tenant (→ per surface) → device (theme mode) | M3    |
 | Currency display (symbol, format locale)      | platform → tenant                                       | M4    |
 | Website sections and domains                  | tenant                                                  | M7    |
@@ -49,3 +49,49 @@ Device configuration       one terminal, screen or kiosk differing from its loca
 | Release channel                               | platform → tenant                                       | M10   |
 
 Each phase's ADR records the exact settings it adds and the layers they accept.
+
+## Modules (M2)
+
+See [ADR 0018](adr/0018-feature-modules.md). The catalog is `Feature` in `@pos/shared-types`; the
+defaults are in `packages/domain/src/features/defaults.ts`, the only file allowed to look at the
+business type (lint rule `pos-local/no-business-type-branching`).
+
+| Module             | Platform | Restaurant | Coffee shop | Supermarket, grocery | Clothing, retail | Enforced today                                             |
+| ------------------ | -------- | ---------- | ----------- | -------------------- | ---------------- | ---------------------------------------------------------- |
+| POS                | on       | on         | on          | on                   | on               | —                                                          |
+| KDS                | off      | on         | on          | off                  | off              | kitchen routes, kitchen tickets, POS kitchen progress, KDS |
+| KITCHEN_PRINTER    | off      | on         | off         | off                  | off              | admin kitchen stations (with KDS)                          |
+| ONLINE_ORDERING    | off      | on         | on          | off                  | off              | storefront, website orders, settings, admin page           |
+| BARCODE            | off      | off        | off         | on                   | on               | Phase M5                                                   |
+| INVENTORY          | off      | off        | off         | on                   | on               | Phase M5                                                   |
+| TABLES             | off      | on         | off         | off                  | off              | floor routes, dine-in table rule, POS tables, admin tables |
+| MODIFIERS          | off      | on         | on          | off                  | off              | published menu, POS options dialog, admin modifier groups  |
+| PRODUCT_VARIANTS   | off      | on         | off         | off                  | on               | Phase M5                                                   |
+| DELIVERY           | off      | on         | off         | on                   | off              | —                                                          |
+| SELF_CHECKOUT      | off      | off        | on          | on                   | off              | Phase M6                                                   |
+| CUSTOMER_DISPLAY   | off      | off        | off         | on                   | on               | —                                                          |
+| LOYALTY            | off      | off        | off         | on                   | on               | —                                                          |
+| ADVANCED_REPORTING | off      | off        | off         | off                  | off              | —                                                          |
+
+`OTHER` gets the platform defaults. Above the layers, the platform operator's entitlement per
+tenant and module decides:
+
+- `entitled`: without it the module is off everywhere.
+- `tenantConfigurable`: without it the tenant, location and device layers are ignored.
+
+A module without an entitlement row is entitled and configurable (until Phase M9 sells plans).
+
+Where the layers are written:
+
+| Layer         | Stored in                                     | Written by                                   |
+| ------------- | --------------------------------------------- | -------------------------------------------- |
+| Platform      | `PLATFORM_FEATURE_DEFAULTS` (code)            | MADAR releases                               |
+| Business type | `BUSINESS_TYPE_DEFAULTS` (code)               | MADAR releases                               |
+| Entitlement   | `tenant_entitlements`                         | the platform operator (seed today; M9 API)   |
+| Tenant        | `feature_overrides` (`scope = tenant`)        | admin → Settings → Modules                   |
+| Location      | `feature_overrides` (`scope = location:<id>`) | admin → Settings → Modules, per location     |
+| Device        | `feature_overrides` (`scope = device:<id>`)   | `PUT /tenants/:tid/features/:f` (`deviceId`) |
+
+The cloud and every location hub resolve with the same function from the same rows (the hub's
+come with its snapshot), so a hub enforces modules offline. Apps read the result from
+`GET /tenants/:tenantId/context?locationId=` (`useFeature`, `<FeatureGate>` in `@pos/app-kit`).

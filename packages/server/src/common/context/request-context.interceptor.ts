@@ -7,7 +7,7 @@ import {
 import { ActionSource } from '@pos/shared-types';
 import type { FastifyRequest } from 'fastify';
 import { Observable } from 'rxjs';
-import { RequestContext, type RequestContextStore } from './request-context';
+import { RequestContext, type RequestContextStore, requestMemo } from './request-context';
 
 /** Sources a client may claim; `HUB` only a paired hub (device credential), `SYSTEM` nobody. */
 const CLIENT_SOURCES = new Set<string>([
@@ -62,6 +62,8 @@ export class RequestContextInterceptor implements NestInterceptor {
       ...(tenantId ? { tenantId } : {}),
       ...(locationId ? { locationId } : {}),
       ...(orderId ? { orderId } : {}),
+      memo: requestMemo(request),
+      ...(request.requiredFeatures ? { requiredFeatures: request.requiredFeatures } : {}),
     };
     request.log = request.log.child({
       userId: store.userId,

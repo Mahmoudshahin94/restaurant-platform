@@ -9,3 +9,4 @@ export * from './permissions';
 export * from './session';
 export * from './storage';
 export * from './realtime';
+export * from './tenant-context';

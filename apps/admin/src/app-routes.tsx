@@ -1,10 +1,12 @@
-import { RequireAuth } from '@pos/app-kit';
-import type { Permission } from '@pos/shared-types';
+import { RequireAuth, TenantProvider } from '@pos/app-kit';
+import { Feature, type Permission } from '@pos/shared-types';
 import type { ReactNode } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router';
-import { session } from './lib/api';
+import { api, session, useSession } from './lib/api';
 import { AppShell } from './components/app-shell';
+import { RequireModule } from './components/require-module';
 import { RequirePermission } from './components/require-permission';
+import { usePreferences } from './stores/preferences';
 import { DashboardPage } from './routes/dashboard-page';
 import { LoginPage } from './routes/login-page';
 import { AvailabilityPage } from './routes/menu/availability-page';
@@ -20,6 +22,7 @@ import { ShiftDetailPage, ShiftsPage } from './routes/operations/shifts-page';
 import { CashRegistersPage } from './routes/settings/cash-registers-page';
 import { DiscountsPage } from './routes/settings/discounts-page';
 import { LocationsPage } from './routes/settings/locations-page';
+import { ModulesPage } from './routes/settings/modules-page';
 import { OnlineOrderingPage } from './routes/settings/online-ordering-page';
 import { PaymentMethodsPage } from './routes/settings/payment-methods-page';
 import { TenantPage } from './routes/settings/tenant-page';
@@ -46,6 +49,27 @@ function guarded(path: string, permission: Permission, element: ReactNode, tenan
   );
 }
 
+/** Pages of a module, behind its permission too. */
+function moduleGuarded(features: readonly Feature[], route: ReactNode) {
+  return (
+    <Route key={`module:${features.join(',')}`} element={<RequireModule features={features} />}>
+      {route}
+    </Route>
+  );
+}
+
+/** The tenant's modules at the location chosen in the header (ADR 0018). */
+function TenantScope({ children }: { children: ReactNode }) {
+  const tenantId = useSession((s) => s.user?.tenantId);
+  const locationId = usePreferences((s) => s.locationId);
+  if (!tenantId) return null;
+  return (
+    <TenantProvider api={api} tenantId={tenantId} locationId={locationId}>
+      {children}
+    </TenantProvider>
+  );
+}
+
 export function AppRoutes() {
   return (
     <BrowserRouter>
@@ -54,7 +78,9 @@ export function AppRoutes() {
         <Route
           element={
             <RequireAuth session={session}>
-              <AppShell />
+              <TenantScope>
+                <AppShell />
+              </TenantScope>
             </RequireAuth>
           }
         >
@@ -71,16 +97,29 @@ export function AppRoutes() {
           <Route path="menu" element={<RequirePermission permission="products.view" />}>
             <Route path="categories" element={<CategoriesPage />} />
             <Route path="products" element={<ProductsPage />} />
-            <Route path="modifier-groups" element={<ModifierGroupsPage />} />
-            <Route path="kitchen-stations" element={<KitchenStationsPage />} />
+            {moduleGuarded(
+              [Feature.MODIFIERS],
+              <Route path="modifier-groups" element={<ModifierGroupsPage />} />,
+            )}
+            {moduleGuarded(
+              [Feature.KDS, Feature.KITCHEN_PRINTER],
+              <Route path="kitchen-stations" element={<KitchenStationsPage />} />,
+            )}
             <Route path="availability" element={<AvailabilityPage />} />
           </Route>
           {guarded('settings/tenant', 'settings.manage', <TenantPage />, true)}
+          {guarded('settings/modules', 'settings.manage', <ModulesPage />, true)}
           {guarded('settings/locations', 'locations.view', <LocationsPage />)}
-          {guarded('settings/online-ordering', 'locations.view', <OnlineOrderingPage />)}
+          {moduleGuarded(
+            [Feature.ONLINE_ORDERING],
+            guarded('settings/online-ordering', 'locations.view', <OnlineOrderingPage />),
+          )}
           {guarded('settings/taxes', 'products.view', <TaxesPage />)}
           {guarded('settings/discounts', 'settings.manage', <DiscountsPage />)}
-          {guarded('settings/tables', 'orders.view', <TablesPage />)}
+          {moduleGuarded(
+            [Feature.TABLES],
+            guarded('settings/tables', 'orders.view', <TablesPage />),
+          )}
           {guarded('settings/payment-methods', 'settings.manage', <PaymentMethodsPage />, true)}
           {guarded('settings/cash-registers', 'settings.manage', <CashRegistersPage />)}
           {guarded('staff/users', 'users.manage', <UsersPage />, true)}

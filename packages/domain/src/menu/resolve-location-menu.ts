@@ -42,13 +42,19 @@ function resolveGroup(
  * and price overrides applied, modifier min/max overrides resolved, everything in display
  * order. Unavailable products stay in the menu flagged `isAvailable: false`, so screens can show
  * them as sold out. Categories with no live products are omitted.
+ *
+ * `capabilities` are the location's modules (ADR 0018): without MODIFIERS, products are sold
+ * without their modifier groups (none shown, none required, none accepted).
  */
 export function resolveLocationMenu(
   catalog: Catalog,
   settings: readonly LocationProductSetting[],
+  capabilities: { modifiers: boolean } = { modifiers: true },
 ): LocationMenu {
   const settingByProduct = new Map(settings.map((s) => [s.productId, s]));
-  const groupsById = new Map(catalog.modifierGroups.filter(isLive).map((g) => [g.id, g]));
+  const groupsById = new Map(
+    capabilities.modifiers ? catalog.modifierGroups.filter(isLive).map((g) => [g.id, g]) : [],
+  );
   const liveStationIds = new Set(catalog.kitchenStations.filter(isLive).map((s) => s.id));
   const liveTaxes = catalog.taxes.filter(isLive);
   const liveTaxIds = new Set(liveTaxes.map((t) => t.id));

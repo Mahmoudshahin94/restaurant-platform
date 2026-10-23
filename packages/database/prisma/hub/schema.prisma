@@ -218,27 +218,29 @@ model Tenant {
   createdAt        DateTime     @default(now()) @map("created_at")
   updatedAt        DateTime     @updatedAt @map("updated_at")
 
-  locations       Location[]
-  users           User[]
-  roles           Role[]
-  employees       Employee[]
-  devices         Device[]
-  categories      Category[]
-  products        Product[]
-  modifierGroups  ModifierGroup[]
-  kitchenStations KitchenStation[]
-  kitchenTickets  KitchenTicket[]
-  taxes           Tax[]
-  discounts       Discount[]
-  orders          Order[]
-  paymentMethods  PaymentMethod[]
+  locations        Location[]
+  users            User[]
+  roles            Role[]
+  employees        Employee[]
+  devices          Device[]
+  categories       Category[]
+  products         Product[]
+  modifierGroups   ModifierGroup[]
+  kitchenStations  KitchenStation[]
+  kitchenTickets   KitchenTicket[]
+  taxes            Tax[]
+  discounts        Discount[]
+  orders           Order[]
+  paymentMethods   PaymentMethod[]
+  entitlements     TenantEntitlement[]
+  featureOverrides FeatureOverride[]
 
   @@map("tenants")
 }
 
 model Location {
   id                    String              @id @default(uuid(7))
-  tenantId          String              @map("tenant_id")
+  tenantId              String              @map("tenant_id")
   /// Short code, unique within the tenant; prefix of locally generated order numbers.
   code                  String
   nameEn                String              @map("name_en")
@@ -270,7 +272,7 @@ model Location {
   createdAt             DateTime            @default(now()) @map("created_at")
   updatedAt             DateTime            @updatedAt @map("updated_at")
 
-  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   userRoles        UserRole[]
   employees        Employee[]
   devices          Device[]
@@ -283,6 +285,7 @@ model Location {
   shifts           Shift[]
   payments         Payment[]
   kitchenTickets   KitchenTicket[]
+  featureOverrides FeatureOverride[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -295,7 +298,7 @@ model Location {
 
 model User {
   id              String    @id @default(uuid(7))
-  tenantId    String    @map("tenant_id")
+  tenantId        String    @map("tenant_id")
   /// Stored lowercase; globally unique so login needs no tenant selector.
   email           String    @unique
   /// argon2id hash. Never logged, never returned by the API.
@@ -307,7 +310,7 @@ model User {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   roles         UserRole[]
   refreshTokens RefreshToken[]
   employee      Employee?
@@ -327,16 +330,16 @@ model Permission {
 }
 
 model Role {
-  id           String   @id @default(uuid(7))
-  tenantId String   @map("tenant_id")
-  name         String
-  description  String?
+  id          String   @id @default(uuid(7))
+  tenantId    String   @map("tenant_id")
+  name        String
+  description String?
   /// System roles (e.g. Owner) cannot be deleted or stripped of permissions.
-  isSystem     Boolean  @default(false) @map("is_system")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  isSystem    Boolean  @default(false) @map("is_system")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  tenant  Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   permissions RolePermission[]
   users       UserRole[]
 
@@ -396,7 +399,7 @@ model RefreshToken {
 /// POS PIN login (Phase 2) verifies `pinHash` on the location hub after it is synced down.
 model Employee {
   id             String   @id @default(uuid(7))
-  tenantId   String   @map("tenant_id")
+  tenantId       String   @map("tenant_id")
   homeLocationId String?  @map("home_location_id")
   userId         String?  @unique @map("user_id")
   employeeCode   String   @map("employee_code")
@@ -407,9 +410,9 @@ model Employee {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  homeLocation Location?  @relation(fields: [homeLocationId], references: [id], onDelete: SetNull)
-  user         User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  homeLocation Location? @relation(fields: [homeLocationId], references: [id], onDelete: SetNull)
+  user         User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@unique([tenantId, employeeCode])
   @@map("employees")
@@ -421,7 +424,7 @@ model Employee {
 
 model Device {
   id             String       @id @default(uuid(7))
-  tenantId   String       @map("tenant_id")
+  tenantId       String       @map("tenant_id")
   locationId     String       @map("location_id")
   name           String
   type           DeviceType
@@ -434,11 +437,63 @@ model Device {
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  location   Location   @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  location         Location          @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  featureOverrides FeatureOverride[]
 
   @@index([locationId])
   @@map("devices")
+}
+
+// ---------------------------------------------------------------------------
+// Modules (ADR 0018)
+// ---------------------------------------------------------------------------
+
+/// What the platform allows a tenant for one module (@pos/shared-types Feature), set by the
+/// platform operator only. A module without a row is entitled and configurable (the default
+/// until plans are sold, Phase M9).
+model TenantEntitlement {
+  tenantId           String   @map("tenant_id")
+  /// @pos/shared-types Feature, stored as text so a new module needs no migration.
+  feature            String
+  /// Without it the module is off for the tenant, whatever its overrides say.
+  entitled           Boolean
+  /// Whether tenant administrators may switch the module (tenant, location and device overrides).
+  tenantConfigurable Boolean  @map("tenant_configurable")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, feature])
+  @@map("tenant_entitlements")
+}
+
+/// A tenant administrator switching a module on or off for the whole tenant (no location, no
+/// device), one location, or one device (which also names its location). Only modules the
+/// tenant is entitled to and may configure; resolution ignores any other.
+model FeatureOverride {
+  id         String   @id @default(uuid(7))
+  tenantId   String   @map("tenant_id")
+  locationId String?  @map("location_id")
+  deviceId   String?  @map("device_id")
+  /// What the row applies to: `tenant`, `location:<id>` or `device:<id>`. Derived from the two
+  /// ids (a check constraint keeps them consistent) so one override per scope is unique on
+  /// PostgreSQL and SQLite alike, where nullable columns never collide in a unique index.
+  scope      String
+  /// @pos/shared-types Feature.
+  feature    String
+  enabled    Boolean
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  location Location? @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  device   Device?   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, scope, feature])
+  @@index([locationId])
+  @@map("feature_overrides")
 }
 
 // ---------------------------------------------------------------------------
@@ -447,18 +502,18 @@ model Device {
 
 /// Append-only. `metadata` is redacted of secrets before insert (AuditService).
 model AuditLog {
-  id           String        @id @default(uuid(7))
-  tenantId String?       @map("tenant_id")
-  locationId   String?       @map("location_id")
-  actorType    ActorType     @map("actor_type")
-  actorId      String?       @map("actor_id")
-  source       ActionSource?
-  action       String
-  entityType   String        @map("entity_type")
-  entityId     String?       @map("entity_id")
-  metadata     Json          @default("{}")
-  requestId    String?       @map("request_id")
-  createdAt    DateTime      @default(now()) @map("created_at")
+  id         String        @id @default(uuid(7))
+  tenantId   String?       @map("tenant_id")
+  locationId String?       @map("location_id")
+  actorType  ActorType     @map("actor_type")
+  actorId    String?       @map("actor_id")
+  source     ActionSource?
+  action     String
+  entityType String        @map("entity_type")
+  entityId   String?       @map("entity_id")
+  metadata   Json          @default("{}")
+  requestId  String?       @map("request_id")
+  createdAt  DateTime      @default(now()) @map("created_at")
 
   @@index([tenantId, createdAt])
   @@index([entityType, entityId])
@@ -474,7 +529,7 @@ model AuditLog {
 
 model Category {
   id            String    @id @default(uuid(7))
-  tenantId  String    @map("tenant_id")
+  tenantId      String    @map("tenant_id")
   nameEn        String    @map("name_en")
   nameAr        String    @map("name_ar")
   descriptionEn String?   @map("description_en")
@@ -484,8 +539,8 @@ model Category {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  products   Product[]
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  products Product[]
 
   @@index([tenantId, sortOrder])
   @@map("categories")
@@ -493,7 +548,7 @@ model Category {
 
 model Product {
   id            String    @id @default(uuid(7))
-  tenantId  String    @map("tenant_id")
+  tenantId      String    @map("tenant_id")
   categoryId    String    @map("category_id")
   /// Optional stock-keeping code, unique within the tenant when present.
   sku           String?
@@ -508,7 +563,7 @@ model Product {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
-  tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant           Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   category         Category               @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   variants         ProductVariant[]
   modifierGroups   ProductModifierGroup[]
@@ -541,22 +596,22 @@ model ProductVariant {
 }
 
 model ModifierGroup {
-  id           String    @id @default(uuid(7))
-  tenantId String    @map("tenant_id")
-  nameEn       String    @map("name_en")
-  nameAr       String    @map("name_ar")
+  id         String    @id @default(uuid(7))
+  tenantId   String    @map("tenant_id")
+  nameEn     String    @map("name_en")
+  nameAr     String    @map("name_ar")
   /// Minimum number of modifiers the customer must choose (0 = optional group).
-  minSelect    Int       @default(0) @map("min_select")
+  minSelect  Int       @default(0) @map("min_select")
   /// Maximum number of modifiers; null = unlimited.
-  maxSelect    Int?      @map("max_select")
-  sortOrder    Int       @default(0) @map("sort_order")
-  archivedAt   DateTime? @map("archived_at")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  maxSelect  Int?      @map("max_select")
+  sortOrder  Int       @default(0) @map("sort_order")
+  archivedAt DateTime? @map("archived_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
 
-  tenant Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  modifiers  Modifier[]
-  products   ProductModifierGroup[]
+  tenant    Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  modifiers Modifier[]
+  products  ProductModifierGroup[]
 
   @@index([tenantId])
   @@map("modifier_groups")
@@ -600,20 +655,20 @@ model ProductModifierGroup {
 /// Kitchen stations (Kitchen, Grill, Fryer, Bar, Dessert, ...) are defined per tenant; each
 /// location's KDS screens subscribe to the stations they serve.
 model KitchenStation {
-  id           String    @id @default(uuid(7))
-  tenantId String    @map("tenant_id")
+  id         String    @id @default(uuid(7))
+  tenantId   String    @map("tenant_id")
   /// Short code, unique within the tenant, e.g. GRILL.
-  code         String
-  nameEn       String    @map("name_en")
-  nameAr       String    @map("name_ar")
-  sortOrder    Int       @default(0) @map("sort_order")
-  archivedAt   DateTime? @map("archived_at")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  code       String
+  nameEn     String    @map("name_en")
+  nameAr     String    @map("name_ar")
+  sortOrder  Int       @default(0) @map("sort_order")
+  archivedAt DateTime? @map("archived_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
 
-  tenant Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  products   ProductStation[]
-  tickets    KitchenTicket[]
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  products ProductStation[]
+  tickets  KitchenTicket[]
 
   @@unique([tenantId, code])
   @@map("kitchen_stations")
@@ -654,20 +709,20 @@ model LocationProduct {
 // ---------------------------------------------------------------------------
 
 model Tax {
-  id           String    @id @default(uuid(7))
-  tenantId String    @map("tenant_id")
-  nameEn       String    @map("name_en")
-  nameAr       String    @map("name_ar")
+  id         String    @id @default(uuid(7))
+  tenantId   String    @map("tenant_id")
+  nameEn     String    @map("name_en")
+  nameAr     String    @map("name_ar")
   /// Basis points: 1500 = 15%.
-  rateBps      Int       @map("rate_bps")
+  rateBps    Int       @map("rate_bps")
   /// Pre-selected for new products in the admin. Pricing never applies taxes implicitly.
-  isDefault    Boolean   @default(false) @map("is_default")
-  archivedAt   DateTime? @map("archived_at")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  isDefault  Boolean   @default(false) @map("is_default")
+  archivedAt DateTime? @map("archived_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
 
-  tenant Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  products   ProductTax[]
+  tenant   Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  products ProductTax[]
 
   @@index([tenantId])
   @@map("taxes")
@@ -686,16 +741,16 @@ model ProductTax {
 
 /// Predefined order-level discounts staff may apply (requires orders.discount).
 model Discount {
-  id           String       @id @default(uuid(7))
-  tenantId String       @map("tenant_id")
-  nameEn       String       @map("name_en")
-  nameAr       String       @map("name_ar")
-  type         DiscountType
+  id         String       @id @default(uuid(7))
+  tenantId   String       @map("tenant_id")
+  nameEn     String       @map("name_en")
+  nameAr     String       @map("name_ar")
+  type       DiscountType
   /// Basis points for PERCENTAGE, minor units for FIXED.
-  value        Int
-  archivedAt   DateTime?    @map("archived_at")
-  createdAt    DateTime     @default(now()) @map("created_at")
-  updatedAt    DateTime     @updatedAt @map("updated_at")
+  value      Int
+  archivedAt DateTime?    @map("archived_at")
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @updatedAt @map("updated_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
@@ -752,7 +807,7 @@ model DiningTable {
 
 model Order {
   id              String           @id @default(uuid(7))
-  tenantId    String           @map("tenant_id")
+  tenantId        String           @map("tenant_id")
   locationId      String           @map("location_id")
   /// Human-readable, unique per location and business day, e.g. "MAIN-042".
   orderNumber     String           @map("order_number")
@@ -791,7 +846,7 @@ model Order {
   createdAt       DateTime         @default(now()) @map("created_at")
   updatedAt       DateTime         @updatedAt @map("updated_at")
 
-  tenant    Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant        Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   location      Location             @relation(fields: [locationId], references: [id], onDelete: Restrict)
   table         DiningTable?         @relation(fields: [tableId], references: [id], onDelete: Restrict)
   items         OrderItem[]
@@ -930,18 +985,18 @@ model OrderCounter {
 
 /// A tender the location accepts, e.g. "Cash", "Mada", "Visa".
 model PaymentMethod {
-  id           String            @id @default(uuid(7))
-  tenantId String            @map("tenant_id")
-  type         PaymentMethodType
-  nameEn       String            @map("name_en")
-  nameAr       String            @map("name_ar")
-  sortOrder    Int               @default(0) @map("sort_order")
-  archivedAt   DateTime?         @map("archived_at")
-  createdAt    DateTime          @default(now()) @map("created_at")
-  updatedAt    DateTime          @updatedAt @map("updated_at")
+  id         String            @id @default(uuid(7))
+  tenantId   String            @map("tenant_id")
+  type       PaymentMethodType
+  nameEn     String            @map("name_en")
+  nameAr     String            @map("name_ar")
+  sortOrder  Int               @default(0) @map("sort_order")
+  archivedAt DateTime?         @map("archived_at")
+  createdAt  DateTime          @default(now()) @map("created_at")
+  updatedAt  DateTime          @updatedAt @map("updated_at")
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  payments   Payment[]
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  payments Payment[]
 
   @@index([tenantId])
   @@map("payment_methods")
@@ -950,7 +1005,7 @@ model PaymentMethod {
 /// One money movement on an order. The id is client-generated and is the idempotency key.
 model Payment {
   id                 String                 @id
-  tenantId       String                 @map("tenant_id")
+  tenantId           String                 @map("tenant_id")
   locationId         String                 @map("location_id")
   orderId            String                 @map("order_id")
   /// The drawer's shift. Null only for ONLINE payments, which touch no drawer (database CHECK).
@@ -1016,7 +1071,7 @@ model CashRegister {
 
 model Shift {
   id             String      @id
-  tenantId   String      @map("tenant_id")
+  tenantId       String      @map("tenant_id")
   locationId     String      @map("location_id")
   cashRegisterId String      @map("cash_register_id")
   status         ShiftStatus
@@ -1071,31 +1126,31 @@ model CashTransaction {
 /// One per order and station. Created when the order is confirmed; the order's PREPARING/READY
 /// statuses are derived from its tickets. Never deleted: cancelled tickets stay for history.
 model KitchenTicket {
-  id           String              @id @default(uuid(7))
-  tenantId String              @map("tenant_id")
-  locationId   String              @map("location_id")
-  orderId      String              @map("order_id")
-  stationId    String              @map("station_id")
-  status       KitchenTicketStatus @default(NEW)
-  priority     TicketPriority      @default(NORMAL)
+  id          String              @id @default(uuid(7))
+  tenantId    String              @map("tenant_id")
+  locationId  String              @map("location_id")
+  orderId     String              @map("order_id")
+  stationId   String              @map("station_id")
+  status      KitchenTicketStatus @default(NEW)
+  priority    TicketPriority      @default(NORMAL)
   /// Incremented on every change; kitchen screens send it back for optimistic concurrency.
-  version      Int                 @default(1)
+  version     Int                 @default(1)
   /// Incremented when an order edit rewrites the items; screens flag tickets with revision > 1.
-  revision     Int                 @default(1)
-  startedAt    DateTime?           @map("started_at")
-  readyAt      DateTime?           @map("ready_at")
-  completedAt  DateTime?           @map("completed_at")
-  cancelledAt  DateTime?           @map("cancelled_at")
+  revision    Int                 @default(1)
+  startedAt   DateTime?           @map("started_at")
+  readyAt     DateTime?           @map("ready_at")
+  completedAt DateTime?           @map("completed_at")
+  cancelledAt DateTime?           @map("cancelled_at")
   /// A cancelled ticket stays on the screen until the kitchen acknowledges it.
-  dismissedAt  DateTime?           @map("dismissed_at")
-  createdAt    DateTime            @default(now()) @map("created_at")
-  updatedAt    DateTime            @updatedAt @map("updated_at")
+  dismissedAt DateTime?           @map("dismissed_at")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
 
-  tenant Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  location   Location            @relation(fields: [locationId], references: [id], onDelete: Restrict)
-  order      Order               @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  station    KitchenStation      @relation(fields: [stationId], references: [id], onDelete: Restrict)
-  items      KitchenTicketItem[]
+  tenant   Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  location Location            @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  order    Order               @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  station  KitchenStation      @relation(fields: [stationId], references: [id], onDelete: Restrict)
+  items    KitchenTicketItem[]
 
   @@unique([orderId, stationId])
   @@index([locationId, status])

@@ -14,7 +14,7 @@ import {
   paymentTotals,
   quoteOrder,
 } from '@pos/domain';
-import { OPEN_ORDER_STATUSES, type RealtimeEvent } from '@pos/shared-types';
+import { Feature, OPEN_ORDER_STATUSES, type RealtimeEvent } from '@pos/shared-types';
 import type {
   Order,
   createOrderSchema,
@@ -31,6 +31,7 @@ import { SqlDialect } from '../../prisma/dialect';
 import { isUniqueViolation } from '../../prisma/errors';
 import { PrismaService, type PrismaTx } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { FeatureService } from '../features/feature.service';
 import { KitchenDispatchService } from '../kitchen/kitchen-dispatch.service';
 import { PublishedMenuService } from '../menu/published-menu.service';
 import { assertCloudMayChangeOrder } from './hub-ownership';
@@ -75,6 +76,7 @@ export class OrdersService {
     private readonly bus: RealtimeBus,
     private readonly dialect: SqlDialect,
     private readonly changes: ChangeRecorder,
+    private readonly features: FeatureService,
     @Inject(SERVER_MODE) private readonly mode: ServerMode,
   ) {}
 
@@ -97,7 +99,7 @@ export class OrdersService {
     const discounts = await this.loadDiscounts(location.tenantId, input.discountIds);
     if (discounts.length > 0)
       assertPermissions(principal.assignments, locationId, ['orders.discount']);
-    if (input.tableId) await this.requireTable(this.prisma, locationId, input.tableId);
+    await this.checkTable(location, input);
 
     const quote = quoteOrder({
       menu,
@@ -262,7 +264,7 @@ export class OrdersService {
       input.discountIds,
     );
     if (discountsChanged) assertPermissions(principal.assignments, locationId, ['orders.discount']);
-    if (input.tableId) await this.requireTable(this.prisma, locationId, input.tableId);
+    await this.checkTable(location, input, current.tableId);
     const foreignLines = await this.prisma.orderItem.count({
       where: { id: { in: input.items.map((i) => i.id) }, orderId: { not: orderId } },
     });
@@ -466,7 +468,10 @@ export class OrdersService {
     if (to === 'CONFIRMED') return this.kitchen.syncTickets(tx, order);
     if (to === 'CANCELLED') return this.kitchen.cancelTickets(tx, order);
     if (to === 'COMPLETED') {
-      if (current.status === 'CONFIRMED') await this.kitchen.assertNothingPending(tx, current.id);
+      // Without a kitchen display nothing is waited for: the order is handed over directly.
+      if (current.status === 'CONFIRMED' && (await this.kitchen.kitchenOn(tx, current))) {
+        await this.kitchen.assertNothingPending(tx, current.id);
+      }
       return this.kitchen.completeReadyTickets(tx, order);
     }
     return [];
@@ -531,6 +536,35 @@ export class OrdersService {
       throw new DomainError('DISCOUNT_NOT_FOUND', 'Discount not found', { discountIds: missing });
     // Apply in the order the client listed them (the engine applies discounts sequentially).
     return ids.map((id) => rows.find((r) => r.id === id)).filter((r) => r !== undefined);
+  }
+
+  /**
+   * Tables are a module (ADR 0018). Where TABLES is on, dine-in needs a table of the location;
+   * where it is off, dine-in is served without one and no order can name a new table (an order
+   * from before the module was switched off keeps its own).
+   */
+  private async checkTable(
+    location: { id: string; tenantId: string },
+    input: { channel: string; tableId: string | null },
+    currentTableId: string | null = null,
+  ): Promise<void> {
+    const tables = await this.features.isEnabled(Feature.TABLES, {
+      tenantId: location.tenantId,
+      locationId: location.id,
+    });
+    if (input.tableId) {
+      if (!tables && input.tableId !== currentTableId) {
+        throw new DomainError('FEATURE_DISABLED', 'The TABLES module is off', {
+          feature: Feature.TABLES,
+        });
+      }
+      await this.requireTable(this.prisma, location.id, input.tableId);
+    } else if (input.channel === 'DINE_IN' && tables) {
+      const message = 'Dine-in orders need a table';
+      throw new DomainError('VALIDATION_FAILED', message, {
+        issues: [{ path: ['tableId'], message }],
+      });
+    }
   }
 
   private async requireTable(tx: PrismaTx, locationId: string, tableId: string): Promise<void> {

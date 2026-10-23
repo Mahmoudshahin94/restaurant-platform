@@ -8,15 +8,21 @@ import {
   updateTableSchema,
   updateTableSectionSchema,
 } from '@pos/validation';
+import { Feature } from '@pos/shared-types';
 import type { z } from 'zod';
 import { ManagedInCloud } from '../../common/auth/managed-in-cloud';
 import { RequirePermissions } from '../../common/auth/decorators';
+import { RequireFeature } from '../../common/auth/require-feature';
 import { ZodValidationPipe } from '../../common/validation/zod-validation.pipe';
 import { FloorService } from './floor.service';
 
 const id = new ZodValidationPipe(idSchema);
 
-/** Mutations return the refreshed floor so clients render one consistent state. */
+/**
+ * Mutations return the refreshed floor so clients render one consistent state. Only where the
+ * TABLES module is on (ADR 0018).
+ */
+@RequireFeature(Feature.TABLES)
 @ManagedInCloud()
 @Controller('locations/:locationId/floor')
 export class FloorController {

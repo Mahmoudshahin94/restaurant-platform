@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import type { KitchenTicket as TicketRecord, Prisma } from '@pos/database';
 import { DomainError, assertTicketTransition, planTickets, routeItems } from '@pos/domain';
-import { ACTIVE_TICKET_STATUSES, type RealtimeEvent } from '@pos/shared-types';
+import { ACTIVE_TICKET_STATUSES, Feature, type RealtimeEvent } from '@pos/shared-types';
 import type { PrismaTx } from '../../prisma/prisma.service';
+import { FeatureService } from '../features/feature.service';
 import { RealtimeBus } from '../realtime/realtime.bus';
 import { jsonStringArray } from '../../prisma/json';
 import { type TicketEventType, modifiersOf, ticketEventPayload } from './kitchen.mappers';
@@ -62,13 +63,33 @@ function signature(
  * Sends orders to the kitchen: one ticket per station, created when the order is confirmed and
  * kept in step with the order afterwards. Every method runs inside the caller's transaction and
  * returns the realtime events to publish once it commits.
+ *
+ * Only where the KDS module is on (ADR 0018). Without it nothing new reaches a kitchen: no ticket
+ * is created or reopened, and a confirmed order can be completed directly. Tickets made before
+ * the module was switched off still follow their order (edits, cancellation, hand-over).
  */
 @Injectable()
 export class KitchenDispatchService {
-  constructor(private readonly bus: RealtimeBus) {}
+  constructor(
+    private readonly bus: RealtimeBus,
+    private readonly features: FeatureService,
+  ) {}
+
+  /** Whether the order's location has a kitchen display (the KDS module). */
+  async kitchenOn(
+    tx: PrismaTx,
+    order: Pick<DispatchOrder, 'tenantId' | 'locationId'>,
+  ): Promise<boolean> {
+    return this.features.isEnabled(
+      Feature.KDS,
+      { tenantId: order.tenantId, locationId: order.locationId },
+      { db: tx },
+    );
+  }
 
   /** Creates, rewrites or cancels tickets so they match the order's current items. */
   async syncTickets(tx: PrismaTx, order: DispatchOrder): Promise<RealtimeEvent[]> {
+    const kitchen = await this.kitchenOn(tx, order);
     const items = await tx.orderItem.findMany({
       where: { orderId: order.id },
       include: { modifiers: true },
@@ -86,7 +107,7 @@ export class KitchenDispatchService {
       (routed.get(stationId) ?? []).map((item, index) => snapshot(item, index));
     const events: RealtimeEvent[] = [];
 
-    for (const stationId of plan.create) {
+    for (const stationId of kitchen ? plan.create : []) {
       const ticket = await tx.kitchenTicket.create({
         data: {
           tenantId: order.tenantId,
@@ -104,6 +125,7 @@ export class KitchenDispatchService {
       if (!current) continue;
       const next = itemsFor(ticket.stationId);
       const reopen = current.status === 'CANCELLED';
+      if (reopen && !kitchen) continue;
       const unchanged = signature(current.items) === signature(next);
       if (!reopen && unchanged) continue;
       if (reopen) {

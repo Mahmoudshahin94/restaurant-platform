@@ -1,5 +1,6 @@
-import { QueryState, useCurrentLocale, useMoneyFormat } from '@pos/app-kit';
+import { FeatureGate, QueryState, useCurrentLocale, useMoneyFormat } from '@pos/app-kit';
 import { formatDateTime, pickLocalized } from '@pos/i18n';
+import { Feature } from '@pos/shared-types';
 import type { DashboardLocation } from '@pos/validation';
 import {
   Badge,
@@ -72,17 +73,19 @@ function LocationCard({ row, currency }: { row: DashboardLocation; currency: str
           <Figure label={t('admin:dashboard.cancelled')} value={String(row.orders.cancelled)} />
           <Figure label={t('admin:dashboard.openShifts')} value={String(row.openShifts)} />
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-muted-foreground">{t('admin:dashboard.online')}</span>
-          <Badge variant={ONLINE_VARIANT[row.onlineOrdering.state]}>
-            {t(`admin:onlineState.${row.onlineOrdering.state}`)}
-          </Badge>
-          {row.onlineOrdering.reason ? (
-            <span className="text-xs text-muted-foreground">
-              {t(`admin:onlineReason.${row.onlineOrdering.reason}`)}
-            </span>
-          ) : null}
-        </div>
+        <FeatureGate feature={Feature.ONLINE_ORDERING}>
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-muted-foreground">{t('admin:dashboard.online')}</span>
+            <Badge variant={ONLINE_VARIANT[row.onlineOrdering.state]}>
+              {t(`admin:onlineState.${row.onlineOrdering.state}`)}
+            </Badge>
+            {row.onlineOrdering.reason ? (
+              <span className="text-xs text-muted-foreground">
+                {t(`admin:onlineReason.${row.onlineOrdering.reason}`)}
+              </span>
+            ) : null}
+          </div>
+        </FeatureGate>
         {sync ? (
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <span className="text-muted-foreground">{t('admin:dashboard.hub')}</span>

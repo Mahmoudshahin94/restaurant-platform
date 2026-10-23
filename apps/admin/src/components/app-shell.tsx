@@ -1,5 +1,5 @@
 import { pickLocalized } from '@pos/i18n';
-import type { Permission } from '@pos/shared-types';
+import { Feature, type Permission } from '@pos/shared-types';
 import { Button, NativeSelect, cn } from '@pos/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -18,6 +18,7 @@ import {
   ListChecks,
   LogOut,
   MapPin,
+  Puzzle,
   Receipt,
   RefreshCw,
   ScrollText,
@@ -36,7 +37,7 @@ import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { session } from '../lib/api';
-import { useCurrentLocale } from '@pos/app-kit';
+import { useCurrentLocale, useFeatures } from '@pos/app-kit';
 import { usePermissions } from '../lib/permissions';
 import { useLocations } from '../lib/queries';
 import { usePreferences } from '../stores/preferences';
@@ -52,6 +53,8 @@ interface NavItem {
   permission?: Permission;
   /** The permission must be held tenant-wide (pages for the whole tenant). */
   tenantWide?: boolean;
+  /** Shown while any of these modules is on at the chosen location (ADR 0018). */
+  features?: readonly Feature[];
 }
 
 interface NavGroup {
@@ -111,12 +114,14 @@ const NAV: NavGroup[] = [
         labelKey: 'modifierGroups',
         icon: ListChecks,
         permission: 'products.view',
+        features: [Feature.MODIFIERS],
       },
       {
         to: '/menu/kitchen-stations',
         labelKey: 'kitchenStations',
         icon: ChefHat,
         permission: 'products.view',
+        features: [Feature.KDS, Feature.KITCHEN_PRINTER],
       },
       {
         to: '/menu/availability',
@@ -137,6 +142,13 @@ const NAV: NavGroup[] = [
         tenantWide: true,
       },
       {
+        to: '/settings/modules',
+        labelKey: 'modules',
+        icon: Puzzle,
+        permission: 'settings.manage',
+        tenantWide: true,
+      },
+      {
         to: '/settings/locations',
         labelKey: 'locations',
         icon: MapPin,
@@ -147,6 +159,7 @@ const NAV: NavGroup[] = [
         labelKey: 'onlineOrdering',
         icon: Globe,
         permission: 'locations.view',
+        features: [Feature.ONLINE_ORDERING],
       },
       { to: '/settings/taxes', labelKey: 'taxes', icon: Receipt, permission: 'products.view' },
       {
@@ -155,7 +168,13 @@ const NAV: NavGroup[] = [
         icon: BadgePercent,
         permission: 'settings.manage',
       },
-      { to: '/settings/tables', labelKey: 'tables', icon: Grid3x3, permission: 'orders.view' },
+      {
+        to: '/settings/tables',
+        labelKey: 'tables',
+        icon: Grid3x3,
+        permission: 'orders.view',
+        features: [Feature.TABLES],
+      },
       {
         to: '/settings/payment-methods',
         labelKey: 'paymentMethods',
@@ -243,6 +262,7 @@ export function AppShell() {
   const { t } = useTranslation(['admin', 'common']);
   const user = useSession((s) => s.user);
   const { can, canAnywhere } = usePermissions();
+  const features = useFeatures();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -266,8 +286,9 @@ export function AppShell() {
           {NAV.map((group) => {
             const items = group.items.filter(
               (item) =>
-                !item.permission ||
-                (item.tenantWide ? can(item.permission) : canAnywhere(item.permission)),
+                (!item.permission ||
+                  (item.tenantWide ? can(item.permission) : canAnywhere(item.permission))) &&
+                (!item.features || item.features.some((f) => features[f].enabled)),
             );
             if (items.length === 0) return null;
             return (

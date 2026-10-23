@@ -60,8 +60,12 @@ import {
   tenantSchema,
   tokenResponseSchema,
   type CreateLocationRequest,
+  type FeatureScopeQuery,
+  type SetFeatureOverrideRequest,
+  featureSettingSchema,
+  tenantContextSchema,
 } from '@pos/validation';
-import type { OrderStatus } from '@pos/shared-types';
+import type { Feature, OrderStatus } from '@pos/shared-types';
 import { z } from 'zod';
 import { adminApi } from './admin';
 import { HttpClient, type HttpClientOptions } from './http';
@@ -161,6 +165,26 @@ export function createApiClient(options: HttpClientOptions) {
         http.request('PATCH', `${API}/tenants/${tenantId}`, {
           body,
           schema: tenantSchema,
+        }),
+      /** Branding, currency, locales and the modules of a location (cloud and hub, ADR 0018). */
+      context: (tenantId: string, locationId?: string | null) =>
+        http.request('GET', `${API}/tenants/${tenantId}/context`, {
+          query: { locationId: locationId ?? undefined },
+          schema: tenantContextSchema,
+        }),
+    },
+    features: {
+      /** The Modules page of the tenant, a location or a device (`settings.manage`). */
+      list: (tenantId: string, scope: FeatureScopeQuery = {}) =>
+        http.request('GET', `${API}/tenants/${tenantId}/features`, {
+          query: { locationId: scope.locationId, deviceId: scope.deviceId },
+          schema: z.array(featureSettingSchema),
+        }),
+      /** Switches a module for a scope; `enabled: null` inherits again (cloud only). */
+      set: (tenantId: string, feature: Feature, body: SetFeatureOverrideRequest) =>
+        http.request('PUT', `${API}/tenants/${tenantId}/features/${feature}`, {
+          body,
+          schema: z.array(featureSettingSchema),
         }),
     },
     locations: {

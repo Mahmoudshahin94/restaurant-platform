@@ -42,6 +42,8 @@ const rows = z.array(z.record(z.string(), z.unknown()));
 export const SNAPSHOT_TABLES = [
   'tenants',
   'locations',
+  /** The location's devices, without credentials: device-level module overrides name them. */
+  'devices',
   'roles',
   'rolePermissions',
   'users',
@@ -63,14 +65,20 @@ export const SNAPSHOT_TABLES = [
   'diningTables',
   'paymentMethods',
   'cashRegisters',
+  /** Modules (ADR 0018): the platform's entitlements and the overrides of this location. */
+  'tenantEntitlements',
+  'featureOverrides',
   /** The cloud's order numbers of recent business days: a hub paired mid-day continues them. */
   'orderCounters',
 ] as const;
 export type SnapshotTable = (typeof SNAPSHOT_TABLES)[number];
 
 export const locationSnapshotSchema = z.object({
-  /** Bumped when the snapshot format changes incompatibly (2: the tenant rename, ADR 0017). */
-  format: z.literal(2),
+  /**
+   * Bumped when the snapshot format changes incompatibly (2: the tenant rename, ADR 0017; 3: the
+   * modules a hub must enforce, ADR 0018).
+   */
+  format: z.literal(3),
   tenantId: idSchema,
   locationId: idSchema,
   generatedAt: isoDateTimeSchema,
