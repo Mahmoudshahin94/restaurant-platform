@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Tenant as TenantRow } from '@pos/database';
 import { DomainError, currencyExponent } from '@pos/domain';
-import type { BusinessType, Locale } from '@pos/shared-types';
+import type { BrandSurface, BusinessType, Locale } from '@pos/shared-types';
 import {
   type Tenant,
   type TenantContextDto,
@@ -10,6 +10,7 @@ import {
 } from '@pos/validation';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { BrandingService } from '../branding/branding.service';
 import { FeatureService } from '../features/feature.service';
 
 export function toTenantDto(row: TenantRow): Tenant {
@@ -36,14 +37,19 @@ export class TenantsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly features: FeatureService,
+    private readonly branding: BrandingService,
   ) {}
 
   /**
-   * What an app needs to render for the tenant (ADR 0018): identity, branding, money, languages
-   * and the modules resolved for `locationId` (or the tenant as a whole). Served by the cloud
-   * and, from its snapshot, by the location hub.
+   * What an app needs to render for the tenant (ADR 0018): identity, money, languages, the
+   * modules resolved for `locationId` (or the tenant as a whole) and the branding of `surface`
+   * (ADR 0019). Served by the cloud and, from its snapshot, by the location hub.
    */
-  async context(tenantId: string, locationId: string | null): Promise<TenantContextDto> {
+  async context(
+    tenantId: string,
+    locationId: string | null,
+    surface: BrandSurface | null = null,
+  ): Promise<TenantContextDto> {
     const row = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!row) throw new DomainError('TENANT_NOT_FOUND', 'Tenant not found');
     if (locationId) {
@@ -60,7 +66,7 @@ export class TenantsService {
         status: row.status,
         timezone: row.timezone,
       },
-      branding: { nameEn: row.nameEn, nameAr: row.nameAr },
+      branding: await this.branding.resolve(tenantId, surface),
       currency: { code: row.currencyCode, exponent: currencyExponent(row.currencyCode) },
       locales: { default: row.defaultLocale, supported: supportedLocalesOf(row) },
       locationId,

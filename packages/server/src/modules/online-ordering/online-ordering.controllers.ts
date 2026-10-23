@@ -17,6 +17,7 @@ import { Public, RequirePermissions } from '../../common/auth/decorators';
 import { RequireFeature } from '../../common/auth/require-feature';
 import { TenantContext } from '../../common/tenancy/tenant-context';
 import { ZodValidationPipe } from '../../common/validation/zod-validation.pipe';
+import { sendTenantFile } from '../files/file-response';
 import { PublicTenantResolver } from './public-tenant.resolver';
 import { StorefrontService } from './storefront.service';
 import { WebOrdersService } from './web-orders.service';
@@ -46,6 +47,20 @@ export class StorefrontController {
   async tenant(@Param('slug', slug) tenantSlug: string): Promise<PublicTenant> {
     const tenantId = await this.tenants.bySlug(tenantSlug);
     return TenantContext.runInTenant(tenantId, () => this.storefront.tenant(tenantSlug));
+  }
+
+  /** A logo or favicon of the tenant's branding (nothing else it uploaded). */
+  @Get('tenants/:slug/files/:fileId')
+  async brandingFile(
+    @Param('slug', slug) tenantSlug: string,
+    @Param('fileId', id) fileId: string,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<Buffer> {
+    const tenantId = await this.tenants.bySlug(tenantSlug);
+    const { file, bytes } = await TenantContext.runInTenant(tenantId, () =>
+      this.storefront.brandingFile(tenantId, fileId),
+    );
+    return sendTenantFile(reply, file, bytes, 'public');
   }
 
   @Get('locations/:locationId')

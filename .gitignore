@@ -23,3 +23,5 @@ tools/printer-sim/out/
 *.db-wal
 *.db-shm
 .hub-data/
+# Tenant files of the local-disk storage (API)
+.data/

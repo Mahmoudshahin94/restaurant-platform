@@ -45,6 +45,8 @@ describe('hub routes', () => {
         .sort(),
     ).toEqual([
       'GET /health',
+      'GET /hub/branding',
+      'GET /hub/branding/files/:fileId',
       'GET /hub/status',
       'GET /ready',
       'POST /auth/login',

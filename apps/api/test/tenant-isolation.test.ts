@@ -1,9 +1,17 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { type PrismaClient, provisionTenant } from '@pos/database';
 import { newId } from '@pos/domain';
-import { PrismaService, TenantContext, TenantScopeError } from '@pos/server';
+import {
+  PrismaService,
+  TENANT_FILE_STORAGE,
+  TenantContext,
+  TenantFileExistsError,
+  TenantFileScopeError,
+  type TenantFileStorage,
+  TenantScopeError,
+} from '@pos/server';
 import { PERMISSIONS, type ApiErrorBody } from '@pos/shared-types';
-import type { DailySalesReport, Order } from '@pos/validation';
+import type { DailySalesReport, Order, TenantFileDto } from '@pos/validation';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   type TenantFixture,
@@ -13,6 +21,7 @@ import {
   resetDatabase,
   startApp,
 } from './helpers';
+import { ICO, PNG } from './image-fixture';
 import { createMenuFixture } from './menu-fixture';
 import { reportSeeder } from './report-fixture';
 
@@ -30,6 +39,7 @@ let b: TenantFixture;
 let menuA: Awaited<ReturnType<typeof createMenuFixture>>;
 let menuB: Awaited<ReturnType<typeof createMenuFixture>>;
 let ownerA: Record<string, string>;
+let ownerB: Record<string, string>;
 let orderB: Order;
 
 beforeAll(async () => {
@@ -40,7 +50,7 @@ beforeAll(async () => {
   menuA = await createMenuFixture(prisma, a);
   menuB = await createMenuFixture(prisma, b);
   ownerA = bearer(await login(app, a.owner.email));
-  const ownerB = bearer(await login(app, b.owner.email));
+  ownerB = bearer(await login(app, b.owner.email));
   const res = await app.inject({
     method: 'POST',
     url: `/api/v1/locations/${b.locationA}/orders`,
@@ -171,6 +181,117 @@ describe('tenant A cannot change tenant B', () => {
     expect((await prisma.order.findUniqueOrThrow({ where: { id: orderB.id } })).tenantId).toBe(
       b.tenantId,
     );
+  });
+});
+
+describe('tenant A cannot read or overwrite tenant B’s files (ADR 0019)', () => {
+  let logoB: TenantFileDto;
+  let keyB: string;
+  const storage = () => app.get<TenantFileStorage>(TENANT_FILE_STORAGE);
+
+  beforeAll(async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/tenants/${b.tenantId}/files?kind=LOGO`,
+      headers: { ...ownerB, 'content-type': 'image/png' },
+      payload: PNG,
+    });
+    expect(res.statusCode).toBe(201);
+    logoB = res.json<TenantFileDto>();
+    keyB = (await prisma.tenantFile.findUniqueOrThrow({ where: { id: logoB.id } })).storageKey;
+    await app.inject({
+      method: 'PUT',
+      url: `/api/v1/tenants/${b.tenantId}/branding`,
+      headers: ownerB,
+      payload: { logoFileId: logoB.id, ...nullBranding },
+    });
+  });
+
+  const nullBranding = {
+    displayNameEn: null,
+    displayNameAr: null,
+    faviconFileId: null,
+    primaryColor: null,
+    secondaryColor: null,
+    accentColor: null,
+    fontFamily: null,
+    logoSize: null,
+    themeMode: null,
+    surfaceStyle: null,
+    borderRadius: null,
+  };
+
+  it('does not find B’s file through A’s routes, B’s routes or the public ones', async () => {
+    for (const url of [
+      `/tenants/${a.tenantId}/files/${logoB.id}/content`,
+      `/tenants/${b.tenantId}/files/${logoB.id}/content`,
+    ]) {
+      const res = await asA('GET', url);
+      expect(res.statusCode, url).toBe(404);
+      expect(res.rawPayload.equals(PNG), url).toBe(false);
+    }
+    const list = await asA('GET', `/tenants/${a.tenantId}/files`);
+    expect(list.body).not.toContain(logoB.id);
+    const { slug } = await prisma.tenant.findUniqueOrThrow({ where: { id: a.tenantId } });
+    const pub = await app.inject({
+      method: 'GET',
+      url: `/api/v1/public/tenants/${slug}/files/${logoB.id}`,
+    });
+    expect(pub.statusCode).toBe(404);
+  });
+
+  it('cannot upload into B or show B’s file as its own logo', async () => {
+    const upload = await app.inject({
+      method: 'POST',
+      url: `/api/v1/tenants/${b.tenantId}/files?kind=FAVICON`,
+      headers: { ...ownerA, 'content-type': 'image/x-icon' },
+      payload: ICO,
+    });
+    expect(upload.statusCode).toBe(404);
+    const branding = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/tenants/${a.tenantId}/branding`,
+      headers: ownerA,
+      payload: { ...nullBranding, logoFileId: logoB.id },
+    });
+    expect(branding.statusCode).toBe(404);
+    expect(branding.json<ApiErrorBody>().code).toBe('FILE_NOT_FOUND');
+    expect(await prisma.tenantFile.count({ where: { tenantId: b.tenantId } })).toBe(1);
+    expect(await prisma.tenantBranding.count({ where: { tenantId: a.tenantId } })).toBe(0);
+  });
+
+  it('cannot read, write or overwrite B’s bytes in the storage', async () => {
+    await expect(storage().get(a.tenantId, keyB)).rejects.toThrow(TenantFileScopeError);
+    await expect(storage().put(a.tenantId, keyB, ICO)).rejects.toThrow(TenantFileScopeError);
+    for (const key of [
+      `tenants/${a.tenantId}/../${b.tenantId}/logo/x.png`,
+      `tenants/${a.tenantId}//x.png`,
+      `/tenants/${a.tenantId}/x.png`,
+    ]) {
+      await expect(storage().put(a.tenantId, key, ICO), key).rejects.toThrow(TenantFileScopeError);
+    }
+    // Not even B itself replaces a stored file: files are immutable.
+    await expect(storage().put(b.tenantId, keyB, ICO)).rejects.toThrow(TenantFileExistsError);
+    expect((await storage().get(b.tenantId, keyB))?.equals(PNG)).toBe(true);
+  });
+
+  it('keeps file rows in their tenant’s folder and scope', async () => {
+    await expect(
+      prisma.tenantFile.create({
+        data: {
+          tenantId: a.tenantId,
+          kind: 'LOGO',
+          storageKey: `tenants/${b.tenantId}/logo/forged.png`,
+          contentType: 'image/png',
+          sizeBytes: 1,
+          sha256: 'x',
+        },
+      }),
+    ).rejects.toThrow(/tenant_files_storage_key_check/);
+    const files = await TenantContext.runInTenant(a.tenantId, () =>
+      app.get(PrismaService).tenantFile.findMany(),
+    );
+    expect(files.map((f) => f.id)).not.toContain(logoB.id);
   });
 });
 

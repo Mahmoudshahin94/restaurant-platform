@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { type AppConfig, loadConfig } from '@pos/server';
 
 const ROOT_ENV = resolve(__dirname, '../../../.env');
@@ -16,6 +17,8 @@ export function testConfig(overrides: Partial<Record<string, string>> = {}): App
     CORS_ORIGINS: 'http://localhost:5173',
     RATE_LIMIT_PER_MINUTE: '100000',
     AUTH_RATE_LIMIT_PER_MINUTE: '100000',
+    // Tenant files of the tests (ADR 0019) stay out of the repository.
+    FILE_STORAGE_DIR: join(tmpdir(), 'pos-kds-test-files'),
     ...overrides,
   });
 }

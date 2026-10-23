@@ -13,3 +13,4 @@ export * from './online-ordering';
 export * from './admin';
 export * from './reports';
 export * from './features';
+export * from './branding';

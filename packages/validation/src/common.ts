@@ -1,8 +1,11 @@
-import { LOCALES } from '@pos/shared-types';
+import { ConfigLayer, LOCALES, enumValues } from '@pos/shared-types';
 import { isSupportedCurrency } from '@pos/domain';
 import { z } from 'zod';
 
 export const idSchema = z.uuid();
+
+/** A configuration layer (docs/configuration.md). */
+export const configLayerSchema = z.enum(enumValues(ConfigLayer));
 
 export const localeSchema = z.enum(LOCALES as unknown as ['en', 'ar']);
 

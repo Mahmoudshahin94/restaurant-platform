@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@pos/server';
+import { Inject, Injectable } from '@nestjs/common';
+import { BrandingService, PrismaService, TENANT_FILE_STORAGE, type TenantFileStorage } from '@pos/server';
 import type { LocationSnapshot, SnapshotTable } from '@pos/validation';
 import type { AuthenticatedDevice } from '../devices/device.guard';
 
@@ -12,7 +12,11 @@ import type { AuthenticatedDevice } from '../devices/device.guard';
  */
 @Injectable()
 export class SnapshotService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly branding: BrandingService,
+    @Inject(TENANT_FILE_STORAGE) private readonly storage: TenantFileStorage,
+  ) {}
 
   async build(device: AuthenticatedDevice): Promise<LocationSnapshot> {
     const { tenantId, locationId } = device;
@@ -26,6 +30,17 @@ export class SnapshotService {
     });
     const userIds = users.map((u) => u.id);
     const productWhere = { product: { tenantId } };
+
+    // Branding (ADR 0019): only the files it shows travel, with their bytes.
+    const fileIds = await this.branding.fileIds(tenantId);
+    const tenantFiles = fileIds.length
+      ? await db.tenantFile.findMany({ where: { tenantId, id: { in: fileIds } }, orderBy: byId })
+      : [];
+    const files: LocationSnapshot['files'] = [];
+    for (const file of tenantFiles) {
+      const bytes = await this.storage.get(tenantId, file.storageKey);
+      if (bytes) files.push({ id: file.id, content: bytes.toString('base64') });
+    }
 
     const tables: Record<SnapshotTable, unknown[]> = {
       tenants: await db.tenant.findMany({ where: { id: tenantId } }),
@@ -103,6 +118,10 @@ export class SnapshotService {
         where: { tenantId, OR: [{ locationId: null }, { locationId }] },
         orderBy: byId,
       }),
+      // Every file branding refers to (its foreign keys hold); bytes missing in the cloud's
+      // storage are simply not served by the hub either.
+      tenantFiles,
+      tenantBranding: await db.tenantBranding.findMany({ where: { tenantId } }),
       // Orders taken through the cloud before the hub was paired keep their numbers (ADR 0012).
       orderCounters: await db.orderCounter.findMany({
         where: { locationId, businessDate: { gte: new Date(Date.now() - 2 * 24 * 60 * 60_000) } },
@@ -112,14 +131,19 @@ export class SnapshotService {
 
     // JSON round trip: dates become ISO strings, exactly as the hub receives them.
     const json = JSON.parse(JSON.stringify(tables)) as LocationSnapshot['tables'];
-    const version = createHash('sha256').update(JSON.stringify(json)).digest('hex').slice(0, 32);
+    const version = createHash('sha256')
+      .update(JSON.stringify(json))
+      .update(JSON.stringify(files.map((f) => f.id)))
+      .digest('hex')
+      .slice(0, 32);
     return {
-      format: 3,
+      format: 4,
       tenantId,
       locationId,
       generatedAt: new Date().toISOString(),
       version,
       tables: json,
+      files,
     };
   }
 }

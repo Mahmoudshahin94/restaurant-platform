@@ -84,6 +84,8 @@ export function loadHubConfig(env: NodeJS.ProcessEnv = process.env): {
     DATABASE_URL: `file:${databaseFile}?connection_limit=1&socket_timeout=20`,
     JWT_ACCESS_SECRET: hubEnv.HUB_JWT_SECRET ?? signingKey(dataDir),
     CORS_ORIGINS: hubEnv.HUB_CORS_ORIGINS,
+    // The tenant's logos and favicons, copied from the snapshot (ADR 0019).
+    FILE_STORAGE_DIR: resolve(dataDir, 'files'),
   });
   return {
     app,

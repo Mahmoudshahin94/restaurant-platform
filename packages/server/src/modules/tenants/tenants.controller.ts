@@ -26,8 +26,9 @@ export class TenantsController {
   }
 
   /**
-   * The tenant as every app renders it: branding, currency, locales and the modules resolved for
-   * `?locationId` (ADR 0018). Any member may read it, on the cloud and on the hub.
+   * The tenant as every app renders it: currency, locales, the modules resolved for
+   * `?locationId` (ADR 0018) and the branding of `?surface` (ADR 0019). Any member may read it, on
+   * the cloud and on the hub.
    */
   @RequirePermissions([])
   @Get('context')
@@ -36,7 +37,7 @@ export class TenantsController {
     @Query(new ZodValidationPipe(tenantContextQuerySchema))
     query: z.output<typeof tenantContextQuerySchema>,
   ): Promise<TenantContextDto> {
-    return this.tenants.context(tenantId, query.locationId ?? null);
+    return this.tenants.context(tenantId, query.locationId ?? null, query.surface ?? null);
   }
 
   @RequirePermissions(['settings.manage'])

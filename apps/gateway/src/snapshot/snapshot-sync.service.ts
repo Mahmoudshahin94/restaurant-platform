@@ -5,12 +5,12 @@ import {
   type OnApplicationBootstrap,
   type OnModuleDestroy,
 } from '@nestjs/common';
-import { PrismaService, RealtimeBus } from '@pos/server';
+import { PrismaService, RealtimeBus, TENANT_FILE_STORAGE, type TenantFileStorage } from '@pos/server';
 import { locationSnapshotSchema } from '@pos/validation';
 import { HUB_CONFIG, type HubConfig } from '../config';
 import { asHubTx } from '../database/hub-database';
 import { HubStateService } from '../hub-state.service';
-import { applySnapshot, belongsToTenant } from './apply-snapshot';
+import { applySnapshot, belongsToTenant, storeSnapshotFiles } from './apply-snapshot';
 
 export type SnapshotOutcome = 'applied' | 'unchanged' | 'offline' | 'rejected' | 'not-paired';
 
@@ -31,6 +31,7 @@ export class SnapshotSyncService implements OnApplicationBootstrap, OnModuleDest
     private readonly state: HubStateService,
     private readonly bus: RealtimeBus,
     @Inject(HUB_CONFIG) private readonly config: HubConfig,
+    @Inject(TENANT_FILE_STORAGE) private readonly storage: TenantFileStorage,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -94,6 +95,10 @@ export class SnapshotSyncService implements OnApplicationBootstrap, OnModuleDest
       !belongsToTenant(snapshot, pairing.tenantId)
     ) {
       this.state.markCloud('ONLINE', 'Snapshot for another tenant or location');
+      return 'rejected';
+    }
+    if (!(await storeSnapshotFiles(this.storage, snapshot))) {
+      this.state.markCloud('ONLINE', 'Snapshot file does not match its checksum');
       return 'rejected';
     }
     await this.prisma.$transaction(

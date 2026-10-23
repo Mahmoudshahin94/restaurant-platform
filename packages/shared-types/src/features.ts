@@ -53,6 +53,8 @@ export const ConfigLayer = {
   PLATFORM: 'PLATFORM',
   BUSINESS_TYPE: 'BUSINESS_TYPE',
   TENANT: 'TENANT',
+  /** One screen (login, POS, KDS, kiosk, website) differing from the tenant (branding, ADR 0019). */
+  SURFACE: 'SURFACE',
   LOCATION: 'LOCATION',
   DEVICE: 'DEVICE',
 } as const;

@@ -7,6 +7,7 @@ import rateLimit from '@fastify/rate-limit';
 import type { DynamicModule } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
+import { TENANT_FILE_MAX_BYTES } from '@pos/shared-types';
 import type { FastifyRequest } from 'fastify';
 import { assertEveryRouteProtected } from './common/auth/route-inventory';
 import { AllExceptionsFilter } from './common/errors/all-exceptions.filter';
@@ -23,6 +24,11 @@ const AUTH_RATE_LIMITED_ROUTES = new Set([
 const WEB_ORDER_ROUTE = `/${API_PREFIX}/orders`;
 const TRACKING_ROUTE = `/${API_PREFIX}/orders/track`;
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9._-]{8,128}$/;
+/**
+ * Tenant file uploads (ADR 0019): raw image bytes. The files service checks kind and size (and
+ * answers FILE_TOO_LARGE); twice the largest file is the transport's own hard limit.
+ */
+const MAX_UPLOAD_BYTES = 2 * Math.max(...Object.values(TENANT_FILE_MAX_BYTES));
 
 type RateBudget = 'auth' | 'web-order' | 'tracking' | 'all';
 
@@ -102,6 +108,15 @@ export async function createServerApp(
   });
 
   const fastify = app.getHttpAdapter().getInstance();
+  // Image bodies arrive as bytes, whatever image type is claimed: the files service refuses what
+  // it does not accept (an SVG among them) by the bytes themselves.
+  fastify.addContentTypeParser(
+    /^image\//,
+    { parseAs: 'buffer', bodyLimit: MAX_UPLOAD_BYTES },
+    (_request, body, done) => {
+      done(null, body);
+    },
+  );
   await app.get(RealtimeGateway).register(fastify, `/${API_PREFIX}/realtime`);
   fastify.addHook('onSend', async (request, reply) => {
     void reply.header('x-request-id', request.id);
