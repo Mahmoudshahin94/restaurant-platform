@@ -144,6 +144,25 @@ describe('signing in at the hub', () => {
       'INVALID_CREDENTIALS',
     );
   });
+  it('signs nobody in when an employee code matches staff of two tenants (ADR 0017)', async () => {
+    // Cannot come from the cloud (snapshots of another tenant are refused); written directly.
+    const db = hub.app.get(PrismaService);
+    const stray = newId();
+    await db.tenant.create({
+      data: {
+        id: stray,
+        slug: 'stray',
+        nameEn: 'S',
+        nameAr: 'S',
+        currencyCode: 'SAR',
+        timezone: 'UTC',
+      },
+    });
+    await db.employee.create({
+      data: { tenantId: stray, employeeCode: '1001', displayName: 'Other', pinHash: 'x' },
+    });
+    expect((await pinSignIn()).json<ApiErrorBody>().code).toBe('INVALID_CREDENTIALS');
+  });
 });
 
 describe('running a location on the hub', () => {

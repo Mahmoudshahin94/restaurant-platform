@@ -90,10 +90,15 @@ export class AuthService {
         retryAfterMs: attempts.lockedUntil - Date.now(),
       });
     }
-    const employee = await this.prisma.employee.findFirst({
+    // Only on the hub (the cloud's route answers 404), whose database holds its paired tenant
+    // only (ADR 0017). Should the code ever match staff of two tenants, nobody is signed in rather
+    // than an arbitrary one.
+    const matches = await this.prisma.employee.findMany({
       where: { employeeCode: { in: [employeeCode, key] }, isActive: true },
       include: { user: true },
+      take: 2,
     });
+    const employee = matches.length === 1 ? matches[0] : undefined;
     const valid = employee?.pinHash ? await verifySecret(employee.pinHash, pin) : false;
     if (!employee?.pinHash) {
       this.timingDummyHash ??= hashSecret(newId());

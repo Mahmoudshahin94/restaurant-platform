@@ -10,6 +10,7 @@ const CURRENCY_EXPONENTS = {
   EGP: 2,
   EUR: 2,
   GBP: 2,
+  ILS: 2,
   IQD: 3,
   JOD: 3,
   KWD: 3,
