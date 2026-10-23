@@ -1,14 +1,14 @@
 import type { PublicOrder } from '@pos/validation';
 import { useQuery } from '@tanstack/react-query';
-import { RESTAURANT_SLUG, storefront } from './api';
+import { TENANT_SLUG, storefront } from './api';
 
 /** Statuses after which an order no longer changes for the customer. */
 const FINAL: ReadonlySet<PublicOrder['status']> = new Set(['COMPLETED', 'CANCELLED', 'REFUNDED']);
 
-export function useRestaurant() {
+export function useTenant() {
   return useQuery({
-    queryKey: ['restaurant', RESTAURANT_SLUG],
-    queryFn: () => storefront.restaurant(RESTAURANT_SLUG),
+    queryKey: ['tenant', TENANT_SLUG],
+    queryFn: () => storefront.tenant(TENANT_SLUG),
     refetchInterval: 60_000,
   });
 }
@@ -31,7 +31,7 @@ export function useMenu(locationId: string) {
   });
 }
 
-/** Polls the order every few seconds while it can still change (the restaurant decides on it). */
+/** Polls the order every few seconds while it can still change (the tenant decides on it). */
 export function useTrackedOrder(token: string) {
   return useQuery({
     queryKey: ['track', token],

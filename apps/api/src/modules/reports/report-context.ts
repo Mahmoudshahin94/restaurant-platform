@@ -12,7 +12,7 @@ export type Channel = OrderChannel;
 
 /** What a report covers, resolved against the caller's reach. */
 export interface ReportContext {
-  restaurantId: string;
+  tenantId: string;
   locationIds: string[];
   from: string;
   to: string;
@@ -51,13 +51,13 @@ export class ReportContextResolver {
       }
       locationIds = permitted.filter((id) => q.locationIds?.includes(id));
     }
-    const restaurant = await this.prisma.restaurant.findUniqueOrThrow({
-      where: { id: principal.restaurantId },
+    const tenant = await this.prisma.tenant.findUniqueOrThrow({
+      where: { id: principal.tenantId },
       select: { currencyCode: true },
     });
     const channels = q.channels ? ALL_CHANNELS.filter((c) => q.channels?.includes(c)) : null;
     return {
-      restaurantId: principal.restaurantId,
+      tenantId: principal.tenantId,
       locationIds,
       from: q.from,
       to: q.to,
@@ -65,7 +65,7 @@ export class ReportContextResolver {
       header: {
         from: q.from,
         to: q.to,
-        currencyCode: restaurant.currencyCode,
+        currencyCode: tenant.currencyCode,
         locationIds,
         channels,
         generatedAt: new Date().toISOString(),
@@ -75,7 +75,7 @@ export class ReportContextResolver {
 }
 
 /**
- * The common filter of report views: the restaurant, the locations, the business dates and (when
+ * The common filter of report views: the tenant, the locations, the business dates and (when
  * `withChannels`) the channels, on the view aliased `alias`.
  */
 export function reportFilter(ctx: ReportContext, alias: string, withChannels = true): Prisma.Sql {
@@ -84,7 +84,7 @@ export function reportFilter(ctx: ReportContext, alias: string, withChannels = t
     withChannels && ctx.channels
       ? Prisma.sql`AND ${a}.channel::text = ANY(${ctx.channels}::text[])`
       : Prisma.empty;
-  return Prisma.sql`${a}.restaurant_id = ${ctx.restaurantId}::uuid
+  return Prisma.sql`${a}.tenant_id = ${ctx.tenantId}::uuid
     AND ${a}.location_id = ANY(${ctx.locationIds}::uuid[])
     AND ${a}.business_date BETWEEN ${ctx.from}::date AND ${ctx.to}::date
     ${channels}`;

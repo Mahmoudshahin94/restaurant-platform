@@ -72,7 +72,7 @@ describe('log redaction', () => {
 describe('request context', () => {
   const ORDER = '0199d0a1-2b3c-7d4e-8f90-123456789abc';
   const LOCATION = '0199d0a1-2b3c-7d4e-8f90-aaaaaaaaaaaa';
-  const RESTAURANT = '0199d0a1-2b3c-7d4e-8f90-bbbbbbbbbbbb';
+  const TENANT = '0199d0a1-2b3c-7d4e-8f90-bbbbbbbbbbbb';
 
   async function run(request: Record<string, unknown>): Promise<{
     store: RequestContextStore | undefined;
@@ -92,7 +92,7 @@ describe('request context', () => {
   it('carries the request, user, tenant and order into logs and audit context', async () => {
     const { store, fields } = await run({
       principal: { userId: 'user-1' },
-      scope: { restaurantId: RESTAURANT, locationId: LOCATION },
+      scope: { tenantId: TENANT, locationId: LOCATION },
       params: { locationId: LOCATION, orderId: ORDER.toUpperCase() },
       headers: { 'x-client-source': 'POS' },
     });
@@ -100,20 +100,20 @@ describe('request context', () => {
       requestId: 'req-1',
       source: 'POS',
       userId: 'user-1',
-      restaurantId: RESTAURANT,
+      tenantId: TENANT,
       locationId: LOCATION,
       orderId: ORDER,
     });
     expect(fields).toMatchObject({
       userId: 'user-1',
-      restaurantId: RESTAURANT,
+      tenantId: TENANT,
       locationId: LOCATION,
       orderId: ORDER,
     });
   });
 
   it('takes the tenant from a hub’s device credential, which alone may claim HUB', async () => {
-    const device = { id: 'device-1', restaurantId: RESTAURANT, locationId: LOCATION };
+    const device = { id: 'device-1', tenantId: TENANT, locationId: LOCATION };
     const hub = await run({ device, headers: { 'x-client-source': 'HUB' } });
     expect(hub.store).toMatchObject({ source: 'HUB', deviceId: 'device-1', locationId: LOCATION });
     const staff = await run({ headers: { 'x-client-source': 'HUB' } });

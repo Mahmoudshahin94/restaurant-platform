@@ -14,18 +14,18 @@ const userWithRolesInclude = {
 export class AccessService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async loadPrincipal(userId: string, restaurantId: string): Promise<Principal> {
+  async loadPrincipal(userId: string, tenantId: string): Promise<Principal> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: userWithRolesInclude,
     });
-    if (!user || user.restaurantId !== restaurantId) {
+    if (!user || user.tenantId !== tenantId) {
       throw new DomainError('UNAUTHENTICATED', 'Unknown user');
     }
     if (!user.isActive) throw new DomainError('ACCOUNT_DISABLED', 'Account is disabled');
     return {
       userId: user.id,
-      restaurantId: user.restaurantId,
+      tenantId: user.tenantId,
       assignments: user.roles.map((ur): RoleAssignment => ({
         locationId: ur.locationId,
         permissions: ur.role.permissions.map((p) => p.permissionKey).filter(isPermission),
@@ -43,7 +43,7 @@ export class AccessService {
       email: user.email,
       displayName: user.displayName,
       preferredLocale: user.preferredLocale,
-      restaurantId: user.restaurantId,
+      tenantId: user.tenantId,
       roles: user.roles.map((ur) => ({
         roleId: ur.roleId,
         roleName: ur.role.name,

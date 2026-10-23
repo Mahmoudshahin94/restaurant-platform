@@ -35,13 +35,13 @@ async function json<T>(response: Promise<APIResponse>): Promise<T> {
 
 /** A completed, cash-paid takeaway order of two fries at the main branch, kitchen included. */
 async function completedOrder(request: APIRequestContext) {
-  const login = await json<{ accessToken: string; user: { restaurantId: string } }>(
+  const login = await json<{ accessToken: string; user: { tenantId: string } }>(
     request.post(`${API}/auth/login`, { data: { ...owner, client: 'native' } }),
   );
   const headers = { authorization: `Bearer ${login.accessToken}` };
-  const rid = login.user.restaurantId;
+  const tid = login.user.tenantId;
   const locations = await json<{ id: string; code: string }[]>(
-    request.get(`${API}/restaurants/${rid}/locations`, { headers }),
+    request.get(`${API}/tenants/${tid}/locations`, { headers }),
   );
   const lid = locations.find((l) => l.code === 'MAIN')?.id ?? '';
   const loc = `${API}/locations/${lid}`;
@@ -50,7 +50,7 @@ async function completedOrder(request: APIRequestContext) {
   }>(request.get(`${loc}/menu`, { headers }));
   const fries = menu.categories.flatMap((c) => c.products).find((p) => p.nameEn === 'Fries');
   const methods = await json<{ id: string; type: string }[]>(
-    request.get(`${API}/restaurants/${rid}/payment-methods`, { headers }),
+    request.get(`${API}/tenants/${tid}/payment-methods`, { headers }),
   );
   const registers = await json<{ id: string; openShiftId: string | null }[]>(
     request.get(`${loc}/cash-registers`, { headers }),

@@ -67,7 +67,7 @@ export function toOrderDto(row: OrderRow): Order {
   const totals = paymentTotals(row.total, settledEntries(row.payments));
   return {
     id: row.id,
-    restaurantId: row.restaurantId,
+    tenantId: row.tenantId,
     locationId: row.locationId,
     orderNumber: row.orderNumber,
     businessDate: row.businessDate.toISOString().slice(0, 10),

@@ -60,20 +60,20 @@ export class PaymentSetupService {
     private readonly audit: AuditService,
   ) {}
 
-  async listMethods(restaurantId: string): Promise<PaymentMethodAdmin[]> {
+  async listMethods(tenantId: string): Promise<PaymentMethodAdmin[]> {
     const rows = await this.prisma.paymentMethod.findMany({
-      where: { restaurantId },
+      where: { tenantId },
       orderBy: [{ archivedAt: { sort: 'desc', nulls: 'first' } }, { sortOrder: 'asc' }],
     });
     return rows.map(toMethod);
   }
 
   async createMethod(
-    restaurantId: string,
+    tenantId: string,
     input: z.output<typeof createPaymentMethodSchema>,
   ): Promise<PaymentMethodAdmin> {
     return this.prisma.$transaction(async (tx) => {
-      const row = await tx.paymentMethod.create({ data: { ...input, restaurantId } });
+      const row = await tx.paymentMethod.create({ data: { ...input, tenantId } });
       await this.audit.record(
         {
           action: 'payment_method.created',
@@ -89,12 +89,12 @@ export class PaymentSetupService {
   }
 
   async updateMethod(
-    restaurantId: string,
+    tenantId: string,
     methodId: string,
     input: z.output<typeof updatePaymentMethodSchema>,
   ): Promise<PaymentMethodAdmin> {
     return this.prisma.$transaction(async (tx) => {
-      const before = await tx.paymentMethod.findFirst({ where: { id: methodId, restaurantId } });
+      const before = await tx.paymentMethod.findFirst({ where: { id: methodId, tenantId } });
       if (!before) throw new DomainError('PAYMENT_METHOD_NOT_FOUND', 'Payment method not found');
       const row = await tx.paymentMethod.update({ where: { id: methodId }, data: input });
       await this.audit.record(
@@ -115,19 +115,19 @@ export class PaymentSetupService {
   }
 
   async archiveMethod(
-    restaurantId: string,
+    tenantId: string,
     methodId: string,
     archived: boolean,
   ): Promise<PaymentMethodAdmin> {
     return this.prisma.$transaction(async (tx) => {
-      const before = await tx.paymentMethod.findFirst({ where: { id: methodId, restaurantId } });
+      const before = await tx.paymentMethod.findFirst({ where: { id: methodId, tenantId } });
       if (!before) throw new DomainError('PAYMENT_METHOD_NOT_FOUND', 'Payment method not found');
       if (archived && before.type === 'CASH' && before.archivedAt === null) {
         const otherCash = await tx.paymentMethod.count({
-          where: { restaurantId, type: 'CASH', archivedAt: null, id: { not: methodId } },
+          where: { tenantId, type: 'CASH', archivedAt: null, id: { not: methodId } },
         });
         if (otherCash === 0) {
-          // Shifts count cash; a restaurant without a cash tender could not close a drawer.
+          // Shifts count cash; a tenant without a cash tender could not close a drawer.
           throw new DomainError('CONFLICT', 'Keep at least one cash method', {
             reason: 'LAST_CASH_METHOD',
           });

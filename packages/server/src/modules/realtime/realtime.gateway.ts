@@ -139,13 +139,13 @@ export class RealtimeGateway {
   /** Same rules as the HTTP guards: valid token, the location's tenant, and a viewing permission. */
   private async authenticate(token: string, locationId: string): Promise<number> {
     const claims = await this.tokens.verifyAccessToken(token);
-    const principal = await this.access.loadPrincipal(claims.userId, claims.restaurantId);
+    const principal = await this.access.loadPrincipal(claims.userId, claims.tenantId);
     const location = await this.prisma.location.findUnique({
       where: { id: locationId },
-      select: { restaurantId: true },
+      select: { tenantId: true },
     });
     if (
-      location?.restaurantId !== principal.restaurantId ||
+      location?.tenantId !== principal.tenantId ||
       !canAccessLocation(principal.assignments, locationId)
     ) {
       throw new DomainError('LOCATION_NOT_FOUND', 'Location not found');

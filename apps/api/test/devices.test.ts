@@ -88,7 +88,7 @@ describe('location snapshot', () => {
     const body = res.json<LocationSnapshot>();
     expect(body).toMatchObject({
       format: 1,
-      restaurantId: tenant.restaurantId,
+      tenantId: tenant.tenantId,
       locationId: tenant.locationA,
     });
     const { tables } = body;
@@ -97,7 +97,7 @@ describe('location snapshot', () => {
     expect(tables.productStations).toHaveLength(1);
     expect(tables.diningTables.map((t) => t.label).sort()).toEqual(['T1', 'T2']);
     expect(tables.taxes.map((t) => t.id)).toEqual([menu.vat.id]);
-    // Staff of this location (and restaurant-wide) with their hashes, for offline sign-in.
+    // Staff of this location (and tenant-wide) with their hashes, for offline sign-in.
     const emails = tables.users.map((u) => u.email).sort();
     expect(emails).toEqual([tenant.cashier.email, tenant.owner.email].sort());
     expect(tables.users.every((u) => typeof u.passwordHash === 'string')).toBe(true);
@@ -109,7 +109,7 @@ describe('location snapshot', () => {
   it('leaves out other locations and staff who only work there', async () => {
     const other = await prisma.user.create({
       data: {
-        restaurantId: tenant.restaurantId,
+        tenantId: tenant.tenantId,
         email: `b-only-${Date.now()}@test.local`,
         passwordHash: 'x',
         displayName: 'B only',

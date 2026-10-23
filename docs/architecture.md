@@ -23,7 +23,7 @@ Customer Web ─┐                          ┌─ Admin
    REST push  │   │  REST pull (cursor-based change feed)
               │   │
         Location Hub (apps/gateway, Node) ── SQLite (operational source of truth while offline)
-         │  REST + WebSocket on the restaurant LAN      │  PrinterService (ESC/POS network/USB adapters)
+         │  REST + WebSocket on the location LAN      │  PrinterService (ESC/POS network/USB adapters)
          ├── POS terminals (Tauri 2 + React) × N
          └── KDS screens (React, any tablet browser, served by the hub) × N
 ```
@@ -42,7 +42,7 @@ Principles:
 - **The gateway contains no business rules.** It is a transport and runtime host (WebSocket,
   device registry, printers, health) plus an application layer that calls `packages/domain`.
 - **Modular monolith, not microservices.** NestJS modules are bounded contexts (auth, audit,
-  restaurants, locations, menu, and later orders, payments, kitchen, sync...). They share one
+  tenants, locations, menu, and later orders, payments, kitchen, sync...). They share one
   database and one deployment.
 
 See [ADR 0001](adr/0001-location-hub-owns-sqlite.md) for why the hub, not each POS terminal,
@@ -94,7 +94,7 @@ See [domain-model.md](domain-model.md) for the ERD and per-entity notes. Convent
   ISO 4217, so it is 2 for SAR and 3 for KWD. Rates and percentage discounts are **basis points**
   (1500 = 15%). No floating-point arithmetic touches money
   ([ADR 0002](adr/0002-money-integer-minor-units.md)).
-- Tenant rows carry `restaurantId`; location-sensitive rows also carry `locationId`.
+- Tenant rows carry `tenantId`; location-sensitive rows also carry `locationId`.
 - Catalog rows are archived (`archivedAt`), never deleted. Financial rows are never deleted or
   updated in place; corrections are new rows.
 - Localized menu content uses relational columns (`nameEn`, `nameAr`, `descriptionEn`,
@@ -152,11 +152,11 @@ Summary (details in [api.md](api.md)):
   with reuse detection. Browsers get the refresh token as an httpOnly SameSite=strict cookie,
   with an Origin check as CSRF defense. Native clients get it in the body.
 - Authorization is **deny-by-default**. Every non-public route declares `@RequirePermissions`.
-  A global guard verifies tenant ownership of `:restaurantId` / `:locationId` (answering 404 for
+  A global guard verifies tenant ownership of `:tenantId` / `:locationId` (answering 404 for
   other tenants) and evaluates permissions in location scope.
 - Fastify plugins provide helmet security headers, a CORS allowlist and rate limiting (stricter
   on credential endpoints). Logs are structured pino with redaction and carry
-  requestId/user/restaurant/location context.
+  requestId/user/tenant/location context.
 
 ## 8. KDS event flow (Phases 4–5)
 
@@ -181,7 +181,7 @@ and [sync.md](sync.md#website-orders-phase-7).
 2. The cloud checks the location's online-ordering state (`onlineOrderingStatus` in
    `@pos/domain`): the restaurant's `OPEN/PAUSED/CLOSED`, then the opening hours, then `OFFLINE`
    when the hub's heartbeat is older than 3 minutes. Refusals are `ONLINE_ORDERING_DISABLED` or
-   `RESTAURANT_OFFLINE`.
+   `LOCATION_OFFLINE`.
 3. The cloud validates products, modifiers and availability, then **recalculates** prices, tax,
    fees (delivery) and the total with the shared pricing engine. Browser totals are ignored.
 4. It charges an online card through the `PaymentProvider` (documented mock adapter only), then
@@ -199,7 +199,7 @@ and [sync.md](sync.md#website-orders-phase-7).
 
 | Phase | Scope                                                                                                                                                   | Status  |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| 0     | Docs, monorepo, tooling, shared packages, identity/tenancy schema, auth, RBAC, audit, restaurants/locations API                                         | ✅ Done |
+| 0     | Docs, monorepo, tooling, shared packages, identity/tenancy schema, auth, RBAC, audit, tenants/locations API                                             | ✅ Done |
 | 1     | Menu: categories, products, variants, modifier groups/modifiers, kitchen stations, location availability/price overrides, published menu, admin menu UI | ✅ Done |
 | 2     | POS order creation, pricing engine, taxes, discounts, order state machine, tables, Tauri shell                                                          | ✅ Done |
 | 3     | Payments (provider abstraction, cash, split), shifts, cash drawer                                                                                       | ✅ Done |
@@ -224,7 +224,7 @@ tasks green. That covers 214 unit and integration tests (domain 79, API 63, i18n
 POS 9, database 9, api-client 6, app-kit 5, admin 5, ui 2), 8 Playwright E2E tests (admin 3; POS 5:
 dine-in order, takeaway order with server-confirmed total, lost-response retry without
 duplication, editing an open order, Arabic RTL ⇄ English LTR), and the Rust shell's `cargo fmt`,
-`clippy -D warnings` and tests. `tauri build --debug` produces `Restaurant POS.app`.
+`clippy -D warnings` and tests. `tauri build --debug` produces `Tenant POS.app`.
 
 ### Phase 2 decisions
 
@@ -434,7 +434,7 @@ See [ADR 0013](adr/0013-online-ordering.md).
   creation and tracking have their own rate limits; the status page polls every 5 s.
 - **Customer website** (`apps/customer-web`): guest checkout only; cart and language in
   localStorage, the placed order's token in sessionStorage; EN/AR with RTL; one restaurant per
-  deployment (`VITE_RESTAURANT_SLUG`).
+  deployment (`VITE_TENANT_SLUG`).
 - **POS:** a banner and an auto-opening dialog for each new website order (items, fulfillment,
   address, payment, countdown), accept or reject with a reason preset; online tenders are no
   longer offered at the till.
@@ -489,7 +489,7 @@ See [ADR 0014](adr/0014-admin-portal-and-conflict-resolution.md).
   an active owner always remains; nobody changes or deactivates themselves. Deactivation and
   password resets end sessions at once. All permission changes are audited.
 - **Hub-owned orders are changed at the POS:** the cloud refuses staff edits, transitions, charges
-  and refunds of orders a hub owns (`OWNED_BY_RESTAURANT`); online card refunds stay with the cloud
+  and refunds of orders a hub owns (`OWNED_BY_LOCATION`); online card refunds stay with the cloud
   (append-only, no version change, announced to the hub).
 - **Conflict resolution:** refused hub changes keep their state; an administrator with
   `sync.resolve` applies the restaurant's version (the cloud's copy goes to the audit log first),
@@ -535,7 +535,7 @@ See [ADR 0015](adr/0015-reporting.md).
 - **Cloud-only reports over PostgreSQL views** (`report_sales_orders`, `report_payments`,
   `report_refunds`, `report_kitchen_tickets`), filtered and summed with parameterized SQL in
   `apps/api/src/modules/reports`; no warehouse, extracts or caches. Nine reports under
-  `/restaurants/:rid/reports/*`, `reports.view`, scoped to the caller's locations, over business
+  `/tenants/:tid/reports/*`, `reports.view`, scoped to the caller's locations, over business
   dates (each location's calendar day), at most 366 days, with a channel filter.
 - **Sales are completed orders** (also when refunded later) on their business date;
   `netSales = total − tax − fees` in both price modes; open, draft and cancelled orders are not
@@ -643,7 +643,7 @@ running a restaurant):
 - KDS screens and POS terminals sign in as staff; only the hub itself is a registered device so
   far. Registering terminals and screens as devices is future work.
 - No bump-bar/keyboard control on the KDS.
-- Restaurants are provisioned by seed only; there is no platform-operator UI yet.
+- Tenants are provisioned by seed only; there is no platform-operator UI yet.
 - **Online ordering (Phase 7):** no customer accounts, saved addresses, delivery zones or radius,
   scheduled orders, promo codes or tips; customers (and support staff in the cloud) cannot cancel
   a website order, only the restaurant (reject) or the acceptance timeout can; the delivery fee is
@@ -652,12 +652,12 @@ running a restaurant):
   on acceptance, voids through an outbox instead of inside the database transaction) is still to
   be integrated. A void the provider refuses is recorded as a `PENDING` refund for an operator.
 - The customer status page polls (5 s); there is no SSE or push notification, and no SMS/e-mail
-  confirmation. `restaurant.status_changed` is typed but not emitted; the website re-checks the
+  confirmation. `tenant.status_changed` is typed but not emitted; the website re-checks the
   branch every 30 s.
 - The POS prompt has no sound and no printed ticket for new website orders; the KDS shows them only
   once accepted.
 - A hub that stays offline keeps the website orders it already received; new ones are refused
-  (`RESTAURANT_OFFLINE`) after 3 minutes, and pending ones time out in the cloud.
+  (`LOCATION_OFFLINE`) after 3 minutes, and pending ones time out in the cloud.
 - The tracking token is part of the status page URL (`/track/<token>`): whoever has the link sees
   the order. Tokens cannot be revoked one by one (rotating `TRACKING_TOKEN_SECRET` revokes all).
 - **Admin portal (Phase 8):** customers are grouped from order contact details (no accounts,

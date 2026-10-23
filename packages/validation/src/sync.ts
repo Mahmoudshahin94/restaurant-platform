@@ -48,7 +48,7 @@ export const syncCashTransactionSchema = z.object({
 
 export const syncPaymentSchema = z.object({
   id: idSchema,
-  restaurantId: idSchema,
+  tenantId: idSchema,
   locationId: idSchema,
   orderId: idSchema,
   /** Null only for ONLINE payments (no drawer). */
@@ -149,7 +149,7 @@ export const syncOrderStatusHistorySchema = z.object({
 
 export const syncOrderSchema = z.object({
   id: idSchema,
-  restaurantId: idSchema,
+  tenantId: idSchema,
   locationId: idSchema,
   orderNumber: z.string().min(1).max(40),
   businessDate: at,
@@ -192,7 +192,7 @@ export type SyncOrder = z.infer<typeof syncOrderSchema>;
 
 export const syncShiftSchema = z.object({
   id: idSchema,
-  restaurantId: idSchema,
+  tenantId: idSchema,
   locationId: idSchema,
   cashRegisterId: idSchema,
   status: z.enum(enumValues(ShiftStatus)),
@@ -229,7 +229,7 @@ export const syncTicketItemSchema = z.object({
 
 export const syncKitchenTicketSchema = z.object({
   id: idSchema,
-  restaurantId: idSchema,
+  tenantId: idSchema,
   locationId: idSchema,
   orderId: idSchema,
   stationId: idSchema,
@@ -250,11 +250,11 @@ export type SyncKitchenTicket = z.infer<typeof syncKitchenTicketSchema>;
 
 /**
  * An audit-trail entry written on the hub (PIN sign-ins, shifts, refunds at the till...). The
- * cloud stores it under the hub's restaurant and location; entries are never changed (ADR 0016).
+ * cloud stores it under the hub's tenant and location; entries are never changed (ADR 0016).
  */
 export const syncAuditLogSchema = z.object({
   id: idSchema,
-  restaurantId: idSchema.nullable(),
+  tenantId: idSchema.nullable(),
   locationId: idSchema.nullable(),
   actorType: z.enum(enumValues(ActorType)),
   actorId: idSchema.nullable(),

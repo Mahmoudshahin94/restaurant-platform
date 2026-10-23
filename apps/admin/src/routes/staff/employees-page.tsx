@@ -34,7 +34,7 @@ import { z } from 'zod';
 import { useAdminErrorText } from '../../lib/admin-errors';
 import { api } from '../../lib/api';
 import { useLocationLookup } from '../../lib/format';
-import { keys, useAdminMutation, useRestaurantId } from '../../lib/queries';
+import { keys, useAdminMutation, useTenantId } from '../../lib/queries';
 
 const required = 'common:validation.required';
 const AFFECTS = ['employees', 'users'];
@@ -66,7 +66,7 @@ function EmployeeDialog({
   onClose: () => void;
 }) {
   const { t } = useTranslation(['admin', 'common']);
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const errorText = useAdminErrorText();
   const { list, name } = useLocationLookup();
   const [formError, setFormError] = useState<string | null>(null);
@@ -93,8 +93,8 @@ function EmployeeDialog({
       userId: v.userId || null,
     };
     return employee
-      ? api.admin.employees.update(rid, employee.id, { ...common, isActive: v.isActive })
-      : api.admin.employees.create(rid, {
+      ? api.admin.employees.update(tid, employee.id, { ...common, isActive: v.isActive })
+      : api.admin.employees.create(tid, {
           ...common,
           employeeCode: v.employeeCode,
           ...(v.pin ? { pin: v.pin } : {}),
@@ -203,7 +203,7 @@ function EmployeeDialog({
 
 function PinDialog({ employee, onClose }: { employee: Employee; onClose: () => void }) {
   const { t } = useTranslation(['admin', 'common']);
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const errorText = useAdminErrorText();
   const [formError, setFormError] = useState<string | null>(null);
   const form = useForm<{ pin: string }>({
@@ -211,7 +211,7 @@ function PinDialog({ employee, onClose }: { employee: Employee; onClose: () => v
     defaultValues: { pin: '' },
   });
   const save = useAdminMutation(
-    ({ pin }: { pin: string }) => api.admin.employees.setPin(rid, employee.id, pin),
+    ({ pin }: { pin: string }) => api.admin.employees.setPin(tid, employee.id, pin),
     AFFECTS,
   );
   const onSubmit = form.handleSubmit(async (values) => {
@@ -259,14 +259,14 @@ type Editing = { kind: 'new' } | { kind: 'edit' | 'pin'; employee: Employee } | 
 
 export function EmployeesPage() {
   const { t } = useTranslation(['admin', 'common']);
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const { name } = useLocationLookup();
   const [editing, setEditing] = useState<Editing>(null);
   const employees = useQuery({
-    queryKey: keys.employees(rid),
-    queryFn: () => api.admin.employees.list(rid),
+    queryKey: keys.employees(tid),
+    queryFn: () => api.admin.employees.list(tid),
   });
-  const users = useQuery({ queryKey: keys.users(rid), queryFn: () => api.admin.users.list(rid) });
+  const users = useQuery({ queryKey: keys.users(tid), queryFn: () => api.admin.users.list(tid) });
   const close = () => {
     setEditing(null);
   };

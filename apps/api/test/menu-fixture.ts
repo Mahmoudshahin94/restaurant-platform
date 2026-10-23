@@ -8,19 +8,19 @@ import type { TenantFixture } from './helpers';
  * discount; one table section at location A with tables T1 and T2.
  */
 export async function createMenuFixture(prisma: PrismaClient, tenant: TenantFixture) {
-  const restaurantId = tenant.restaurantId;
+  const tenantId = tenant.tenantId;
   const vat = await prisma.tax.create({
-    data: { restaurantId, nameEn: 'VAT', nameAr: 'ضريبة', rateBps: 1500 },
+    data: { tenantId, nameEn: 'VAT', nameAr: 'ضريبة', rateBps: 1500 },
   });
   const grill = await prisma.kitchenStation.create({
-    data: { restaurantId, code: 'GRILL', nameEn: 'Grill', nameAr: 'شواية' },
+    data: { tenantId, code: 'GRILL', nameEn: 'Grill', nameAr: 'شواية' },
   });
   const category = await prisma.category.create({
-    data: { restaurantId, nameEn: 'Mains', nameAr: 'رئيسية' },
+    data: { tenantId, nameEn: 'Mains', nameAr: 'رئيسية' },
   });
   const doneness = await prisma.modifierGroup.create({
     data: {
-      restaurantId,
+      tenantId,
       nameEn: 'Doneness',
       nameAr: 'الاستواء',
       minSelect: 1,
@@ -36,7 +36,7 @@ export async function createMenuFixture(prisma: PrismaClient, tenant: TenantFixt
   });
   const extras = await prisma.modifierGroup.create({
     data: {
-      restaurantId,
+      tenantId,
       nameEn: 'Extras',
       nameAr: 'إضافات',
       maxSelect: 2,
@@ -46,7 +46,7 @@ export async function createMenuFixture(prisma: PrismaClient, tenant: TenantFixt
   });
   const burger = await prisma.product.create({
     data: {
-      restaurantId,
+      tenantId,
       categoryId: category.id,
       nameEn: 'Burger',
       nameAr: 'برجر',
@@ -63,7 +63,7 @@ export async function createMenuFixture(prisma: PrismaClient, tenant: TenantFixt
   });
   const cola = await prisma.product.create({
     data: {
-      restaurantId,
+      tenantId,
       categoryId: category.id,
       nameEn: 'Cola',
       nameAr: 'كولا',
@@ -79,7 +79,7 @@ export async function createMenuFixture(prisma: PrismaClient, tenant: TenantFixt
     include: { variants: true },
   });
   const tenPercent = await prisma.discount.create({
-    data: { restaurantId, nameEn: '10% off', nameAr: 'خصم 10%', type: 'PERCENTAGE', value: 1000 },
+    data: { tenantId, nameEn: '10% off', nameAr: 'خصم 10%', type: 'PERCENTAGE', value: 1000 },
   });
   const section = await prisma.tableSection.create({
     data: {

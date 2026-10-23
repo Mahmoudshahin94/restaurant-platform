@@ -10,7 +10,7 @@ Envelope:
 interface RealtimeEvent<K extends EventType> {
   eventId: string; // UUIDv7 — consumers de-duplicate on it
   type: K;
-  restaurantId: string;
+  tenantId: string;
   locationId: string;
   occurredAt: string; // ISO-8601 UTC
   payload: EventMap[K];
@@ -33,7 +33,7 @@ payloads carry `{ ticketId, orderId, orderNumber, stationId, status, version }`.
 | `sync.completed`                                   | The hub's push delivered operations (`processed`, `pending`)     | POS sync indicator and screen         | Phase 6 |
 | `sync.failed`                                      | The cloud refused operations (`failed`, `lastError`)             | POS sync indicator and screen         | Phase 6 |
 | `sync.status_changed`                              | The hub's indicator state changed (`state`, `pending`, `failed`) | POS sync indicator and screen         | Phase 6 |
-| `restaurant.status_changed`                        | Online ordering state changed (typed; not emitted yet)           | — (the website polls)                 | Phase 7 |
+| `tenant.status_changed`                            | Online ordering state changed (typed; not emitted yet)           | — (the website polls)                 | Phase 7 |
 | `menu.updated`                                     | The hub applied a new configuration snapshot                     | POS, KDS, customer web                | Phase 5 |
 
 Website orders (Phase 7): the hub publishes `order.created` when it stores a website order from

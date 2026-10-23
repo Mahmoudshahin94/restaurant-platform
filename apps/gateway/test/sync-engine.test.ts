@@ -98,7 +98,7 @@ const types = (ops: { entityType: string }[]) => ops.map((o) => o.entityType);
 const business = <T extends { entityType: string }>(ops: T[]) =>
   ops.filter((o) => o.entityType !== 'AuditLog');
 
-describe('the restaurant’s audit trail (ADR 0016)', () => {
+describe('the hub’s audit trail (ADR 0016)', () => {
   it('queues each audit entry with its change and uploads it, redacted, exactly once', async () => {
     const pin = (value: string) =>
       hub.app.inject({

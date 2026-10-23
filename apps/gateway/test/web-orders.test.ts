@@ -49,14 +49,14 @@ async function signIn(email: string): Promise<Record<string, string>> {
   return { ...bearer(res.json<TokenResponse>().accessToken), 'x-client-source': 'POS' };
 }
 
-/** A website order as the cloud stores it: placed, waiting for the restaurant. */
+/** A website order as the cloud stores it: placed, waiting for the tenant. */
 function cloudOrder(overrides: Partial<SyncOrder> = {}, paidOnline = false): SyncOrder {
   const id = overrides.id ?? newId();
   const at = new Date().toISOString();
   const lineId = newId();
   return {
     id,
-    restaurantId: fixture.ids.restaurantId,
+    tenantId: fixture.ids.tenantId,
     locationId: fixture.ids.locationId,
     orderNumber: 'W-001',
     businessDate: `${at.slice(0, 10)}T00:00:00.000Z`,
@@ -157,7 +157,7 @@ function onlineCharge(orderId: string, amount: number, refundOfId: string | null
   const at = new Date().toISOString();
   return {
     id: newId(),
-    restaurantId: fixture.ids.restaurantId,
+    tenantId: fixture.ids.tenantId,
     locationId: fixture.ids.locationId,
     orderId,
     shiftId: null,
@@ -266,7 +266,7 @@ describe('receiving website orders', () => {
     const productId = newId();
     fixture.tables.products.push({
       id: productId,
-      restaurantId: fixture.ids.restaurantId,
+      tenantId: fixture.ids.tenantId,
       categoryId: fixture.ids.category,
       nameEn: 'Shawarma',
       nameAr: 'شاورما',
@@ -285,7 +285,7 @@ describe('receiving website orders', () => {
   });
 });
 
-describe('accepting and rejecting at the restaurant', () => {
+describe('accepting and rejecting at the till', () => {
   it('hands an accepted order over: the push names the cloud version, the kitchen gets it', async () => {
     const order = cloudOrder();
     cloud.publishOrder(order);
@@ -405,7 +405,7 @@ describe('when the cloud decided first', () => {
     await hub.engine.syncNow();
     const cashier = await signIn('cashier@hub.test');
 
-    // The Internet drops; the restaurant accepts; the kitchen gets a ticket.
+    // The Internet drops; the location accepts; the kitchen gets a ticket.
     await cloud.stop();
     expect((await transition(order.id, cashier, 'CONFIRMED')).statusCode).toBe(200);
     expect(await db().kitchenTicket.count({ where: { orderId: order.id, status: 'NEW' } })).toBe(1);

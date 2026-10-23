@@ -60,7 +60,7 @@ async function startCloud(): Promise<void> {
     .toBe(true);
 }
 
-/** The Internet drops: the cloud goes away while the restaurant keeps working. */
+/** The Internet drops: the cloud goes away while the tenant keeps working. */
 async function stopCloud(): Promise<void> {
   const running = cloud;
   if (!running || running.exitCode !== null) return;
@@ -251,7 +251,7 @@ test('the Internet drops during service: the kitchen still gets the order, and i
   await expect(placed).toBeVisible();
   const number = /MAIN-\d+/.exec(await placed.innerText())?.[0] ?? '';
 
-  // 10. It appears on the restaurant's kitchen display at once, without the cloud.
+  // 10. It appears on the tenant's kitchen display at once, without the cloud.
   const tickets = kds.getByRole('article', { name: number });
   await expect(tickets.filter({ hasText: 'Fries' })).toBeVisible();
   await expect(tickets.filter({ hasText: 'Classic Burger' }).first()).toBeVisible();

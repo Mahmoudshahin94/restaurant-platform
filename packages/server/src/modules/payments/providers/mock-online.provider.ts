@@ -14,7 +14,7 @@ import type {
  * (`ONLINE_PAYMENT_PROVIDER=mock` fails configuration there) and moves no money.
  *
  * Test tokens: `tok_mock_decline…` is declined; any other `tok_mock_…` is approved. The charge is
- * captured at once (the customer pays when ordering); an order the restaurant rejects, or does not
+ * captured at once (the customer pays when ordering); an order the location rejects, or does not
  * accept in time, is voided.
  *
  * State lives in memory, keyed by our payment id, so a retried charge is idempotent within one

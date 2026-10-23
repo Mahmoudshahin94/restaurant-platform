@@ -93,14 +93,7 @@ export function PosShell() {
   const realtime = useRealtime(session, locationId, (event) => {
     if (event.type === 'menu.updated') {
       // The hub applied new configuration from the cloud: menu, prices, discounts, tables.
-      const roots = [
-        'menu',
-        'discounts',
-        'floor',
-        'payment-methods',
-        'cash-registers',
-        'restaurant',
-      ];
+      const roots = ['menu', 'discounts', 'floor', 'payment-methods', 'cash-registers', 'tenant'];
       void queryClient.invalidateQueries({
         predicate: (q) => roots.includes(String(q.queryKey[0])),
       });

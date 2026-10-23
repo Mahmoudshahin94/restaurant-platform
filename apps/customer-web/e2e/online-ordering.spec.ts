@@ -9,8 +9,8 @@ import {
 
 /**
  * The specification's acceptance steps 14–17: a customer creates an online order → the cloud
- * order reaches the restaurant → the restaurant accepts it → the customer sees the updated status.
- * The website talks to the cloud; the POS talks to the restaurant's hub; the hub follows the
+ * order reaches the store → the store accepts it → the customer sees the updated status.
+ * The website talks to the cloud; the POS talks to the location's hub; the hub follows the
  * cloud's change feed and hands accepted orders back with its push.
  */
 const CLOUD = `http://localhost:${process.env.WEB_E2E_CLOUD_PORT ?? '3130'}`;
@@ -36,7 +36,7 @@ async function customer(page: Page, locale: 'en' | 'ar'): Promise<void> {
   }, locale);
 }
 
-/** A till at the restaurant: the POS served by the hub, in its own browser and language. */
+/** A till at the store: the POS served by the hub, in its own browser and language. */
 async function till(browser: Browser, locale: 'en' | 'ar' = 'en'): Promise<Page> {
   const context = await browser.newContext({
     baseURL: POS,
@@ -118,7 +118,7 @@ async function hubTickets(request: APIRequestContext, orderNumber: string): Prom
   return tickets.filter((t) => t.orderNumber === orderNumber).length;
 }
 
-test('a website order reaches the restaurant, is accepted, and the customer sees it', async ({
+test('a website order reaches the store, is accepted, and the customer sees it', async ({
   page,
   browser,
   request,
@@ -156,9 +156,9 @@ test('a website order reaches the restaurant, is accepted, and the customer sees
   const number = /W-\d+/.exec(sent)?.[0] ?? '';
   expect(number).not.toBe('');
   await page.getByRole('link', { name: 'Follow your order' }).click();
-  await expect(page.getByTestId('order-status')).toHaveText('Waiting for the restaurant');
+  await expect(page.getByTestId('order-status')).toHaveText('Waiting for the store');
 
-  // 15. The cloud order reaches the restaurant: the till announces it.
+  // 15. The cloud order reaches the tenant: the till announces it.
   const pos = await till(browser);
   await cashierSignsIn(pos);
   const incoming = pos.getByRole('dialog');
@@ -169,7 +169,7 @@ test('a website order reaches the restaurant, is accepted, and the customer sees
   await expect(incoming.getByText('Ring the bell')).toBeVisible();
   await expect(incoming.getByTestId('accept-countdown')).toHaveText(/Accept within \d\d:\d\d/);
 
-  // 16. The restaurant accepts it: it goes to the kitchen.
+  // 16. The tenant accepts it: it goes to the kitchen.
   await incoming.getByRole('button', { name: 'Accept' }).click();
   await expect(pos.getByText(`Order ${number} accepted and sent to the kitchen.`)).toBeVisible();
   await expect(incoming).toBeHidden();
@@ -177,7 +177,7 @@ test('a website order reaches the restaurant, is accepted, and the customer sees
 
   // 17. The customer sees the new status (the page refreshes itself).
   await expect(page.getByTestId('order-status')).toHaveText('Accepted', { timeout: 30_000 });
-  await expect(page.getByText('The restaurant accepted your order.')).toBeVisible();
+  await expect(page.getByText('The tenant accepted your order.')).toBeVisible();
 });
 
 test('in Arabic, right to left: a paid delivery order is rejected and the payment voided', async ({
@@ -211,7 +211,7 @@ test('in Arabic, right to left: a paid delivery order is rejected and the paymen
   const sent = await page.getByText(/أُرسل الطلب W-\d+/).innerText();
   const number = /W-\d+/.exec(sent)?.[0] ?? '';
   await page.getByRole('link', { name: 'تابع طلبك' }).click();
-  await expect(page.getByTestId('order-status')).toHaveText('بانتظار المطعم');
+  await expect(page.getByTestId('order-status')).toHaveText('بانتظار المتجر');
   await expect(page.getByText('مدفوع عبر الإنترنت')).toBeVisible();
 
   // The manager, working in Arabic, rejects it because the kitchen is too busy.
@@ -231,7 +231,7 @@ test('in Arabic, right to left: a paid delivery order is rejected and the paymen
 
   // The customer sees the cancellation, the reason and that the card was not charged.
   await expect(page.getByTestId('order-status')).toHaveText('ملغى', { timeout: 30_000 });
-  await expect(page.getByText('المطعم مشغول جدًا ولا يستطيع استقبال طلبك الآن.')).toBeVisible();
+  await expect(page.getByText('المتجر مشغول جدًا ولا يستطيع استقبال طلبك الآن.')).toBeVisible();
   await expect(
     page.getByText('أُلغيت عملية الدفع عبر الإنترنت: لن يُخصم منك أي مبلغ.'),
   ).toBeVisible({
@@ -246,7 +246,7 @@ test('a paused branch shows why and takes no order', async ({ page, request }) =
     await page.goto('/');
     await page.getByRole('link', { name: 'View menu · Main Branch' }).click();
     await expect(page.getByText('Paused').first()).toBeVisible();
-    await expect(page.getByText(/The restaurant paused online orders for a moment/)).toBeVisible();
+    await expect(page.getByText(/The tenant paused online orders for a moment/)).toBeVisible();
     // Browsing and filling the cart still work; placing the order does not.
     await page.getByRole('button', { name: 'Add Fries' }).click();
     await page

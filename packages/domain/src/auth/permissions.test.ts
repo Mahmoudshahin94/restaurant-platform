@@ -22,7 +22,7 @@ const branchCashier: RoleAssignment[] = [
 ];
 
 describe('resolvePermissions', () => {
-  it('applies restaurant-wide roles to every location', () => {
+  it('applies tenant-wide roles to every location', () => {
     expect(resolvePermissions(owner, LOC_B).has('orders.view')).toBe(true);
     expect(resolvePermissions(owner, null).has('settings.manage')).toBe(true);
   });
@@ -32,7 +32,7 @@ describe('resolvePermissions', () => {
     expect(resolvePermissions(branchCashier, LOC_B).size).toBe(0);
   });
 
-  it('does not let location roles grant restaurant-level permissions', () => {
+  it('does not let location roles grant tenant-level permissions', () => {
     expect(resolvePermissions(branchCashier, null).size).toBe(0);
   });
 
@@ -65,7 +65,7 @@ describe('assertPermissions', () => {
 });
 
 describe('locationsWithPermissions', () => {
-  it('lists every location for restaurant-wide grants and only matching ones otherwise', () => {
+  it('lists every location for tenant-wide grants and only matching ones otherwise', () => {
     expect(locationsWithPermissions(owner, [LOC_A, LOC_B], ['orders.view'])).toEqual([
       LOC_A,
       LOC_B,
@@ -85,7 +85,7 @@ describe('assertCanGrant', () => {
     expect(() => {
       assertCanGrant(branchCashier, LOC_A, ['orders.create']);
     }).not.toThrow();
-    // A branch role cannot be handed out restaurant-wide, nor more than the actor holds.
+    // A branch role cannot be handed out tenant-wide, nor more than the actor holds.
     expect(() => {
       assertCanGrant(branchCashier, null, ['orders.create']);
     }).toThrow(DomainError);

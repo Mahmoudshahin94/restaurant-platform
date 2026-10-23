@@ -4,9 +4,9 @@ import type { AuthUser } from '@pos/validation';
 import { useMemo } from 'react';
 
 export interface PermissionChecks {
-  /** Granted restaurant-wide. */
+  /** Granted tenant-wide. */
   can: (...required: Permission[]) => boolean;
-  /** Granted restaurant-wide or at any location. */
+  /** Granted tenant-wide or at any location. */
   canAnywhere: (...required: Permission[]) => boolean;
   canAt: (locationId: string, ...required: Permission[]) => boolean;
 }

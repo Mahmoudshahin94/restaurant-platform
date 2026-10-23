@@ -1,7 +1,7 @@
 import { DomainError } from '../errors';
 
 /**
- * ISO 4217 minor-unit exponents for the currencies the platform supports. A restaurant's
+ * ISO 4217 minor-unit exponents for the currencies the platform supports. A tenant's
  * currency is configuration; adding a currency means adding it here (validated server-side).
  */
 const CURRENCY_EXPONENTS = {

@@ -224,7 +224,7 @@ export class SyncAdminService {
         });
       }
       if (isUniqueViolation(error)) {
-        throw new DomainError('CONFLICT', 'The restaurant’s version clashes with another record', {
+        throw new DomainError('CONFLICT', 'The hub’s version clashes with another record', {
           reason: 'APPLY_FAILED',
           code: 'SYNC_CONFLICT',
         });
@@ -364,11 +364,11 @@ export class SyncAdminService {
       payload: row.payload,
     });
     if (!parsed.success) {
-      throw new DomainError('CONFLICT', 'The restaurant’s version is not valid', {
+      throw new DomainError('CONFLICT', 'The hub’s version is not valid', {
         reason: 'INVALID_HUB_VERSION',
       });
     }
-    const device = { id: row.deviceId, restaurantId: row.restaurantId, locationId: row.locationId };
+    const device = { id: row.deviceId, tenantId: row.tenantId, locationId: row.locationId };
     const applied = await applyOperation(tx, device, parsed.data, this.hooks, { force: true });
     if (parsed.data.operationType === 'ORDER_UPSERT') {
       await this.settleOrderMoney(tx, parsed.data.payload.id);
@@ -379,7 +379,7 @@ export class SyncAdminService {
   /**
    * After the hub's order replaced the cloud's: payments are append-only, so the cloud may hold
    * more than the hub's copy listed (an online void). The payment status follows every recorded
-   * payment, a website order the restaurant rejected has its online payment voided, and the hub
+   * payment, a website order the tenant rejected has its online payment voided, and the hub
    * is told to merge what it lacks. Neither bumps the order's version.
    */
   private async settleOrderMoney(tx: PrismaTx, orderId: string): Promise<void> {

@@ -46,10 +46,10 @@ beforeEach(async () => {
   tenant = await createTenant(prisma, CASHIER);
   menu = await createMenuFixture(prisma, tenant);
   cash = await prisma.paymentMethod.create({
-    data: { restaurantId: tenant.restaurantId, type: 'CASH', nameEn: 'Cash', nameAr: 'نقدًا' },
+    data: { tenantId: tenant.tenantId, type: 'CASH', nameEn: 'Cash', nameAr: 'نقدًا' },
   });
   card = await prisma.paymentMethod.create({
-    data: { restaurantId: tenant.restaurantId, type: 'CARD', nameEn: 'Mada', nameAr: 'مدى' },
+    data: { tenantId: tenant.tenantId, type: 'CARD', nameEn: 'Mada', nameAr: 'مدى' },
   });
   registerId = (
     await prisma.cashRegister.create({

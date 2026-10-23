@@ -10,7 +10,7 @@ import { UnconfiguredOnlinePaymentProvider } from '../payments/providers/unconfi
 
 /**
  * Online card payments of website orders (ADR 0013): charged at checkout through the configured
- * provider and voided when the restaurant rejects the order or does not accept it in time. A void
+ * provider and voided when the location rejects the order or does not accept it in time. A void
  * is recorded append-only, as a REFUND row of the charge, so financial rows are never edited.
  */
 @Injectable()
@@ -32,11 +32,11 @@ export class OnlinePaymentsService {
     return !(this.provider instanceof UnconfiguredOnlinePaymentProvider);
   }
 
-  /** The restaurant's online tender, if it has one; online card needs both it and a provider. */
-  async methodFor(tx: PrismaTx, restaurantId: string) {
+  /** The tenant's online tender, if it has one; online card needs both it and a provider. */
+  async methodFor(tx: PrismaTx, tenantId: string) {
     if (!this.configured) return null;
     return tx.paymentMethod.findFirst({
-      where: { restaurantId, type: 'ONLINE', archivedAt: null },
+      where: { tenantId, type: 'ONLINE', archivedAt: null },
       orderBy: { sortOrder: 'asc' },
     });
   }
@@ -67,7 +67,7 @@ export class OnlinePaymentsService {
       await tx.payment.create({
         data: {
           id: newId(),
-          restaurantId: charge.restaurantId,
+          tenantId: charge.tenantId,
           locationId: charge.locationId,
           orderId,
           shiftId: null,
@@ -90,7 +90,7 @@ export class OnlinePaymentsService {
           action: 'payment.voided',
           entityType: 'Order',
           entityId: orderId,
-          restaurantId: charge.restaurantId,
+          tenantId: charge.tenantId,
           locationId: charge.locationId,
           metadata: {
             chargeId: charge.id,

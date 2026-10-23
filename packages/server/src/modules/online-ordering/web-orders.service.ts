@@ -48,7 +48,7 @@ const WEB_PREFIX = 'W';
 /**
  * Website orders (ADR 0013). The cloud creates them as PLACED on channel WEBSITE, re-pricing
  * everything with the shared domain engine (browser totals are never read), takes online card
- * payments through the payment provider, and cancels orders the restaurant does not accept in
+ * payments through the payment provider, and cancels orders the tenant does not accept in
  * time. Every change is reported to the change feed (`ORDER` topic) so the hub receives it.
  */
 @Injectable()
@@ -120,7 +120,7 @@ export class WebOrdersService implements OnApplicationBootstrap, OnModuleDestroy
     const total = quote.pricing.total;
     const charge =
       input.payment.option === 'ONLINE_CARD'
-        ? await this.charge(input, location.restaurantId, currencyCode, total)
+        ? await this.charge(input, location.tenantId, currencyCode, total)
         : null;
 
     const businessDate = businessDateFor(now, location.timezone);
@@ -130,7 +130,7 @@ export class WebOrdersService implements OnApplicationBootstrap, OnModuleDestroy
         await tx.order.create({
           data: {
             id: input.id,
-            restaurantId: location.restaurantId,
+            tenantId: location.tenantId,
             locationId: location.id,
             orderNumber: formatOrderNumber(WEB_PREFIX, sequence),
             businessDate: new Date(`${businessDate}T00:00:00Z`),
@@ -176,7 +176,7 @@ export class WebOrdersService implements OnApplicationBootstrap, OnModuleDestroy
           await tx.payment.create({
             data: {
               id: charge.paymentId,
-              restaurantId: location.restaurantId,
+              tenantId: location.tenantId,
               locationId: location.id,
               orderId: input.id,
               shiftId: null,
@@ -199,7 +199,7 @@ export class WebOrdersService implements OnApplicationBootstrap, OnModuleDestroy
             entityId: input.id,
             actorType: 'CUSTOMER',
             actorId: null,
-            restaurantId: location.restaurantId,
+            tenantId: location.tenantId,
             locationId: location.id,
             metadata: {
               channel: 'WEBSITE',
@@ -227,8 +227,8 @@ export class WebOrdersService implements OnApplicationBootstrap, OnModuleDestroy
     }
   }
 
-  private async charge(input: CreateInput, restaurantId: string, currency: string, amount: number) {
-    const method = await this.payments.methodFor(this.prisma, restaurantId);
+  private async charge(input: CreateInput, tenantId: string, currency: string, amount: number) {
+    const method = await this.payments.methodFor(this.prisma, tenantId);
     if (!method) {
       throw new DomainError('PAYMENT_FAILED', 'Online card payment is not available', {
         reason: 'PROVIDER_NOT_CONFIGURED',
@@ -368,7 +368,7 @@ export class WebOrdersService implements OnApplicationBootstrap, OnModuleDestroy
           entityId: orderId,
           actorType: 'SYSTEM',
           actorId: null,
-          restaurantId: order.restaurantId,
+          tenantId: order.tenantId,
           locationId: order.locationId,
           metadata: {
             from: 'PLACED',

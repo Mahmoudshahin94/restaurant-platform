@@ -10,7 +10,7 @@ import { AuditService } from '../audit/audit.service';
 export function toLocationDto(row: LocationRow): Location {
   return {
     id: row.id,
-    restaurantId: row.restaurantId,
+    tenantId: row.tenantId,
     code: row.code,
     nameEn: row.nameEn,
     nameAr: row.nameAr,
@@ -35,12 +35,12 @@ export class LocationsService {
     private readonly audit: AuditService,
   ) {}
 
-  /** Lists the locations the caller can access (all of them for restaurant-wide roles). */
+  /** Lists the locations the caller can access (all of them for tenant-wide roles). */
   async list(principal: Principal): Promise<Location[]> {
     const reach = accessibleLocations(principal.assignments);
     const rows = await this.prisma.location.findMany({
       where: {
-        restaurantId: principal.restaurantId,
+        tenantId: principal.tenantId,
         ...(reach === 'ALL' ? {} : { id: { in: reach } }),
       },
       orderBy: [{ createdAt: 'asc' }],
@@ -54,18 +54,15 @@ export class LocationsService {
     return toLocationDto(row);
   }
 
-  async create(
-    restaurantId: string,
-    input: z.output<typeof createLocationSchema>,
-  ): Promise<Location> {
+  async create(tenantId: string, input: z.output<typeof createLocationSchema>): Promise<Location> {
     return this.prisma.$transaction(async (tx) => {
-      const row = await tx.location.create({ data: { ...input, restaurantId } });
+      const row = await tx.location.create({ data: { ...input, tenantId } });
       await this.audit.record(
         {
           action: 'location.created',
           entityType: 'Location',
           entityId: row.id,
-          restaurantId,
+          tenantId,
           locationId: row.id,
           metadata: { location: input },
         },
@@ -94,7 +91,7 @@ export class LocationsService {
           action: 'location.updated',
           entityType: 'Location',
           entityId: locationId,
-          restaurantId: before.restaurantId,
+          tenantId: before.tenantId,
           locationId,
           metadata: { changes },
         },

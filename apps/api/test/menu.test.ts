@@ -39,7 +39,7 @@ beforeEach(async () => {
   cashier = bearer(await login(app, tenant.cashier.email));
 });
 
-const r = () => `/api/v1/restaurants/${tenant.restaurantId}`;
+const r = () => `/api/v1/tenants/${tenant.tenantId}`;
 
 async function post<T>(url: string, payload: unknown, headers = owner): Promise<T> {
   const res = await app.inject({ method: 'POST', url, payload: payload as object, headers });
@@ -149,7 +149,7 @@ describe('catalog administration', () => {
   it('rejects references to other tenants and bad money values', async () => {
     const other = await createTenant(prisma);
     const foreignGroup = await prisma.modifierGroup.create({
-      data: { restaurantId: other.restaurantId, nameEn: 'X', nameAr: 'X' },
+      data: { tenantId: other.tenantId, nameEn: 'X', nameAr: 'X' },
     });
     const { mains } = await seedMenu();
 
@@ -194,7 +194,7 @@ describe('catalog administration', () => {
     const otherOwner = bearer(await login(app, other.owner.email));
     const res = await app.inject({
       method: 'GET',
-      url: `/api/v1/restaurants/${other.restaurantId}/products/${burger.id}`,
+      url: `/api/v1/tenants/${other.tenantId}/products/${burger.id}`,
       headers: otherOwner,
     });
     expect(res.statusCode).toBe(404);

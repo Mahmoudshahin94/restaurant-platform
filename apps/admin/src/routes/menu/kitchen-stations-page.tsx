@@ -35,7 +35,7 @@ import { api } from '../../lib/api';
 import { applyServerValidation, tKey, useErrorText } from '@pos/app-kit';
 import { useCurrentLocale } from '@pos/app-kit';
 import { usePermissions } from '../../lib/permissions';
-import { useCatalogMutation, useKitchenStations, useRestaurantId } from '../../lib/queries';
+import { useCatalogMutation, useKitchenStations, useTenantId } from '../../lib/queries';
 
 const required = 'common:validation.required';
 const stationForm = z.object({
@@ -62,7 +62,7 @@ function StationDialog({
   onClose: () => void;
 }) {
   const { t } = useTranslation(['menu', 'common']);
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const errorText = useErrorText();
   const [formError, setFormError] = useState<string | null>(null);
   const form = useForm<StationFormInput, unknown, StationFormOutput>({
@@ -76,8 +76,8 @@ function StationDialog({
   });
   const save = useCatalogMutation((values: StationFormOutput) =>
     station
-      ? api.menu.kitchenStations.update(rid, station.id, values)
-      : api.menu.kitchenStations.create(rid, values),
+      ? api.menu.kitchenStations.update(tid, station.id, values)
+      : api.menu.kitchenStations.create(tid, values),
   );
   const errors = form.formState.errors;
   const onSubmit = form.handleSubmit(async (values) => {
@@ -138,13 +138,13 @@ function StationDialog({
 export function KitchenStationsPage() {
   const { t } = useTranslation(['menu', 'common']);
   const locale = useCurrentLocale();
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const { can } = usePermissions();
   const [showArchived, setShowArchived] = useState(false);
   const [editing, setEditing] = useState<KitchenStation | 'new' | null>(null);
   const query = useKitchenStations(showArchived);
-  const archive = useCatalogMutation((id: string) => api.menu.kitchenStations.archive(rid, id));
-  const restore = useCatalogMutation((id: string) => api.menu.kitchenStations.restore(rid, id));
+  const archive = useCatalogMutation((id: string) => api.menu.kitchenStations.archive(tid, id));
+  const restore = useCatalogMutation((id: string) => api.menu.kitchenStations.restore(tid, id));
 
   return (
     <>

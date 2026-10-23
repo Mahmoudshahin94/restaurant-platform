@@ -1,5 +1,5 @@
 /**
- * The permission catalog. Roles are configurable per restaurant, but the set of permission
+ * The permission catalog. Roles are configurable per tenant, but the set of permission
  * keys is defined in code because every key is enforced by a server-side guard.
  */
 export const PERMISSIONS = [

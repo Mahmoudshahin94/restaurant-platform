@@ -97,11 +97,11 @@ describe('online ordering status', () => {
     now,
   };
 
-  it('is open when the restaurant is open, in hours, with a live hub', () => {
+  it('is open when the tenant is open, in hours, with a live hub', () => {
     expect(onlineOrderingStatus(base)).toEqual({ state: 'OPEN', reason: null });
   });
 
-  it('follows the restaurant’s choice first, then hours, then the hub', () => {
+  it('follows the tenant’s choice first, then hours, then the hub', () => {
     expect(onlineOrderingStatus({ ...base, isActive: false }).reason).toBe('LOCATION_INACTIVE');
     expect(onlineOrderingStatus({ ...base, setting: 'CLOSED', hubLastSeenAt: null })).toEqual({
       state: 'CLOSED',
@@ -128,7 +128,7 @@ describe('online ordering status', () => {
     expect(onlineOrderingStatus({ ...base, hubLastSeenAt: fresh }).state).toBe('OPEN');
   });
 
-  it('answers ONLINE_ORDERING_DISABLED or RESTAURANT_OFFLINE', () => {
+  it('answers ONLINE_ORDERING_DISABLED or LOCATION_OFFLINE', () => {
     expect(() => {
       assertOnlineOrderingOpen({ state: 'OPEN', reason: null });
     }).not.toThrow();
@@ -136,7 +136,7 @@ describe('online ordering status', () => {
       () => {
         assertOnlineOrderingOpen({ state: 'OFFLINE', reason: 'HUB_OFFLINE' });
       },
-      'RESTAURANT_OFFLINE',
+      'LOCATION_OFFLINE',
       {},
     );
     expectError(

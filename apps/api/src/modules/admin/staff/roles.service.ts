@@ -56,9 +56,9 @@ export class RolesService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(restaurantId: string): Promise<Role[]> {
+  async list(tenantId: string): Promise<Role[]> {
     const rows = await this.prisma.role.findMany({
-      where: { restaurantId },
+      where: { tenantId },
       include: roleInclude,
       orderBy: [{ isSystem: 'desc' }, { name: 'asc' }],
     });
@@ -71,7 +71,7 @@ export class RolesService {
       this.prisma.$transaction(async (tx) => {
         const row = await tx.role.create({
           data: {
-            restaurantId: principal.restaurantId,
+            tenantId: principal.tenantId,
             name: input.name,
             description: input.description,
             permissions: { create: input.permissions.map((permissionKey) => ({ permissionKey })) },
@@ -100,7 +100,7 @@ export class RolesService {
   ): Promise<Role> {
     return this.uniqueName(() =>
       this.prisma.$transaction(async (tx) => {
-        const before = await this.load(tx, principal.restaurantId, roleId);
+        const before = await this.load(tx, principal.tenantId, roleId);
         if (before.isSystem) {
           throw new DomainError('CONFLICT', 'System roles cannot be changed', {
             reason: 'SYSTEM_ROLE',
@@ -172,7 +172,7 @@ export class RolesService {
   /** Roles are deleted only while nobody holds them; system roles never. */
   async remove(principal: Principal, roleId: string): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
-      const role = await this.load(tx, principal.restaurantId, roleId);
+      const role = await this.load(tx, principal.tenantId, roleId);
       if (role.isSystem) {
         throw new DomainError('CONFLICT', 'System roles cannot be deleted', {
           reason: 'SYSTEM_ROLE',
@@ -200,9 +200,9 @@ export class RolesService {
     });
   }
 
-  private async load(tx: PrismaTx, restaurantId: string, roleId: string): Promise<RoleRow> {
+  private async load(tx: PrismaTx, tenantId: string, roleId: string): Promise<RoleRow> {
     const row = await tx.role.findFirst({
-      where: { id: roleId, restaurantId },
+      where: { id: roleId, tenantId },
       include: roleInclude,
     });
     if (!row) throw new DomainError('ROLE_NOT_FOUND', 'Role not found', { roleId });

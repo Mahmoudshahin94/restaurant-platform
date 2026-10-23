@@ -510,7 +510,7 @@ export function ShiftPage() {
   );
 }
 
-/** The restaurant currency (from the restaurant settings). */
+/** The tenant currency (from the tenant settings). */
 function useCashCurrency(): string | null {
   const summary = useDailySummary(useLocationId());
   return summary.data?.currencyCode ?? null;

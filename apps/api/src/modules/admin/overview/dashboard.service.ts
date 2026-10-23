@@ -27,9 +27,9 @@ export class DashboardService {
 
   async build(principal: Principal): Promise<Dashboard> {
     const ids = await permittedLocationIds(this.prisma, principal, ['orders.view']);
-    const [restaurant, locations] = await Promise.all([
-      this.prisma.restaurant.findUniqueOrThrow({
-        where: { id: principal.restaurantId },
+    const [tenant, locations] = await Promise.all([
+      this.prisma.tenant.findUniqueOrThrow({
+        where: { id: principal.tenantId },
         select: { currencyCode: true },
       }),
       this.prisma.location.findMany({ where: { id: { in: ids } }, orderBy: { createdAt: 'asc' } }),
@@ -39,7 +39,7 @@ export class DashboardService {
       locations.map((location) => this.forLocation(principal, location, now)),
     );
     return {
-      currencyCode: restaurant.currencyCode,
+      currencyCode: tenant.currencyCode,
       generatedAt: now.toISOString(),
       locations: rows,
     };

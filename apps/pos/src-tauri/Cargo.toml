@@ -1,7 +1,7 @@
 [package]
 name = "pos"
 version = "0.1.0"
-description = "Restaurant point of sale"
+description = "Tenant point of sale"
 edition = "2021"
 rust-version = "1.80"
 publish = false

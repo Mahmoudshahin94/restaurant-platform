@@ -40,7 +40,7 @@ const rows = z.array(z.record(z.string(), z.unknown()));
  * edits these tables itself.
  */
 export const SNAPSHOT_TABLES = [
-  'restaurants',
+  'tenants',
   'locations',
   'roles',
   'rolePermissions',
@@ -71,7 +71,7 @@ export type SnapshotTable = (typeof SNAPSHOT_TABLES)[number];
 export const locationSnapshotSchema = z.object({
   /** Bumped when the snapshot format changes incompatibly. */
   format: z.literal(1),
-  restaurantId: idSchema,
+  tenantId: idSchema,
   locationId: idSchema,
   generatedAt: isoDateTimeSchema,
   /** Content hash; also the HTTP ETag. */
@@ -86,7 +86,7 @@ export type LocationSnapshot = z.infer<typeof locationSnapshotSchema>;
 
 export const hubStatusSchema = z.object({
   paired: z.boolean(),
-  restaurantId: idSchema.nullable(),
+  tenantId: idSchema.nullable(),
   locationId: idSchema.nullable(),
   /** Whether the last attempt to reach the cloud succeeded. */
   cloud: z.enum(['ONLINE', 'OFFLINE', 'UNKNOWN']),

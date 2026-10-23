@@ -69,7 +69,7 @@ export class DevicesService {
     return this.prisma.$transaction(async (tx) => {
       const row = await tx.device.create({
         data: {
-          restaurantId: location.restaurantId,
+          tenantId: location.tenantId,
           locationId,
           name: input.name,
           type: input.type,

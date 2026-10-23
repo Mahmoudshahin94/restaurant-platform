@@ -40,7 +40,7 @@ const PUBLIC_ROUTES = [
   'GET /orders/track',
   'GET /public/locations/:locationId',
   'GET /public/locations/:locationId/menu',
-  'GET /public/restaurants/:slug',
+  'GET /public/tenants/:slug',
   'GET /ready',
   'POST /auth/login',
   'POST /auth/logout',
@@ -52,11 +52,11 @@ const PUBLIC_ROUTES = [
 const key = (r: RouteEntry) => `${r.method} ${r.path}`;
 
 /** A concrete URL for a route: the given tenant's ids, a fresh id for any other parameter. */
-function urlOf(route: RouteEntry, ids: { restaurantId: string; locationId: string }): string {
+function urlOf(route: RouteEntry, ids: { tenantId: string; locationId: string }): string {
   const path = route.path.replace(/:(\w+)/g, (_match, name: string) => {
-    if (name === 'restaurantId') return ids.restaurantId;
+    if (name === 'tenantId') return ids.tenantId;
     if (name === 'locationId') return ids.locationId;
-    if (name === 'slug') return 'no-such-restaurant';
+    if (name === 'slug') return 'no-such-tenant';
     return newId();
   });
   return path === '/health' || path === '/ready' ? path : `/api/v1${path}`;
@@ -107,7 +107,7 @@ describe('refusals on every protected route', () => {
     for (const route of routes.filter((r) => r.access === 'permissions')) {
       const res = await app.inject({
         method: methodOf(route),
-        url: urlOf(route, { restaurantId: tenant.restaurantId, locationId: tenant.locationA }),
+        url: urlOf(route, { tenantId: tenant.tenantId, locationId: tenant.locationA }),
       });
       if (res.statusCode !== 401 || res.json<ApiErrorBody>().code !== 'UNAUTHENTICATED') {
         failures.push(`${key(route)} → ${String(res.statusCode)}`);
@@ -120,7 +120,7 @@ describe('refusals on every protected route', () => {
     for (const route of routes.filter((r) => r.access === 'guarded')) {
       const res = await app.inject({
         method: methodOf(route),
-        url: urlOf(route, { restaurantId: tenant.restaurantId, locationId: tenant.locationA }),
+        url: urlOf(route, { tenantId: tenant.tenantId, locationId: tenant.locationA }),
         headers: bearer(ownerToken),
       });
       expect(res.statusCode, key(route)).toBe(401);
@@ -133,7 +133,7 @@ describe('refusals on every protected route', () => {
       if (route.permissions.length === 0) continue;
       const res = await app.inject({
         method: methodOf(route),
-        url: urlOf(route, { restaurantId: tenant.restaurantId, locationId: tenant.locationA }),
+        url: urlOf(route, { tenantId: tenant.tenantId, locationId: tenant.locationA }),
         headers: bearer(memberToken),
       });
       const { code } = res.json<ApiErrorBody>();
@@ -144,20 +144,17 @@ describe('refusals on every protected route', () => {
     expect(failures).toEqual([]);
   });
 
-  it('hides another tenant’s restaurant and locations from an owner on every route', async () => {
+  it('hides another tenant and its locations from an owner on every route', async () => {
     const failures: string[] = [];
     for (const route of routes.filter((r) => r.access === 'permissions')) {
-      if (!/:(restaurantId|locationId)/.test(route.path)) continue;
+      if (!/:(tenantId|locationId)/.test(route.path)) continue;
       const res = await app.inject({
         method: methodOf(route),
-        url: urlOf(route, { restaurantId: tenant.restaurantId, locationId: tenant.locationA }),
+        url: urlOf(route, { tenantId: tenant.tenantId, locationId: tenant.locationA }),
         headers: bearer(ownerToken),
       });
       const { code } = res.json<ApiErrorBody>();
-      if (
-        res.statusCode !== 404 ||
-        !['RESTAURANT_NOT_FOUND', 'LOCATION_NOT_FOUND'].includes(code)
-      ) {
+      if (res.statusCode !== 404 || !['TENANT_NOT_FOUND', 'LOCATION_NOT_FOUND'].includes(code)) {
         failures.push(`${key(route)} → ${String(res.statusCode)} ${code}`);
       }
     }

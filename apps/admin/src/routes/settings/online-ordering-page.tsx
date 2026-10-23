@@ -29,7 +29,7 @@ import { api } from '../../lib/api';
 import { useLocationLookup } from '../../lib/format';
 import { moneyField, useMoney } from '../../lib/money';
 import { usePermissions } from '../../lib/permissions';
-import { keys, useAdminMutation, useRestaurant } from '../../lib/queries';
+import { keys, useAdminMutation, useTenant } from '../../lib/queries';
 
 const STATES = ['OPEN', 'PAUSED', 'CLOSED'] as const;
 const DAYS = ['0', '1', '2', '3', '4', '5', '6'] as const;
@@ -276,14 +276,14 @@ function OnlineForm({ locationId, data }: { locationId: string; data: OnlineOrde
 }
 
 function OnlineOrdering({ locationId }: { locationId: string }) {
-  const restaurant = useRestaurant();
+  const tenant = useTenant();
   const query = useQuery({
     queryKey: keys.onlineOrdering(locationId),
     queryFn: () => api.onlineOrdering.get(locationId),
   });
-  // The form shows money in the restaurant's currency: it waits for the restaurant too.
+  // The form shows money in the tenant's currency: it waits for the tenant too.
   return (
-    <QueryState query={restaurant}>
+    <QueryState query={tenant}>
       {() => (
         <QueryState query={query}>
           {(data) => (

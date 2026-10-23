@@ -92,15 +92,13 @@ describe('sync issue page', () => {
         body: { code: 'CONFLICT', message: 'x', details: { reason: 'APPLY_FAILED' } },
       }));
     await renderIssue();
-    await userEvent.click(
-      await screen.findByRole('radio', { name: /Use the restaurant's version/ }),
-    );
+    await userEvent.click(await screen.findByRole('radio', { name: /Use the location's version/ }));
     const confirm = screen.getByRole('button', { name: 'Confirm decision' });
     expect(confirm).toBeDisabled(); // a note is required
     await userEvent.type(screen.getByLabelText('Note for the record'), 'Branch confirmed the sale');
     await userEvent.click(confirm);
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      "The restaurant's version could not be applied",
+      "The location's version could not be applied",
     );
     expect(api.calls.find((c) => c.method === 'POST')?.body).toEqual({
       action: 'APPLY_HUB',

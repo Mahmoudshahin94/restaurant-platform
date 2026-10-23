@@ -2,7 +2,7 @@ import {
   type CreateWebOrderRequest,
   publicLocationSchema,
   publicOrderSchema,
-  publicRestaurantSchema,
+  publicTenantSchema,
   publishedMenuSchema,
   webOrderCreatedSchema,
 } from '@pos/validation';
@@ -23,9 +23,9 @@ export function createStorefrontClient(options: StorefrontClientOptions) {
   const http = new HttpClient({ ...options, source: 'WEBSITE', getAccessToken: () => null });
   return {
     http,
-    restaurant: (slug: string) =>
-      http.request('GET', `${API}/public/restaurants/${encodeURIComponent(slug)}`, {
-        schema: publicRestaurantSchema,
+    tenant: (slug: string) =>
+      http.request('GET', `${API}/public/tenants/${encodeURIComponent(slug)}`, {
+        schema: publicTenantSchema,
       }),
     location: (locationId: string) =>
       http.request('GET', `${API}/public/locations/${locationId}`, {

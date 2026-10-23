@@ -37,7 +37,7 @@ const localizedDescriptions = {
 
 export const categorySchema = z.object({
   id: idSchema,
-  restaurantId: idSchema,
+  tenantId: idSchema,
   nameEn: z.string(),
   nameAr: z.string(),
   descriptionEn: z.string().nullable(),
@@ -79,7 +79,7 @@ export const stationCodeSchema = z
 
 export const kitchenStationSchema = z.object({
   id: idSchema,
-  restaurantId: idSchema,
+  tenantId: idSchema,
   code: z.string(),
   nameEn: z.string(),
   nameAr: z.string(),
@@ -117,7 +117,7 @@ export type Modifier = z.infer<typeof modifierSchema>;
 
 export const modifierGroupSchema = z.object({
   id: idSchema,
-  restaurantId: idSchema,
+  tenantId: idSchema,
   nameEn: z.string(),
   nameAr: z.string(),
   minSelect: z.int(),
@@ -206,7 +206,7 @@ export type ProductModifierGroupLink = z.infer<typeof productModifierGroupLinkSc
 
 export const productSchema = z.object({
   id: idSchema,
-  restaurantId: idSchema,
+  tenantId: idSchema,
   categoryId: idSchema,
   sku: z.string().nullable(),
   nameEn: z.string(),
@@ -360,7 +360,7 @@ const publishedProductSchema = z.object({
 });
 
 export const publishedMenuSchema = z.object({
-  restaurantId: idSchema,
+  tenantId: idSchema,
   locationId: idSchema,
   currencyCode: z.string(),
   taxInclusive: z.boolean(),

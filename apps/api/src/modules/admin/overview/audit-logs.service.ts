@@ -3,12 +3,12 @@ import type { Prisma } from '@pos/database';
 import { type Principal, PrismaService, redactForAudit } from '@pos/server';
 import type { AuditLogEntry, Paginated, auditLogQuerySchema } from '@pos/validation';
 import type { z } from 'zod';
-import { holdsRestaurantWide, instantRange, paging, permittedLocationIds } from '../scope';
+import { holdsTenantWide, instantRange, paging, permittedLocationIds } from '../scope';
 
 /**
  * The audit trail, read-only (`audit.view`). Entries of locations the caller cannot audit are
- * hidden, and restaurant-level entries (staff, roles, configuration) need `audit.view`
- * restaurant-wide. Metadata was redacted when written and is redacted again here, so a secret
+ * hidden, and tenant-level entries (staff, roles, configuration) need `audit.view`
+ * tenant-wide. Metadata was redacted when written and is redacted again here, so a secret
  * can never be shown even if an older entry kept one.
  */
 @Injectable()
@@ -25,12 +25,11 @@ export class AuditLogsService {
       ['audit.view'],
       q.locationId,
     );
-    const restaurantLevel =
-      q.locationId === undefined && holdsRestaurantWide(principal, 'audit.view');
+    const tenantLevel = q.locationId === undefined && holdsTenantWide(principal, 'audit.view');
     const created = instantRange(q.from, q.to);
     const where: Prisma.AuditLogWhereInput = {
-      restaurantId: principal.restaurantId,
-      OR: [{ locationId: { in: locationIds } }, ...(restaurantLevel ? [{ locationId: null }] : [])],
+      tenantId: principal.tenantId,
+      OR: [{ locationId: { in: locationIds } }, ...(tenantLevel ? [{ locationId: null }] : [])],
       ...(q.action
         ? q.action.endsWith('.')
           ? { action: { startsWith: q.action } }
@@ -53,11 +52,11 @@ export class AuditLogsService {
     const actorIds = [...new Set(rows.flatMap((r) => (r.actorId ? [r.actorId] : [])))];
     const [users, employees] = await Promise.all([
       this.prisma.user.findMany({
-        where: { id: { in: actorIds }, restaurantId: principal.restaurantId },
+        where: { id: { in: actorIds }, tenantId: principal.tenantId },
         select: { id: true, displayName: true },
       }),
       this.prisma.employee.findMany({
-        where: { id: { in: actorIds }, restaurantId: principal.restaurantId },
+        where: { id: { in: actorIds }, tenantId: principal.tenantId },
         select: { id: true, displayName: true },
       }),
     ]);

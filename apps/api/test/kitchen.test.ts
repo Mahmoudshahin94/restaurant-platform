@@ -46,14 +46,14 @@ beforeEach(async () => {
   await resetDatabase(prisma);
   tenant = await createTenant(prisma, CASHIER);
   menu = await createMenuFixture(prisma, tenant);
-  const { restaurantId } = tenant;
-  const category = await prisma.category.findFirstOrThrow({ where: { restaurantId } });
+  const { tenantId } = tenant;
+  const category = await prisma.category.findFirstOrThrow({ where: { tenantId } });
   fryer = await prisma.kitchenStation.create({
-    data: { restaurantId, code: 'FRYER', nameEn: 'Fryer', nameAr: 'المقلاة', sortOrder: 2 },
+    data: { tenantId, code: 'FRYER', nameEn: 'Fryer', nameAr: 'المقلاة', sortOrder: 2 },
   });
   fries = await prisma.product.create({
     data: {
-      restaurantId,
+      tenantId,
       categoryId: category.id,
       nameEn: 'Fries',
       nameAr: 'بطاطس',
@@ -64,7 +64,7 @@ beforeEach(async () => {
   // Assembled on the grill, fried at the fryer: one line, two stations.
   loadedFries = await prisma.product.create({
     data: {
-      restaurantId,
+      tenantId,
       categoryId: category.id,
       nameEn: 'Loaded fries',
       nameAr: 'بطاطس محملة',
@@ -84,7 +84,7 @@ async function createKitchenUser(): Promise<string> {
   const user = await prisma.user.findUniqueOrThrow({ where: { id: tenant.cashier.id } });
   const role = await prisma.role.create({
     data: {
-      restaurantId: tenant.restaurantId,
+      tenantId: tenant.tenantId,
       name: 'Kitchen',
       permissions: {
         create: (['kitchen.view', 'kitchen.update'] as const).map((permissionKey) => ({
@@ -96,7 +96,7 @@ async function createKitchenUser(): Promise<string> {
   const email = `kitchen-${newId()}@test.local`;
   await prisma.user.create({
     data: {
-      restaurantId: tenant.restaurantId,
+      tenantId: tenant.tenantId,
       email,
       passwordHash: user.passwordHash,
       displayName: 'Kitchen',
@@ -499,7 +499,7 @@ describe('realtime socket', () => {
     expect(types.slice(0, 2)).toEqual(['order.created', 'kitchen.ticket_created']);
     const created = eventsOf(client.messages)[1] as RealtimeEvent<'kitchen.ticket_created'>;
     expect(created).toMatchObject({
-      restaurantId: tenant.restaurantId,
+      tenantId: tenant.tenantId,
       locationId: tenant.locationA,
       payload: { orderId: order.id, orderNumber: order.orderNumber, stationId: menu.grill.id },
     });

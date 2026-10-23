@@ -34,7 +34,7 @@ import { useAdminErrorText } from '../../lib/admin-errors';
 import { api } from '../../lib/api';
 import { optionalMoneyField, useMoney } from '../../lib/money';
 import { usePermissions } from '../../lib/permissions';
-import { useAdminMutation, useLocations, useRestaurant, useRestaurantId } from '../../lib/queries';
+import { useAdminMutation, useLocations, useTenant, useTenantId } from '../../lib/queries';
 
 const required = 'common:validation.required';
 const minutes = (min: number, max: number) =>
@@ -75,7 +75,7 @@ type FormOutput = z.output<ReturnType<typeof locationForm>>;
 
 function LocationDialog({ location, onClose }: { location: Location | null; onClose: () => void }) {
   const { t } = useTranslation(['admin', 'common']);
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const errorText = useAdminErrorText();
   const { currency, toInput } = useMoney();
   const [formError, setFormError] = useState<string | null>(null);
@@ -114,7 +114,7 @@ function LocationDialog({ location, onClose }: { location: Location | null; onCl
           kdsLateMinutes,
         });
       }
-      const created = await api.locations.create(rid, { ...base, code });
+      const created = await api.locations.create(tid, { ...base, code });
       return api.locations.update(created.id, {
         cashRoundingIncrement,
         kdsWarnMinutes,
@@ -179,7 +179,7 @@ function LocationDialog({ location, onClose }: { location: Location | null; onCl
           </Field>
           <Field
             label={t('admin:locations.timezone')}
-            hint={t('admin:restaurant.timezoneHint')}
+            hint={t('admin:tenant.timezoneHint')}
             error={msg(errors.timezone?.message)}
           >
             <Input dir="ltr" autoComplete="off" {...form.register('timezone')} />
@@ -248,7 +248,7 @@ export function LocationsPage() {
   const { can, canAt } = usePermissions();
   const { format } = useMoney();
   const query = useLocations();
-  const restaurant = useRestaurant();
+  const tenant = useTenant();
   const [editing, setEditing] = useState<Location | 'new' | null>(null);
   return (
     <>
@@ -300,7 +300,7 @@ export function LocationsPage() {
                         : t('admin:locations.exclusive')}
                     </TableCell>
                     <TableCell className="ltr-nums">
-                      {row.cashRoundingIncrement === null || !restaurant.data
+                      {row.cashRoundingIncrement === null || !tenant.data
                         ? t('admin:locations.noRounding')
                         : format(row.cashRoundingIncrement)}
                     </TableCell>
@@ -340,8 +340,8 @@ export function LocationsPage() {
           if (!open) setEditing(null);
         }}
       >
-        {/* Money fields need the restaurant's currency. */}
-        {editing !== null && restaurant.data ? (
+        {/* Money fields need the tenant's currency. */}
+        {editing !== null && tenant.data ? (
           <LocationDialog
             key={editing === 'new' ? 'new' : editing.id}
             location={editing === 'new' ? null : editing}

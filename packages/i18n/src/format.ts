@@ -1,7 +1,7 @@
 import { formatMinorAsDecimal } from '@pos/domain';
 import type { Locale } from '@pos/shared-types';
 
-/** Arabic UIs may show Latin (0-9) or Arabic-Indic (٠-٩) digits; restaurants choose. */
+/** Arabic UIs may show Latin (0-9) or Arabic-Indic (٠-٩) digits; tenants choose. */
 export type DigitStyle = 'latn' | 'arab';
 
 export interface FormatOptions {

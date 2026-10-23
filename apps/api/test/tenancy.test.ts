@@ -2,7 +2,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { PrismaClient } from '@pos/database';
 import { newId } from '@pos/domain';
 import type { ApiErrorBody } from '@pos/shared-types';
-import type { Location, Restaurant } from '@pos/validation';
+import type { Location, Tenant } from '@pos/validation';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   type TenantFixture,
@@ -62,32 +62,32 @@ describe('health', () => {
   });
 });
 
-describe('restaurants', () => {
-  it('lets any member read their restaurant', async () => {
+describe('tenants', () => {
+  it('lets any member read their tenant', async () => {
     const res = await app.inject({
       method: 'GET',
-      url: `/api/v1/restaurants/${tenant.restaurantId}`,
+      url: `/api/v1/tenants/${tenant.tenantId}`,
       headers: bearer(cashierToken),
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json<Restaurant>().currencyCode).toBe('SAR');
+    expect(res.json<Tenant>().currencyCode).toBe('SAR');
   });
 
   it('hides other tenants', async () => {
     const other = await createTenant(prisma);
     const res = await app.inject({
       method: 'GET',
-      url: `/api/v1/restaurants/${other.restaurantId}`,
+      url: `/api/v1/tenants/${other.tenantId}`,
       headers: bearer(ownerToken),
     });
     expect(res.statusCode).toBe(404);
-    expect(res.json<ApiErrorBody>().code).toBe('RESTAURANT_NOT_FOUND');
+    expect(res.json<ApiErrorBody>().code).toBe('TENANT_NOT_FOUND');
   });
 
   it('requires settings.manage to update, enforced server-side', async () => {
     const res = await app.inject({
       method: 'PATCH',
-      url: `/api/v1/restaurants/${tenant.restaurantId}`,
+      url: `/api/v1/tenants/${tenant.tenantId}`,
       headers: bearer(cashierToken),
       payload: { nameEn: 'Hacked' },
     });
@@ -100,28 +100,28 @@ describe('restaurants', () => {
   it('updates and audits with actor, request id and before/after values', async () => {
     const res = await app.inject({
       method: 'PATCH',
-      url: `/api/v1/restaurants/${tenant.restaurantId}`,
+      url: `/api/v1/tenants/${tenant.tenantId}`,
       headers: { ...bearer(ownerToken), 'x-request-id': 'audit-req-0001' },
       payload: { nameEn: 'Renamed', timezone: 'Asia/Dubai' },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json<Restaurant>().timezone).toBe('Asia/Dubai');
+    expect(res.json<Tenant>().timezone).toBe('Asia/Dubai');
     const audit = await prisma.auditLog.findFirstOrThrow({
-      where: { action: 'restaurant.updated' },
+      where: { action: 'tenant.updated' },
     });
     expect(audit.actorId).toBe(tenant.owner.id);
     expect(audit.requestId).toBe('audit-req-0001');
     expect(audit.source).toBe('ADMIN');
     expect(audit.metadata).toMatchObject({
       changes: { nameEn: 'Renamed' },
-      before: { nameEn: 'Test Restaurant' },
+      before: { nameEn: 'Test Tenant' },
     });
   });
 
   it('does not allow changing the currency', async () => {
     const res = await app.inject({
       method: 'PATCH',
-      url: `/api/v1/restaurants/${tenant.restaurantId}`,
+      url: `/api/v1/tenants/${tenant.tenantId}`,
       headers: bearer(ownerToken),
       payload: { currencyCode: 'USD' },
     });
@@ -130,17 +130,17 @@ describe('restaurants', () => {
 });
 
 describe('locations', () => {
-  it('lists every location for restaurant-wide roles and only assigned ones otherwise', async () => {
+  it('lists every location for tenant-wide roles and only assigned ones otherwise', async () => {
     const all = await app.inject({
       method: 'GET',
-      url: `/api/v1/restaurants/${tenant.restaurantId}/locations`,
+      url: `/api/v1/tenants/${tenant.tenantId}/locations`,
       headers: bearer(ownerToken),
     });
     expect(all.json<Location[]>()).toHaveLength(2);
 
     const mine = await app.inject({
       method: 'GET',
-      url: `/api/v1/restaurants/${tenant.restaurantId}/locations`,
+      url: `/api/v1/tenants/${tenant.tenantId}/locations`,
       headers: bearer(cashierToken),
     });
     expect(mine.json<Location[]>().map((l) => l.id)).toEqual([tenant.locationA]);
@@ -184,7 +184,7 @@ describe('locations', () => {
     };
     const created = await app.inject({
       method: 'POST',
-      url: `/api/v1/restaurants/${tenant.restaurantId}/locations`,
+      url: `/api/v1/tenants/${tenant.tenantId}/locations`,
       headers: bearer(ownerToken),
       payload,
     });
@@ -198,7 +198,7 @@ describe('locations', () => {
 
     const duplicate = await app.inject({
       method: 'POST',
-      url: `/api/v1/restaurants/${tenant.restaurantId}/locations`,
+      url: `/api/v1/tenants/${tenant.tenantId}/locations`,
       headers: bearer(ownerToken),
       payload,
     });
@@ -207,7 +207,7 @@ describe('locations', () => {
 
     const invalid = await app.inject({
       method: 'POST',
-      url: `/api/v1/restaurants/${tenant.restaurantId}/locations`,
+      url: `/api/v1/tenants/${tenant.tenantId}/locations`,
       headers: bearer(ownerToken),
       payload: { ...payload, code: 'x', timezone: 'Nowhere/Land' },
     });
@@ -226,12 +226,12 @@ describe('locations', () => {
       payload: { phone: '+966500000000' },
     });
     expect(own.statusCode).toBe(200);
-    const restaurantWide = await app.inject({
+    const tenantWide = await app.inject({
       method: 'POST',
-      url: `/api/v1/restaurants/${manager.restaurantId}/locations`,
+      url: `/api/v1/tenants/${manager.tenantId}/locations`,
       headers: bearer(token),
       payload: { code: 'NEW1', nameEn: 'n', nameAr: 'n', timezone: 'UTC', taxInclusive: true },
     });
-    expect(restaurantWide.statusCode).toBe(403);
+    expect(tenantWide.statusCode).toBe(403);
   });
 });

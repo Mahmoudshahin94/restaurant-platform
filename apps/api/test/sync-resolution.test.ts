@@ -43,7 +43,7 @@ beforeEach(async () => {
   tenant = await createTenant(prisma);
   const menu = await createMenuFixture(prisma, tenant);
   const cash = await prisma.paymentMethod.create({
-    data: { restaurantId: tenant.restaurantId, type: 'CASH', nameEn: 'Cash', nameAr: 'نقدًا' },
+    data: { tenantId: tenant.tenantId, type: 'CASH', nameEn: 'Cash', nameAr: 'نقدًا' },
   });
   const register = await prisma.cashRegister.create({
     data: { locationId: tenant.locationA, nameEn: 'Drawer 1', nameAr: 'الدرج 1' },
@@ -150,7 +150,7 @@ describe('refused operations for administrators', () => {
     });
   });
 
-  it('applies the restaurant’s version, keeping the cloud’s copy in the audit log', async () => {
+  it('applies the hub’s version, keeping the cloud’s copy in the audit log', async () => {
     const { order, refused } = await conflictingOrder();
     const head = await prisma.changeLog.aggregate({ _max: { seq: true } });
 
@@ -280,7 +280,7 @@ describe('refused operations for administrators', () => {
     const { refused } = await conflictingOrder();
     const viewer = await prisma.role.create({
       data: {
-        restaurantId: tenant.restaurantId,
+        tenantId: tenant.tenantId,
         name: 'Sync viewer',
         permissions: { create: [{ permissionKey: 'sync.view' }] },
       },

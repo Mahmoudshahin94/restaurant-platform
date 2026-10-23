@@ -54,10 +54,10 @@ import {
   publishedMenuSchema,
   type LoginRequest,
   type UpdateLocationRequest,
-  type UpdateRestaurantRequest,
+  type UpdateTenantRequest,
   authUserSchema,
   locationSchema,
-  restaurantSchema,
+  tenantSchema,
   tokenResponseSchema,
   type CreateLocationRequest,
 } from '@pos/validation';
@@ -154,24 +154,24 @@ export function createApiClient(options: HttpClientOptions) {
           schema: onlineOrderingOverviewSchema,
         }),
     },
-    restaurants: {
-      get: (restaurantId: string) =>
-        http.request('GET', `${API}/restaurants/${restaurantId}`, { schema: restaurantSchema }),
-      update: (restaurantId: string, body: UpdateRestaurantRequest) =>
-        http.request('PATCH', `${API}/restaurants/${restaurantId}`, {
+    tenants: {
+      get: (tenantId: string) =>
+        http.request('GET', `${API}/tenants/${tenantId}`, { schema: tenantSchema }),
+      update: (tenantId: string, body: UpdateTenantRequest) =>
+        http.request('PATCH', `${API}/tenants/${tenantId}`, {
           body,
-          schema: restaurantSchema,
+          schema: tenantSchema,
         }),
     },
     locations: {
-      list: (restaurantId: string) =>
-        http.request('GET', `${API}/restaurants/${restaurantId}/locations`, {
+      list: (tenantId: string) =>
+        http.request('GET', `${API}/tenants/${tenantId}/locations`, {
           schema: z.array(locationSchema),
         }),
       get: (locationId: string) =>
         http.request('GET', `${API}/locations/${locationId}`, { schema: locationSchema }),
-      create: (restaurantId: string, body: CreateLocationRequest) =>
-        http.request('POST', `${API}/restaurants/${restaurantId}/locations`, {
+      create: (tenantId: string, body: CreateLocationRequest) =>
+        http.request('POST', `${API}/tenants/${tenantId}/locations`, {
           body,
           schema: locationSchema,
         }),
@@ -227,8 +227,8 @@ export function createApiClient(options: HttpClientOptions) {
         }),
     },
     payments: {
-      methods: (restaurantId: string) =>
-        http.request('GET', `${API}/restaurants/${restaurantId}/payment-methods`, {
+      methods: (tenantId: string) =>
+        http.request('GET', `${API}/tenants/${tenantId}/payment-methods`, {
           schema: z.array(paymentMethodSchema),
         }),
       /** Idempotent on `body.id`: a retry returns the recorded payment, never a second charge. */
@@ -406,8 +406,8 @@ export function createApiClient(options: HttpClientOptions) {
       ),
       products: {
         ...crud(http, 'products', productSchema, createProductSchema, updateProductSchema),
-        list: (restaurantId: string, query: ListProductsQuery = {}) =>
-          http.request('GET', `${API}/restaurants/${restaurantId}/products`, {
+        list: (tenantId: string, query: ListProductsQuery = {}) =>
+          http.request('GET', `${API}/tenants/${tenantId}/products`, {
             query: { ...query },
             schema: z.array(productSchema),
           }),
@@ -418,7 +418,7 @@ export function createApiClient(options: HttpClientOptions) {
 
 export type ApiClient = ReturnType<typeof createApiClient>;
 
-/** Shared CRUD + archive/restore calls for restaurant-scoped catalog resources. */
+/** Shared CRUD + archive/restore calls for tenant-scoped catalog resources. */
 function crud<S extends z.ZodType, C extends z.ZodType, U extends z.ZodType>(
   http: HttpClient,
   resource: string,
@@ -427,22 +427,22 @@ function crud<S extends z.ZodType, C extends z.ZodType, U extends z.ZodType>(
   _createSchema: C,
   _updateSchema: U,
 ) {
-  const base = (restaurantId: string) => `${API}/restaurants/${restaurantId}/${resource}`;
+  const base = (tenantId: string) => `${API}/tenants/${tenantId}/${resource}`;
   return {
-    list: (restaurantId: string, options: { includeArchived?: boolean } = {}) =>
-      http.request('GET', base(restaurantId), {
+    list: (tenantId: string, options: { includeArchived?: boolean } = {}) =>
+      http.request('GET', base(tenantId), {
         query: { includeArchived: options.includeArchived ? 'true' : undefined },
         schema: z.array(schema),
       }),
-    get: (restaurantId: string, id: string) =>
-      http.request('GET', `${base(restaurantId)}/${id}`, { schema }),
-    create: (restaurantId: string, body: z.input<C>) =>
-      http.request('POST', base(restaurantId), { body, schema }),
-    update: (restaurantId: string, id: string, body: z.input<U>) =>
-      http.request('PATCH', `${base(restaurantId)}/${id}`, { body, schema }),
-    archive: (restaurantId: string, id: string) =>
-      http.request('POST', `${base(restaurantId)}/${id}/archive`, { schema }),
-    restore: (restaurantId: string, id: string) =>
-      http.request('POST', `${base(restaurantId)}/${id}/restore`, { schema }),
+    get: (tenantId: string, id: string) =>
+      http.request('GET', `${base(tenantId)}/${id}`, { schema }),
+    create: (tenantId: string, body: z.input<C>) =>
+      http.request('POST', base(tenantId), { body, schema }),
+    update: (tenantId: string, id: string, body: z.input<U>) =>
+      http.request('PATCH', `${base(tenantId)}/${id}`, { body, schema }),
+    archive: (tenantId: string, id: string) =>
+      http.request('POST', `${base(tenantId)}/${id}/archive`, { schema }),
+    restore: (tenantId: string, id: string) =>
+      http.request('POST', `${base(tenantId)}/${id}/restore`, { schema }),
   };
 }

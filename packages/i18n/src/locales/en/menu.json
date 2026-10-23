@@ -36,7 +36,7 @@
     "price": "Price",
     "priceHint": "When the product has sizes, each size's price is used instead.",
     "sku": "SKU",
-    "skuHint": "Optional code, unique in your restaurant",
+    "skuHint": "Optional code, unique in your business",
     "search": "Search products",
     "variants": "Sizes / variants",
     "variantsHint": "Leave empty if the product has a single price.",

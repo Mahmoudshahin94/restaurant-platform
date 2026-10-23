@@ -26,7 +26,7 @@ export { OrdersModule } from './modules/orders/orders.module';
 export { PaymentsModule } from './modules/payments/payments.module';
 export { PricingConfigModule } from './modules/pricing-config/pricing-config.module';
 export { ReportsModule } from './modules/reports/reports.module';
-export { RestaurantsModule } from './modules/restaurants/restaurants.module';
+export { TenantsModule } from './modules/tenants/tenants.module';
 export { ShiftsModule } from './modules/shifts/shifts.module';
 export { OnlineOrderingModule } from './modules/online-ordering/online-ordering.module';
 export { OnlinePaymentsService } from './modules/online-ordering/online-payments.service';

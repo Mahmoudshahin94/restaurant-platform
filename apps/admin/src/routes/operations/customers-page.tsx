@@ -22,18 +22,18 @@ import { OrderStatusBadge, PaymentStatusBadge } from '../../components/order-bad
 import { Pagination } from '../../components/pagination';
 import { api } from '../../lib/api';
 import { useDateTime, useLocationLookup } from '../../lib/format';
-import { keys, useRestaurant, useRestaurantId } from '../../lib/queries';
+import { keys, useTenant, useTenantId } from '../../lib/queries';
 
 const PAGE_SIZE = 25;
 
 function useCurrencyFormat() {
-  const restaurant = useRestaurant();
-  return useMoneyFormat(restaurant.data?.currencyCode ?? null).format;
+  const tenant = useTenant();
+  return useMoneyFormat(tenant.data?.currencyCode ?? null).format;
 }
 
 export function CustomersPage() {
   const { t } = useTranslation(['admin', 'common']);
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const format = useCurrencyFormat();
   const formatDate = useDateTime();
   const [search, setSearch] = useState('');
@@ -44,8 +44,8 @@ export function CustomersPage() {
     pageSize: PAGE_SIZE,
   };
   const customers = useQuery({
-    queryKey: keys.customers(rid, query),
-    queryFn: () => api.admin.customers(rid, query),
+    queryKey: keys.customers(tid, query),
+    queryFn: () => api.admin.customers(tid, query),
     placeholderData: keepPreviousData,
   });
   return (
@@ -164,13 +164,13 @@ export function OrderSummaryTable({ orders }: { orders: OrderSummary[] }) {
 
 export function CustomerDetailPage() {
   const { t } = useTranslation('admin');
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const format = useCurrencyFormat();
   const formatDate = useDateTime();
   const { key = '' } = useParams();
   const query = useQuery({
-    queryKey: keys.customer(rid, key),
-    queryFn: () => api.admin.customer(rid, key),
+    queryKey: keys.customer(tid, key),
+    queryFn: () => api.admin.customer(tid, key),
   });
   return (
     <>

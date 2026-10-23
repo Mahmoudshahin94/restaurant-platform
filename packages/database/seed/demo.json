@@ -1,6 +1,6 @@
 {
-  "$comment": "Development/demo data only. Production restaurants are provisioned through the admin API. Credentials come from SEED_* environment variables, never from this file.",
-  "restaurant": {
+  "$comment": "Development/demo data only. Production tenants are provisioned through the admin API. Credentials come from SEED_* environment variables, never from this file.",
+  "tenant": {
     "slug": "demo-kitchen",
     "nameEn": "Demo Kitchen",
     "nameAr": "مطبخ تجريبي",

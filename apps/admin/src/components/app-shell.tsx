@@ -50,8 +50,8 @@ interface NavItem {
   labelKey: NavKey;
   icon: LucideIcon;
   permission?: Permission;
-  /** The permission must be held restaurant-wide (pages for the whole restaurant). */
-  restaurantWide?: boolean;
+  /** The permission must be held tenant-wide (pages for the whole tenant). */
+  tenantWide?: boolean;
 }
 
 interface NavGroup {
@@ -130,11 +130,11 @@ const NAV: NavGroup[] = [
     labelKey: 'settings',
     items: [
       {
-        to: '/settings/restaurant',
-        labelKey: 'restaurant',
+        to: '/settings/tenant',
+        labelKey: 'tenant',
         icon: Building2,
         permission: 'settings.manage',
-        restaurantWide: true,
+        tenantWide: true,
       },
       {
         to: '/settings/locations',
@@ -161,7 +161,7 @@ const NAV: NavGroup[] = [
         labelKey: 'paymentMethods',
         icon: Wallet,
         permission: 'settings.manage',
-        restaurantWide: true,
+        tenantWide: true,
       },
       {
         to: '/settings/cash-registers',
@@ -179,21 +179,21 @@ const NAV: NavGroup[] = [
         labelKey: 'users',
         icon: Users,
         permission: 'users.manage',
-        restaurantWide: true,
+        tenantWide: true,
       },
       {
         to: '/staff/roles',
         labelKey: 'roles',
         icon: ShieldCheck,
         permission: 'roles.manage',
-        restaurantWide: true,
+        tenantWide: true,
       },
       {
         to: '/staff/employees',
         labelKey: 'employees',
         icon: IdCard,
         permission: 'users.manage',
-        restaurantWide: true,
+        tenantWide: true,
       },
     ],
   },
@@ -267,7 +267,7 @@ export function AppShell() {
             const items = group.items.filter(
               (item) =>
                 !item.permission ||
-                (item.restaurantWide ? can(item.permission) : canAnywhere(item.permission)),
+                (item.tenantWide ? can(item.permission) : canAnywhere(item.permission)),
             );
             if (items.length === 0) return null;
             return (

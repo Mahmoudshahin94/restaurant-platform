@@ -32,7 +32,7 @@ class FakeSocket {
 const event = (eventId: string): RealtimeEvent => ({
   eventId,
   type: 'order.created',
-  restaurantId: 'r',
+  tenantId: 'r',
   locationId: 'l',
   occurredAt: '2026-10-17T10:00:00.000Z',
   payload: {

@@ -25,7 +25,7 @@ import { api } from '../../lib/api';
 import { applyServerValidation, tKey, useErrorText } from '@pos/app-kit';
 import { useCurrentLocale } from '@pos/app-kit';
 import { moneyField, useMoney } from '../../lib/money';
-import { useCatalogMutation, useRestaurantId } from '../../lib/queries';
+import { useCatalogMutation, useTenantId } from '../../lib/queries';
 
 const required = 'common:validation.required';
 const selectionCount = z
@@ -146,7 +146,7 @@ export function ProductDialog({
 }: ProductDialogProps) {
   const { t } = useTranslation(['menu', 'common', 'pricing']);
   const locale = useCurrentLocale();
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const errorText = useErrorText();
   const { toInput } = useMoney();
   const [formError, setFormError] = useState<string | null>(null);
@@ -182,7 +182,7 @@ export function ProductDialog({
           max: l.maxSelect === null ? '' : String(l.maxSelect),
         })) ?? [],
       stationIds: product?.stationIds ?? [],
-      // New products start with the restaurant's default taxes; nothing is applied implicitly.
+      // New products start with the tenant's default taxes; nothing is applied implicitly.
       taxIds: product?.taxIds ?? taxes.filter((t) => t.isDefault).map((t) => t.id),
     },
   });
@@ -212,8 +212,8 @@ export function ProductDialog({
       stationIds: values.stationIds,
       taxIds: values.taxIds,
     };
-    if (product) return api.menu.products.update(rid, product.id, body);
-    return api.menu.products.create(rid, {
+    if (product) return api.menu.products.update(tid, product.id, body);
+    return api.menu.products.create(tid, {
       ...body,
       variants: body.variants.map(({ id: _id, ...v }) => v),
     });

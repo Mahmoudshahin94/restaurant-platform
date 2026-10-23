@@ -3,10 +3,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePreferences } from '../stores/preferences';
 import { api, useSession } from './session';
 
-export function useRestaurantId(): string {
+export function useTenantId(): string {
   const user = useSession((s) => s.user);
   if (!user) throw new Error('Not signed in');
-  return user.restaurantId;
+  return user.tenantId;
 }
 
 /** The location this terminal operates at (chosen once per terminal). */
@@ -17,10 +17,10 @@ export function useLocationId(): string {
 }
 
 export function useLocations() {
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   return useQuery({
-    queryKey: ['locations', rid],
-    queryFn: () => api.locations.list(rid),
+    queryKey: ['locations', tid],
+    queryFn: () => api.locations.list(tid),
     staleTime: 5 * 60_000,
   });
 }
@@ -36,10 +36,10 @@ export function useLocationMenu(locationId: string) {
 }
 
 export function useDiscounts() {
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   return useQuery({
-    queryKey: ['discounts', rid],
-    queryFn: () => api.menu.discounts.list(rid),
+    queryKey: ['discounts', tid],
+    queryFn: () => api.menu.discounts.list(tid),
     staleTime: 5 * 60_000,
   });
 }
@@ -61,20 +61,20 @@ export function useOrders(locationId: string, filter: OrderListFilter) {
   });
 }
 
-export function useRestaurant() {
-  const rid = useRestaurantId();
+export function useTenant() {
+  const tid = useTenantId();
   return useQuery({
-    queryKey: ['restaurant', rid],
-    queryFn: () => api.restaurants.get(rid),
+    queryKey: ['tenant', tid],
+    queryFn: () => api.tenants.get(tid),
     staleTime: 10 * 60_000,
   });
 }
 
 export function usePaymentMethods() {
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   return useQuery({
-    queryKey: ['payment-methods', rid],
-    queryFn: () => api.payments.methods(rid),
+    queryKey: ['payment-methods', tid],
+    queryFn: () => api.payments.methods(tid),
     staleTime: 5 * 60_000,
   });
 }

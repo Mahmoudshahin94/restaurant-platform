@@ -55,7 +55,7 @@ export const cola: PublishedMenuProduct = {
 };
 
 export const menu: PublishedMenu = {
-  restaurantId: id(80),
+  tenantId: id(80),
   locationId: id(81),
   currencyCode: 'SAR',
   taxInclusive: true,

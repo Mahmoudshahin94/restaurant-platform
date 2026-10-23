@@ -8,7 +8,7 @@ import type {
   PairedDevice,
   PublicLocation,
   PublicOrder,
-  PublicRestaurant,
+  PublicTenant,
   PublishedMenu,
   SyncOperationResult,
   SyncOrder,
@@ -52,10 +52,10 @@ beforeEach(async () => {
   await resetDatabase(prisma);
   tenant = await createTenant(prisma);
   menu = await createMenuFixture(prisma, tenant);
-  slug = (await prisma.restaurant.findUniqueOrThrow({ where: { id: tenant.restaurantId } })).slug;
+  slug = (await prisma.tenant.findUniqueOrThrow({ where: { id: tenant.tenantId } })).slug;
   await prisma.paymentMethod.create({
     data: {
-      restaurantId: tenant.restaurantId,
+      tenantId: tenant.tenantId,
       type: 'ONLINE',
       nameEn: 'Online card',
       nameAr: 'بطاقة عبر الإنترنت',
@@ -154,7 +154,7 @@ async function cloudAggregate(orderId: string, headers = hub): Promise<SyncOrder
   return res.json<SyncOrder>();
 }
 
-/** What the hub's outbox sends after the restaurant decided on a website order. */
+/** What the hub's outbox sends after the location decided on a website order. */
 function decided(order: SyncOrder, to: 'CONFIRMED' | 'CANCELLED', reason: string | null = null) {
   const at = new Date().toISOString();
   return {
@@ -209,12 +209,12 @@ const minutes = (n: number) => n * 60_000;
 // --- Storefront ----------------------------------------------------------------------------------
 
 describe('public storefront', () => {
-  it('lists the restaurant’s active locations with what customers can do there', async () => {
-    const res = await app.inject({ method: 'GET', url: `/api/v1/public/restaurants/${slug}` });
+  it('lists the tenant’s active locations with what customers can do there', async () => {
+    const res = await app.inject({ method: 'GET', url: `/api/v1/public/tenants/${slug}` });
     expect(res.statusCode).toBe(200);
-    const restaurant = res.json<PublicRestaurant>();
-    expect(restaurant).toMatchObject({ slug, currencyCode: 'SAR' });
-    const a = restaurant.locations.find((l) => l.id === tenant.locationA);
+    const storefront = res.json<PublicTenant>();
+    expect(storefront).toMatchObject({ slug, currencyCode: 'SAR' });
+    const a = storefront.locations.find((l) => l.id === tenant.locationA);
     expect(a).toMatchObject({
       status: { state: 'OPEN', reason: null },
       pickupEnabled: true,
@@ -223,12 +223,12 @@ describe('public storefront', () => {
       onlineCardEnabled: true,
     });
     // Location B has no hub: it cannot receive orders.
-    expect(restaurant.locations.find((l) => l.id === tenant.locationB)?.status).toEqual({
+    expect(storefront.locations.find((l) => l.id === tenant.locationB)?.status).toEqual({
       state: 'CLOSED',
       reason: 'SETTING_CLOSED',
     });
     expect(
-      (await app.inject({ method: 'GET', url: '/api/v1/public/restaurants/nope' })).statusCode,
+      (await app.inject({ method: 'GET', url: '/api/v1/public/tenants/nope' })).statusCode,
     ).toBe(404);
   });
 
@@ -279,7 +279,7 @@ describe('public storefront', () => {
 // --- Online ordering states ----------------------------------------------------------------------
 
 describe('online-ordering state', () => {
-  it('refuses orders when the restaurant closed or paused online ordering', async () => {
+  it('refuses orders when the tenant closed or paused online ordering', async () => {
     await settings({ state: 'CLOSED' });
     const closed = await placeRaw(webOrder());
     expect(closed.statusCode).toBe(409);
@@ -316,11 +316,11 @@ describe('online-ordering state', () => {
     });
   });
 
-  it('answers RESTAURANT_OFFLINE when the hub heartbeat is stale', async () => {
+  it('answers LOCATION_OFFLINE when the hub heartbeat is stale', async () => {
     await heartbeat(minutes(4));
     const res = await placeRaw(webOrder());
     expect(res.statusCode).toBe(503);
-    expect(res.json()).toMatchObject({ code: 'RESTAURANT_OFFLINE' });
+    expect(res.json()).toMatchObject({ code: 'LOCATION_OFFLINE' });
     const location = (
       await app.inject({ method: 'GET', url: `/api/v1/public/locations/${tenant.locationA}` })
     ).json<PublicLocation>();
@@ -407,7 +407,7 @@ describe('POST /orders', () => {
       customerEmail: 'sara@example.com',
       createdById: null,
     });
-    // The restaurant has the configured time to accept it.
+    // The tenant has the configured time to accept it.
     expect(row.acceptBy!.getTime() - row.placedAt!.getTime()).toBe(minutes(10));
     const history = await prisma.orderStatusHistory.findMany({ where: { orderId: order.id } });
     expect(history).toEqual([
@@ -553,7 +553,7 @@ describe('GET /orders/track', () => {
       expect(codes).toEqual([404, 404, 404, 429, 429]);
       // Other endpoints keep their own budget.
       expect(
-        (await limited.app.inject({ method: 'GET', url: `/api/v1/public/restaurants/${slug}` }))
+        (await limited.app.inject({ method: 'GET', url: `/api/v1/public/tenants/${slug}` }))
           .statusCode,
       ).toBe(200);
     } finally {
@@ -633,7 +633,7 @@ describe('ORDER entries on the change feed', () => {
 // --- Ownership hand-over -------------------------------------------------------------------------
 
 describe('ownership hand-over', () => {
-  it('hands a website order to the hub when the restaurant accepts it', async () => {
+  it('hands a website order to the hub when the location accepts it', async () => {
     const { order, trackingToken } = await place();
     const cloud = await cloudAggregate(order.id);
     const accepted = decided(cloud, 'CONFIRMED');
@@ -645,7 +645,7 @@ describe('ownership hand-over', () => {
       where: { entityId: order.id },
     });
     expect(ledger).toMatchObject({ status: 'APPLIED', rowVersion: cloud.version + 1 });
-    // The customer sees the restaurant's decision.
+    // The customer sees the location's decision.
     expect((await track(trackingToken)).json<PublicOrder>()).toMatchObject({
       status: 'CONFIRMED',
       timeline: [
@@ -674,7 +674,7 @@ describe('ownership hand-over', () => {
     // Without the version it was based on, or based on another version.
     const noBase = await push([orderOp(accepted, 1)]);
     const stale = await push([orderOp(accepted, 1, cloud.version + 5)]);
-    // An edit before the restaurant decided (still PLACED).
+    // An edit before the location decided (still PLACED).
     const edited = await push([
       orderOp({ ...cloud, notes: 'Changed', version: 2 }, 1, cloud.version),
     ]);
@@ -808,7 +808,7 @@ describe('website orders handled by staff in the cloud', () => {
     expect(edit.statusCode).toBe(409);
     expect(edit.json()).toMatchObject({ details: { reason: 'AWAITING_ACCEPTANCE' } });
 
-    // The restaurant accepts or rejects at its hub, where the kitchen is.
+    // The tenant accepts or rejects at its hub, where the kitchen is.
     for (const payload of [{ to: 'CONFIRMED' }, { to: 'CANCELLED', reason: 'Customer called' }]) {
       const res = await app.inject({
         method: 'POST',
@@ -817,7 +817,7 @@ describe('website orders handled by staff in the cloud', () => {
         payload,
       });
       expect(res.statusCode).toBe(409);
-      expect(res.json()).toMatchObject({ details: { reason: 'DECIDED_AT_RESTAURANT' } });
+      expect(res.json()).toMatchObject({ details: { reason: 'DECIDED_AT_LOCATION' } });
     }
     expect(await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).toMatchObject({
       status: 'PLACED',

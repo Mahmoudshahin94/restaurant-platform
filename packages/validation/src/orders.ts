@@ -178,7 +178,7 @@ export type OrderItem = z.infer<typeof orderItemSchema>;
 
 export const orderSchema = z.object({
   id: idSchema,
-  restaurantId: idSchema,
+  tenantId: idSchema,
   locationId: idSchema,
   orderNumber: z.string(),
   businessDate: z.iso.date(),
@@ -213,7 +213,7 @@ export const orderSchema = z.object({
   version: z.int(),
   createdById: idSchema.nullable(),
   placedAt: isoDateTimeSchema.nullable(),
-  /** Website orders: the restaurant must accept before this, or the order is cancelled. */
+  /** Website orders: the tenant must accept before this, or the order is cancelled. */
   acceptBy: isoDateTimeSchema.nullable(),
   completedAt: isoDateTimeSchema.nullable(),
   cancelledAt: isoDateTimeSchema.nullable(),

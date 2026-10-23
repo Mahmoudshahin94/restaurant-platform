@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Restaurant POS",
+  "productName": "Tenant POS",
   "version": "0.1.0",
   "identifier": "com.restaurantplatform.pos",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Restaurant POS",
+        "title": "Tenant POS",
         "width": 1366,
         "height": 900,
         "minWidth": 1024,
@@ -30,6 +30,6 @@
     "targets": "all",
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
     "category": "Business",
-    "shortDescription": "Restaurant point of sale"
+    "shortDescription": "Tenant point of sale"
   }
 }

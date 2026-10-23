@@ -112,7 +112,7 @@ export class SnapshotSyncService implements OnApplicationBootstrap, OnModuleDest
     this.bus.publish([
       this.bus.event(
         'menu.updated',
-        { restaurantId: pairing.restaurantId, locationId: pairing.locationId },
+        { tenantId: pairing.tenantId, locationId: pairing.locationId },
         { locationId: pairing.locationId, version: snapshot.version },
       ),
     ]);

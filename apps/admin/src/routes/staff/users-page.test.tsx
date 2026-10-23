@@ -62,7 +62,7 @@ describe('users page', () => {
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Deactivate' }));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-      'The restaurant needs at least one active owner.',
+      'The business needs at least one active owner.',
     );
   });
 

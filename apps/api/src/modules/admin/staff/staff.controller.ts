@@ -21,7 +21,7 @@ import {
   updateUserSchema,
 } from '@pos/validation';
 import type { z } from 'zod';
-import { assertAnyRestaurantWide } from '../scope';
+import { assertAnyTenantWide } from '../scope';
 import { EmployeesService } from './employees.service';
 import { RolesService } from './roles.service';
 import { UsersService } from './users.service';
@@ -30,9 +30,9 @@ const id = new ZodValidationPipe(idSchema);
 
 /**
  * Users, roles and employees (cloud only; hubs receive them through the change feed). All routes
- * are restaurant-wide: a branch manager cannot manage staff.
+ * are tenant-wide: a branch manager cannot manage staff.
  */
-@Controller('restaurants/:restaurantId')
+@Controller('tenants/:tenantId')
 export class StaffController {
   constructor(
     private readonly users: UsersService,
@@ -44,14 +44,14 @@ export class StaffController {
 
   @RequirePermissions(['users.manage'])
   @Get('users')
-  listUsers(@Param('restaurantId', id) restaurantId: string): Promise<StaffUser[]> {
-    return this.users.list(restaurantId);
+  listUsers(@Param('tenantId', id) tenantId: string): Promise<StaffUser[]> {
+    return this.users.list(tenantId);
   }
 
   @RequirePermissions(['users.manage'])
   @Post('users')
   createUser(
-    @Param('restaurantId', id) _restaurantId: string,
+    @Param('tenantId', id) _tenantId: string,
     @CurrentPrincipal() principal: Principal,
     @Body(new ZodValidationPipe(createUserSchema)) body: z.output<typeof createUserSchema>,
   ): Promise<StaffUser> {
@@ -61,7 +61,7 @@ export class StaffController {
   @RequirePermissions(['users.manage'])
   @Patch('users/:userId')
   updateUser(
-    @Param('restaurantId', id) _restaurantId: string,
+    @Param('tenantId', id) _tenantId: string,
     @Param('userId', id) userId: string,
     @CurrentPrincipal() principal: Principal,
     @Body(new ZodValidationPipe(updateUserSchema)) body: z.output<typeof updateUserSchema>,
@@ -72,7 +72,7 @@ export class StaffController {
   @RequirePermissions(['users.manage'])
   @Put('users/:userId/roles')
   setUserRoles(
-    @Param('restaurantId', id) _restaurantId: string,
+    @Param('tenantId', id) _tenantId: string,
     @Param('userId', id) userId: string,
     @CurrentPrincipal() principal: Principal,
     @Body(new ZodValidationPipe(setUserRolesSchema)) body: z.output<typeof setUserRolesSchema>,
@@ -84,7 +84,7 @@ export class StaffController {
   @Post('users/:userId/password')
   @HttpCode(204)
   resetPassword(
-    @Param('restaurantId', id) _restaurantId: string,
+    @Param('tenantId', id) _tenantId: string,
     @Param('userId', id) userId: string,
     @CurrentPrincipal() principal: Principal,
     @Body(new ZodValidationPipe(resetPasswordSchema)) body: z.output<typeof resetPasswordSchema>,
@@ -98,17 +98,17 @@ export class StaffController {
   @RequirePermissions([])
   @Get('roles')
   listRoles(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @CurrentPrincipal() principal: Principal,
   ): Promise<Role[]> {
-    assertAnyRestaurantWide(principal, ['roles.manage', 'users.manage']);
-    return this.roles.list(restaurantId);
+    assertAnyTenantWide(principal, ['roles.manage', 'users.manage']);
+    return this.roles.list(tenantId);
   }
 
   @RequirePermissions(['roles.manage'])
   @Post('roles')
   createRole(
-    @Param('restaurantId', id) _restaurantId: string,
+    @Param('tenantId', id) _tenantId: string,
     @CurrentPrincipal() principal: Principal,
     @Body(new ZodValidationPipe(createRoleSchema)) body: z.output<typeof createRoleSchema>,
   ): Promise<Role> {
@@ -118,7 +118,7 @@ export class StaffController {
   @RequirePermissions(['roles.manage'])
   @Patch('roles/:roleId')
   updateRole(
-    @Param('restaurantId', id) _restaurantId: string,
+    @Param('tenantId', id) _tenantId: string,
     @Param('roleId', id) roleId: string,
     @CurrentPrincipal() principal: Principal,
     @Body(new ZodValidationPipe(updateRoleSchema)) body: z.output<typeof updateRoleSchema>,
@@ -130,7 +130,7 @@ export class StaffController {
   @Delete('roles/:roleId')
   @HttpCode(204)
   deleteRole(
-    @Param('restaurantId', id) _restaurantId: string,
+    @Param('tenantId', id) _tenantId: string,
     @Param('roleId', id) roleId: string,
     @CurrentPrincipal() principal: Principal,
   ): Promise<void> {
@@ -141,14 +141,14 @@ export class StaffController {
 
   @RequirePermissions(['users.manage'])
   @Get('employees')
-  listEmployees(@Param('restaurantId', id) restaurantId: string): Promise<Employee[]> {
-    return this.employees.list(restaurantId);
+  listEmployees(@Param('tenantId', id) tenantId: string): Promise<Employee[]> {
+    return this.employees.list(tenantId);
   }
 
   @RequirePermissions(['users.manage'])
   @Post('employees')
   createEmployee(
-    @Param('restaurantId', id) _restaurantId: string,
+    @Param('tenantId', id) _tenantId: string,
     @CurrentPrincipal() principal: Principal,
     @Body(new ZodValidationPipe(createEmployeeSchema)) body: z.output<typeof createEmployeeSchema>,
   ): Promise<Employee> {
@@ -158,7 +158,7 @@ export class StaffController {
   @RequirePermissions(['users.manage'])
   @Patch('employees/:employeeId')
   updateEmployee(
-    @Param('restaurantId', id) _restaurantId: string,
+    @Param('tenantId', id) _tenantId: string,
     @Param('employeeId', id) employeeId: string,
     @CurrentPrincipal() principal: Principal,
     @Body(new ZodValidationPipe(updateEmployeeSchema)) body: z.output<typeof updateEmployeeSchema>,
@@ -169,7 +169,7 @@ export class StaffController {
   @RequirePermissions(['users.manage'])
   @Put('employees/:employeeId/pin')
   setPin(
-    @Param('restaurantId', id) _restaurantId: string,
+    @Param('tenantId', id) _tenantId: string,
     @Param('employeeId', id) employeeId: string,
     @CurrentPrincipal() principal: Principal,
     @Body(new ZodValidationPipe(setPinSchema)) body: z.output<typeof setPinSchema>,

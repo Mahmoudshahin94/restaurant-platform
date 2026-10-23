@@ -4,15 +4,15 @@ import { Badge, cn } from '@pos/ui';
 import { ShoppingBag, Store } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link, Outlet, useMatch } from 'react-router';
-import { useRestaurant } from '../lib/queries';
+import { useTenant } from '../lib/queries';
 import { cartCount, useCart } from '../stores/cart';
 import { usePreferences } from '../stores/preferences';
 
-/** Header (restaurant, language, cart) and page frame of every screen. */
+/** Header (tenant, language, cart) and page frame of every screen. */
 export function SiteShell() {
   const { t } = useTranslation(['customer', 'common']);
   const locale = useCurrentLocale();
-  const restaurant = useRestaurant();
+  const tenant = useTenant();
   const setLocale = usePreferences((s) => s.setLocale);
   const { lines, locationId } = useCart();
   const count = cartCount(lines);
@@ -32,9 +32,7 @@ export function SiteShell() {
           <Link to="/" className="flex min-w-0 items-center gap-2 font-semibold">
             <Store aria-hidden className="size-5 shrink-0 text-primary" />
             <span className="truncate">
-              {restaurant.data
-                ? pickLocalized(restaurant.data, 'name', locale)
-                : t('customer:brand')}
+              {tenant.data ? pickLocalized(tenant.data, 'name', locale) : t('customer:brand')}
             </span>
           </Link>
           <div className="ms-auto flex items-center gap-2">

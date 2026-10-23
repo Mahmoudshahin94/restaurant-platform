@@ -32,7 +32,7 @@ export async function resetDatabase(prisma: PrismaClient): Promise<void> {
 }
 
 export interface TenantFixture {
-  restaurantId: string;
+  tenantId: string;
   locationA: string;
   locationB: string;
   owner: { id: string; email: string };
@@ -42,7 +42,7 @@ export interface TenantFixture {
 let counter = 0;
 
 /**
- * A restaurant with two locations, an Owner (all permissions, restaurant-wide) and a Cashier
+ * A tenant with two locations, an Owner (all permissions, tenant-wide) and a Cashier
  * whose role applies to location A only.
  */
 export async function createTenant(
@@ -57,10 +57,10 @@ export async function createTenant(
   counter += 1;
   const suffix = `${Date.now().toString(36)}${counter}`;
   const passwordHash = await hashSecret(PASSWORD);
-  const restaurant = await prisma.restaurant.create({
+  const tenant = await prisma.tenant.create({
     data: {
       slug: `test-${suffix}`,
-      nameEn: 'Test Restaurant',
+      nameEn: 'Test Tenant',
       nameAr: 'مطعم تجريبي',
       currencyCode: 'SAR',
       timezone: 'Asia/Riyadh',
@@ -70,7 +70,7 @@ export async function createTenant(
     ['A', 'B'].map((code) =>
       prisma.location.create({
         data: {
-          restaurantId: restaurant.id,
+          tenantId: tenant.id,
           code: `LOC${code}`,
           nameEn: `Location ${code}`,
           nameAr: `الموقع ${code}`,
@@ -82,7 +82,7 @@ export async function createTenant(
   );
   const ownerRole = await prisma.role.create({
     data: {
-      restaurantId: restaurant.id,
+      tenantId: tenant.id,
       name: 'Owner',
       isSystem: true,
       permissions: { create: PERMISSIONS.map((permissionKey) => ({ permissionKey })) },
@@ -90,14 +90,14 @@ export async function createTenant(
   });
   const cashierRole = await prisma.role.create({
     data: {
-      restaurantId: restaurant.id,
+      tenantId: tenant.id,
       name: 'Cashier',
       permissions: { create: cashierPermissions.map((permissionKey) => ({ permissionKey })) },
     },
   });
   const owner = await prisma.user.create({
     data: {
-      restaurantId: restaurant.id,
+      tenantId: tenant.id,
       email: `owner-${suffix}@test.local`,
       passwordHash,
       displayName: 'Owner',
@@ -106,7 +106,7 @@ export async function createTenant(
   });
   const cashier = await prisma.user.create({
     data: {
-      restaurantId: restaurant.id,
+      tenantId: tenant.id,
       email: `cashier-${suffix}@test.local`,
       passwordHash,
       displayName: 'Cashier',
@@ -115,7 +115,7 @@ export async function createTenant(
     },
   });
   return {
-    restaurantId: restaurant.id,
+    tenantId: tenant.id,
     locationA: locationA!.id,
     locationB: locationB!.id,
     owner: { id: owner.id, email: owner.email },

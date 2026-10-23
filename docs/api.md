@@ -48,7 +48,7 @@ developers and may change. Validation failures (`400 VALIDATION_FAILED`) list
 | POST   | `/auth/logout`  | public               | Revokes the refresh-token family; clears the cookie                          |
 | GET    | `/auth/me`      | bearer               | Current user with role assignments                                           |
 
-- Access token: HS256 JWT (`iss=pos-kds-api`, `aud=pos-kds`, `sub=userId`, `rid=restaurantId`),
+- Access token: HS256 JWT (`iss=pos-kds-api`, `aud=pos-kds`, `sub=userId`, `tid=tenantId`),
   15 minutes by default. Expired tokens answer `401 TOKEN_EXPIRED`; clients refresh once and
   retry (built into `@pos/api-client`).
 - Refresh tokens rotate on every use. Re-presenting a used token answers `401 TOKEN_REUSED` and
@@ -67,7 +67,7 @@ developers and may change. Validation failures (`400 VALIDATION_FAILED`) list
 - **Deny by default.** A non-public route without `@RequirePermissions(...)` is rejected.
 - Permissions are re-read from the database on every request, never trusted from the token, so
   revocations apply immediately.
-- `:restaurantId` must be the caller's restaurant, otherwise `404 RESTAURANT_NOT_FOUND`.
+- `:tenantId` must be the caller's restaurant, otherwise `404 TENANT_NOT_FOUND`.
   `:locationId` must belong to it and be reachable through the caller's roles, otherwise
   `404 LOCATION_NOT_FOUND`.
 - Scope: with `:locationId`, location-scoped and restaurant-wide roles both count. Without it,
@@ -76,16 +76,16 @@ developers and may change. Validation failures (`400 VALIDATION_FAILED`) list
 
 ## Tenancy endpoints
 
-| Method | Path                                   | Permission                                                   |
-| ------ | -------------------------------------- | ------------------------------------------------------------ |
-| GET    | `/restaurants/:restaurantId`           | any member                                                   |
-| PATCH  | `/restaurants/:restaurantId`           | `settings.manage` (restaurant-wide). Currency cannot change. |
-| GET    | `/restaurants/:restaurantId/locations` | `locations.view` (any location; filtered)                    |
-| POST   | `/restaurants/:restaurantId/locations` | `settings.manage` (restaurant-wide)                          |
-| GET    | `/locations/:locationId`               | `locations.view`                                             |
-| PATCH  | `/locations/:locationId`               | `settings.manage`                                            |
+| Method | Path                           | Permission                                                   |
+| ------ | ------------------------------ | ------------------------------------------------------------ |
+| GET    | `/tenants/:tenantId`           | any member                                                   |
+| PATCH  | `/tenants/:tenantId`           | `settings.manage` (restaurant-wide). Currency cannot change. |
+| GET    | `/tenants/:tenantId/locations` | `locations.view` (any location; filtered)                    |
+| POST   | `/tenants/:tenantId/locations` | `settings.manage` (restaurant-wide)                          |
+| GET    | `/locations/:locationId`       | `locations.view`                                             |
+| PATCH  | `/locations/:locationId`       | `settings.manage`                                            |
 
-Restaurants are provisioned by the seed (development) or a future platform-operator flow. There
+Tenants are provisioned by the seed (development) or a future platform-operator flow. There
 is no self-service signup.
 
 ## Menu endpoints (Phase 1)
@@ -94,19 +94,19 @@ Catalog definitions are restaurant-level. Availability ("86") and price override
 per location. Rows are **archived, never deleted**, because historical orders and sync
 operations reference them.
 
-| Method         | Path                                                                  | Permission                            |
-| -------------- | --------------------------------------------------------------------- | ------------------------------------- |
-| GET            | `/restaurants/:rid/categories?includeArchived=true`                   | `products.view` (any location)        |
-| POST           | `/restaurants/:rid/categories`                                        | `products.create`                     |
-| PATCH          | `/restaurants/:rid/categories/:categoryId`                            | `products.update`                     |
-| POST           | `/restaurants/:rid/categories/:categoryId/archive` · `/restore`       | `products.delete` · `products.update` |
-| GET/POST/PATCH | `/restaurants/:rid/kitchen-stations[/:stationId]` (+ archive/restore) | same pattern                          |
-| GET/POST/PATCH | `/restaurants/:rid/modifier-groups[/:groupId]` (+ archive/restore)    | same pattern                          |
-| GET            | `/restaurants/:rid/products?categoryId=&search=&includeArchived=`     | `products.view` (any location)        |
-| GET/POST/PATCH | `/restaurants/:rid/products[/:productId]` (+ archive/restore)         | same pattern                          |
-| GET            | `/locations/:locationId/menu`                                         | `products.view` at the location       |
-| GET            | `/locations/:locationId/product-settings`                             | `products.view` at the location       |
-| PUT            | `/locations/:locationId/products/:productId/settings`                 | `products.update` at the location     |
+| Method         | Path                                                              | Permission                            |
+| -------------- | ----------------------------------------------------------------- | ------------------------------------- |
+| GET            | `/tenants/:tid/categories?includeArchived=true`                   | `products.view` (any location)        |
+| POST           | `/tenants/:tid/categories`                                        | `products.create`                     |
+| PATCH          | `/tenants/:tid/categories/:categoryId`                            | `products.update`                     |
+| POST           | `/tenants/:tid/categories/:categoryId/archive` · `/restore`       | `products.delete` · `products.update` |
+| GET/POST/PATCH | `/tenants/:tid/kitchen-stations[/:stationId]` (+ archive/restore) | same pattern                          |
+| GET/POST/PATCH | `/tenants/:tid/modifier-groups[/:groupId]` (+ archive/restore)    | same pattern                          |
+| GET            | `/tenants/:tid/products?categoryId=&search=&includeArchived=`     | `products.view` (any location)        |
+| GET/POST/PATCH | `/tenants/:tid/products[/:productId]` (+ archive/restore)         | same pattern                          |
+| GET            | `/locations/:locationId/menu`                                     | `products.view` at the location       |
+| GET            | `/locations/:locationId/product-settings`                         | `products.view` at the location       |
+| PUT            | `/locations/:locationId/products/:productId/settings`             | `products.update` at the location     |
 
 Semantics:
 
@@ -134,12 +134,12 @@ archived/restored`, `product.price_changed` (base, variant and location override
 
 ## Pricing configuration (Phase 2)
 
-| Method     | Path                                                                  | Permission                      |
-| ---------- | --------------------------------------------------------------------- | ------------------------------- |
-| GET        | `/restaurants/:rid/taxes`                                             | `products.view` (any location)  |
-| POST/PATCH | `/restaurants/:rid/taxes[/:taxId]`, `…/archive`, `…/restore`          | `settings.manage`               |
-| GET        | `/restaurants/:rid/discounts`                                         | any member (the POS lists them) |
-| POST/PATCH | `/restaurants/:rid/discounts[/:discountId]`, `…/archive`, `…/restore` | `settings.manage`               |
+| Method     | Path                                                              | Permission                      |
+| ---------- | ----------------------------------------------------------------- | ------------------------------- |
+| GET        | `/tenants/:tid/taxes`                                             | `products.view` (any location)  |
+| POST/PATCH | `/tenants/:tid/taxes[/:taxId]`, `…/archive`, `…/restore`          | `settings.manage`               |
+| GET        | `/tenants/:tid/discounts`                                         | any member (the POS lists them) |
+| POST/PATCH | `/tenants/:tid/discounts[/:discountId]`, `…/archive`, `…/restore` | `settings.manage`               |
 
 Products accept `taxIds`. The published menu includes `taxes` (with `rateBps`) and each
 product's `taxIds`. Rate changes are audited as `tax.rate_changed` and affect only orders priced
@@ -196,13 +196,13 @@ guestCount, notes }`. The `id` is a client-generated UUID and the **idempotency 
   `acceptBy` (`reason: ACCEPTANCE_EXPIRED`). Rejecting one (→ `CANCELLED` with a reason) is allowed
   even when it was paid online: the cloud voids that payment. The decision is made at the
   restaurant's hub: in the cloud, staff transitions of a waiting website order answer
-  `reason: DECIDED_AT_RESTAURANT` (the cloud's only decision is the acceptance timeout).
+  `reason: DECIDED_AT_LOCATION` (the cloud's only decision is the acceptance timeout).
 
 ## Payments (Phase 3)
 
 | Method | Path                                                          | Permission                       |
 | ------ | ------------------------------------------------------------- | -------------------------------- |
-| GET    | `/restaurants/:rid/payment-methods`                           | any role at one of its locations |
+| GET    | `/tenants/:tid/payment-methods`                               | any role at one of its locations |
 | POST   | `/locations/:lid/orders/:orderId/payments`                    | `payments.create`                |
 | POST   | `/locations/:lid/orders/:orderId/payments/:paymentId/refunds` | `payments.refund`                |
 
@@ -237,7 +237,7 @@ guestCount, notes }`. The `id` is a client-generated UUID and the **idempotency 
   is held answers `reason: BELOW_PAID`.
 - **Hub-owned orders** (Phase 8, ADR 0014): in the cloud, an order a location hub has synchronized
   belongs to that hub. Charges and refunds of it (and order edits and transitions) answer
-  `409 INVALID_ORDER_STATE`, `reason: OWNED_BY_RESTAURANT`; they are made at the POS. Online card
+  `409 INVALID_ORDER_STATE`, `reason: OWNED_BY_LOCATION`; they are made at the POS. Online card
   charges are refunded from the admin portal instead (below).
 - **Audit:** `payment.captured`, `payment.refunded`, `payment.voided` (online voids; references
   only, never card data).
@@ -315,7 +315,7 @@ See [ADR 0013](adr/0013-online-ordering.md). Public endpoints need no token; the
 
 | Method | Path                              | Auth                           | Notes                                                                                           |
 | ------ | --------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------- |
-| GET    | `/public/restaurants/:slug`       | public                         | Restaurant and its active locations with ordering status                                        |
+| GET    | `/public/tenants/:slug`           | public                         | Restaurant and its active locations with ordering status                                        |
 | GET    | `/public/locations/:lid`          | public                         | One location (`PublicLocation`)                                                                 |
 | GET    | `/public/locations/:lid/menu`     | public                         | Published menu, `ETag` / `304` like the staff endpoint                                          |
 | POST   | `/orders`                         | public, own budget             | Place a website order (`CreateWebOrderRequest`)                                                 |
@@ -339,7 +339,7 @@ trackingToken }`. Prices and totals sent by the browser are stripped and never r
   `acceptMinutes`. A resend of the same `id` and phone answers `200` with the same order and
   token; another phone `409 CONFLICT` (`ID_IN_USE`).
 - **Errors:** `409 ONLINE_ORDERING_DISABLED` (`details: { state, reason }`, also
-  `reason: FULFILLMENT_UNAVAILABLE`), `503 RESTAURANT_OFFLINE`, `400 VALIDATION_FAILED`
+  `reason: FULFILLMENT_UNAVAILABLE`), `503 LOCATION_OFFLINE`, `400 VALIDATION_FAILED`
   (`PAYMENT_OPTION_MISMATCH`: pay at pickup goes with pickup, cash on delivery with delivery),
   `422 PRODUCT_UNAVAILABLE` / `INVALID_MODIFIER_SELECTION` / … from the domain,
   `422 PAYMENT_FAILED` (`CARD_DECLINED`, `PROVIDER_NOT_CONFIGURED`; no order is created).
@@ -364,7 +364,7 @@ trackingToken }`. Prices and totals sent by the browser are stripped and never r
 
 ## Location hub (Phases 5–6)
 
-The hub (`apps/gateway`) serves the same API as the cloud to the POS and KDS on the restaurant LAN
+The hub (`apps/gateway`) serves the same API as the cloud to the POS and KDS on the location LAN
 (orders, payments, shifts, kitchen, menu, floor, realtime), from its SQLite database. Differences:
 
 - **Cloud-managed settings are read-only** on the hub: writes to menu, prices, taxes, discounts,
@@ -382,7 +382,7 @@ The hub (`apps/gateway`) serves the same API as the cloud to the POS and KDS on 
 | GET    | `/hub/sync/operations`           | `orders.view` — the outbox (`?status=PENDING\|FAILED\|COMPLETED&limit=`) |
 | POST   | `/hub/sync/operations/:id/retry` | `sync.view` — put a FAILED operation back in the queue                   |
 
-`HubStatus`: `{ paired, restaurantId, locationId, cloud: ONLINE|OFFLINE|UNKNOWN,
+`HubStatus`: `{ paired, tenantId, locationId, cloud: ONLINE|OFFLINE|UNKNOWN,
 state: ONLINE|OFFLINE|SYNCING|SYNC_ERROR, lastSnapshotAt, snapshotVersion, lastError,
 pendingOperations, failedOperations, syncedOperations (24 h), lastSyncAt, nextAttemptAt }`.
 Clients use it to know they are behind a hub. Outbox rows (`HubSyncOperation`) carry the entity,
@@ -441,21 +441,21 @@ total }`.
 
 ### Staff (restaurant-wide)
 
-| Method | Path                                          | Permission                       |
-| ------ | --------------------------------------------- | -------------------------------- |
-| GET    | `/restaurants/:rid/users`                     | `users.manage`                   |
-| POST   | `/restaurants/:rid/users`                     | `users.manage`                   |
-| PATCH  | `/restaurants/:rid/users/:userId`             | `users.manage`                   |
-| PUT    | `/restaurants/:rid/users/:userId/roles`       | `users.manage`                   |
-| POST   | `/restaurants/:rid/users/:userId/password`    | `users.manage` (204)             |
-| GET    | `/restaurants/:rid/roles`                     | `roles.manage` or `users.manage` |
-| POST   | `/restaurants/:rid/roles`                     | `roles.manage`                   |
-| PATCH  | `/restaurants/:rid/roles/:roleId`             | `roles.manage`                   |
-| DELETE | `/restaurants/:rid/roles/:roleId`             | `roles.manage` (204)             |
-| GET    | `/restaurants/:rid/employees`                 | `users.manage`                   |
-| POST   | `/restaurants/:rid/employees`                 | `users.manage`                   |
-| PATCH  | `/restaurants/:rid/employees/:employeeId`     | `users.manage`                   |
-| PUT    | `/restaurants/:rid/employees/:employeeId/pin` | `users.manage`                   |
+| Method | Path                                      | Permission                       |
+| ------ | ----------------------------------------- | -------------------------------- |
+| GET    | `/tenants/:tid/users`                     | `users.manage`                   |
+| POST   | `/tenants/:tid/users`                     | `users.manage`                   |
+| PATCH  | `/tenants/:tid/users/:userId`             | `users.manage`                   |
+| PUT    | `/tenants/:tid/users/:userId/roles`       | `users.manage`                   |
+| POST   | `/tenants/:tid/users/:userId/password`    | `users.manage` (204)             |
+| GET    | `/tenants/:tid/roles`                     | `roles.manage` or `users.manage` |
+| POST   | `/tenants/:tid/roles`                     | `roles.manage`                   |
+| PATCH  | `/tenants/:tid/roles/:roleId`             | `roles.manage`                   |
+| DELETE | `/tenants/:tid/roles/:roleId`             | `roles.manage` (204)             |
+| GET    | `/tenants/:tid/employees`                 | `users.manage`                   |
+| POST   | `/tenants/:tid/employees`                 | `users.manage`                   |
+| PATCH  | `/tenants/:tid/employees/:employeeId`     | `users.manage`                   |
+| PUT    | `/tenants/:tid/employees/:employeeId/pin` | `users.manage`                   |
 
 - **Users:** create `{ email, displayName, preferredLocale, password (≥ 10), roles: [{ roleId,
 locationId | null }] }`; update `{ displayName?, preferredLocale?, isActive? }`; roles are
@@ -477,14 +477,14 @@ userId, pin? }`; the PIN (4–8 digits) is stored hashed; responses only say `ha
 
 ### Payment setup
 
-| Method     | Path                                                             | Permission                         |
-| ---------- | ---------------------------------------------------------------- | ---------------------------------- |
-| GET        | `/restaurants/:rid/payment-methods/all`                          | `settings.manage` (incl. archived) |
-| POST/PATCH | `/restaurants/:rid/payment-methods[/:methodId]`                  | `settings.manage`                  |
-| POST       | `/restaurants/:rid/payment-methods/:methodId/archive · /restore` | `settings.manage`                  |
-| GET        | `/locations/:lid/cash-registers/all`                             | `settings.manage` at the location  |
-| POST/PATCH | `/locations/:lid/cash-registers[/:registerId]`                   | `settings.manage` at the location  |
-| POST       | `/locations/:lid/cash-registers/:registerId/archive · /restore`  | `settings.manage` at the location  |
+| Method     | Path                                                            | Permission                         |
+| ---------- | --------------------------------------------------------------- | ---------------------------------- |
+| GET        | `/tenants/:tid/payment-methods/all`                             | `settings.manage` (incl. archived) |
+| POST/PATCH | `/tenants/:tid/payment-methods[/:methodId]`                     | `settings.manage`                  |
+| POST       | `/tenants/:tid/payment-methods/:methodId/archive · /restore`    | `settings.manage`                  |
+| GET        | `/locations/:lid/cash-registers/all`                            | `settings.manage` at the location  |
+| POST/PATCH | `/locations/:lid/cash-registers[/:registerId]`                  | `settings.manage` at the location  |
+| POST       | `/locations/:lid/cash-registers/:registerId/archive · /restore` | `settings.manage` at the location  |
 
 A method's `type` cannot change; the last active cash method cannot be archived
 (`LAST_CASH_METHOD`), nor a drawer with an open shift (`SHIFT_OPEN`). Audit:
@@ -494,13 +494,13 @@ A method's `type` cannot change; the last active cash method cannot be archived
 
 | Method | Path                                          | Permission                             |
 | ------ | --------------------------------------------- | -------------------------------------- |
-| GET    | `/restaurants/:rid/dashboard`                 | `orders.view` (any location)           |
-| GET    | `/restaurants/:rid/orders`                    | `orders.view` (any location), paged    |
-| GET    | `/restaurants/:rid/customers?search=`         | `customers.view` (any location), paged |
-| GET    | `/restaurants/:rid/customers/:customerKey`    | `customers.view` (any location)        |
-| GET    | `/restaurants/:rid/payments`                  | `payments.view` (any location), paged  |
+| GET    | `/tenants/:tid/dashboard`                     | `orders.view` (any location)           |
+| GET    | `/tenants/:tid/orders`                        | `orders.view` (any location), paged    |
+| GET    | `/tenants/:tid/customers?search=`             | `customers.view` (any location), paged |
+| GET    | `/tenants/:tid/customers/:customerKey`        | `customers.view` (any location)        |
+| GET    | `/tenants/:tid/payments`                      | `payments.view` (any location), paged  |
 | POST   | `/locations/:lid/payments/:paymentId/refunds` | `payments.refund` at the location      |
-| GET    | `/restaurants/:rid/audit-logs`                | `audit.view` (any location), paged     |
+| GET    | `/tenants/:tid/audit-logs`                    | `audit.view` (any location), paged     |
 
 - **Dashboard:** per location, today's business date, orders (count, open, cancelled), sales
   (total of orders not cancelled, money collected), open shifts, online-ordering status, and — with
@@ -553,17 +553,17 @@ Cloud-only reports (`apps/api/src/modules/reports`, [ADR 0015](adr/0015-reportin
 PostgreSQL views. Every route needs `reports.view` (at some location) and answers for the
 locations where the caller holds it.
 
-| Method | Path                                    | Report                                            |
-| ------ | --------------------------------------- | ------------------------------------------------- |
-| GET    | `/restaurants/:rid/reports/daily-sales` | Sales per business date (every day of the period) |
-| GET    | `/restaurants/:rid/reports/channels`    | Sales per channel with share of net sales         |
-| GET    | `/restaurants/:rid/reports/payments`    | Money per payment method and per channel          |
-| GET    | `/restaurants/:rid/reports/products`    | Line sales per product and size                   |
-| GET    | `/restaurants/:rid/reports/categories`  | Line sales per category                           |
-| GET    | `/restaurants/:rid/reports/taxes`       | Per tax, rate and price mode, refunds netted      |
-| GET    | `/restaurants/:rid/reports/discounts`   | Per discount as applied                           |
-| GET    | `/restaurants/:rid/reports/shifts`      | Shifts opened in the period, cash and tenders     |
-| GET    | `/restaurants/:rid/reports/prep-times`  | Kitchen prep and wait times per station           |
+| Method | Path                                | Report                                            |
+| ------ | ----------------------------------- | ------------------------------------------------- |
+| GET    | `/tenants/:tid/reports/daily-sales` | Sales per business date (every day of the period) |
+| GET    | `/tenants/:tid/reports/channels`    | Sales per channel with share of net sales         |
+| GET    | `/tenants/:tid/reports/payments`    | Money per payment method and per channel          |
+| GET    | `/tenants/:tid/reports/products`    | Line sales per product and size                   |
+| GET    | `/tenants/:tid/reports/categories`  | Line sales per category                           |
+| GET    | `/tenants/:tid/reports/taxes`       | Per tax, rate and price mode, refunds netted      |
+| GET    | `/tenants/:tid/reports/discounts`   | Per discount as applied                           |
+| GET    | `/tenants/:tid/reports/shifts`      | Shifts opened in the period, cash and tenders     |
+| GET    | `/tenants/:tid/reports/prep-times`  | Kitchen prep and wait times per station           |
 
 - **Query:** `from`, `to` (business dates `YYYY-MM-DD`, inclusive, required, at most 366 days),
   `locationIds` (comma-separated; default every permitted location; another location answers
@@ -623,14 +623,14 @@ locations where the caller holds it.
 
 ## Observability
 
-Structured JSON logs (pino) include `reqId`, `userId`, `restaurantId`, `locationId`, `orderId`
+Structured JSON logs (pino) include `reqId`, `userId`, `tenantId`, `locationId`, `orderId`
 (routes naming an order) and `deviceId` (a hub calling `/sync/*`, whose restaurant and location
 are logged too), also on Fastify's request-completed line. Authorization headers, cookies,
 passwords, tokens, PINs, credentials and card fields are redacted, also one level down
 (`body.password`); database errors are logged without the query's arguments. The hub logs the
 same fields (`service: "hub"`) and serves the same `/health` and `/ready`. Audit
 entries record actor, source, request id and redacted metadata for: login, failed login, logout,
-refresh-token reuse, restaurant/location changes, catalog changes including price changes,
+refresh-token reuse, tenant/location changes, catalog changes including price changes,
 orders (creation, discounts, edits, status changes, cancellations), payments (captures, refunds,
 voids), shifts and cash movements, online-ordering settings, devices, staff and permission
 changes, payment setup and sync decisions (the admin portal's audit log, `audit.view`). Since Phase 10 the

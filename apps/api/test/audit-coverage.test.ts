@@ -30,13 +30,13 @@ describe('audit coverage', () => {
     const tenant = await createTenant(prisma);
     const menu = await createMenuFixture(prisma, tenant);
     const cash = await prisma.paymentMethod.create({
-      data: { restaurantId: tenant.restaurantId, type: 'CASH', nameEn: 'Cash', nameAr: 'نقدًا' },
+      data: { tenantId: tenant.tenantId, type: 'CASH', nameEn: 'Cash', nameAr: 'نقدًا' },
     });
     const register = await prisma.cashRegister.create({
       data: { locationId: tenant.locationA, nameEn: 'Drawer', nameAr: 'درج' },
     });
     const loc = `/api/v1/locations/${tenant.locationA}`;
-    const base = `/api/v1/restaurants/${tenant.restaurantId}`;
+    const base = `/api/v1/tenants/${tenant.tenantId}`;
     // Login (and, at the end, logout).
     const login = await app.inject({
       method: 'POST',
@@ -111,7 +111,7 @@ describe('audit coverage', () => {
     // Payment correction: an online charge voided by the cloud.
     const online = await prisma.paymentMethod.create({
       data: {
-        restaurantId: tenant.restaurantId,
+        tenantId: tenant.tenantId,
         type: 'ONLINE',
         nameEn: 'Online',
         nameAr: 'إلكتروني',
@@ -120,7 +120,7 @@ describe('audit coverage', () => {
     await prisma.payment.create({
       data: {
         id: newId(),
-        restaurantId: tenant.restaurantId,
+        tenantId: tenant.tenantId,
         locationId: tenant.locationA,
         orderId: other.id,
         paymentMethodId: online.id,
@@ -160,7 +160,7 @@ describe('audit coverage', () => {
     });
 
     const entries = await prisma.auditLog.findMany({
-      where: { restaurantId: tenant.restaurantId },
+      where: { tenantId: tenant.tenantId },
     });
     const actions = new Set(entries.map((e) => e.action));
     for (const action of [
@@ -178,7 +178,7 @@ describe('audit coverage', () => {
       'role.permissions_changed',
       'user.roles_changed',
       'location.updated',
-      'restaurant.updated',
+      'tenant.updated',
       'online_ordering.updated',
       'payment_method.created',
     ]) {

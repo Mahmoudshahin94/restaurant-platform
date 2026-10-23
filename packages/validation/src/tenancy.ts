@@ -12,7 +12,7 @@ import {
 
 export const onlineOrderingStateSchema = z.enum(enumValues(OnlineOrderingState));
 
-export const restaurantSchema = z.object({
+export const tenantSchema = z.object({
   id: idSchema,
   slug: z.string(),
   nameEn: z.string(),
@@ -23,13 +23,13 @@ export const restaurantSchema = z.object({
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
 });
-export type Restaurant = z.infer<typeof restaurantSchema>;
+export type Tenant = z.infer<typeof tenantSchema>;
 
 /**
  * Currency is not updatable: every stored amount is in that currency's minor units, so a change
- * would silently rescale history. It is set when the restaurant is provisioned.
+ * would silently rescale history. It is set when the tenant is provisioned.
  */
-export const updateRestaurantSchema = z
+export const updateTenantSchema = z
   .object({
     nameEn: nameEnSchema,
     nameAr: nameArSchema,
@@ -38,9 +38,9 @@ export const updateRestaurantSchema = z
   })
   .partial()
   .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' });
-export type UpdateRestaurantRequest = z.infer<typeof updateRestaurantSchema>;
+export type UpdateTenantRequest = z.infer<typeof updateTenantSchema>;
 
-export const createRestaurantSchema = z.object({
+export const createTenantSchema = z.object({
   slug: z
     .string()
     .trim()
@@ -53,11 +53,11 @@ export const createRestaurantSchema = z.object({
   defaultLocale: localeSchema,
   timezone: timezoneSchema,
 });
-export type CreateRestaurantRequest = z.infer<typeof createRestaurantSchema>;
+export type CreateTenantRequest = z.infer<typeof createTenantSchema>;
 
 export const locationSchema = z.object({
   id: idSchema,
-  restaurantId: idSchema,
+  tenantId: idSchema,
   code: z.string(),
   nameEn: z.string(),
   nameAr: z.string(),

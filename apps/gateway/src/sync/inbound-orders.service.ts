@@ -22,8 +22,8 @@ const json = (value: Record<string, unknown> | null) =>
 /**
  * Stores website orders the cloud announced on its change feed (ADR 0013).
  *
- * The cloud owns a website order until the restaurant accepts or rejects it. While the hub has not
- * changed the order, the cloud's copy simply replaces the hub's. Once the restaurant decided here,
+ * The cloud owns a website order until the location accepts or rejects it. While the hub has not
+ * changed the order, the cloud's copy simply replaces the hub's. Once the location decided here,
  * the hub's push hands the order over; if the cloud decided first (it cancelled the order at the
  * acceptance deadline), the cloud's decision stands: the hub takes the cloud's copy, cancels the
  * kitchen tickets it opened and marks its own unsent change superseded. After the hand-over the
@@ -63,7 +63,7 @@ export class InboundOrdersService {
         };
       }
       if (!handedOver && unsent.length > 0 && order.status !== 'PLACED') {
-        // The cloud decided before the restaurant's decision reached it: the cloud's stands.
+        // The cloud decided before the location's decision reached it: the cloud's stands.
         await this.store(tx, order, true);
         await this.remember(tx, order);
         // The cloud can only cancel an order it still owns (acceptance happens at the hub).
@@ -174,7 +174,7 @@ export class InboundOrdersService {
     type: 'order.created' | 'order.updated' | 'order.cancelled',
     o: SyncOrder,
   ): RealtimeEvent {
-    const scope = { restaurantId: o.restaurantId, locationId: o.locationId };
+    const scope = { tenantId: o.tenantId, locationId: o.locationId };
     const payload = {
       orderId: o.id,
       orderNumber: o.orderNumber,

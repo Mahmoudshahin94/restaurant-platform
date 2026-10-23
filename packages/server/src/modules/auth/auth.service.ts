@@ -46,14 +46,14 @@ export class AuthService {
         entityId: user.id,
         actorType: 'USER',
         actorId: user.id,
-        restaurantId: user.restaurantId,
+        tenantId: user.tenantId,
         metadata: { reason: 'INVALID_CREDENTIALS' },
       });
       throw new DomainError('INVALID_CREDENTIALS', 'Invalid email or password');
     }
     if (!user.isActive) throw new DomainError('ACCOUNT_DISABLED', 'Account is disabled');
 
-    const session = await this.issueSession(user.id, user.restaurantId, newId());
+    const session = await this.issueSession(user.id, user.tenantId, newId());
     await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     await this.audit.record({
       action: 'auth.login',
@@ -61,7 +61,7 @@ export class AuthService {
       entityId: user.id,
       actorType: 'USER',
       actorId: user.id,
-      restaurantId: user.restaurantId,
+      tenantId: user.tenantId,
     });
     return session;
   }
@@ -99,7 +99,7 @@ export class AuthService {
           action: 'auth.pin_login_failed',
           entityType: 'Employee',
           entityId: employee.id,
-          restaurantId: employee.restaurantId,
+          tenantId: employee.tenantId,
           metadata: { reason: 'INVALID_CREDENTIALS', locked: count >= PIN_MAX_FAILURES },
         });
       }
@@ -108,14 +108,14 @@ export class AuthService {
     this.pinFailures.delete(key);
     if (!employee.user.isActive) throw new DomainError('ACCOUNT_DISABLED', 'Account is disabled');
 
-    const session = await this.issueSession(employee.user.id, employee.restaurantId, newId());
+    const session = await this.issueSession(employee.user.id, employee.tenantId, newId());
     await this.audit.record({
       action: 'auth.pin_login',
       entityType: 'User',
       entityId: employee.user.id,
       actorType: 'EMPLOYEE',
       actorId: employee.id,
-      restaurantId: employee.restaurantId,
+      tenantId: employee.tenantId,
     });
     return session;
   }
@@ -146,7 +146,7 @@ export class AuthService {
         entityId: stored.userId,
         actorType: 'USER',
         actorId: stored.userId,
-        restaurantId: stored.user.restaurantId,
+        tenantId: stored.user.tenantId,
         metadata: { familyId: stored.familyId },
       });
       throw new DomainError('TOKEN_REUSED', 'Refresh token was already used; session revoked');
@@ -184,7 +184,7 @@ export class AuthService {
     });
 
     return {
-      response: await this.buildResponse(stored.userId, stored.user.restaurantId),
+      response: await this.buildResponse(stored.userId, stored.user.tenantId),
       refreshToken: nextRaw,
     };
   }
@@ -193,7 +193,7 @@ export class AuthService {
     if (!rawToken) return;
     const stored = await this.prisma.refreshToken.findUnique({
       where: { tokenHash: this.tokens.hashRefreshToken(rawToken) },
-      include: { user: { select: { restaurantId: true } } },
+      include: { user: { select: { tenantId: true } } },
     });
     if (!stored) return;
     await this.revokeFamily(stored.familyId);
@@ -203,13 +203,13 @@ export class AuthService {
       entityId: stored.userId,
       actorType: 'USER',
       actorId: stored.userId,
-      restaurantId: stored.user.restaurantId,
+      tenantId: stored.user.tenantId,
     });
   }
 
   private async issueSession(
     userId: string,
-    restaurantId: string,
+    tenantId: string,
     familyId: string,
   ): Promise<IssuedSession> {
     const refreshToken = this.tokens.generateRefreshToken();
@@ -221,15 +221,15 @@ export class AuthService {
         expiresAt: this.tokens.refreshTokenExpiry(),
       },
     });
-    return { response: await this.buildResponse(userId, restaurantId), refreshToken };
+    return { response: await this.buildResponse(userId, tenantId), refreshToken };
   }
 
   private async buildResponse(
     userId: string,
-    restaurantId: string,
+    tenantId: string,
   ): Promise<Omit<TokenResponse, 'refreshToken'>> {
     return {
-      accessToken: await this.tokens.signAccessToken({ userId, restaurantId }),
+      accessToken: await this.tokens.signAccessToken({ userId, tenantId }),
       expiresIn: this.tokens.accessTtlSeconds,
       user: await this.access.loadAuthUser(userId),
     };

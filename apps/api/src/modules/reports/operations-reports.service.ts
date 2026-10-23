@@ -147,7 +147,7 @@ export class OperationsReportsService {
       JOIN cash_registers cr ON cr.id = sh.cash_register_id
       LEFT JOIN users ou ON ou.id = sh.opened_by_id
       LEFT JOIN users cu ON cu.id = sh.closed_by_id
-      WHERE sh.restaurant_id = ${ctx.restaurantId}::uuid
+      WHERE sh.tenant_id = ${ctx.tenantId}::uuid
         AND sh.location_id = ANY(${ctx.locationIds}::uuid[])
         AND (sh.opened_at AT TIME ZONE l.timezone)::date BETWEEN ${ctx.from}::date AND ${ctx.to}::date
       ORDER BY sh.opened_at DESC, sh.id`;
@@ -274,7 +274,7 @@ export class OperationsReportsService {
     };
     const [stations, perStation, overall] = await Promise.all([
       this.prisma.kitchenStation.findMany({
-        where: { restaurantId: ctx.restaurantId },
+        where: { tenantId: ctx.tenantId },
         orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
       }),
       this.prisma.$queryRaw<(Stats & { station_id: string })[]>`

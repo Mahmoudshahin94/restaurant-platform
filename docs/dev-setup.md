@@ -59,7 +59,7 @@ Run the customer website (online ordering; it talks to the cloud API):
 pnpm --filter @pos/customer-web dev        # http://localhost:5175 (proxies /api to :3000)
 ```
 
-It sells for the restaurant in `VITE_RESTAURANT_SLUG` (default `demo-kitchen`, the seed). A
+It sells for the restaurant in `VITE_TENANT_SLUG` (default `demo-kitchen`, the seed). A
 branch takes orders only when online ordering is OPEN (the seed opens `MAIN` when it creates it;
 otherwise `PUT /api/v1/locations/:lid/online-ordering { "state": "OPEN" }` as the owner), it is
 within its opening hours, and **its hub is running** (a hub silent for 3 minutes makes the

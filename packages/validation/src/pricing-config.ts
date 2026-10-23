@@ -17,7 +17,7 @@ const noEmptyUpdate = { message: 'No fields to update' };
 
 export const taxSchema = z.object({
   id: idSchema,
-  restaurantId: idSchema,
+  tenantId: idSchema,
   nameEn: z.string(),
   nameAr: z.string(),
   rateBps: z.int(),
@@ -45,7 +45,7 @@ export const discountTypeSchema = z.enum(enumValues(DiscountType));
 
 export const discountSchema = z.object({
   id: idSchema,
-  restaurantId: idSchema,
+  tenantId: idSchema,
   nameEn: z.string(),
   nameAr: z.string(),
   type: discountTypeSchema,

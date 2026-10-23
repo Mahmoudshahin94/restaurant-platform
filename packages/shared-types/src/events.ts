@@ -48,7 +48,7 @@ export interface EventMap {
   'sync.failed': { failed: number; lastError: string };
   /** The hub's indicator state changed (e.g. the cloud became unreachable or came back). */
   'sync.status_changed': { state: SyncConnectionState; pending: number; failed: number };
-  'restaurant.status_changed': { locationId: string; state: OnlineOrderingState };
+  'tenant.status_changed': { locationId: string; state: OnlineOrderingState };
   'menu.updated': { locationId: string; version: string };
 }
 
@@ -58,7 +58,7 @@ export interface RealtimeEvent<K extends EventType = EventType> {
   /** UUIDv7; consumers de-duplicate on it. */
   eventId: string;
   type: K;
-  restaurantId: string;
+  tenantId: string;
   locationId: string;
   /** ISO-8601 UTC. */
   occurredAt: string;

@@ -63,7 +63,7 @@ export class KitchenService {
   async settings(locationId: string): Promise<KitchenSettings> {
     const location = await this.prisma.location.findUniqueOrThrow({ where: { id: locationId } });
     const stations = await this.prisma.kitchenStation.findMany({
-      where: { restaurantId: location.restaurantId, archivedAt: null },
+      where: { tenantId: location.tenantId, archivedAt: null },
       orderBy: [{ sortOrder: 'asc' }, { nameEn: 'asc' }],
     });
     return {

@@ -211,7 +211,7 @@ Timestamps never decide a conflict or identify duplicates: duplicates are recogn
 `operationId`, ownership by the ledger, ordering by `entity_version` and the feed's `seq`.
 
 In the cloud, staff cannot change an order a hub owns (edits, transitions, charges, refunds answer
-`OWNED_BY_RESTAURANT`); only online card payments are still settled by the cloud, without
+`OWNED_BY_LOCATION`); only online card payments are still settled by the cloud, without
 changing the order's version (ADR 0014).
 
 ## Resolving refused operations (Phase 8)

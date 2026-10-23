@@ -126,7 +126,7 @@ export class ShiftsService {
         await tx.shift.create({
           data: {
             id: input.id,
-            restaurantId: location.restaurantId,
+            tenantId: location.tenantId,
             locationId,
             cashRegisterId: register.id,
             status: 'OPEN',

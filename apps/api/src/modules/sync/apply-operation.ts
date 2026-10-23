@@ -46,12 +46,12 @@ export interface ApplyOptions {
 
 /** Cloud-side effects the push path needs for website orders (ADR 0013). */
 export interface ApplyHooks {
-  /** Voids the online payments of a website order the restaurant rejected. */
+  /** Voids the online payments of a website order the tenant rejected. */
   voidOnlinePayments(tx: PrismaTx, orderId: string, reason: string): Promise<number>;
   /** Tells the hub (change feed) that the cloud changed the order after applying the push. */
   recordOrderChange(
     tx: PrismaTx,
-    order: { id: string; restaurantId: string; locationId: string },
+    order: { id: string; tenantId: string; locationId: string },
   ): Promise<void>;
 }
 
@@ -68,11 +68,8 @@ export async function applyOperation(
 ): Promise<Applied> {
   if (op.payload.id !== op.entityId) throw reject('entityId does not match the payload id');
   if (op.operationType === 'AUDIT_LOG_APPEND') return applyAuditLog(tx, device, op.payload);
-  if (
-    op.payload.restaurantId !== device.restaurantId ||
-    op.payload.locationId !== device.locationId
-  ) {
-    throw outOfScope('The payload belongs to another restaurant or location than this hub');
+  if (op.payload.tenantId !== device.tenantId || op.payload.locationId !== device.locationId) {
+    throw outOfScope('The payload belongs to another tenant or location than this hub');
   }
   switch (op.operationType) {
     case 'ORDER_UPSERT':
@@ -85,8 +82,8 @@ export async function applyOperation(
 }
 
 /**
- * An audit entry recorded at the restaurant (ADR 0016). Append-only: stored once under the hub's
- * restaurant and location (the hub serves exactly one), never updated; its metadata is redacted
+ * An audit entry recorded at the location (ADR 0016). Append-only: stored once under the hub's
+ * tenant and location (the hub serves exactly one), never updated; its metadata is redacted
  * again, as on every audit write.
  */
 async function applyAuditLog(
@@ -95,10 +92,10 @@ async function applyAuditLog(
   entry: SyncAuditLog,
 ): Promise<Applied> {
   if (
-    (entry.restaurantId !== null && entry.restaurantId !== device.restaurantId) ||
+    (entry.tenantId !== null && entry.tenantId !== device.tenantId) ||
     (entry.locationId !== null && entry.locationId !== device.locationId)
   ) {
-    throw outOfScope('The audit entry belongs to another restaurant or location than this hub');
+    throw outOfScope('The audit entry belongs to another tenant or location than this hub');
   }
   const existing = await tx.auditLog.findUnique({
     where: { id: entry.id },
@@ -111,7 +108,7 @@ async function applyAuditLog(
   await tx.auditLog.create({
     data: {
       id: entry.id,
-      restaurantId: device.restaurantId,
+      tenantId: device.tenantId,
       locationId: device.locationId,
       actorType: entry.actorType,
       actorId: entry.actorId,
@@ -135,7 +132,7 @@ type Table = 'orders' | 'shifts' | 'kitchen_tickets';
  * deliveries for one entity cannot interleave. Returns whether the row exists.
  *
  * `handOver` covers the one entity the cloud gives away: a website order, owned by the cloud until
- * the restaurant decides on it (ADR 0013). It is consulted only while the hub has never written the
+ * the tenant decides on it (ADR 0013). It is consulted only while the hub has never written the
  * entity, and either allows the write or throws why not.
  */
 async function claim(
@@ -195,7 +192,7 @@ async function claim(
 function orderScalars(o: SyncOrder): Prisma.OrderUncheckedCreateInput {
   return {
     id: o.id,
-    restaurantId: o.restaurantId,
+    tenantId: o.tenantId,
     locationId: o.locationId,
     orderNumber: o.orderNumber,
     businessDate: date(o.businessDate),
@@ -240,8 +237,8 @@ function checkOrderChildren(o: SyncOrder, device: AuthenticatedDevice): void {
   }
   for (const p of o.payments) {
     if (p.orderId !== o.id) throw reject('A payment belongs to another order');
-    if (p.restaurantId !== device.restaurantId || p.locationId !== device.locationId) {
-      throw outOfScope('A payment belongs to another restaurant or location');
+    if (p.tenantId !== device.tenantId || p.locationId !== device.locationId) {
+      throw outOfScope('A payment belongs to another tenant or location');
     }
     if (!p.cash.every((c) => c.paymentId === p.id && c.shiftId === p.shiftId)) {
       throw reject('A cash movement does not belong to its payment');
@@ -251,7 +248,7 @@ function checkOrderChildren(o: SyncOrder, device: AuthenticatedDevice): void {
 
 /**
  * The hand-over of a website order (ADR 0013). The cloud owns it while it waits for the
- * restaurant; the hub's first change of it must be the restaurant's decision (accept or reject)
+ * tenant; the hub's first change of it must be the location's decision (accept or reject)
  * made on exactly the version the cloud handed out (`baseVersion`). Anything else crosses
  * ownership: the cloud already decided (e.g. cancelled it at the acceptance deadline), changed it
  * since, or the hub tried to edit it before deciding.
@@ -277,7 +274,7 @@ async function webOrderHandOver(
     throw conflict('The website order changed in the cloud since the hub received it');
   }
   if (o.status === 'PLACED' || o.status === 'DRAFT') {
-    throw conflict('The cloud owns this website order until the restaurant accepts or rejects it');
+    throw conflict('The cloud owns this website order until the location accepts or rejects it');
   }
   return true;
 }
@@ -374,7 +371,7 @@ async function applyOrder(
     }
   }
 
-  // The restaurant rejected a website order: the cloud voids what the customer paid online, and
+  // The tenant rejected a website order: the cloud voids what the customer paid online, and
   // tells the hub (which owns the order now, but not its online payments).
   if (ownership.handedOver && o.status === 'CANCELLED') {
     const voided = await hooks.voidOnlinePayments(

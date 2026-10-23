@@ -52,10 +52,11 @@ describe('hub migrations', () => {
     );
   });
 
-  it('upgrades a hub that already holds orders, payments and cash (online ordering)', async () => {
+  it('upgrades a hub that already holds orders, payments and cash (online ordering, tenant rename)', async () => {
     const { client, dir } = fresh();
     await client.$executeRawUnsafe('PRAGMA foreign_keys = ON');
-    // The hub as Phase 6 left it: every migration before online ordering.
+    // The hub as Phase 6 left it (still naming the tenant a restaurant): every migration before
+    // online ordering.
     const before = join(dir, 'before');
     for (const name of readdirSync(hubMigrationsDir()).filter((n) => n < '20261017133550')) {
       cpSync(join(hubMigrationsDir(), name), join(before, name), { recursive: true });
@@ -75,8 +76,11 @@ describe('hub migrations', () => {
       await client.$executeRawUnsafe(sql);
     }
 
-    // The tables it rebuilds (locations, payments) keep their rows and references.
-    expect(await migrateHubDatabase(client)).toEqual(['20261017133550_online_ordering']);
+    // The tables online ordering rebuilds (locations, payments) keep their rows and references,
+    // and the tenant rename (ADR 0017) keeps every row under its tenant.
+    expect(await migrateHubDatabase(client)).toEqual(
+      readdirSync(hubMigrationsDir()).filter((n) => n >= '20261017133550' && /^\d{14}_/.test(n)),
+    );
     expect(await client.$queryRawUnsafe('PRAGMA foreign_key_check')).toEqual([]);
     expect(await client.payment.findUnique({ where: { id: 'p' } })).toMatchObject({ shiftId: 's' });
     expect(await client.cashTransaction.findUnique({ where: { id: 't' } })).toMatchObject({
@@ -85,7 +89,10 @@ describe('hub migrations', () => {
     expect(await client.location.findUnique({ where: { id: 'l' } })).toMatchObject({
       onlineAcceptMinutes: 10,
       openingHours: [],
+      tenantId: 'r',
     });
+    expect(await client.tenant.findUnique({ where: { id: 'r' } })).toMatchObject({ slug: 'r' });
+    expect(await client.order.findUnique({ where: { id: 'o' } })).toMatchObject({ tenantId: 'r' });
   });
 
   it('rolls back a migration that fails halfway', async () => {

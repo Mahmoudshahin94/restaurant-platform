@@ -24,8 +24,8 @@ const userInclude = {
 
 type UserRow = Awaited<ReturnType<typeof loadUser>>;
 
-function loadUser(tx: PrismaTx, restaurantId: string, userId: string) {
-  return tx.user.findFirst({ where: { id: userId, restaurantId }, include: userInclude });
+function loadUser(tx: PrismaTx, tenantId: string, userId: string) {
+  return tx.user.findFirst({ where: { id: userId, tenantId }, include: userInclude });
 }
 
 const toDto = (row: NonNullable<UserRow>): StaffUser => ({
@@ -48,11 +48,11 @@ const toDto = (row: NonNullable<UserRow>): StaffUser => ({
 const key = (a: RoleAssignmentInput) => `${a.roleId}:${a.locationId ?? '*'}`;
 
 /**
- * Back-office users (`users.manage`, restaurant-wide). Every change of what someone may do is a
+ * Back-office users (`users.manage`, tenant-wide). Every change of what someone may do is a
  * permission change and is audited (`user.roles_changed` with the assignments before and after).
  * Guards: nobody grants or revokes a role holding permissions they lack (at that scope); nobody
- * changes their own roles or deactivates themselves; the restaurant always keeps an active
- * restaurant-wide holder of a system role (Owner). Deactivation and password resets end the
+ * changes their own roles or deactivates themselves; the tenant always keeps an active
+ * tenant-wide holder of a system role (Owner). Deactivation and password resets end the
  * user's sessions at once. Passwords are hashed with argon2id and never logged or returned.
  */
 @Injectable()
@@ -62,9 +62,9 @@ export class UsersService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(restaurantId: string): Promise<StaffUser[]> {
+  async list(tenantId: string): Promise<StaffUser[]> {
     const rows = await this.prisma.user.findMany({
-      where: { restaurantId },
+      where: { tenantId },
       include: userInclude,
       orderBy: [{ isActive: 'desc' }, { displayName: 'asc' }],
     });
@@ -78,7 +78,7 @@ export class UsersService {
         await this.checkAssignments(tx, principal, input.roles);
         const row = await tx.user.create({
           data: {
-            restaurantId: principal.restaurantId,
+            tenantId: principal.tenantId,
             email: input.email,
             displayName: input.displayName,
             preferredLocale: input.preferredLocale,
@@ -114,14 +114,14 @@ export class UsersService {
 
   async update(principal: Principal, userId: string, input: UpdateUserRequest): Promise<StaffUser> {
     return this.prisma.$transaction(async (tx) => {
-      const before = await this.load(tx, principal.restaurantId, userId);
+      const before = await this.load(tx, principal.tenantId, userId);
       if (input.isActive === false && before.isActive) {
         if (userId === principal.userId) {
           throw new DomainError('CONFLICT', 'You cannot deactivate yourself', { reason: 'SELF' });
         }
         // Deactivating someone takes away everything they can do.
         await this.checkAssignments(tx, principal, before.roles);
-        await this.assertOwnerRemains(tx, principal.restaurantId, userId, []);
+        await this.assertOwnerRemains(tx, principal.tenantId, userId, []);
         await this.endSessions(tx, userId);
       }
       if (input.isActive === true && !before.isActive) {
@@ -151,14 +151,14 @@ export class UsersService {
     });
   }
 
-  /** Replaces the user's role assignments (restaurant-wide or per location). */
+  /** Replaces the user's role assignments (tenant-wide or per location). */
   async setRoles(
     principal: Principal,
     userId: string,
     roles: RoleAssignmentInput[],
   ): Promise<StaffUser> {
     return this.prisma.$transaction(async (tx) => {
-      const before = await this.load(tx, principal.restaurantId, userId);
+      const before = await this.load(tx, principal.tenantId, userId);
       if (userId === principal.userId) {
         throw new DomainError('CONFLICT', 'You cannot change your own roles', { reason: 'SELF' });
       }
@@ -168,7 +168,7 @@ export class UsersService {
       const added = roles.filter((a) => !had.has(key(a)));
       const removed = current.filter((a) => !wanted.has(key(a)));
       await this.checkAssignments(tx, principal, [...added, ...removed]);
-      await this.assertOwnerRemains(tx, principal.restaurantId, userId, roles);
+      await this.assertOwnerRemains(tx, principal.tenantId, userId, roles);
       for (const a of removed) {
         await tx.userRole.deleteMany({
           where: { userId, roleId: a.roleId, locationId: a.locationId },
@@ -180,14 +180,14 @@ export class UsersService {
       if (added.length > 0 || removed.length > 0) {
         await this.recordRoleChange(tx, userId, current, roles);
       }
-      return toDto(await this.load(tx, principal.restaurantId, userId));
+      return toDto(await this.load(tx, principal.tenantId, userId));
     });
   }
 
   async resetPassword(principal: Principal, userId: string, password: string): Promise<void> {
     const passwordHash = await hashSecret(password);
     await this.prisma.$transaction(async (tx) => {
-      const user = await this.load(tx, principal.restaurantId, userId);
+      const user = await this.load(tx, principal.tenantId, userId);
       // Taking over someone's account is as strong as holding their roles.
       if (userId !== principal.userId) await this.checkAssignments(tx, principal, user.roles);
       await tx.user.update({ where: { id: userId }, data: { passwordHash } });
@@ -205,13 +205,13 @@ export class UsersService {
     });
   }
 
-  private async load(tx: PrismaTx, restaurantId: string, userId: string) {
-    const row = await loadUser(tx, restaurantId, userId);
+  private async load(tx: PrismaTx, tenantId: string, userId: string) {
+    const row = await loadUser(tx, tenantId, userId);
     if (!row) throw new DomainError('USER_NOT_FOUND', 'User not found', { userId });
     return row;
   }
 
-  /** Each role must be the restaurant's, each location too, and grantable by the caller there. */
+  /** Each role must be the tenant's, each location too, and grantable by the caller there. */
   private async checkAssignments(
     tx: PrismaTx,
     principal: Principal,
@@ -220,7 +220,7 @@ export class UsersService {
     if (assignments.length === 0) return;
     const roleIds = [...new Set(assignments.map((a) => a.roleId))];
     const roles = await tx.role.findMany({
-      where: { id: { in: roleIds }, restaurantId: principal.restaurantId },
+      where: { id: { in: roleIds }, tenantId: principal.tenantId },
       include: { permissions: { select: { permissionKey: true } } },
     });
     const missingRoles = roleIds.filter((id) => !roles.some((r) => r.id === id));
@@ -231,7 +231,7 @@ export class UsersService {
       ...new Set(assignments.flatMap((a) => (a.locationId ? [a.locationId] : []))),
     ];
     const found = await tx.location.count({
-      where: { id: { in: locationIds }, restaurantId: principal.restaurantId },
+      where: { id: { in: locationIds }, tenantId: principal.tenantId },
     });
     if (found !== locationIds.length) {
       throw new DomainError('LOCATION_NOT_FOUND', 'Location not found');
@@ -246,17 +246,17 @@ export class UsersService {
   }
 
   /**
-   * The restaurant must keep an active user holding a system role restaurant-wide, or nobody
+   * The tenant must keep an active user holding a system role tenant-wide, or nobody
    * could administer it any more. `nextRoles` are the user's assignments after the change.
    */
   private async assertOwnerRemains(
     tx: PrismaTx,
-    restaurantId: string,
+    tenantId: string,
     userId: string,
     nextRoles: readonly RoleAssignmentInput[],
   ): Promise<void> {
     const systemRoles = await tx.role.findMany({
-      where: { restaurantId, isSystem: true },
+      where: { tenantId, isSystem: true },
       select: { id: true },
     });
     const systemIds = new Set(systemRoles.map((r) => r.id));
@@ -266,11 +266,11 @@ export class UsersService {
         roleId: { in: [...systemIds] },
         locationId: null,
         userId: { not: userId },
-        user: { isActive: true, restaurantId },
+        user: { isActive: true, tenantId },
       },
     });
     if (others === 0) {
-      throw new DomainError('CONFLICT', 'The restaurant needs at least one active owner', {
+      throw new DomainError('CONFLICT', 'The tenant needs at least one active owner', {
         reason: 'LAST_OWNER',
       });
     }

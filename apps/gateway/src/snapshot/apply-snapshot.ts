@@ -14,7 +14,7 @@ const REPLACED: ReadonlySet<SnapshotTable> = new Set([
 ]);
 
 const DELEGATE: Record<SnapshotTable, string> = {
-  restaurants: 'restaurant',
+  tenants: 'tenant',
   locations: 'location',
   roles: 'role',
   rolePermissions: 'rolePermission',

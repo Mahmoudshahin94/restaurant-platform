@@ -4,7 +4,7 @@ import { DomainError } from '../errors';
  * What an administrator may do with an operation the cloud refused from a location hub
  * (ADR 0014). The rule: nothing is overwritten or dropped silently.
  *
- * - **Apply the restaurant's version** (`APPLY_HUB`): only for ownership conflicts (`CONFLICT` /
+ * - **Apply the hub's version** (`APPLY_HUB`): only for ownership conflicts (`CONFLICT` /
  *   `SYNC_CONFLICT`) whose hub state the cloud kept. The cloud's copy is written to the audit log
  *   before the hub's state replaces it; payments stay append-only.
  * - **Keep the cloud's version** (`KEEP_CLOUD`): only for orders the cloud has, and never when the

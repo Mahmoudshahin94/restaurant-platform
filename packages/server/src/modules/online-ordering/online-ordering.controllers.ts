@@ -3,7 +3,7 @@ import {
   type OnlineOrderingOverview,
   type PublicLocation,
   type PublicOrder,
-  type PublicRestaurant,
+  type PublicTenant,
   type PublishedMenu,
   type WebOrderCreated,
   createWebOrderSchema,
@@ -31,9 +31,9 @@ const slug = new ZodValidationPipe(
 export class StorefrontController {
   constructor(private readonly storefront: StorefrontService) {}
 
-  @Get('restaurants/:slug')
-  restaurant(@Param('slug', slug) restaurantSlug: string): Promise<PublicRestaurant> {
-    return this.storefront.restaurant(restaurantSlug);
+  @Get('tenants/:slug')
+  tenant(@Param('slug', slug) tenantSlug: string): Promise<PublicTenant> {
+    return this.storefront.tenant(tenantSlug);
   }
 
   @Get('locations/:locationId')
@@ -87,7 +87,7 @@ export class WebOrdersController {
   }
 }
 
-/** The restaurant's online-ordering switch, hours and options (admin, cloud only). */
+/** The tenant's online-ordering switch, hours and options (admin, cloud only). */
 @Controller('locations/:locationId/online-ordering')
 export class OnlineOrderingSettingsController {
   constructor(private readonly storefront: StorefrontService) {}

@@ -13,20 +13,17 @@ export class CategoriesService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(restaurantId: string, includeArchived: boolean): Promise<Category[]> {
+  async list(tenantId: string, includeArchived: boolean): Promise<Category[]> {
     const rows = await this.prisma.category.findMany({
-      where: { restaurantId, ...(includeArchived ? {} : { archivedAt: null }) },
+      where: { tenantId, ...(includeArchived ? {} : { archivedAt: null }) },
       orderBy: [{ sortOrder: 'asc' }, { nameEn: 'asc' }],
     });
     return rows.map(toCategoryDto);
   }
 
-  async create(
-    restaurantId: string,
-    input: z.output<typeof createCategorySchema>,
-  ): Promise<Category> {
+  async create(tenantId: string, input: z.output<typeof createCategorySchema>): Promise<Category> {
     return this.prisma.$transaction(async (tx) => {
-      const row = await tx.category.create({ data: { ...input, restaurantId } });
+      const row = await tx.category.create({ data: { ...input, tenantId } });
       await this.audit.record(
         {
           action: 'category.created',
@@ -41,12 +38,12 @@ export class CategoriesService {
   }
 
   async update(
-    restaurantId: string,
+    tenantId: string,
     categoryId: string,
     changes: UpdateCategoryRequest,
   ): Promise<Category> {
     return this.prisma.$transaction(async (tx) => {
-      await this.require(tx, restaurantId, categoryId);
+      await this.require(tx, tenantId, categoryId);
       const row = await tx.category.update({ where: { id: categoryId }, data: changes });
       await this.audit.record(
         {
@@ -62,13 +59,9 @@ export class CategoriesService {
   }
 
   /** Archiving hides the category (and therefore its products) from published menus. */
-  async setArchived(
-    restaurantId: string,
-    categoryId: string,
-    archived: boolean,
-  ): Promise<Category> {
+  async setArchived(tenantId: string, categoryId: string, archived: boolean): Promise<Category> {
     return this.prisma.$transaction(async (tx) => {
-      await this.require(tx, restaurantId, categoryId);
+      await this.require(tx, tenantId, categoryId);
       const row = await tx.category.update({
         where: { id: categoryId },
         data: { archivedAt: archived ? new Date() : null },
@@ -87,10 +80,10 @@ export class CategoriesService {
 
   private async require(
     tx: Pick<PrismaService, 'category'>,
-    restaurantId: string,
+    tenantId: string,
     categoryId: string,
   ): Promise<void> {
-    const found = await tx.category.count({ where: { id: categoryId, restaurantId } });
+    const found = await tx.category.count({ where: { id: categoryId, tenantId } });
     if (found !== 1)
       throw new DomainError('CATEGORY_NOT_FOUND', 'Category not found', { categoryId });
   }

@@ -47,241 +47,241 @@ const listQuery = new ZodValidationPipe(listQuerySchema);
 type ListQuery = z.output<typeof listQuerySchema>;
 
 @ManagedInCloud()
-@Controller('restaurants/:restaurantId/categories')
+@Controller('tenants/:tenantId/categories')
 export class CategoriesController {
   constructor(private readonly categories: CategoriesService) {}
 
   @RequirePermissions(['products.view'], { scope: 'any-location' })
   @Get()
   list(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Query(listQuery) q: ListQuery,
   ): Promise<Category[]> {
-    return this.categories.list(restaurantId, q.includeArchived);
+    return this.categories.list(tenantId, q.includeArchived);
   }
 
   @RequirePermissions(['products.create'])
   @Post()
   create(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Body(new ZodValidationPipe(createCategorySchema)) body: z.output<typeof createCategorySchema>,
   ): Promise<Category> {
-    return this.categories.create(restaurantId, body);
+    return this.categories.create(tenantId, body);
   }
 
   @RequirePermissions(['products.update'])
   @Patch(':categoryId')
   update(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Param('categoryId', id) categoryId: string,
     @Body(new ZodValidationPipe(updateCategorySchema)) body: z.output<typeof updateCategorySchema>,
   ): Promise<Category> {
-    return this.categories.update(restaurantId, categoryId, body);
+    return this.categories.update(tenantId, categoryId, body);
   }
 
   @RequirePermissions(['products.delete'])
   @Post(':categoryId/archive')
   @HttpCode(200)
   archive(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Param('categoryId', id) categoryId: string,
   ): Promise<Category> {
-    return this.categories.setArchived(restaurantId, categoryId, true);
+    return this.categories.setArchived(tenantId, categoryId, true);
   }
 
   @RequirePermissions(['products.update'])
   @Post(':categoryId/restore')
   @HttpCode(200)
   restore(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Param('categoryId', id) categoryId: string,
   ): Promise<Category> {
-    return this.categories.setArchived(restaurantId, categoryId, false);
+    return this.categories.setArchived(tenantId, categoryId, false);
   }
 }
 
 @ManagedInCloud()
-@Controller('restaurants/:restaurantId/kitchen-stations')
+@Controller('tenants/:tenantId/kitchen-stations')
 export class KitchenStationsController {
   constructor(private readonly stations: KitchenStationsService) {}
 
   @RequirePermissions(['products.view'], { scope: 'any-location' })
   @Get()
   list(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Query(listQuery) q: ListQuery,
   ): Promise<KitchenStation[]> {
-    return this.stations.list(restaurantId, q.includeArchived);
+    return this.stations.list(tenantId, q.includeArchived);
   }
 
   @RequirePermissions(['products.create'])
   @Post()
   create(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Body(new ZodValidationPipe(createKitchenStationSchema))
     body: z.output<typeof createKitchenStationSchema>,
   ): Promise<KitchenStation> {
-    return this.stations.create(restaurantId, body);
+    return this.stations.create(tenantId, body);
   }
 
   @RequirePermissions(['products.update'])
   @Patch(':stationId')
   update(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Param('stationId', id) stationId: string,
     @Body(new ZodValidationPipe(updateKitchenStationSchema))
     body: z.output<typeof updateKitchenStationSchema>,
   ): Promise<KitchenStation> {
-    return this.stations.update(restaurantId, stationId, body);
+    return this.stations.update(tenantId, stationId, body);
   }
 
   @RequirePermissions(['products.delete'])
   @Post(':stationId/archive')
   @HttpCode(200)
   archive(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Param('stationId', id) stationId: string,
   ): Promise<KitchenStation> {
-    return this.stations.setArchived(restaurantId, stationId, true);
+    return this.stations.setArchived(tenantId, stationId, true);
   }
 
   @RequirePermissions(['products.update'])
   @Post(':stationId/restore')
   @HttpCode(200)
   restore(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Param('stationId', id) stationId: string,
   ): Promise<KitchenStation> {
-    return this.stations.setArchived(restaurantId, stationId, false);
+    return this.stations.setArchived(tenantId, stationId, false);
   }
 }
 
 @ManagedInCloud()
-@Controller('restaurants/:restaurantId/modifier-groups')
+@Controller('tenants/:tenantId/modifier-groups')
 export class ModifierGroupsController {
   constructor(private readonly groups: ModifierGroupsService) {}
 
   @RequirePermissions(['products.view'], { scope: 'any-location' })
   @Get()
   list(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Query(listQuery) q: ListQuery,
   ): Promise<ModifierGroup[]> {
-    return this.groups.list(restaurantId, q.includeArchived);
+    return this.groups.list(tenantId, q.includeArchived);
   }
 
   @RequirePermissions(['products.view'], { scope: 'any-location' })
   @Get(':groupId')
   get(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Param('groupId', id) groupId: string,
   ): Promise<ModifierGroup> {
-    return this.groups.get(restaurantId, groupId);
+    return this.groups.get(tenantId, groupId);
   }
 
   @RequirePermissions(['products.create'])
   @Post()
   create(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Body(new ZodValidationPipe(createModifierGroupSchema))
     body: z.output<typeof createModifierGroupSchema>,
   ): Promise<ModifierGroup> {
-    return this.groups.create(restaurantId, body);
+    return this.groups.create(tenantId, body);
   }
 
   @RequirePermissions(['products.update'])
   @Patch(':groupId')
   update(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Param('groupId', id) groupId: string,
     @Body(new ZodValidationPipe(updateModifierGroupSchema))
     body: z.output<typeof updateModifierGroupSchema>,
   ): Promise<ModifierGroup> {
-    return this.groups.update(restaurantId, groupId, body);
+    return this.groups.update(tenantId, groupId, body);
   }
 
   @RequirePermissions(['products.delete'])
   @Post(':groupId/archive')
   @HttpCode(200)
   archive(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Param('groupId', id) groupId: string,
   ): Promise<ModifierGroup> {
-    return this.groups.setArchived(restaurantId, groupId, true);
+    return this.groups.setArchived(tenantId, groupId, true);
   }
 
   @RequirePermissions(['products.update'])
   @Post(':groupId/restore')
   @HttpCode(200)
   restore(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Param('groupId', id) groupId: string,
   ): Promise<ModifierGroup> {
-    return this.groups.setArchived(restaurantId, groupId, false);
+    return this.groups.setArchived(tenantId, groupId, false);
   }
 }
 
 @ManagedInCloud()
-@Controller('restaurants/:restaurantId/products')
+@Controller('tenants/:tenantId/products')
 export class ProductsController {
   constructor(private readonly products: ProductsService) {}
 
   @RequirePermissions(['products.view'], { scope: 'any-location' })
   @Get()
   list(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Query(new ZodValidationPipe(listProductsQuerySchema))
     query: z.output<typeof listProductsQuerySchema>,
   ): Promise<Product[]> {
-    return this.products.list(restaurantId, query);
+    return this.products.list(tenantId, query);
   }
 
   @RequirePermissions(['products.view'], { scope: 'any-location' })
   @Get(':productId')
   get(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Param('productId', id) productId: string,
   ): Promise<Product> {
-    return this.products.get(restaurantId, productId);
+    return this.products.get(tenantId, productId);
   }
 
   @RequirePermissions(['products.create'])
   @Post()
   create(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Body(new ZodValidationPipe(createProductSchema)) body: z.output<typeof createProductSchema>,
   ): Promise<Product> {
-    return this.products.create(restaurantId, body);
+    return this.products.create(tenantId, body);
   }
 
   @RequirePermissions(['products.update'])
   @Patch(':productId')
   update(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Param('productId', id) productId: string,
     @Body(new ZodValidationPipe(updateProductSchema)) body: z.output<typeof updateProductSchema>,
   ): Promise<Product> {
-    return this.products.update(restaurantId, productId, body);
+    return this.products.update(tenantId, productId, body);
   }
 
   @RequirePermissions(['products.delete'])
   @Post(':productId/archive')
   @HttpCode(200)
   archive(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Param('productId', id) productId: string,
   ): Promise<Product> {
-    return this.products.setArchived(restaurantId, productId, true);
+    return this.products.setArchived(tenantId, productId, true);
   }
 
   @RequirePermissions(['products.update'])
   @Post(':productId/restore')
   @HttpCode(200)
   restore(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Param('productId', id) productId: string,
   ): Promise<Product> {
-    return this.products.setArchived(restaurantId, productId, false);
+    return this.products.setArchived(tenantId, productId, false);
   }
 }
 
@@ -326,6 +326,6 @@ export class LocationMenuController {
     @Body(new ZodValidationPipe(setLocationProductSchema))
     body: z.output<typeof setLocationProductSchema>,
   ): Promise<LocationProductSetting> {
-    return this.menus.setProductSetting(scope.restaurantId, locationId, productId, body);
+    return this.menus.setProductSetting(scope.tenantId, locationId, productId, body);
   }
 }

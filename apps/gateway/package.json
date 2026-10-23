@@ -2,7 +2,7 @@
   "name": "@pos/gateway",
   "version": "0.1.0",
   "private": true,
-  "description": "Location hub: serves the POS and KDS on the restaurant LAN from a local SQLite database, keeps working without the Internet, and links the location to the cloud",
+  "description": "Location hub: serves the POS and KDS on the location LAN from a local SQLite database, keeps working without the Internet, and links the location to the cloud",
   "scripts": {
     "build": "nest build -p tsconfig.build.json",
     "dev": "nest start --watch -p tsconfig.build.json",

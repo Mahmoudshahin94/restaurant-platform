@@ -6,7 +6,7 @@ import { parseDeviceCredential, secretMatches } from './device-credentials';
 
 export interface AuthenticatedDevice {
   id: string;
-  restaurantId: string;
+  tenantId: string;
   locationId: string;
 }
 
@@ -50,7 +50,7 @@ export class DeviceGuard implements CanActivate {
     }
     request.device = {
       id: device.id,
-      restaurantId: device.restaurantId,
+      tenantId: device.tenantId,
       locationId: device.locationId,
     };
     return true;

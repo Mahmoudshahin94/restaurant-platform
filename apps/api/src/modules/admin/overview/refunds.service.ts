@@ -50,8 +50,8 @@ export class RefundsService {
         include: { payments: true },
       });
       if (isAwaitingAcceptance(order)) {
-        // The restaurant's rejection (or the timeout) voids it; refunding first would race that.
-        throw new DomainError('INVALID_ORDER_STATE', 'The order is waiting for the restaurant', {
+        // The tenant's rejection (or the timeout) voids it; refunding first would race that.
+        throw new DomainError('INVALID_ORDER_STATE', 'The order is waiting for the tenant', {
           reason: 'AWAITING_ACCEPTANCE',
         });
       }
@@ -80,7 +80,7 @@ export class RefundsService {
       await tx.payment.create({
         data: {
           id: input.id,
-          restaurantId: charge.restaurantId,
+          tenantId: charge.tenantId,
           locationId,
           orderId: order.id,
           shiftId: null,

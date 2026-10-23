@@ -44,7 +44,7 @@ export const productInclude = {
 export function toCategoryDto(row: CategoryRow): Category {
   return {
     id: row.id,
-    restaurantId: row.restaurantId,
+    tenantId: row.tenantId,
     nameEn: row.nameEn,
     nameAr: row.nameAr,
     descriptionEn: row.descriptionEn,
@@ -59,7 +59,7 @@ export function toCategoryDto(row: CategoryRow): Category {
 export function toKitchenStationDto(row: KitchenStationRow): KitchenStation {
   return {
     id: row.id,
-    restaurantId: row.restaurantId,
+    tenantId: row.tenantId,
     code: row.code,
     nameEn: row.nameEn,
     nameAr: row.nameAr,
@@ -74,7 +74,7 @@ export function toKitchenStationDto(row: KitchenStationRow): KitchenStation {
 export function toModifierGroupDto(row: ModifierGroupWithModifiers): ModifierGroup {
   return {
     id: row.id,
-    restaurantId: row.restaurantId,
+    tenantId: row.tenantId,
     nameEn: row.nameEn,
     nameAr: row.nameAr,
     minSelect: row.minSelect,
@@ -101,7 +101,7 @@ export function toModifierGroupDto(row: ModifierGroupWithModifiers): ModifierGro
 export function toProductDto(row: ProductWithRelations): Product {
   return {
     id: row.id,
-    restaurantId: row.restaurantId,
+    tenantId: row.tenantId,
     categoryId: row.categoryId,
     sku: row.sku,
     nameEn: row.nameEn,

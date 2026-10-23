@@ -14,8 +14,8 @@ export interface PermissionRequirement {
   permissions: readonly Permission[];
   /**
    * How the requirement is evaluated:
-   * - `auto` (default): at the `:locationId` route param if present, otherwise restaurant-wide.
-   * - `any-location`: satisfied if granted restaurant-wide or at any location; the handler must
+   * - `auto` (default): at the `:locationId` route param if present, otherwise tenant-wide.
+   * - `any-location`: satisfied if granted tenant-wide or at any location; the handler must
    *   then filter results to the caller's accessible locations (e.g. listing locations).
    */
   scope: 'auto' | 'any-location';
@@ -23,7 +23,7 @@ export interface PermissionRequirement {
 
 /**
  * Declares the permissions a route needs. Enforced server-side by PermissionsGuard, which also
- * verifies `:restaurantId` / `:locationId` route params belong to the caller's tenant.
+ * verifies `:tenantId` / `:locationId` route params belong to the caller's tenant.
  * Pass an empty list for "any authenticated member of this tenant".
  */
 export const RequirePermissions = (

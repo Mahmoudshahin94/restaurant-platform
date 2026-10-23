@@ -23,11 +23,11 @@ export async function posSession(
   });
   const { accessToken, user } = (await login.json()) as {
     accessToken: string;
-    user: { restaurantId: string };
+    user: { tenantId: string };
   };
   const headers = { authorization: `Bearer ${accessToken}`, 'x-client-source': 'POS' };
   const locations = (await (
-    await request.get(`${API}/restaurants/${user.restaurantId}/locations`, { headers })
+    await request.get(`${API}/tenants/${user.tenantId}/locations`, { headers })
   ).json()) as { id: string; code: string }[];
   const main = locations.find((l) => l.code === 'MAIN') ?? locations[0];
   if (!main) throw new Error('no location');

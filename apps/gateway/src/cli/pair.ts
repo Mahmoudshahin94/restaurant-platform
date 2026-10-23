@@ -77,7 +77,7 @@ async function main(): Promise<void> {
     const login = await json<{
       accessToken: string;
       refreshToken?: string;
-      user: { restaurantId: string };
+      user: { tenantId: string };
     }>(
       await fetch(`${cloud}/api/v1/auth/login`, {
         method: 'POST',
@@ -91,7 +91,7 @@ async function main(): Promise<void> {
       'content-type': 'application/json',
     };
     const locations = await json<LocationList>(
-      await fetch(`${cloud}/api/v1/restaurants/${login.user.restaurantId}/locations`, { headers }),
+      await fetch(`${cloud}/api/v1/tenants/${login.user.tenantId}/locations`, { headers }),
       'Listing locations',
     );
     const location = values.location
@@ -122,7 +122,7 @@ async function main(): Promise<void> {
       cloudUrl: cloud,
       deviceId: paired.device.id,
       credential: paired.credential,
-      restaurantId: login.user.restaurantId,
+      tenantId: login.user.tenantId,
       locationId: location.id,
       pairedAt: new Date().toISOString(),
     });

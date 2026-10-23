@@ -146,7 +146,7 @@ describe('signing in at the hub', () => {
   });
 });
 
-describe('running the restaurant on the hub', () => {
+describe('running a location on the hub', () => {
   beforeEach(provision);
 
   it('takes an order through payment, kitchen and handover, recording each change in the outbox', async () => {
@@ -318,7 +318,7 @@ describe('running the restaurant on the hub', () => {
     const owner = await signIn('owner@hub.test');
     const write = await hub.app.inject({
       method: 'POST',
-      url: `${api}/restaurants/${fixture.ids.restaurantId}/categories`,
+      url: `${api}/tenants/${fixture.ids.tenantId}/categories`,
       headers: owner,
       payload: { nameEn: 'New', nameAr: 'جديد' },
     });
@@ -326,7 +326,7 @@ describe('running the restaurant on the hub', () => {
     expect(write.json<ApiErrorBody>().code).toBe('MANAGED_IN_CLOUD');
     const read = await hub.app.inject({
       method: 'GET',
-      url: `${api}/restaurants/${fixture.ids.restaurantId}/categories`,
+      url: `${api}/tenants/${fixture.ids.tenantId}/categories`,
       headers: owner,
     });
     expect(read.statusCode).toBe(200);

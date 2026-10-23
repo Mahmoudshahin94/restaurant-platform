@@ -6,7 +6,7 @@ import { ChangeRecorder, type ChangeSet, type PrismaTx } from '@pos/server';
  * appends an `ORDER` entry to the change feed, inside that transaction, so the location's hub
  * fetches the order. Other orders, shifts and tickets come from hubs and are not echoed back.
  *
- * Takes the same per-restaurant advisory lock as the configuration triggers (ADR 0012), so `seq`
+ * Takes the same per-tenant advisory lock as the configuration triggers (ADR 0012), so `seq`
  * order is commit order and a hub's cursor never passes an entry that commits late.
  */
 @Injectable()
@@ -16,7 +16,7 @@ export class WebOrderChangeRecorder extends ChangeRecorder {
     if (ids.length === 0) return;
     const orders = await tx.order.findMany({
       where: { id: { in: ids }, channel: 'WEBSITE' },
-      select: { id: true, restaurantId: true, locationId: true },
+      select: { id: true, tenantId: true, locationId: true },
       orderBy: { id: 'asc' },
     });
     for (const order of orders) await recordOrderChange(tx, order);
@@ -29,9 +29,9 @@ export class WebOrderChangeRecorder extends ChangeRecorder {
  */
 export async function recordOrderChange(
   tx: PrismaTx,
-  order: { id: string; restaurantId: string; locationId: string },
+  order: { id: string; tenantId: string; locationId: string },
 ): Promise<void> {
-  await appendChange(tx, order.restaurantId, order.locationId, 'ORDER', order.id);
+  await appendChange(tx, order.tenantId, order.locationId, 'ORDER', order.id);
 }
 
 /**
@@ -40,20 +40,20 @@ export async function recordOrderChange(
  */
 export async function recordResolutionChange(
   tx: PrismaTx,
-  issue: { operationId: string; restaurantId: string; locationId: string },
+  issue: { operationId: string; tenantId: string; locationId: string },
 ): Promise<void> {
-  await appendChange(tx, issue.restaurantId, issue.locationId, 'RESOLUTION', issue.operationId);
+  await appendChange(tx, issue.tenantId, issue.locationId, 'RESOLUTION', issue.operationId);
 }
 
 async function appendChange(
   tx: PrismaTx,
-  restaurantId: string,
+  tenantId: string,
   locationId: string,
   topic: 'ORDER' | 'RESOLUTION',
   entityId: string,
 ): Promise<void> {
   await tx.$queryRaw`
     SELECT 1 FROM (SELECT pg_advisory_xact_lock(
-      hashtextextended(${`change_log:${restaurantId}`}, 0))) AS locked`;
-  await tx.changeLog.create({ data: { restaurantId, locationId, topic, entityId } });
+      hashtextextended(${`change_log:${tenantId}`}, 0))) AS locked`;
+  await tx.changeLog.create({ data: { tenantId, locationId, topic, entityId } });
 }

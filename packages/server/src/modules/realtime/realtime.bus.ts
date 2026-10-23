@@ -5,7 +5,7 @@ import type { EventMap, EventType, RealtimeEvent } from '@pos/shared-types';
 type Listener = (event: RealtimeEvent) => void;
 
 export interface EventScope {
-  restaurantId: string;
+  tenantId: string;
   locationId: string;
 }
 
@@ -26,7 +26,7 @@ export class RealtimeBus {
     return {
       eventId: newId(),
       type,
-      restaurantId: scope.restaurantId,
+      tenantId: scope.tenantId,
       locationId: scope.locationId,
       occurredAt: new Date().toISOString(),
       payload,

@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { defineConfig } from '@playwright/test';
 
 /**
- * POS end-to-end tests, the way a restaurant runs: the POS web UI (the same UI the Tauri shell
+ * POS end-to-end tests, the way a tenant runs: the POS web UI (the same UI the Tauri shell
  * hosts) talks to a location hub, and the cloud is OFF. The hub is paired and provisioned from a
  * freshly seeded cloud database (`pos_kds_pos_e2e`) just before the tests start.
  */

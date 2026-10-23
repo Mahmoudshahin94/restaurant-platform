@@ -26,7 +26,7 @@ Run through this before shipping a build to a restaurant or deploying the cloud.
 - [ ] `RATE_LIMIT_PER_MINUTE`, `AUTH_RATE_LIMIT_PER_MINUTE`, `WEB_ORDER_RATE_LIMIT_PER_MINUTE`,
       `TRACKING_RATE_LIMIT_PER_MINUTE` reviewed for the expected traffic
 - [ ] `ONLINE_PAYMENT_PROVIDER=none` until a real gateway adapter exists (ADR 0013)
-- [ ] `LOG_LEVEL=info`; logs shipped to a store that keeps `requestId`, `restaurantId`,
+- [ ] `LOG_LEVEL=info`; logs shipped to a store that keeps `requestId`, `tenantId`,
       `locationId`, `userId`, `orderId`, `deviceId`
 - [ ] Load balancer health checks: liveness `GET /health`, readiness `GET /ready` (503
       `SERVICE_UNAVAILABLE` while the database is unreachable)

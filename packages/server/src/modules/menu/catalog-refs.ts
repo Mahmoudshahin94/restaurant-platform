@@ -2,16 +2,16 @@ import { DomainError } from '@pos/domain';
 import type { PrismaTx } from '../../prisma/prisma.service';
 
 /**
- * Verifies that referenced catalog rows exist, belong to the restaurant and are not archived.
+ * Verifies that referenced catalog rows exist, belong to the tenant and are not archived.
  * Answers with the specific *_NOT_FOUND code and the offending ids.
  */
 export async function assertCategory(
   tx: PrismaTx,
-  restaurantId: string,
+  tenantId: string,
   categoryId: string,
 ): Promise<void> {
   const found = await tx.category.count({
-    where: { id: categoryId, restaurantId, archivedAt: null },
+    where: { id: categoryId, tenantId, archivedAt: null },
   });
   if (found !== 1)
     throw new DomainError('CATEGORY_NOT_FOUND', 'Category not found', { categoryId });
@@ -19,12 +19,12 @@ export async function assertCategory(
 
 export async function assertModifierGroups(
   tx: PrismaTx,
-  restaurantId: string,
+  tenantId: string,
   ids: readonly string[],
 ): Promise<void> {
   if (ids.length === 0) return;
   const rows = await tx.modifierGroup.findMany({
-    where: { id: { in: [...ids] }, restaurantId, archivedAt: null },
+    where: { id: { in: [...ids] }, tenantId, archivedAt: null },
     select: { id: true },
   });
   const found = new Set(rows.map((r) => r.id));
@@ -38,12 +38,12 @@ export async function assertModifierGroups(
 
 export async function assertTaxes(
   tx: PrismaTx,
-  restaurantId: string,
+  tenantId: string,
   ids: readonly string[],
 ): Promise<void> {
   if (ids.length === 0) return;
   const rows = await tx.tax.findMany({
-    where: { id: { in: [...ids] }, restaurantId, archivedAt: null },
+    where: { id: { in: [...ids] }, tenantId, archivedAt: null },
     select: { id: true },
   });
   const found = new Set(rows.map((r) => r.id));
@@ -54,12 +54,12 @@ export async function assertTaxes(
 
 export async function assertKitchenStations(
   tx: PrismaTx,
-  restaurantId: string,
+  tenantId: string,
   ids: readonly string[],
 ): Promise<void> {
   if (ids.length === 0) return;
   const rows = await tx.kitchenStation.findMany({
-    where: { id: { in: [...ids] }, restaurantId, archivedAt: null },
+    where: { id: { in: [...ids] }, tenantId, archivedAt: null },
     select: { id: true },
   });
   const found = new Set(rows.map((r) => r.id));

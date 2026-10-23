@@ -10,7 +10,7 @@ import { DomainError } from '@pos/domain';
 import type { FastifyRequest } from 'fastify';
 
 export const SERVER_MODE = Symbol('SERVER_MODE');
-/** `cloud`: the multi-tenant API. `hub`: a location hub serving POS/KDS on the restaurant LAN. */
+/** `cloud`: the multi-tenant API. `hub`: a location hub serving POS/KDS on the location LAN. */
 export type ServerMode = 'cloud' | 'hub';
 
 const MANAGED_IN_CLOUD_KEY = 'server:managedInCloud';

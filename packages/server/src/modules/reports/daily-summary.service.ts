@@ -16,7 +16,7 @@ export class DailySummaryService {
   async get(locationId: string, requestedDate: string | undefined): Promise<DailySummary> {
     const location = await this.prisma.location.findUniqueOrThrow({
       where: { id: locationId },
-      include: { restaurant: { select: { currencyCode: true } } },
+      include: { tenant: { select: { currencyCode: true } } },
     });
     const businessDate = requestedDate ?? businessDateFor(new Date(), location.timezone);
     const orders = await this.prisma.order.findMany({
@@ -37,7 +37,7 @@ export class DailySummaryService {
 
     return {
       businessDate,
-      currencyCode: location.restaurant.currencyCode,
+      currencyCode: location.tenant.currencyCode,
       orders: {
         count: counted.length,
         completed: orders.filter((o) => o.status === 'COMPLETED').length,

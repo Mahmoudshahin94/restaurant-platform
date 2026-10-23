@@ -67,61 +67,61 @@ const reportQuery = (q: ReportQuery): Query => ({
 
 /** The admin portal's cloud-only endpoints (Phases 8–9). */
 export function adminApi(http: HttpClient) {
-  const restaurant = (rid: string) => `${API}/restaurants/${rid}`;
+  const tenant = (tid: string) => `${API}/tenants/${tid}`;
   const location = (lid: string) => `${API}/locations/${lid}`;
   const report =
     <T extends z.ZodType>(name: string, schema: T) =>
-    (rid: string, q: ReportQuery) =>
-      http.request('GET', `${restaurant(rid)}/reports/${name}`, {
+    (tid: string, q: ReportQuery) =>
+      http.request('GET', `${tenant(tid)}/reports/${name}`, {
         query: reportQuery(q),
         schema,
       });
   return {
-    dashboard: (rid: string) =>
-      http.request('GET', `${restaurant(rid)}/dashboard`, { schema: dashboardSchema }),
+    dashboard: (tid: string) =>
+      http.request('GET', `${tenant(tid)}/dashboard`, { schema: dashboardSchema }),
 
     users: {
-      list: (rid: string) =>
-        http.request('GET', `${restaurant(rid)}/users`, { schema: z.array(staffUserSchema) }),
-      create: (rid: string, body: CreateUserRequest) =>
-        http.request('POST', `${restaurant(rid)}/users`, { body, schema: staffUserSchema }),
-      update: (rid: string, userId: string, body: UpdateUserRequest) =>
-        http.request('PATCH', `${restaurant(rid)}/users/${userId}`, {
+      list: (tid: string) =>
+        http.request('GET', `${tenant(tid)}/users`, { schema: z.array(staffUserSchema) }),
+      create: (tid: string, body: CreateUserRequest) =>
+        http.request('POST', `${tenant(tid)}/users`, { body, schema: staffUserSchema }),
+      update: (tid: string, userId: string, body: UpdateUserRequest) =>
+        http.request('PATCH', `${tenant(tid)}/users/${userId}`, {
           body,
           schema: staffUserSchema,
         }),
-      setRoles: (rid: string, userId: string, roles: RoleAssignmentInput[]) =>
-        http.request('PUT', `${restaurant(rid)}/users/${userId}/roles`, {
+      setRoles: (tid: string, userId: string, roles: RoleAssignmentInput[]) =>
+        http.request('PUT', `${tenant(tid)}/users/${userId}/roles`, {
           body: { roles },
           schema: staffUserSchema,
         }),
-      resetPassword: (rid: string, userId: string, password: string) =>
-        http.request('POST', `${restaurant(rid)}/users/${userId}/password`, {
+      resetPassword: (tid: string, userId: string, password: string) =>
+        http.request('POST', `${tenant(tid)}/users/${userId}/password`, {
           body: { password },
         }),
     },
     roles: {
-      list: (rid: string) =>
-        http.request('GET', `${restaurant(rid)}/roles`, { schema: z.array(roleSchema) }),
-      create: (rid: string, body: CreateRoleRequest) =>
-        http.request('POST', `${restaurant(rid)}/roles`, { body, schema: roleSchema }),
-      update: (rid: string, roleId: string, body: UpdateRoleRequest) =>
-        http.request('PATCH', `${restaurant(rid)}/roles/${roleId}`, { body, schema: roleSchema }),
-      remove: (rid: string, roleId: string) =>
-        http.request('DELETE', `${restaurant(rid)}/roles/${roleId}`),
+      list: (tid: string) =>
+        http.request('GET', `${tenant(tid)}/roles`, { schema: z.array(roleSchema) }),
+      create: (tid: string, body: CreateRoleRequest) =>
+        http.request('POST', `${tenant(tid)}/roles`, { body, schema: roleSchema }),
+      update: (tid: string, roleId: string, body: UpdateRoleRequest) =>
+        http.request('PATCH', `${tenant(tid)}/roles/${roleId}`, { body, schema: roleSchema }),
+      remove: (tid: string, roleId: string) =>
+        http.request('DELETE', `${tenant(tid)}/roles/${roleId}`),
     },
     employees: {
-      list: (rid: string) =>
-        http.request('GET', `${restaurant(rid)}/employees`, { schema: z.array(employeeSchema) }),
-      create: (rid: string, body: CreateEmployeeRequest) =>
-        http.request('POST', `${restaurant(rid)}/employees`, { body, schema: employeeSchema }),
-      update: (rid: string, employeeId: string, body: UpdateEmployeeRequest) =>
-        http.request('PATCH', `${restaurant(rid)}/employees/${employeeId}`, {
+      list: (tid: string) =>
+        http.request('GET', `${tenant(tid)}/employees`, { schema: z.array(employeeSchema) }),
+      create: (tid: string, body: CreateEmployeeRequest) =>
+        http.request('POST', `${tenant(tid)}/employees`, { body, schema: employeeSchema }),
+      update: (tid: string, employeeId: string, body: UpdateEmployeeRequest) =>
+        http.request('PATCH', `${tenant(tid)}/employees/${employeeId}`, {
           body,
           schema: employeeSchema,
         }),
-      setPin: (rid: string, employeeId: string, pin: string) =>
-        http.request('PUT', `${restaurant(rid)}/employees/${employeeId}/pin`, {
+      setPin: (tid: string, employeeId: string, pin: string) =>
+        http.request('PUT', `${tenant(tid)}/employees/${employeeId}/pin`, {
           body: { pin },
           schema: employeeSchema,
         }),
@@ -129,26 +129,26 @@ export function adminApi(http: HttpClient) {
 
     paymentMethods: {
       /** Including archived ones (the POS list omits them). */
-      list: (rid: string) =>
-        http.request('GET', `${restaurant(rid)}/payment-methods/all`, {
+      list: (tid: string) =>
+        http.request('GET', `${tenant(tid)}/payment-methods/all`, {
           schema: z.array(paymentMethodAdminSchema),
         }),
-      create: (rid: string, body: CreatePaymentMethodRequest) =>
-        http.request('POST', `${restaurant(rid)}/payment-methods`, {
+      create: (tid: string, body: CreatePaymentMethodRequest) =>
+        http.request('POST', `${tenant(tid)}/payment-methods`, {
           body,
           schema: paymentMethodAdminSchema,
         }),
-      update: (rid: string, id: string, body: UpdatePaymentMethodRequest) =>
-        http.request('PATCH', `${restaurant(rid)}/payment-methods/${id}`, {
+      update: (tid: string, id: string, body: UpdatePaymentMethodRequest) =>
+        http.request('PATCH', `${tenant(tid)}/payment-methods/${id}`, {
           body,
           schema: paymentMethodAdminSchema,
         }),
-      archive: (rid: string, id: string) =>
-        http.request('POST', `${restaurant(rid)}/payment-methods/${id}/archive`, {
+      archive: (tid: string, id: string) =>
+        http.request('POST', `${tenant(tid)}/payment-methods/${id}/archive`, {
           schema: paymentMethodAdminSchema,
         }),
-      restore: (rid: string, id: string) =>
-        http.request('POST', `${restaurant(rid)}/payment-methods/${id}/restore`, {
+      restore: (tid: string, id: string) =>
+        http.request('POST', `${tenant(tid)}/payment-methods/${id}/restore`, {
           schema: paymentMethodAdminSchema,
         }),
     },
@@ -178,14 +178,14 @@ export function adminApi(http: HttpClient) {
     },
 
     orders: (
-      rid: string,
+      tid: string,
       q: Omit<OrderSearchQuery, 'status' | 'channel' | 'paymentStatus'> & {
         status?: string[];
         channel?: string[];
         paymentStatus?: string[];
       } = {},
     ) =>
-      http.request('GET', `${restaurant(rid)}/orders`, {
+      http.request('GET', `${tenant(tid)}/orders`, {
         query: {
           ...(q as Query),
           status: list(q.status),
@@ -194,15 +194,15 @@ export function adminApi(http: HttpClient) {
         },
         schema: orderSummaryPageSchema,
       }),
-    customers: (rid: string, q: CustomerQuery = {}) =>
-      http.request('GET', `${restaurant(rid)}/customers`, {
+    customers: (tid: string, q: CustomerQuery = {}) =>
+      http.request('GET', `${tenant(tid)}/customers`, {
         query: q as Query,
         schema: customerPageSchema,
       }),
-    customer: (rid: string, key: string) =>
-      http.request('GET', `${restaurant(rid)}/customers/${key}`, { schema: customerDetailSchema }),
-    payments: (rid: string, q: PaymentSearchQuery = {}) =>
-      http.request('GET', `${restaurant(rid)}/payments`, {
+    customer: (tid: string, key: string) =>
+      http.request('GET', `${tenant(tid)}/customers/${key}`, { schema: customerDetailSchema }),
+    payments: (tid: string, q: PaymentSearchQuery = {}) =>
+      http.request('GET', `${tenant(tid)}/payments`, {
         query: q as Query,
         schema: paymentPageSchema,
       }),
@@ -225,8 +225,8 @@ export function adminApi(http: HttpClient) {
       prepTimes: report('prep-times', prepTimeReportSchema),
     },
 
-    auditLogs: (rid: string, q: AuditLogQuery = {}) =>
-      http.request('GET', `${restaurant(rid)}/audit-logs`, {
+    auditLogs: (tid: string, q: AuditLogQuery = {}) =>
+      http.request('GET', `${tenant(tid)}/audit-logs`, {
         query: q as Query,
         schema: auditLogPageSchema,
       }),

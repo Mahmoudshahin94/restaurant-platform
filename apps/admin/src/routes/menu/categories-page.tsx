@@ -35,7 +35,7 @@ import { api } from '../../lib/api';
 import { applyServerValidation, tKey, useErrorText } from '@pos/app-kit';
 import { useCurrentLocale } from '@pos/app-kit';
 import { usePermissions } from '../../lib/permissions';
-import { useCatalogMutation, useCategories, useRestaurantId } from '../../lib/queries';
+import { useCatalogMutation, useCategories, useTenantId } from '../../lib/queries';
 
 const required = 'common:validation.required';
 const categoryForm = z.object({
@@ -53,7 +53,7 @@ type CategoryFormOutput = z.output<typeof categoryForm>;
 
 function CategoryDialog({ category, onClose }: { category: Category | null; onClose: () => void }) {
   const { t } = useTranslation(['menu', 'common']);
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const errorText = useErrorText();
   const [formError, setFormError] = useState<string | null>(null);
   const form = useForm<CategoryFormInput, unknown, CategoryFormOutput>({
@@ -73,8 +73,8 @@ function CategoryDialog({ category, onClose }: { category: Category | null; onCl
       descriptionAr: values.descriptionAr || null,
     };
     return category
-      ? api.menu.categories.update(rid, category.id, body)
-      : api.menu.categories.create(rid, body);
+      ? api.menu.categories.update(tid, category.id, body)
+      : api.menu.categories.create(tid, body);
   });
 
   const onSubmit = form.handleSubmit(async (values) => {
@@ -129,13 +129,13 @@ function CategoryDialog({ category, onClose }: { category: Category | null; onCl
 export function CategoriesPage() {
   const { t } = useTranslation(['menu', 'common']);
   const locale = useCurrentLocale();
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const { can } = usePermissions();
   const [showArchived, setShowArchived] = useState(false);
   const [editing, setEditing] = useState<Category | 'new' | null>(null);
   const query = useCategories(showArchived);
-  const archive = useCatalogMutation((id: string) => api.menu.categories.archive(rid, id));
-  const restore = useCatalogMutation((id: string) => api.menu.categories.restore(rid, id));
+  const archive = useCatalogMutation((id: string) => api.menu.categories.archive(tid, id));
+  const restore = useCatalogMutation((id: string) => api.menu.categories.restore(tid, id));
   const canCreate = can('products.create');
 
   return (
