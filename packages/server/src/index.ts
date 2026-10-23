@@ -11,6 +11,8 @@ export * from './common/auth/managed-in-cloud';
 export * from './common/auth/principal';
 export * from './common/auth/route-inventory';
 export * from './common/context/request-context';
+export * from './common/tenancy/tenant-context';
+export { TENANT_KEYS, scopeToTenant, type WithoutTenant } from './common/tenancy/scoped-prisma';
 export { LOG_REDACT_PATHS, loggableError } from './common/logging/logger';
 export * from './common/validation/zod-validation.pipe';
 export * from './modules/audit/audit.service';

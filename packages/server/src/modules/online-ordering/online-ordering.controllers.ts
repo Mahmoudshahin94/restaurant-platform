@@ -13,7 +13,9 @@ import {
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { Public, RequirePermissions } from '../../common/auth/decorators';
+import { TenantContext } from '../../common/tenancy/tenant-context';
 import { ZodValidationPipe } from '../../common/validation/zod-validation.pipe';
+import { PublicTenantResolver } from './public-tenant.resolver';
 import { StorefrontService } from './storefront.service';
 import { WebOrdersService } from './web-orders.service';
 
@@ -29,16 +31,20 @@ const slug = new ZodValidationPipe(
 @Public()
 @Controller('public')
 export class StorefrontController {
-  constructor(private readonly storefront: StorefrontService) {}
+  constructor(
+    private readonly storefront: StorefrontService,
+    private readonly tenants: PublicTenantResolver,
+  ) {}
 
   @Get('tenants/:slug')
-  tenant(@Param('slug', slug) tenantSlug: string): Promise<PublicTenant> {
-    return this.storefront.tenant(tenantSlug);
+  async tenant(@Param('slug', slug) tenantSlug: string): Promise<PublicTenant> {
+    const tenantId = await this.tenants.bySlug(tenantSlug);
+    return TenantContext.runInTenant(tenantId, () => this.storefront.tenant(tenantSlug));
   }
 
   @Get('locations/:locationId')
   location(@Param('locationId', id) locationId: string): Promise<PublicLocation> {
-    return this.storefront.location(locationId);
+    return this.tenants.inLocationTenant(locationId, () => this.storefront.location(locationId));
   }
 
   /** The published menu; `If-None-Match` answers `304` when it did not change. */
@@ -48,7 +54,9 @@ export class StorefrontController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<PublishedMenu | undefined> {
-    const menu = await this.storefront.menu(locationId);
+    const menu = await this.tenants.inLocationTenant(locationId, () =>
+      this.storefront.menu(locationId),
+    );
     const etag = `"${menu.version}"`;
     void reply.header('etag', etag).header('cache-control', 'public, no-cache');
     if (request.headers['if-none-match'] === etag) {
@@ -63,7 +71,10 @@ export class StorefrontController {
 @Public()
 @Controller('orders')
 export class WebOrdersController {
-  constructor(private readonly orders: WebOrdersService) {}
+  constructor(
+    private readonly orders: WebOrdersService,
+    private readonly tenants: PublicTenantResolver,
+  ) {}
 
   /** 201 when created, 200 for a resend of the same order id (idempotent). */
   @Post()
@@ -71,7 +82,9 @@ export class WebOrdersController {
     @Body(new ZodValidationPipe(createWebOrderSchema)) body: z.output<typeof createWebOrderSchema>,
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<WebOrderCreated> {
-    const { result, created } = await this.orders.create(body);
+    const { result, created } = await this.tenants.inLocationTenant(body.locationId, () =>
+      this.orders.create(body),
+    );
     void reply.status(created ? 201 : 200).header('cache-control', 'no-store');
     return result;
   }

@@ -391,6 +391,23 @@ describe('configuration from the cloud', () => {
     expect(price?.price).toBe(1100);
   });
 
+  it('refuses a snapshot holding another tenant’s rows, keeping its last copy (ADR 0017)', async () => {
+    const fries = fixture.tables.products.find((p) => p.id === fixture.ids.fries);
+    if (fries) Object.assign(fries, { tenantId: newId(), price: 1 });
+    cloud.snapshot = withVersion(fixture.ids, fixture.tables);
+    expect(await hub.snapshots.syncNow()).toBe('rejected');
+    const status = (
+      await hub.app.inject({ method: 'GET', url: `${api}/hub/status` })
+    ).json<HubStatus>();
+    expect(status.lastError).toMatch(/another tenant/);
+    const owner = await signIn('owner@hub.test');
+    const menu = (
+      await hub.app.inject({ method: 'GET', url: `${loc()}/menu`, headers: owner })
+    ).json<PublishedMenu>();
+    const kept = menu.categories.flatMap((c) => c.products).find((p) => p.nameEn === 'Fries');
+    expect(kept?.price).not.toBe(1);
+  });
+
   it('continues the cloud’s order numbers for the day, and never goes backwards', async () => {
     const cashier = await signIn('cashier@hub.test');
     const first = await placeOrder(cashier, [fixture.ids.cola]);

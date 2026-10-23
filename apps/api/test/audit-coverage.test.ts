@@ -1,7 +1,7 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { PrismaClient } from '@pos/database';
 import { newId } from '@pos/domain';
-import { OnlinePaymentsService, PrismaService } from '@pos/server';
+import { OnlinePaymentsService, PrismaService, TenantContext } from '@pos/server';
 import type { Order, Role, Shift } from '@pos/validation';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PASSWORD, bearer, createTenant, resetDatabase, startApp } from './helpers';
@@ -135,7 +135,10 @@ describe('audit coverage', () => {
       },
     });
     const payments = app.get(OnlinePaymentsService);
-    await app.get(PrismaService).$transaction((tx) => payments.voidAll(tx, other.id, 'TOO_BUSY'));
+    // Outside a request, services work only for a tenant they are given (ADR 0017).
+    await TenantContext.runInTenant(tenant.tenantId, () =>
+      app.get(PrismaService).$transaction((tx) => payments.voidAll(tx, other.id, 'TOO_BUSY')),
+    );
 
     // Permission changes and configuration changes.
     const role = await call<Role>('POST', `${base}/roles`, {

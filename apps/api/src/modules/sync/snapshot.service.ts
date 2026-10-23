@@ -90,7 +90,7 @@ export class SnapshotService {
     const json = JSON.parse(JSON.stringify(tables)) as LocationSnapshot['tables'];
     const version = createHash('sha256').update(JSON.stringify(json)).digest('hex').slice(0, 32);
     return {
-      format: 1,
+      format: 2,
       tenantId,
       locationId,
       generatedAt: new Date().toISOString(),

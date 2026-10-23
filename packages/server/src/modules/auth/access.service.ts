@@ -3,6 +3,7 @@ import { DomainError, type RoleAssignment } from '@pos/domain';
 import { isPermission } from '@pos/shared-types';
 import type { AuthUser } from '@pos/validation';
 import type { Principal } from '../../common/auth/principal';
+import { TenantContext } from '../../common/tenancy/tenant-context';
 import { PrismaService } from '../../prisma/prisma.service';
 
 const userWithRolesInclude = {
@@ -14,11 +15,11 @@ const userWithRolesInclude = {
 export class AccessService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /** Loads the user inside the token's tenant, so a user of another tenant is simply unknown. */
   async loadPrincipal(userId: string, tenantId: string): Promise<Principal> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: userWithRolesInclude,
-    });
+    const user = await TenantContext.runInTenant(tenantId, () =>
+      this.prisma.user.findUnique({ where: { id: userId }, include: userWithRolesInclude }),
+    );
     if (!user || user.tenantId !== tenantId) {
       throw new DomainError('UNAUTHENTICATED', 'Unknown user');
     }

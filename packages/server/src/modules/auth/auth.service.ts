@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { hashSecret, verifySecret } from '@pos/database';
 import { DomainError, newId } from '@pos/domain';
 import type { TokenResponse } from '@pos/validation';
+import { TenantContext } from '../../common/tenancy/tenant-context';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AccessService } from './access.service';
@@ -31,13 +32,23 @@ export class AuthService {
   ) {}
 
   async login(email: string, password: string): Promise<IssuedSession> {
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    // E-mail addresses are unique across tenants, so sign-in needs no tenant selector; the rest
+    // of the sign-in runs inside the account's tenant.
+    const user = await TenantContext.runUnscoped('sign-in: find the account by e-mail', () =>
+      this.prisma.user.findUnique({ where: { email } }),
+    );
     if (!user) {
       this.timingDummyHash ??= hashSecret(newId());
       await verifySecret(await this.timingDummyHash, password);
       throw new DomainError('INVALID_CREDENTIALS', 'Invalid email or password');
     }
+    return TenantContext.runInTenant(user.tenantId, () => this.completeLogin(user, password));
+  }
 
+  private async completeLogin(
+    user: { id: string; tenantId: string; passwordHash: string; isActive: boolean },
+    password: string,
+  ): Promise<IssuedSession> {
     const valid = await verifySecret(user.passwordHash, password);
     if (!valid) {
       await this.audit.record({
@@ -131,7 +142,18 @@ export class AuthService {
       include: { user: true },
     });
     if (!stored) throw new DomainError('UNAUTHENTICATED', 'Unknown refresh token');
+    return TenantContext.runInTenant(stored.user.tenantId, () => this.rotate(stored));
+  }
 
+  private async rotate(stored: {
+    id: string;
+    userId: string;
+    familyId: string;
+    revokedAt: Date | null;
+    replacedById: string | null;
+    expiresAt: Date;
+    user: { tenantId: string; isActive: boolean };
+  }): Promise<IssuedSession> {
     if (stored.revokedAt !== null) {
       // Just rotated by a concurrent request from the same client: fail this one, keep the session.
       if (stored.replacedById !== null && this.tokens.withinReuseGrace(stored.revokedAt)) {
@@ -197,14 +219,16 @@ export class AuthService {
     });
     if (!stored) return;
     await this.revokeFamily(stored.familyId);
-    await this.audit.record({
-      action: 'auth.logout',
-      entityType: 'User',
-      entityId: stored.userId,
-      actorType: 'USER',
-      actorId: stored.userId,
-      tenantId: stored.user.tenantId,
-    });
+    await TenantContext.runInTenant(stored.user.tenantId, () =>
+      this.audit.record({
+        action: 'auth.logout',
+        entityType: 'User',
+        entityId: stored.userId,
+        actorType: 'USER',
+        actorId: stored.userId,
+        tenantId: stored.user.tenantId,
+      }),
+    );
   }
 
   private async issueSession(

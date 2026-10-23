@@ -21,6 +21,7 @@ import { WEB_ACCEPTANCE_TIMEOUT_REASON } from '@pos/shared-types';
 import type { WebOrderCreated, createWebOrderSchema } from '@pos/validation';
 import type { z } from 'zod';
 import { APP_CONFIG, type AppConfig } from '../../config/env';
+import { TenantContext } from '../../common/tenancy/tenant-context';
 import { ChangeRecorder } from '../../prisma/change-recorder';
 import { isUniqueViolation } from '../../prisma/errors';
 import { PrismaService, type PrismaTx } from '../../prisma/prisma.service';
@@ -31,6 +32,7 @@ import { orderEventPayload } from '../orders/orders.mappers';
 import { RealtimeBus } from '../realtime/realtime.bus';
 import { OnlinePaymentsService } from './online-payments.service';
 import { OnlineStatusService } from './online-status.service';
+import { PublicTenantResolver } from './public-tenant.resolver';
 import { TrackingTokens, trackingSecret } from './tracking-token';
 import { type PublicOrderRow, publicOrderInclude, toPublicOrder } from './web-order.mappers';
 
@@ -66,6 +68,7 @@ export class WebOrdersService implements OnApplicationBootstrap, OnModuleDestroy
     private readonly audit: AuditService,
     private readonly bus: RealtimeBus,
     private readonly changes: ChangeRecorder,
+    private readonly tenants: PublicTenantResolver,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {
     this.tokens = new TrackingTokens(trackingSecret(config));
@@ -288,9 +291,13 @@ export class WebOrdersService implements OnApplicationBootstrap, OnModuleDestroy
   /** The order a tracking token opens; an invalid token looks exactly like an unknown order. */
   async track(token: string | undefined) {
     const orderId = token ? this.tokens.verify(token.trim()) : null;
-    const row = orderId
-      ? await this.prisma.order.findUnique({ where: { id: orderId }, include: publicOrderInclude })
-      : null;
+    const tenantId = orderId ? await this.tenants.byOrder(orderId) : null;
+    const row =
+      orderId && tenantId
+        ? await TenantContext.runInTenant(tenantId, () =>
+            this.prisma.order.findUnique({ where: { id: orderId }, include: publicOrderInclude }),
+          )
+        : null;
     if (!row || row.channel !== 'WEBSITE') {
       throw new DomainError('ORDER_NOT_FOUND', 'Order not found');
     }
@@ -309,16 +316,22 @@ export class WebOrdersService implements OnApplicationBootstrap, OnModuleDestroy
 
   private async sweep(now: Date): Promise<number> {
     const cutoff = new Date(now.getTime() - ACCEPT_GRACE_MS);
-    const due = await this.prisma.order.findMany({
-      where: { channel: 'WEBSITE', status: 'PLACED', acceptBy: { lt: cutoff } },
-      select: { id: true },
-      orderBy: { acceptBy: 'asc' },
-      take: 100,
-    });
+    // The sweep looks across tenants; each cancellation then runs inside its order's tenant.
+    const due = await TenantContext.runUnscoped('web order timeout sweep', () =>
+      this.prisma.order.findMany({
+        where: { channel: 'WEBSITE', status: 'PLACED', acceptBy: { lt: cutoff } },
+        select: { id: true, tenantId: true },
+        orderBy: { acceptBy: 'asc' },
+        take: 100,
+      }),
+    );
     let cancelled = 0;
-    for (const { id } of due) {
+    for (const { id, tenantId } of due) {
       try {
-        if (await this.cancelOne(id, now, cutoff)) cancelled += 1;
+        const done = await TenantContext.runInTenant(tenantId, () =>
+          this.cancelOne(id, now, cutoff),
+        );
+        if (done) cancelled += 1;
       } catch (error) {
         this.logger.error(`Could not cancel expired website order ${id}: ${String(error)}`);
       }

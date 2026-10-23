@@ -10,6 +10,7 @@ import { AccessService } from '../auth/access.service';
 import { loggableError } from '../../common/logging/logger';
 import { TokenService } from '../auth/token.service';
 import { RealtimeBus } from './realtime.bus';
+import { TenantContext } from '../../common/tenancy/tenant-context';
 
 const AUTH_TIMEOUT_MS = 10_000;
 const HEARTBEAT_MS = 30_000;
@@ -140,10 +141,9 @@ export class RealtimeGateway {
   private async authenticate(token: string, locationId: string): Promise<number> {
     const claims = await this.tokens.verifyAccessToken(token);
     const principal = await this.access.loadPrincipal(claims.userId, claims.tenantId);
-    const location = await this.prisma.location.findUnique({
-      where: { id: locationId },
-      select: { tenantId: true },
-    });
+    const location = await TenantContext.runInTenant(principal.tenantId, () =>
+      this.prisma.location.findUnique({ where: { id: locationId }, select: { tenantId: true } }),
+    );
     if (
       location?.tenantId !== principal.tenantId ||
       !canAccessLocation(principal.assignments, locationId)

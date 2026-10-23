@@ -69,8 +69,8 @@ export const SNAPSHOT_TABLES = [
 export type SnapshotTable = (typeof SNAPSHOT_TABLES)[number];
 
 export const locationSnapshotSchema = z.object({
-  /** Bumped when the snapshot format changes incompatibly. */
-  format: z.literal(1),
+  /** Bumped when the snapshot format changes incompatibly (2: the tenant rename, ADR 0017). */
+  format: z.literal(2),
   tenantId: idSchema,
   locationId: idSchema,
   generatedAt: isoDateTimeSchema,

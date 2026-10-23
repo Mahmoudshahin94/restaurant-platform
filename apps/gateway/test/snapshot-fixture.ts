@@ -198,7 +198,7 @@ export function withVersion(
 ): LocationSnapshot {
   const json = JSON.parse(JSON.stringify(tables)) as LocationSnapshot['tables'];
   return {
-    format: 1,
+    format: 2,
     tenantId: ids.tenantId,
     locationId: ids.locationId,
     generatedAt: new Date().toISOString(),

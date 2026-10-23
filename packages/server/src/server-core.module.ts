@@ -31,7 +31,9 @@ export class ServerCoreModule {
       module: ServerCoreModule,
       imports: [
         ConfigModule.forRoot(options.config, options.mode),
-        PrismaModule.forRoot(options.database),
+        // The cloud holds every tenant: a tenant query without a tenant in scope is refused. The
+        // hub's database holds only its own tenant (ADR 0017).
+        PrismaModule.forRoot(options.database, options.mode === 'hub' ? 'allow' : 'refuse'),
         AuditModule,
         AuthModule,
         RealtimeModule,

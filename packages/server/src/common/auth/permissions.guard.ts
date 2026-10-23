@@ -10,6 +10,7 @@ import {
 import type { Permission } from '@pos/shared-types';
 import type { FastifyRequest } from 'fastify';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantContext } from '../tenancy/tenant-context';
 import { IS_PUBLIC_KEY, PERMISSIONS_KEY, type PermissionRequirement } from './decorators';
 import type { Principal, RequestScope } from './principal';
 
@@ -62,10 +63,9 @@ export class PermissionsGuard implements CanActivate {
     }
     if (locationId !== undefined) {
       if (!isUuid(locationId)) throw new DomainError('LOCATION_NOT_FOUND', 'Location not found');
-      const location = await this.prisma.location.findUnique({
-        where: { id: locationId },
-        select: { tenantId: true },
-      });
+      const location = await TenantContext.runInTenant(principal.tenantId, () =>
+        this.prisma.location.findUnique({ where: { id: locationId }, select: { tenantId: true } }),
+      );
       if (location?.tenantId !== principal.tenantId) {
         throw new DomainError('LOCATION_NOT_FOUND', 'Location not found');
       }

@@ -51,6 +51,19 @@ interface Delegate {
 }
 
 /**
+ * Whether every row of the snapshot belongs to `tenantId` (ADR 0017): the tenant row itself, and
+ * each row carrying a `tenantId`. The hub's database holds its paired tenant only.
+ */
+export function belongsToTenant(snapshot: LocationSnapshot, tenantId: string): boolean {
+  if (snapshot.tenantId !== tenantId) return false;
+  return SNAPSHOT_TABLES.every((table) =>
+    (snapshot.tables[table] as Row[]).every((row) =>
+      table === 'tenants' ? row.id === tenantId : !('tenantId' in row) || row.tenantId === tenantId,
+    ),
+  );
+}
+
+/**
  * Writes a cloud snapshot into the hub database (inside the caller's transaction). Rows are
  * upserted in dependency order, so local orders keep referencing the same products, tables and
  * staff. Nothing the cloud owns is ever deleted outright (orders reference it); staff missing from
