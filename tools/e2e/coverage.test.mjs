@@ -1,5 +1,6 @@
-// Keeps the critical-scenario matrix in docs/testing.md honest: every one of the specification's
-// 19 end-to-end scenarios names at least one Playwright test, and every test named exists.
+// Keeps the critical-scenario matrix in docs/testing.md honest: the specification's 19 end-to-end
+// scenarios (and any added since) are numbered in order, each names at least one Playwright test,
+// and every test named exists.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -16,10 +17,11 @@ const rows = section
   .filter((match) => match !== null);
 const REFERENCE = /\]\(\.\.\/(apps\/[^)]+\.spec\.ts)\)\s*“([^”]+)”/g;
 
-test('the matrix lists the 19 scenarios in order', () => {
+test('the matrix lists at least the 19 scenarios, numbered in order', () => {
+  assert.ok(rows.length >= 19, `only ${rows.length} scenarios listed`);
   assert.deepEqual(
     rows.map((row) => Number(row[1])),
-    Array.from({ length: 19 }, (_, i) => i + 1),
+    Array.from({ length: rows.length }, (_, i) => i + 1),
   );
 });
 
