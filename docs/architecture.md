@@ -3,9 +3,10 @@
 Restaurant platform: offline-first POS, Kitchen Display System (KDS), customer online ordering,
 admin portal, cloud API, and a per-restaurant location hub. Arabic and English with full RTL.
 
-> Status: Phases 0–9 (foundations, menu, POS, payments, KDS, location hub, sync engine, customer
-> website and online ordering, admin portal, reporting) are implemented. See the
-> [phase checklist](#10-development-phases) at the end.
+> Status: Phases 0–10 (foundations, menu, POS, payments, KDS, location hub, sync engine, customer
+> website and online ordering, admin portal, reporting, hardening with the full end-to-end suite)
+> are implemented. See the [phase checklist](#10-development-phases) at the end, the
+> [testing guide](testing.md) and the [release checklist](release.md).
 
 ## 1. Starting point
 
@@ -208,7 +209,7 @@ and [sync.md](sync.md#website-orders-phase-7).
 | 7     | Customer website, online ordering availability                                                                                                          | ✅ Done |
 | 8     | Admin portal completion                                                                                                                                 | ✅ Done |
 | 9     | Reporting                                                                                                                                               | ✅ Done |
-| 10    | Hardening, full E2E suite                                                                                                                               | ⏳      |
+| 10    | Hardening, full E2E suite                                                                                                                               | ✅ Done |
 
 Gate after every phase: tests, typecheck, lint, migration status, build, and docs updated.
 
@@ -549,21 +550,84 @@ See [ADR 0015](adr/0015-reporting.md).
 - **Admin Reports section** with filters in the URL, headline figures, tables with totals, a small
   net-sales chart, locale-free CSV export (UTF-8 BOM), and English/Arabic with RTL.
 
-Known gaps carried forward:
+**Phase 10 verification (2026-10-23):** `pnpm typecheck && pnpm lint && pnpm test && pnpm build` and `pnpm format:check`
+green (turbo: 26/26 typecheck, lint and test tasks, 16/16 builds), covering 585 unit, integration
+and component tests (API 210, domain 149, gateway 55, admin 26, i18n 26, database 23,
+validation 20, POS 17, server 14, customer-web 12, api-client 11, receipts 8, KDS 7, app-kit 5,
+ui 2), and `pnpm e2e` with 31 Playwright tests in 2 min 20 s (admin 8, POS 15, customer-web 4,
+KDS 4) covering all 19 critical scenarios ([testing.md](testing.md)). New: the security suites
+(every cloud and hub route refused without a token, every permission-requiring route refused to a
+member without permissions, every tenant-scoped route hidden from another tenant, the device guard
+on `/sync/*`, the public-route list, CORS preflights and origin validation, helmet headers on
+every response, separate refresh and website-order rate budgets, `TRUST_PROXY`, claimed sources,
+`/ready` → `SERVICE_UNAVAILABLE`, Prisma errors logged without their arguments, log redaction and
+the request context); the hub's audit trail (queued with each change, uploaded redacted and once;
+the cloud storing it under the hub's location, refusing other scopes, never rewriting an entry;
+the payload contract); a POS resending an order to the hub, sequentially and concurrently; the
+keychain token store; the cross-app journey; the mid-service disconnect with the order on the
+local KDS and the resent push. Also `pnpm test:tools` (with the scenario-matrix check), the Rust
+shell's `rust:check` (fmt, clippy `-D warnings`, 7 tests, including the secure store), a clean
+`migrate status` on the development and test databases, the hub migrations applied to a fresh
+SQLite file with `migrate status` clean and no drift from the hub schema, the hub schema check,
+and a manual run in the browser pane on an isolated stack (cloud, paired hub, POS, KDS and
+website): website order → POS acceptance → three KDS stations started and ready → cash payment and
+hand-over → "Completed" on the customer's page, then the same in Arabic (RTL) on all three apps,
+with the cloud's audit log showing the hub's PIN sign-ins, shift, payments and kitchen changes.
 
-- Hub audit-log rows are not uploaded yet (Phase 10): actions taken at the restaurant (PIN
-  sign-ins, shift open/close, refunds at the till) are audited on the hub only; the cloud's audit
-  log shows them once the hub uploads its audit trail.
+### Phase 10 decisions
+
+See [ADR 0016](adr/0016-hardening.md), [testing.md](testing.md) and [release.md](release.md).
+
+- **The 19 critical flows** are mapped to Playwright tests in [testing.md](testing.md) (checked by
+  `pnpm test:tools`) and run with one command, `pnpm e2e`. New: a cross-app journey (website →
+  cloud → hub → POS acceptance → every KDS station → cash payment → hand-over, the customer's page
+  following each status), the Internet dropping mid-service (order on the local KDS, synced once on
+  reconnect), and the hub's push resent as a duplicate (`DUPLICATE`, still one order).
+- **Routes are protected by construction:** the server refuses to start with a route that is
+  neither `@Public()` nor `@RequirePermissions`; tests call every cloud and hub route and expect
+  `401` without a token, `403` for a member without permissions, `404` across tenants and the
+  device guard on `/sync/*`, against an explicit list of public routes.
+- **Transport:** `CORS_ORIGINS` must be bare origins (`*` refused at start-up), `TRUST_PROXY` for
+  per-client rate limits behind a proxy, helmet defaults tested; the cookie refresh keeps
+  SameSite=strict plus the Origin check. Clients can no longer label audit entries `HUB` or
+  `SYSTEM`.
+- **Observability:** logs and audit context carry `orderId` and `deviceId` besides request, user,
+  restaurant and location; redaction goes one level deeper; database errors are logged without
+  their query arguments; `/ready` answers the typed `SERVICE_UNAVAILABLE`; the hub's public status
+  keeps only the code and message of a cloud refusal.
+- **The hub's audit trail reaches the cloud** through the outbox (`AUDIT_LOG_APPEND`, append-only,
+  exactly once, scoped to the hub's location), so the admin portal's audit log shows PIN sign-ins,
+  shifts, payments, refunds and kitchen actions taken at the restaurant.
+- **The POS desktop app stays signed in across a restart:** its refresh token lives in the OS
+  keychain (Tauri `keyring`), never in web storage.
+- Raw SQL, input validation (every body, query and parameter through a Zod schema) and the
+  specification's testing requirements were audited; only the gaps above needed code.
+
+### Known gaps
+
+Carried forward after Phase 10 (each was weighed in [ADR 0016](adr/0016-hardening.md); none blocks
+running a restaurant):
+
 - **Sync conflicts** (ADR 0014): an order-number clash (the same number twice on one business day,
   possible only with data from before Phase 6) cannot be settled by choosing a version; there is no
   screen to renumber an order. "Keep the cloud's version" exists for orders only.
 - Shifts have no `version` column, so a shift changed in the cloud itself would not be detected as a
   conflict; nothing in the cloud edits hub shifts today.
-- The change feed's waiting requests poll PostgreSQL once a second each; `LISTEN/NOTIFY` should
-  replace this before many hubs share one API instance.
-- The POS keeps its refresh token in memory (sign in again after a restart); OS-keychain storage
-  is still to do. An employee signs in with the roles of a linked user, so every PIN user is also a
-  user account (with an e-mail); employees without one cannot sign in.
+- **Scaling out the cloud API** (several instances) needs shared state that is in-process today:
+  the change feed's waiting requests poll PostgreSQL once a second each (`LISTEN/NOTIFY` needs a
+  dedicated connection outside Prisma), realtime delivery is in-process (`RealtimeBus`), rate-limit
+  counters are per instance, and the website-order timeout sweep runs in every instance. One
+  instance serves tens of hubs comfortably.
+- Password sign-in is throttled per client IP (PINs per employee code); there is no per-account
+  lockout against a guess spread over many addresses, no second factor and no password reset by
+  e-mail.
+- The POS desktop app keeps its refresh token in the OS keychain (Phase 10); a browser-served POS
+  keeps it in memory (sign in again after a reload). An employee signs in with the roles of a
+  linked user, so every PIN user is also a user account (with an e-mail); employees without one
+  cannot sign in.
+- Security tooling outside the code: no CI pipeline, dependency or container scanning, or secret
+  manager integration ships with the repository ([release checklist](release.md)); the static web
+  apps' own headers (CSP) belong to whatever host serves them.
 - The hub runs as a separate Node process; packaging it as a Tauri sidecar for single-terminal
   sites, an installer/service wrapper and disk encryption of its data are hardening work.
 - The hub's SQLite tables have no CHECK constraints (the cloud's do); rules are enforced by the
@@ -578,8 +642,6 @@ Known gaps carried forward:
   business day is the calendar date in the location's timezone.
 - KDS screens and POS terminals sign in as staff; only the hub itself is a registered device so
   far. Registering terminals and screens as devices is future work.
-- Realtime delivery is in-process: fine for the hub (one per site); several cloud API instances
-  would need a shared channel (e.g. Postgres LISTEN/NOTIFY) behind `RealtimeBus`.
 - No bump-bar/keyboard control on the KDS.
 - Restaurants are provisioned by seed only; there is no platform-operator UI yet.
 - **Online ordering (Phase 7):** no customer accounts, saved addresses, delivery zones or radius,
@@ -598,14 +660,14 @@ Known gaps carried forward:
   (`RESTAURANT_OFFLINE`) after 3 minutes, and pending ones time out in the cloud.
 - The tracking token is part of the status page URL (`/track/<token>`): whoever has the link sees
   the order. Tokens cannot be revoked one by one (rotating `TRACKING_TOKEN_SECRET` revokes all).
-- The timeout sweep runs in every API instance (the row lock keeps it correct, but several
-  instances would repeat the scan).
 - **Admin portal (Phase 8):** customers are grouped from order contact details (no accounts,
   merging or erasure yet); the portal refunds online card payments only (cash and card refunds
   happen at the POS) and cannot cancel or edit orders a hub owns; users have no self-service
   password change, password reset by e-mail or second factor; the audit log has no free-text search
   or export; pairing a hub still needs the command on the hub machine (the portal shows it);
-  location and restaurant time zones are typed as IANA names, not picked from a list.
+  location and restaurant time zones are typed as IANA names, not picked from a list. Audit
+  entries of a conflict resolution keep the cloud's full copy of the order, customer contact
+  details included (the undo record; erasure is the open privacy item below).
 
 - **Reports (Phase 9):** reports read live views (no materialized views, replica or warehouse
   yet); there are no scheduled or e-mailed reports, no PDF/print layout (CSV only), no hourly or
@@ -659,6 +721,10 @@ Recorded as ADRs in [adr/](adr/):
     completed orders on their business date, refunds on the day they were made and split in
     proportion to the order, money reports dated by when money moved, prep time from ticket
     timestamps.
+16. [0016](adr/0016-hardening.md): hardening: the 19 critical flows mapped to Playwright tests
+    (a cross-app journey, a mid-service disconnect, a resent push), routes protected by
+    construction and tested route by route, CORS/proxy/log hardening, the hub's audit trail
+    uploaded through the outbox, the POS refresh token in the OS keychain.
 
 Open items to revisit:
 

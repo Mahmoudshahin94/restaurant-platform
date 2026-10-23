@@ -248,6 +248,26 @@ export const syncKitchenTicketSchema = z.object({
 });
 export type SyncKitchenTicket = z.infer<typeof syncKitchenTicketSchema>;
 
+/**
+ * An audit-trail entry written on the hub (PIN sign-ins, shifts, refunds at the till...). The
+ * cloud stores it under the hub's restaurant and location; entries are never changed (ADR 0016).
+ */
+export const syncAuditLogSchema = z.object({
+  id: idSchema,
+  restaurantId: idSchema.nullable(),
+  locationId: idSchema.nullable(),
+  actorType: z.enum(enumValues(ActorType)),
+  actorId: idSchema.nullable(),
+  source: z.enum(enumValues(ActionSource)).nullable(),
+  action: z.string().min(1).max(100),
+  entityType: z.string().min(1).max(100),
+  entityId: z.string().max(100).nullable(),
+  metadata: z.record(z.string(), z.unknown()),
+  requestId: z.string().max(128).nullable(),
+  createdAt: at,
+});
+export type SyncAuditLog = z.infer<typeof syncAuditLogSchema>;
+
 // --- Push (hub → cloud) -------------------------------------------------------------------------
 
 const operationBase = {
@@ -280,6 +300,12 @@ export const syncOperationSchema = z.discriminatedUnion('operationType', [
     entityType: z.literal(SyncEntityType.KitchenTicket),
     operationType: z.literal(SyncOperationType.KITCHEN_TICKET_UPSERT),
     payload: syncKitchenTicketSchema,
+  }),
+  z.object({
+    ...operationBase,
+    entityType: z.literal(SyncEntityType.AuditLog),
+    operationType: z.literal(SyncOperationType.AUDIT_LOG_APPEND),
+    payload: syncAuditLogSchema,
   }),
 ]);
 export type SyncOperation = z.infer<typeof syncOperationSchema>;

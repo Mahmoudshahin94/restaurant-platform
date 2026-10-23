@@ -13,7 +13,7 @@ export interface SessionState {
 
 /**
  * Where a native client keeps its refresh token. The default is memory only (sign in again after
- * a restart); a Tauri app can plug in OS secure storage later.
+ * a restart); the POS desktop app plugs in OS secure storage (apps/pos/src/lib/secure-token.ts).
  */
 export interface RefreshTokenStore {
   get: () => string | null;

@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@pos/database';
+import { newId } from '@pos/domain';
 import { RequestContext } from '../../common/context/request-context';
+import { ChangeRecorder } from '../../prisma/change-recorder';
 import { PrismaService, type PrismaTx } from '../../prisma/prisma.service';
 import { redactForAudit } from './redact';
 
@@ -19,16 +21,31 @@ export interface AuditEntry {
   locationId?: string | null;
 }
 
-/** Append-only audit trail. Pass the transaction client so the record commits with the change. */
+/**
+ * Append-only audit trail. Pass the transaction client so the record commits with the change. On
+ * the location hub each entry also goes to the sync outbox in the same transaction, so the cloud's
+ * audit log receives what happened at the restaurant (ADR 0016).
+ */
 @Injectable()
 export class AuditService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly changes: ChangeRecorder,
+  ) {}
 
-  async record(entry: AuditEntry, tx: PrismaTx = this.prisma): Promise<void> {
+  async record(entry: AuditEntry, tx?: PrismaTx): Promise<void> {
+    if (tx) return this.write(entry, tx);
+    if (!this.changes.capturesAudit) return this.write(entry, this.prisma);
+    await this.prisma.$transaction((t) => this.write(entry, t));
+  }
+
+  private async write(entry: AuditEntry, tx: PrismaTx): Promise<void> {
     const ctx = RequestContext.get();
     const actorId = entry.actorId !== undefined ? entry.actorId : (ctx?.userId ?? null);
+    const id = newId();
     await tx.auditLog.create({
       data: {
+        id,
         action: entry.action,
         entityType: entry.entityType,
         entityId: entry.entityId ?? null,
@@ -42,5 +59,6 @@ export class AuditService {
         requestId: ctx?.requestId ?? null,
       },
     });
+    await this.changes.record(tx, { auditIds: [id] });
   }
 }

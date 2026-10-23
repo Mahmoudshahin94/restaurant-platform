@@ -23,18 +23,26 @@ POS terminals and KDS screens never sync with the cloud directly; they talk to t
 Every mutation that must reach the cloud inserts a `sync_operations` row **in the same SQLite
 transaction** as the mutation itself. If either fails, both roll back.
 
-| column                         | meaning                                                   |
-| ------------------------------ | --------------------------------------------------------- |
-| `id`                           | local row id                                              |
-| `operation_id`                 | UUIDv7, the idempotency key, unique                       |
-| `entity_type`, `entity_id`     | e.g. `Order`, `<uuid>`                                    |
-| `operation_type`               | `ORDER_UPSERT`, `SHIFT_UPSERT`, `KITCHEN_TICKET_UPSERT`   |
-| `payload`                      | the aggregate's full state after the change               |
-| `entity_version`               | per-entity sequence of the hub's changes (1, 2, 3, …)     |
-| `status`                       | `PENDING → PROCESSING → COMPLETED` or `FAILED`            |
-| `retry_count`, `next_retry_at` | how often the cloud answered RETRY, and when to try again |
-| `error_code`, `error_message`  | last failure; the POS translates the code                 |
-| `created_at`, `processed_at`   | UTC timestamps                                            |
+| column                         | meaning                                                                     |
+| ------------------------------ | --------------------------------------------------------------------------- |
+| `id`                           | local row id                                                                |
+| `operation_id`                 | UUIDv7, the idempotency key, unique                                         |
+| `entity_type`, `entity_id`     | e.g. `Order`, `<uuid>`                                                      |
+| `operation_type`               | `ORDER_UPSERT`, `SHIFT_UPSERT`, `KITCHEN_TICKET_UPSERT`, `AUDIT_LOG_APPEND` |
+| `payload`                      | the aggregate's full state after the change                                 |
+| `entity_version`               | per-entity sequence of the hub's changes (1, 2, 3, …)                       |
+| `status`                       | `PENDING → PROCESSING → COMPLETED` or `FAILED`                              |
+| `retry_count`, `next_retry_at` | how often the cloud answered RETRY, and when to try again                   |
+| `error_code`, `error_message`  | last failure; the POS translates the code                                   |
+| `created_at`, `processed_at`   | UTC timestamps                                                              |
+
+**Audit entries (Phase 10, ADR 0016).** Every audit entry the hub writes (PIN sign-ins and
+failures, shifts and cash movements, payments and refunds at the till, cancellations, kitchen
+actions) also gets an `AUDIT_LOG_APPEND` operation (`entity_type` `AuditLog`) in the same
+transaction; entries recorded outside a transaction (a failed sign-in) open one for the pair. The
+cloud stores the entry once, under the hub's restaurant and location, with its metadata redacted
+again; entries are append-only (a repeat answers `DUPLICATE`, a new operation for a stored entry
+changes nothing) and depend on nothing, so they never wait for another entity.
 
 ## Provisioning snapshot (Phase 5)
 

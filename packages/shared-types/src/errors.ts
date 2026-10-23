@@ -9,6 +9,8 @@ export const ERROR_CODES = [
   'CONFLICT',
   'RATE_LIMITED',
   'INTERNAL_ERROR',
+  /** A dependency (the database) is unavailable; `/ready` answers it. */
+  'SERVICE_UNAVAILABLE',
   // auth
   'UNAUTHENTICATED',
   'INVALID_CREDENTIALS',

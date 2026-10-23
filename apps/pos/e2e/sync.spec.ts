@@ -1,6 +1,7 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { resolve } from 'node:path';
-import { type APIRequestContext, type Page, expect, test } from '@playwright/test';
+import { DatabaseSync } from 'node:sqlite';
+import { type APIRequestContext, type Browser, type Page, expect, test } from '@playwright/test';
 
 /**
  * The specification's offline acceptance flow, end to end against the real cloud API:
@@ -12,7 +13,10 @@ import { type APIRequestContext, type Page, expect, test } from '@playwright/tes
  */
 const CLOUD = `http://localhost:${process.env.POS_E2E_CLOUD_PORT ?? '3110'}`;
 const HUB = `http://localhost:${process.env.POS_E2E_API_PORT ?? '4110'}`;
+const KDS = process.env.POS_E2E_KDS_URL ?? 'http://localhost:5191';
 let cloud: ChildProcess | null = null;
+
+test.describe.configure({ mode: 'serial' });
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -54,6 +58,99 @@ async function startCloud(): Promise<void> {
       { timeout: 30_000 },
     )
     .toBe(true);
+}
+
+/** The Internet drops: the cloud goes away while the restaurant keeps working. */
+async function stopCloud(): Promise<void> {
+  const running = cloud;
+  if (!running || running.exitCode !== null) return;
+  const exited = new Promise((done) => running.once('exit', done));
+  running.kill('SIGTERM');
+  await exited;
+}
+
+/** The kitchen display, signed in at the same hub. */
+async function kitchenScreen(browser: Browser): Promise<Page> {
+  const context = await browser.newContext({
+    baseURL: KDS,
+    viewport: { width: 1366, height: 900 },
+  });
+  await context.addInitScript(() => {
+    if (!sessionStorage.getItem('e2e-init')) {
+      localStorage.clear();
+      localStorage.setItem(
+        'kds-screen-preferences',
+        JSON.stringify({
+          state: { locale: 'en', locationId: null, stationIds: [], sound: false },
+          version: 1,
+        }),
+      );
+      sessionStorage.setItem('e2e-init', '1');
+    }
+  });
+  const kds = await context.newPage();
+  await kds.goto('/login');
+  await kds.getByLabel('Email').fill(process.env.SEED_KITCHEN_EMAIL ?? '');
+  await kds.getByLabel('Password').fill(process.env.SEED_KITCHEN_PASSWORD ?? '');
+  await kds.getByRole('button', { name: 'Sign in' }).click();
+  await expect(kds.getByRole('status').filter({ hasText: 'Live' })).toBeVisible();
+  return kds;
+}
+
+/**
+ * Sends the cloud, again, exactly what the hub already pushed for an order (its newest order
+ * operation and its kitchen tickets'), with the hub's own credential — as a network retry whose
+ * first answer was lost would. Returns the cloud's answer per operation.
+ */
+async function resendHubPush(request: APIRequestContext, orderNumber: string): Promise<string[]> {
+  const db = new DatabaseSync(resolve(process.env.POS_E2E_HUB_DATA_DIR ?? '', 'hub.db'), {
+    readOnly: true,
+  });
+  try {
+    const pairing = db.prepare("SELECT value FROM hub_state WHERE key = 'pairing'").get() as {
+      value: string;
+    };
+    const { credential } = JSON.parse(pairing.value) as { credential: string };
+    const order = db
+      .prepare('SELECT id FROM orders WHERE order_number = ? ORDER BY created_at DESC LIMIT 1')
+      .get(orderNumber) as { id: string };
+    const rows = db
+      .prepare(
+        `SELECT operation_id, entity_type, entity_id, operation_type, entity_version, payload
+         FROM sync_operations s
+         WHERE status = 'COMPLETED' AND (entity_id = ? OR (entity_type = 'KitchenTicket'
+           AND json_extract(payload, '$.orderId') = ?))
+           AND entity_version = (SELECT max(entity_version) FROM sync_operations t
+             WHERE t.entity_type = s.entity_type AND t.entity_id = s.entity_id)
+         ORDER BY entity_type DESC`,
+      )
+      .all(order.id, order.id) as {
+      operation_id: string;
+      entity_type: string;
+      entity_id: string;
+      operation_type: string;
+      entity_version: number;
+      payload: string;
+    }[];
+    expect(rows.map((r) => r.entity_type)).toContain('Order');
+    const res = await request.post(`${CLOUD}/api/v1/sync/push`, {
+      headers: { authorization: `Device ${credential}` },
+      data: {
+        operations: rows.map((r) => ({
+          operationId: r.operation_id,
+          entityType: r.entity_type,
+          entityId: r.entity_id,
+          operationType: r.operation_type,
+          entityVersion: r.entity_version,
+          payload: JSON.parse(r.payload) as unknown,
+        })),
+      },
+    });
+    expect(res.ok()).toBe(true);
+    return ((await res.json()) as { results: { status: string }[] }).results.map((r) => r.status);
+  } finally {
+    db.close();
+  }
 }
 
 async function signIn(page: Page): Promise<void> {
@@ -124,4 +221,57 @@ test('an order taken offline synchronizes exactly once when the Internet returns
   await page.getByRole('button', { name: 'Sync now' }).click();
   await expect(page.getByText('Everything is synchronized with the cloud.')).toBeVisible();
   expect(await cloudOrders(request, number)).toBe(1);
+});
+
+test('the Internet drops during service: the kitchen still gets the order, and it syncs once', async ({
+  page,
+  browser,
+  request,
+}) => {
+  test.setTimeout(150_000);
+  if (cloud?.exitCode !== null) await startCloud();
+  await signIn(page);
+  const indicator = page.getByRole('status').filter({ hasText: /^(Offline|Online|Syncing)/ });
+  await expect(indicator).toHaveText(/^Online · \d+ synchronized$/, { timeout: 60_000 });
+  const kds = await kitchenScreen(browser);
+
+  // 8. The Internet disconnects in the middle of service.
+  await stopCloud();
+  await expect(indicator).toHaveText(/^Offline · \d+ pending$/, { timeout: 60_000 });
+
+  // 9. The cashier still takes an order: a burger for the grill and fries for the fryer.
+  await page.keyboard.press('F2');
+  await page.getByRole('button', { name: /^Classic Burger/ }).click();
+  const options = page.getByRole('dialog');
+  await options.getByRole('button', { name: /Add to order/ }).click();
+  await expect(options).toBeHidden();
+  await page.getByRole('button', { name: /^Fries/ }).click();
+  await page.getByRole('button', { name: 'Place order' }).click();
+  const placed = page.getByText(/Order (MAIN-\d+) placed/);
+  await expect(placed).toBeVisible();
+  const number = /MAIN-\d+/.exec(await placed.innerText())?.[0] ?? '';
+
+  // 10. It appears on the restaurant's kitchen display at once, without the cloud.
+  const tickets = kds.getByRole('article', { name: number });
+  await expect(tickets.filter({ hasText: 'Fries' })).toBeVisible();
+  await expect(tickets.filter({ hasText: 'Classic Burger' }).first()).toBeVisible();
+  await tickets.filter({ hasText: 'Fries' }).getByRole('button', { name: 'Start' }).click();
+  await expect(tickets.filter({ hasText: 'Fries' })).toContainText('Preparing');
+
+  // 11. The Internet reconnects; 12. the order reaches the cloud exactly once.
+  await startCloud();
+  await indicator.click();
+  await page.getByRole('button', { name: 'Sync now' }).click();
+  await expect(page.getByText('Everything is synchronized with the cloud.')).toBeVisible({
+    timeout: 60_000,
+  });
+  await expect(indicator).toHaveText(/^Online · \d+ synchronized$/);
+  expect(await cloudOrders(request, number)).toBe(1);
+
+  // 13. The same push arriving again (a retry after a lost answer) changes nothing.
+  const answers = await resendHubPush(request, number);
+  expect(answers.length).toBeGreaterThan(1);
+  expect(new Set(answers)).toEqual(new Set(['DUPLICATE']));
+  expect(await cloudOrders(request, number)).toBe(1);
+  await kds.context().close();
 });

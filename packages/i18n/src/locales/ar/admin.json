@@ -667,7 +667,8 @@
     "entity": {
       "Order": "طلب",
       "Shift": "وردية",
-      "KitchenTicket": "تذكرة مطبخ"
+      "KitchenTicket": "تذكرة مطبخ",
+      "AuditLog": "سجل تدقيق"
     },
     "status": {
       "APPLIED": "مطبّق",

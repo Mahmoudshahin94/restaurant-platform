@@ -35,6 +35,8 @@ const api = '/api/v1';
 const loc = () => `${api}/locations/${fixture.ids.locationId}`;
 const outbox = () =>
   asHubTx(hub.app.get(PrismaService)).syncOperation.findMany({ orderBy: { createdAt: 'asc' } });
+/** Business entities only: every staff action also queues its audit entry (ADR 0016). */
+const businessOutbox = async () => (await outbox()).filter((o) => o.entityType !== 'AuditLog');
 
 async function provision(): Promise<void> {
   await pair(hub, cloud);
@@ -223,7 +225,7 @@ describe('running the restaurant on the hub', () => {
   it('writes nothing to the outbox when a change is rejected', async () => {
     const cashier = await signIn('cashier@hub.test');
     const order = await placeOrder(cashier, [fixture.ids.cola]);
-    const before = (await outbox()).length;
+    const before = (await businessOutbox()).length;
     const shift = (
       await hub.app.inject({
         method: 'POST',
@@ -232,7 +234,8 @@ describe('running the restaurant on the hub', () => {
         payload: { id: newId(), cashRegisterId: fixture.ids.drawer, openingFloat: 0 },
       })
     ).json<Shift>();
-    const afterShift = (await outbox()).length;
+    const afterShift = (await businessOutbox()).length;
+    const all = (await outbox()).length;
     expect(afterShift).toBe(before + 1);
     const overpay = await hub.app.inject({
       method: 'POST',
@@ -247,7 +250,36 @@ describe('running the restaurant on the hub', () => {
       },
     });
     expect(overpay.statusCode).toBe(422);
-    expect((await outbox()).length).toBe(afterShift);
+    // Neither the payment nor its audit entry reached the outbox: the transaction rolled back.
+    expect((await outbox()).length).toBe(all);
+  });
+
+  it('creates an order once when the POS resends it, also concurrently', async () => {
+    const cashier = await signIn('cashier@hub.test');
+    const payload = {
+      id: newId(),
+      channel: 'TAKEAWAY',
+      status: 'CONFIRMED',
+      items: [{ id: newId(), productId: fixture.ids.cola, quantity: 2 }],
+    };
+    const send = () =>
+      hub.app.inject({ method: 'POST', url: `${loc()}/orders`, headers: cashier, payload });
+    const first = await send();
+    expect(first.statusCode).toBe(201);
+    // A retry after a lost response, then two terminals' retries racing each other.
+    const [again, racing1, racing2] = await Promise.all([send(), send(), send()]);
+    for (const res of [again, racing1, racing2]) {
+      expect(res.statusCode).toBeLessThan(300);
+      expect(res.json<Order>()).toMatchObject({
+        id: payload.id,
+        orderNumber: first.json<Order>().orderNumber,
+      });
+    }
+    const db = asHubTx(hub.app.get(PrismaService));
+    expect(await db.order.count({ where: { id: payload.id } })).toBe(1);
+    expect(await db.orderItem.count({ where: { orderId: payload.id } })).toBe(1);
+    const ops = (await businessOutbox()).filter((o) => o.entityId === payload.id);
+    expect(ops).toHaveLength(1);
   });
 
   it('never over-collects when two terminals pay the same order at once', async () => {

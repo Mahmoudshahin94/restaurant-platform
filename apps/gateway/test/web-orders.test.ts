@@ -306,7 +306,10 @@ describe('accepting and rejecting at the restaurant', () => {
       payload: { status: 'CONFIRMED', version: 2 },
     });
     // The ticket follows its order in the same push.
-    expect(cloud.pushed.map((o) => o.entityType)).toEqual(['Order', 'KitchenTicket']);
+    expect(cloud.pushed.map((o) => o.entityType).filter((type) => type !== 'AuditLog')).toEqual([
+      'Order',
+      'KitchenTicket',
+    ]);
   });
 
   it('refuses to edit a website order before accepting it, and to accept it too late', async () => {

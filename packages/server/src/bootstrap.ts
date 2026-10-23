@@ -8,6 +8,7 @@ import type { DynamicModule } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { FastifyRequest } from 'fastify';
+import { assertEveryRouteProtected } from './common/auth/route-inventory';
 import { AllExceptionsFilter } from './common/errors/all-exceptions.filter';
 import { PinoNestLogger, createRootLogger } from './common/logging/logger';
 import { RealtimeGateway } from './modules/realtime/realtime.gateway';
@@ -52,6 +53,8 @@ export async function createServerApp(
   const adapter = new FastifyAdapter({
     loggerInstance: logger,
     bodyLimit: 1024 * 1024,
+    // `request.ip` (rate-limit key) comes from X-Forwarded-For only for this many trusted hops.
+    ...(config.TRUST_PROXY > 0 ? { trustProxy: config.TRUST_PROXY } : {}),
     // Honour a caller-supplied correlation id (e.g. from the location hub), otherwise mint one.
     genReqId: (req: IncomingMessage) => {
       const header = req.headers['x-request-id'];
@@ -63,6 +66,7 @@ export async function createServerApp(
     logger: new PinoNestLogger(logger),
   });
 
+  assertEveryRouteProtected(app);
   app.setGlobalPrefix(API_PREFIX, { exclude: ['health', 'ready'] });
   app.enableCors({
     origin: config.CORS_ORIGINS,

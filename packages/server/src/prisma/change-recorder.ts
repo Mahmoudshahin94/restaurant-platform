@@ -6,6 +6,8 @@ export interface ChangeSet {
   orderIds?: Iterable<string>;
   shiftIds?: Iterable<string>;
   ticketIds?: Iterable<string>;
+  /** Audit-trail entries; the hub uploads its own so the cloud's audit log is complete. */
+  auditIds?: Iterable<string>;
 }
 
 /**
@@ -14,6 +16,8 @@ export interface ChangeSet {
  * together); the cloud is the destination and records nothing.
  */
 export abstract class ChangeRecorder {
+  /** Whether audit entries leave this node (the hub's do; the cloud is their destination). */
+  readonly capturesAudit: boolean = false;
   abstract record(tx: PrismaTx, changes: ChangeSet): Promise<void>;
 }
 

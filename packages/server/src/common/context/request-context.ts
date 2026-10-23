@@ -9,8 +9,12 @@ export interface RequestContextStore {
   requestId: string;
   source: ActionSource;
   userId?: string;
+  /** A paired hub calling the cloud with its device credential. */
+  deviceId?: string;
   restaurantId?: string;
   locationId?: string;
+  /** The order the request is about, when its route names one. */
+  orderId?: string;
 }
 
 const storage = new AsyncLocalStorage<RequestContextStore>();
