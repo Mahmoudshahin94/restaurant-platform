@@ -158,7 +158,7 @@ test('a website order reaches the store, is accepted, and the customer sees it',
   await page.getByRole('link', { name: 'Follow your order' }).click();
   await expect(page.getByTestId('order-status')).toHaveText('Waiting for the store');
 
-  // 15. The cloud order reaches the tenant: the till announces it.
+  // 15. The cloud order reaches the location: the till announces it.
   const pos = await till(browser);
   await cashierSignsIn(pos);
   const incoming = pos.getByRole('dialog');
@@ -169,7 +169,7 @@ test('a website order reaches the store, is accepted, and the customer sees it',
   await expect(incoming.getByText('Ring the bell')).toBeVisible();
   await expect(incoming.getByTestId('accept-countdown')).toHaveText(/Accept within \d\d:\d\d/);
 
-  // 16. The tenant accepts it: it goes to the kitchen.
+  // 16. The location accepts it: it goes to the kitchen.
   await incoming.getByRole('button', { name: 'Accept' }).click();
   await expect(pos.getByText(`Order ${number} accepted and sent to the kitchen.`)).toBeVisible();
   await expect(incoming).toBeHidden();
@@ -177,7 +177,7 @@ test('a website order reaches the store, is accepted, and the customer sees it',
 
   // 17. The customer sees the new status (the page refreshes itself).
   await expect(page.getByTestId('order-status')).toHaveText('Accepted', { timeout: 30_000 });
-  await expect(page.getByText('The tenant accepted your order.')).toBeVisible();
+  await expect(page.getByText('The store accepted your order.')).toBeVisible();
 });
 
 test('in Arabic, right to left: a paid delivery order is rejected and the payment voided', async ({
@@ -246,7 +246,7 @@ test('a paused branch shows why and takes no order', async ({ page, request }) =
     await page.goto('/');
     await page.getByRole('link', { name: 'View menu · Main Branch' }).click();
     await expect(page.getByText('Paused').first()).toBeVisible();
-    await expect(page.getByText(/The tenant paused online orders for a moment/)).toBeVisible();
+    await expect(page.getByText(/The store paused online orders for a moment/)).toBeVisible();
     // Browsing and filling the cart still work; placing the order does not.
     await page.getByRole('button', { name: 'Add Fries' }).click();
     await page

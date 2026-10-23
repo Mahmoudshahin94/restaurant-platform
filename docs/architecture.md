@@ -722,9 +722,14 @@ See [ADR 0017](adr/0017-tenant-root-and-isolation.md).
 - **Provisioning** (`provisionTenant`) is shared by the seed and the future platform API. The seed
   has one tenant per business type. ILS is supported.
 
-**Phase M1 verification (2026-10-23):** see the pull request. It covers
-`pnpm build typecheck lint test`, `pnpm test:tools`, `pnpm e2e`, a clean `migrate status` and the
-hub schema check.
+**Phase M1 verification (2026-10-23):** `pnpm build`, `typecheck`, `lint` and `test` green (614 unit,
+integration and component tests: API 224, domain 149, gateway 58, admin 26, i18n 26, database 24,
+server 23, validation 22, POS 17, customer-web 12, api-client 11, receipts 8, KDS 7, app-kit 5,
+ui 2), `pnpm test:tools` (6, including the new lint rule), the hub schema check, a clean
+`migrate status`, and all 31 Playwright E2E tests (admin 8, POS 15, KDS 4, customer-web 4). New:
+the tenant-isolation suite, the scoped-client tests on PostgreSQL and SQLite, the change feed
+after the rename, the pre-rename hub upgrade, and the hub's tenant checks. A POS payment test
+failed once on a full run and passed on two reruns: a timing flake seen once, not reproduced.
 
 ## Architectural decisions and open questions
 
