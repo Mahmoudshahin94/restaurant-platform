@@ -253,7 +253,7 @@ export function syncBuilders({ tenant, menu, cashMethodId, registerId }: SyncCon
 export type SyncBuilders = ReturnType<typeof syncBuilders>;
 
 export const op = <P extends { id: string }>(
-  entityType: 'Order' | 'Shift' | 'KitchenTicket',
+  entityType: 'Order' | 'Shift' | 'KitchenTicket' | 'AuditLog',
   payload: P,
   entityVersion: number,
   operationId = newId(),
@@ -265,6 +265,7 @@ export const op = <P extends { id: string }>(
     Order: 'ORDER_UPSERT',
     Shift: 'SHIFT_UPSERT',
     KitchenTicket: 'KITCHEN_TICKET_UPSERT',
+    AuditLog: 'AUDIT_LOG_APPEND',
   }[entityType],
   entityVersion,
   payload,

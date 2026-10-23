@@ -1,8 +1,14 @@
 import { Prisma } from '@pos/database';
-import type { PrismaTx } from '@pos/server';
+import { type PrismaTx, redactForAudit } from '@pos/server';
 import { WebRejectReason } from '@pos/shared-types';
 import type { ErrorCode } from '@pos/shared-types';
-import type { SyncKitchenTicket, SyncOperation, SyncOrder, SyncShift } from '@pos/validation';
+import type {
+  SyncAuditLog,
+  SyncKitchenTicket,
+  SyncOperation,
+  SyncOrder,
+  SyncShift,
+} from '@pos/validation';
 import type { AuthenticatedDevice } from '../devices/device.guard';
 
 /** A pushed operation the cloud will not apply (now or ever, depending on the status). */
@@ -61,6 +67,7 @@ export async function applyOperation(
   options: ApplyOptions = {},
 ): Promise<Applied> {
   if (op.payload.id !== op.entityId) throw reject('entityId does not match the payload id');
+  if (op.operationType === 'AUDIT_LOG_APPEND') return applyAuditLog(tx, device, op.payload);
   if (
     op.payload.restaurantId !== device.restaurantId ||
     op.payload.locationId !== device.locationId
@@ -75,6 +82,49 @@ export async function applyOperation(
     case 'KITCHEN_TICKET_UPSERT':
       return applyTicket(tx, device, op, op.payload, options);
   }
+}
+
+/**
+ * An audit entry recorded at the restaurant (ADR 0016). Append-only: stored once under the hub's
+ * restaurant and location (the hub serves exactly one), never updated; its metadata is redacted
+ * again, as on every audit write.
+ */
+async function applyAuditLog(
+  tx: PrismaTx,
+  device: AuthenticatedDevice,
+  entry: SyncAuditLog,
+): Promise<Applied> {
+  if (
+    (entry.restaurantId !== null && entry.restaurantId !== device.restaurantId) ||
+    (entry.locationId !== null && entry.locationId !== device.locationId)
+  ) {
+    throw outOfScope('The audit entry belongs to another restaurant or location than this hub');
+  }
+  const existing = await tx.auditLog.findUnique({
+    where: { id: entry.id },
+    select: { locationId: true },
+  });
+  if (existing) {
+    if (existing.locationId !== device.locationId) throw conflict('Audit entry id already in use');
+    return { rowVersion: null };
+  }
+  await tx.auditLog.create({
+    data: {
+      id: entry.id,
+      restaurantId: device.restaurantId,
+      locationId: device.locationId,
+      actorType: entry.actorType,
+      actorId: entry.actorId,
+      source: entry.source ?? 'HUB',
+      action: entry.action,
+      entityType: entry.entityType,
+      entityId: entry.entityId,
+      metadata: redactForAudit(entry.metadata) as Prisma.InputJsonValue,
+      requestId: entry.requestId,
+      createdAt: date(entry.createdAt),
+    },
+  });
+  return { rowVersion: null };
 }
 
 type Table = 'orders' | 'shifts' | 'kitchen_tickets';

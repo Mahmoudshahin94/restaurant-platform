@@ -94,6 +94,59 @@ async function status(): Promise<HubStatus> {
 }
 
 const types = (ops: { entityType: string }[]) => ops.map((o) => o.entityType);
+/** Business entities only: every staff action also queues its audit entry (ADR 0016). */
+const business = <T extends { entityType: string }>(ops: T[]) =>
+  ops.filter((o) => o.entityType !== 'AuditLog');
+
+describe('the restaurant’s audit trail (ADR 0016)', () => {
+  it('queues each audit entry with its change and uploads it, redacted, exactly once', async () => {
+    const pin = (value: string) =>
+      hub.app.inject({
+        method: 'POST',
+        url: `${api}/auth/pin`,
+        payload: { employeeCode: '1001', pin: value },
+      });
+    expect((await pin('0000')).statusCode).toBe(401);
+    expect((await pin(CASHIER_PIN)).statusCode).toBe(200);
+    const cashier = await signIn('cashier@hub.test');
+    const shift = await hub.app.inject({
+      method: 'POST',
+      url: `${loc()}/shifts`,
+      headers: cashier,
+      payload: { id: newId(), cashRegisterId: fixture.ids.drawer, openingFloat: 5000 },
+    });
+    expect(shift.statusCode).toBeLessThan(300);
+
+    const entries = await db().auditLog.findMany({ orderBy: { createdAt: 'asc' } });
+    const queued = await db().syncOperation.findMany({ where: { entityType: 'AuditLog' } });
+    expect(queued.map((o) => o.entityId).sort()).toEqual(entries.map((e) => e.id).sort());
+    expect(entries.map((e) => e.action)).toEqual(
+      expect.arrayContaining([
+        'auth.pin_login_failed',
+        'auth.pin_login',
+        'auth.login',
+        'shift.opened',
+      ]),
+    );
+
+    await hub.engine.syncNow();
+    const uploaded = cloud.pushed.filter((o) => o.entityType === 'AuditLog');
+    expect(uploaded.map((o) => o.operationType)).toEqual(entries.map(() => 'AUDIT_LOG_APPEND'));
+    const opened = uploaded.find((o) => (o.payload as { action: string }).action === 'shift.opened')
+      ?.payload as { metadata: Record<string, unknown>; locationId: string; source: string };
+    expect(opened).toMatchObject({
+      locationId: fixture.ids.locationId,
+      source: 'POS',
+      metadata: { openingFloat: 5000 },
+    });
+    expect(JSON.stringify(uploaded)).not.toContain(CASHIER_PIN);
+    expect(await db().syncOperation.count({ where: { status: { not: 'COMPLETED' } } })).toBe(0);
+
+    const pushes = cloud.pushes.length;
+    await hub.engine.syncNow();
+    expect(cloud.pushes.length).toBe(pushes);
+  });
+});
 
 describe('pushing the outbox', () => {
   it('sends orders taken offline once the cloud is back, exactly once', async () => {
@@ -207,7 +260,12 @@ describe('pushing the outbox', () => {
       payments: { cash: { type: string }[] }[];
     };
     expect(pushedOrder.payments[0]?.cash.map((c) => c.type)).toEqual(['SALE']);
-    expect(types(cloud.pushed).sort()).toEqual(['KitchenTicket', 'Order', 'Order', 'Shift']);
+    expect(types(business(cloud.pushed)).sort()).toEqual([
+      'KitchenTicket',
+      'Order',
+      'Order',
+      'Shift',
+    ]);
   });
 
   it('keeps a refused operation as FAILED, holds back only its entity, and retries on request', async () => {
@@ -228,7 +286,7 @@ describe('pushing the outbox', () => {
     await editNotes(cashier, fine, 'also later');
     const before = cloud.pushed.length;
     await hub.engine.pushNow();
-    expect(cloud.pushed.slice(before).map((o) => o.entityId)).toEqual([fine.id]);
+    expect(business(cloud.pushed.slice(before)).map((o) => o.entityId)).toEqual([fine.id]);
 
     const failed = (
       await hub.app.inject({
@@ -264,7 +322,7 @@ describe('pushing the outbox', () => {
     expect(retried.statusCode).toBe(200);
     await hub.engine.pushNow();
     // The newest state of the refused order went, covering the failed operation.
-    const last = cloud.pushed.at(-1);
+    const last = business(cloud.pushed).at(-1);
     expect(last).toMatchObject({ entityId: refused.id, payload: { notes: 'later change' } });
     expect(await status()).toMatchObject({ state: 'ONLINE', failedOperations: 0 });
 

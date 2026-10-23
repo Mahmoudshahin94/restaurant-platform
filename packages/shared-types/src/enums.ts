@@ -218,6 +218,8 @@ export const SyncOperationType = {
   ORDER_UPSERT: 'ORDER_UPSERT',
   SHIFT_UPSERT: 'SHIFT_UPSERT',
   KITCHEN_TICKET_UPSERT: 'KITCHEN_TICKET_UPSERT',
+  /** An audit-trail entry recorded at the restaurant; append-only (ADR 0016). */
+  AUDIT_LOG_APPEND: 'AUDIT_LOG_APPEND',
 } as const;
 export type SyncOperationType = ValueOf<typeof SyncOperationType>;
 
@@ -225,6 +227,7 @@ export const SyncEntityType = {
   Order: 'Order',
   Shift: 'Shift',
   KitchenTicket: 'KitchenTicket',
+  AuditLog: 'AuditLog',
 } as const;
 export type SyncEntityType = ValueOf<typeof SyncEntityType>;
 

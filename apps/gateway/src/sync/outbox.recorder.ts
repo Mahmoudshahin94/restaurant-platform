@@ -25,6 +25,8 @@ const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as object;
  */
 @Injectable()
 export class OutboxRecorder implements ChangeRecorder {
+  readonly capturesAudit = true;
+
   constructor(private readonly signal: OutboxSignal) {}
 
   async record(tx: PrismaTx, changes: ChangeSet): Promise<void> {
@@ -40,6 +42,10 @@ export class OutboxRecorder implements ChangeRecorder {
     for (const id of new Set(changes.ticketIds)) {
       const ticket = await db.kitchenTicket.findUnique({ where: { id }, include: { items: true } });
       if (ticket) await this.write(db, 'KitchenTicket', id, 'KITCHEN_TICKET_UPSERT', ticket);
+    }
+    for (const id of new Set(changes.auditIds)) {
+      const entry = await db.auditLog.findUnique({ where: { id } });
+      if (entry) await this.write(db, 'AuditLog', id, 'AUDIT_LOG_APPEND', entry);
     }
     this.signal.raise();
   }

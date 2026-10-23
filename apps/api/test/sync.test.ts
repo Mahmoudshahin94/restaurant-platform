@@ -12,6 +12,7 @@ import type {
   SyncShift,
 } from '@pos/validation';
 import {
+  syncAuditLogSchema,
   syncCashTransactionSchema,
   syncKitchenTicketSchema,
   syncOrderDiscountSchema,
@@ -403,6 +404,97 @@ async function pull(query: string): Promise<SyncPullResponse> {
   return res.json<SyncPullResponse>();
 }
 
+describe('hub audit trail (ADR 0016)', () => {
+  const entry = (overrides: Record<string, unknown> = {}) => ({
+    id: newId(),
+    restaurantId: tenant.restaurantId,
+    locationId: tenant.locationA,
+    actorType: 'USER',
+    actorId: tenant.cashier.id,
+    source: 'POS',
+    action: 'auth.pin_login',
+    entityType: 'User',
+    entityId: tenant.cashier.id,
+    metadata: { employeeCode: '1001' },
+    requestId: 'hub-req-1',
+    createdAt: '2026-10-23T08:00:00.000Z',
+    ...overrides,
+  });
+
+  it('stores the restaurant’s audit entries once, under the hub’s location', async () => {
+    const signIn = entry();
+    const system = entry({
+      restaurantId: null,
+      locationId: null,
+      actorType: 'SYSTEM',
+      actorId: null,
+      source: null,
+      action: 'auth.pin_login_failed',
+      metadata: { reason: 'BAD_PIN', pin: '1234', nested: { refreshToken: 'rt-value' } },
+    });
+    const first = op('AuditLog', signIn, 1);
+    expect(statuses(await push([first, op('AuditLog', system, 1)]))).toEqual([
+      'APPLIED',
+      'APPLIED',
+    ]);
+    expect(statuses(await push([first]))).toEqual(['DUPLICATE']);
+
+    const stored = await prisma.auditLog.findMany({
+      where: { id: { in: [signIn.id, system.id] } },
+      orderBy: { action: 'asc' },
+    });
+    expect(stored).toHaveLength(2);
+    expect(stored[0]).toMatchObject({
+      action: 'auth.pin_login',
+      restaurantId: tenant.restaurantId,
+      locationId: tenant.locationA,
+      actorId: tenant.cashier.id,
+      source: 'POS',
+      requestId: 'hub-req-1',
+      createdAt: new Date('2026-10-23T08:00:00.000Z'),
+    });
+    // Rows without a tenant are the hub's own; secrets are redacted again on the way in.
+    expect(stored[1]).toMatchObject({
+      restaurantId: tenant.restaurantId,
+      locationId: tenant.locationA,
+      source: 'HUB',
+      metadata: { reason: 'BAD_PIN', pin: '[REDACTED]', nested: { refreshToken: '[REDACTED]' } },
+    });
+
+    // The owner reads them in the cloud's audit log.
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/restaurants/${tenant.restaurantId}/audit-logs?action=auth.pin_login`,
+      headers: owner,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.stringify(res.json())).toContain(signIn.id);
+  });
+
+  it('refuses entries of another location or restaurant, and never rewrites one', async () => {
+    const otherTenant = await createTenant(prisma);
+    const results = await push([
+      op('AuditLog', entry({ locationId: tenant.locationB }), 1),
+      op('AuditLog', entry({ restaurantId: otherTenant.restaurantId }), 1),
+      op('AuditLog', entry({ action: '' }), 1),
+    ]);
+    expect(results.map((r) => [r.status, r.code])).toEqual([
+      ['REJECTED', 'SYNC_SCOPE_MISMATCH'],
+      ['REJECTED', 'SYNC_SCOPE_MISMATCH'],
+      ['REJECTED', 'VALIDATION_FAILED'],
+    ]);
+
+    // A new operation for an entry already stored changes nothing.
+    const original = entry();
+    await push([op('AuditLog', original, 1)]);
+    expect(statuses(await push([op('AuditLog', { ...original, action: 'forged' }, 2)]))).toEqual([
+      'APPLIED',
+    ]);
+    const stored = await prisma.auditLog.findUniqueOrThrow({ where: { id: original.id } });
+    expect(stored.action).toBe('auth.pin_login');
+  });
+});
+
 describe('GET /sync/pull', () => {
   it('starts a new hub at the head of its restaurant’s feed', async () => {
     const head = await pull('');
@@ -505,6 +597,7 @@ describe('sync payload schemas', () => {
     ['Shift', syncShiftSchema, ['cash']],
     ['KitchenTicket', syncKitchenTicketSchema, ['items']],
     ['KitchenTicketItem', syncTicketItemSchema, []],
+    ['AuditLog', syncAuditLogSchema, []],
   ] as const)('%s', (model, schema, relations) => {
     expect(keysOf(schema)).toEqual(fieldsOf(model, [...relations]));
   });

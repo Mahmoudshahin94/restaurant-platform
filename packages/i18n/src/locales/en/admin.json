@@ -667,7 +667,8 @@
     "entity": {
       "Order": "Order",
       "Shift": "Shift",
-      "KitchenTicket": "Kitchen ticket"
+      "KitchenTicket": "Kitchen ticket",
+      "AuditLog": "Audit entry"
     },
     "status": {
       "APPLIED": "Applied",
