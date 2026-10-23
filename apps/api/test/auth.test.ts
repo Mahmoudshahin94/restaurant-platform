@@ -267,7 +267,7 @@ describe('access tokens', () => {
 
   it('reports expired tokens distinctly so clients know to refresh', async () => {
     const key = new TextEncoder().encode(testConfig().JWT_ACCESS_SECRET);
-    const expired = await new SignJWT({ rid: tenant.restaurantId })
+    const expired = await new SignJWT({ tid: tenant.tenantId })
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(tenant.owner.id)
       .setIssuer('pos-kds-api')
@@ -284,7 +284,7 @@ describe('access tokens', () => {
   });
 
   it('rejects tokens signed with another key', async () => {
-    const forged = await new SignJWT({ rid: tenant.restaurantId })
+    const forged = await new SignJWT({ tid: tenant.tenantId })
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(tenant.owner.id)
       .setIssuer('pos-kds-api')

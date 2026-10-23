@@ -9,7 +9,7 @@ const AUDIENCE = 'pos-kds';
 
 export interface AccessTokenClaims {
   userId: string;
-  restaurantId: string;
+  tenantId: string;
 }
 
 export interface VerifiedAccessToken extends AccessTokenClaims {
@@ -31,7 +31,7 @@ export class TokenService {
   }
 
   async signAccessToken(claims: AccessTokenClaims): Promise<string> {
-    return new SignJWT({ rid: claims.restaurantId })
+    return new SignJWT({ tid: claims.tenantId })
       .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
       .setSubject(claims.userId)
       .setIssuer(ISSUER)
@@ -50,12 +50,12 @@ export class TokenService {
       });
       if (
         typeof payload.sub !== 'string' ||
-        typeof payload.rid !== 'string' ||
+        typeof payload.tid !== 'string' ||
         typeof payload.exp !== 'number'
       ) {
         throw new DomainError('UNAUTHENTICATED', 'Malformed access token');
       }
-      return { userId: payload.sub, restaurantId: payload.rid, expiresAt: payload.exp * 1000 };
+      return { userId: payload.sub, tenantId: payload.tid, expiresAt: payload.exp * 1000 };
     } catch (error) {
       if (error instanceof joseErrors.JWTExpired) {
         throw new DomainError('TOKEN_EXPIRED', 'Access token expired');

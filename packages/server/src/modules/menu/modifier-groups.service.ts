@@ -20,24 +20,24 @@ export class ModifierGroupsService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(restaurantId: string, includeArchived: boolean): Promise<ModifierGroup[]> {
+  async list(tenantId: string, includeArchived: boolean): Promise<ModifierGroup[]> {
     const rows = await this.prisma.modifierGroup.findMany({
-      where: { restaurantId, ...(includeArchived ? {} : { archivedAt: null }) },
+      where: { tenantId, ...(includeArchived ? {} : { archivedAt: null }) },
       include: { modifiers: true },
       orderBy: [{ sortOrder: 'asc' }, { nameEn: 'asc' }],
     });
     return rows.map(toModifierGroupDto);
   }
 
-  async get(restaurantId: string, groupId: string): Promise<ModifierGroup> {
-    return toModifierGroupDto(await this.load(this.prisma, restaurantId, groupId));
+  async get(tenantId: string, groupId: string): Promise<ModifierGroup> {
+    return toModifierGroupDto(await this.load(this.prisma, tenantId, groupId));
   }
 
-  async create(restaurantId: string, input: CreateInput): Promise<ModifierGroup> {
+  async create(tenantId: string, input: CreateInput): Promise<ModifierGroup> {
     return this.prisma.$transaction(async (tx) => {
       const { modifiers, ...group } = input;
       const row = await tx.modifierGroup.create({
-        data: { ...group, restaurantId, modifiers: { create: modifiers } },
+        data: { ...group, tenantId, modifiers: { create: modifiers } },
         include: { modifiers: true },
       });
       await this.audit.record(
@@ -53,9 +53,9 @@ export class ModifierGroupsService {
     });
   }
 
-  async update(restaurantId: string, groupId: string, input: UpdateInput): Promise<ModifierGroup> {
+  async update(tenantId: string, groupId: string, input: UpdateInput): Promise<ModifierGroup> {
     return this.prisma.$transaction(async (tx) => {
-      const current = await this.load(tx, restaurantId, groupId);
+      const current = await this.load(tx, tenantId, groupId);
       const { modifiers, ...fields } = input;
       const priceChanges: Record<string, unknown>[] = [];
 
@@ -98,7 +98,7 @@ export class ModifierGroupsService {
         await tx.modifierGroup.update({ where: { id: groupId }, data: fields });
       }
 
-      const after = await this.load(tx, restaurantId, groupId);
+      const after = await this.load(tx, tenantId, groupId);
       const liveCount = after.modifiers.filter((m) => m.archivedAt === null).length;
       if (!isValidSelectionRange(after.minSelect, after.maxSelect) || after.minSelect > liveCount) {
         throw new DomainError('VALIDATION_FAILED', 'Invalid selection range for modifier group', {
@@ -132,13 +132,9 @@ export class ModifierGroupsService {
     });
   }
 
-  async setArchived(
-    restaurantId: string,
-    groupId: string,
-    archived: boolean,
-  ): Promise<ModifierGroup> {
+  async setArchived(tenantId: string, groupId: string, archived: boolean): Promise<ModifierGroup> {
     return this.prisma.$transaction(async (tx) => {
-      await this.load(tx, restaurantId, groupId);
+      await this.load(tx, tenantId, groupId);
       await tx.modifierGroup.update({
         where: { id: groupId },
         data: { archivedAt: archived ? new Date() : null },
@@ -151,17 +147,17 @@ export class ModifierGroupsService {
         },
         tx,
       );
-      return toModifierGroupDto(await this.load(tx, restaurantId, groupId));
+      return toModifierGroupDto(await this.load(tx, tenantId, groupId));
     });
   }
 
   private async load(
     tx: PrismaTx,
-    restaurantId: string,
+    tenantId: string,
     groupId: string,
   ): Promise<ModifierGroupWithModifiers> {
     const row = await tx.modifierGroup.findFirst({
-      where: { id: groupId, restaurantId },
+      where: { id: groupId, tenantId },
       include: { modifiers: true },
     });
     if (!row)

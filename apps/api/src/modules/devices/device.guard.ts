@@ -1,12 +1,12 @@
 import { type CanActivate, type ExecutionContext, Injectable } from '@nestjs/common';
 import { DomainError, isUuid } from '@pos/domain';
-import { PrismaService } from '@pos/server';
+import { PrismaService, TenantContext } from '@pos/server';
 import type { FastifyRequest } from 'fastify';
 import { parseDeviceCredential, secretMatches } from './device-credentials';
 
 export interface AuthenticatedDevice {
   id: string;
-  restaurantId: string;
+  tenantId: string;
   locationId: string;
 }
 
@@ -33,7 +33,10 @@ export class DeviceGuard implements CanActivate {
     const reject = () => new DomainError('UNAUTHENTICATED', 'Invalid device credential');
     if (!credential || !isUuid(credential.deviceId)) throw reject();
 
-    const device = await this.prisma.device.findUnique({ where: { id: credential.deviceId } });
+    // The credential names the device, and the device its tenant: nothing is scoped yet.
+    const device = await TenantContext.runUnscoped('device sign-in: find the device', () =>
+      this.prisma.device.findUnique({ where: { id: credential.deviceId } }),
+    );
     if (
       device?.type !== 'GATEWAY' ||
       device.status !== 'ACTIVE' ||
@@ -43,14 +46,13 @@ export class DeviceGuard implements CanActivate {
       throw reject();
     }
     if (!device.lastSeenAt || Date.now() - device.lastSeenAt.getTime() > SEEN_WRITE_INTERVAL_MS) {
-      await this.prisma.device.update({
-        where: { id: device.id },
-        data: { lastSeenAt: new Date() },
-      });
+      await TenantContext.runInTenant(device.tenantId, () =>
+        this.prisma.device.update({ where: { id: device.id }, data: { lastSeenAt: new Date() } }),
+      );
     }
     request.device = {
       id: device.id,
-      restaurantId: device.restaurantId,
+      tenantId: device.tenantId,
       locationId: device.locationId,
     };
     return true;

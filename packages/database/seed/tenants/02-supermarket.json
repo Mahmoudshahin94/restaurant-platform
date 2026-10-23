@@ -1,0 +1,117 @@
+{
+  "$comment": "Development/demo data only: a supermarket tenant (ADR 0017). Its owner account is created only when SEED_MARKET_OWNER_EMAIL/_PASSWORD are set.",
+  "tenant": {
+    "slug": "al-balad-market",
+    "nameEn": "Al-Balad Market",
+    "nameAr": "سوق البلد",
+    "legalName": "Al-Balad Market Co.",
+    "businessType": "SUPERMARKET",
+    "currencyCode": "ILS",
+    "defaultLocale": "ar",
+    "supportedLocales": ["ar", "en"],
+    "timezone": "Asia/Hebron"
+  },
+  "locations": [
+    {
+      "code": "BLD",
+      "nameEn": "Downtown",
+      "nameAr": "وسط البلد",
+      "timezone": "Asia/Hebron",
+      "taxInclusive": true,
+      "addressLine": "Main Street, Ramallah",
+      "phone": null
+    }
+  ],
+  "roles": [
+    {
+      "name": "Owner",
+      "description": "Full access",
+      "isSystem": true,
+      "permissions": "*"
+    }
+  ],
+  "menu": {
+    "kitchenStations": [],
+    "modifierGroups": [],
+    "categories": [
+      {
+        "nameEn": "Pantry",
+        "nameAr": "المؤونة",
+        "products": [
+          {
+            "sku": "RICE-5KG",
+            "nameEn": "Rice 5 kg",
+            "nameAr": "أرز 5 كغ",
+            "price": 3500,
+            "stations": [],
+            "groups": []
+          },
+          {
+            "sku": "OIL-1L",
+            "nameEn": "Olive oil 1 L",
+            "nameAr": "زيت زيتون 1 لتر",
+            "price": 4500,
+            "stations": [],
+            "groups": []
+          }
+        ]
+      },
+      {
+        "nameEn": "Dairy",
+        "nameAr": "الألبان",
+        "products": [
+          {
+            "sku": "LBN-500",
+            "nameEn": "Labneh 500 g",
+            "nameAr": "لبنة 500 غ",
+            "price": 1200,
+            "stations": [],
+            "groups": []
+          }
+        ]
+      }
+    ]
+  },
+  "taxes": [
+    {
+      "nameEn": "VAT",
+      "nameAr": "ضريبة القيمة المضافة",
+      "rateBps": 1600,
+      "isDefault": true
+    }
+  ],
+  "paymentMethods": [
+    {
+      "type": "CASH",
+      "nameEn": "Cash",
+      "nameAr": "نقدًا"
+    },
+    {
+      "type": "CARD",
+      "nameEn": "Card",
+      "nameAr": "بطاقة"
+    }
+  ],
+  "cashRegisters": {
+    "BLD": [
+      {
+        "nameEn": "Till 1",
+        "nameAr": "الصندوق 1"
+      },
+      {
+        "nameEn": "Till 2",
+        "nameAr": "الصندوق 2"
+      }
+    ]
+  },
+  "users": [
+    {
+      "envPrefix": "SEED_MARKET_OWNER",
+      "displayName": "Owner",
+      "preferredLocale": "ar",
+      "role": "Owner",
+      "location": null,
+      "optional": true
+    }
+  ]
+}

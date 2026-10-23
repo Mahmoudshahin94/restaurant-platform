@@ -52,10 +52,11 @@ describe('hub migrations', () => {
     );
   });
 
-  it('upgrades a hub that already holds orders, payments and cash (online ordering)', async () => {
+  it('upgrades a hub that already holds orders, payments and cash (online ordering, tenant rename)', async () => {
     const { client, dir } = fresh();
     await client.$executeRawUnsafe('PRAGMA foreign_keys = ON');
-    // The hub as Phase 6 left it: every migration before online ordering.
+    // The hub as Phase 6 left it (still naming the tenant a restaurant): every migration before
+    // online ordering.
     const before = join(dir, 'before');
     for (const name of readdirSync(hubMigrationsDir()).filter((n) => n < '20261017133550')) {
       cpSync(join(hubMigrationsDir(), name), join(before, name), { recursive: true });
@@ -71,12 +72,16 @@ describe('hub migrations', () => {
       `INSERT INTO orders (id, restaurant_id, location_id, order_number, business_date, channel, status, source, currency_code, tax_inclusive, subtotal, discount_total, tax_total, fee_total, total, created_at, updated_at) VALUES ('o', 'r', 'l', 'MAIN-001', '${now}', 'TAKEAWAY', 'CONFIRMED', 'POS', 'SAR', 1, 100, 0, 13, 0, 100, '${now}', '${now}')`,
       `INSERT INTO payments (id, restaurant_id, location_id, order_id, shift_id, payment_method_id, method_type, method_name_en, method_name_ar, type, status, provider, amount, created_at, updated_at) VALUES ('p', 'r', 'l', 'o', 's', 'm', 'CASH', 'Cash', 'Cash', 'CHARGE', 'CAPTURED', 'cash', 100, '${now}', '${now}')`,
       `INSERT INTO cash_transactions (id, shift_id, type, amount, payment_id, created_at) VALUES ('t', 's', 'SALE', 100, 'p', '${now}')`,
+      `INSERT INTO hub_state (key, value, updated_at) VALUES ('pairing', '{"deviceId":"d","restaurantId":"r","locationId":"l"}', '${now}')`,
     ]) {
       await client.$executeRawUnsafe(sql);
     }
 
-    // The tables it rebuilds (locations, payments) keep their rows and references.
-    expect(await migrateHubDatabase(client)).toEqual(['20261017133550_online_ordering']);
+    // The tables online ordering rebuilds (locations, payments) keep their rows and references,
+    // and the tenant rename (ADR 0017) keeps every row under its tenant.
+    expect(await migrateHubDatabase(client)).toEqual(
+      readdirSync(hubMigrationsDir()).filter((n) => n >= '20261017133550' && /^\d{14}_/.test(n)),
+    );
     expect(await client.$queryRawUnsafe('PRAGMA foreign_key_check')).toEqual([]);
     expect(await client.payment.findUnique({ where: { id: 'p' } })).toMatchObject({ shiftId: 's' });
     expect(await client.cashTransaction.findUnique({ where: { id: 't' } })).toMatchObject({
@@ -85,6 +90,14 @@ describe('hub migrations', () => {
     expect(await client.location.findUnique({ where: { id: 'l' } })).toMatchObject({
       onlineAcceptMinutes: 10,
       openingHours: [],
+      tenantId: 'r',
+    });
+    expect(await client.tenant.findUnique({ where: { id: 'r' } })).toMatchObject({ slug: 'r' });
+    expect(await client.order.findUnique({ where: { id: 'o' } })).toMatchObject({ tenantId: 'r' });
+    expect((await client.hubState.findUnique({ where: { key: 'pairing' } }))?.value).toEqual({
+      deviceId: 'd',
+      tenantId: 'r',
+      locationId: 'l',
     });
   });
 

@@ -9,6 +9,30 @@
 type ValueOf<T> = T[keyof T];
 
 /**
+ * What kind of business a tenant is (ADR 0017). It only chooses default configuration (which
+ * modules start enabled); behaviour is decided by capabilities, never by comparing the type.
+ * Stored as text, so a new type is a code change here, not a database migration.
+ */
+export const BusinessType = {
+  RESTAURANT: 'RESTAURANT',
+  COFFEE_SHOP: 'COFFEE_SHOP',
+  SUPERMARKET: 'SUPERMARKET',
+  GROCERY: 'GROCERY',
+  CLOTHING: 'CLOTHING',
+  RETAIL: 'RETAIL',
+  OTHER: 'OTHER',
+} as const;
+export type BusinessType = ValueOf<typeof BusinessType>;
+
+/** Lifecycle of a tenant, set by the platform operator (Phase 9 enforces SUSPENDED). */
+export const TenantStatus = {
+  ACTIVE: 'ACTIVE',
+  SUSPENDED: 'SUSPENDED',
+  ARCHIVED: 'ARCHIVED',
+} as const;
+export type TenantStatus = ValueOf<typeof TenantStatus>;
+
+/**
  * How the customer ordered. Third-party marketplaces (UBER_EATS, DOORDASH, TALABAT, CAREEM, ...)
  * are added here as new values plus a Postgres enum migration; there is never a separate order
  * table per channel.
@@ -61,7 +85,7 @@ export const PaymentStatus = {
 } as const;
 export type PaymentStatus = ValueOf<typeof PaymentStatus>;
 
-/** Kinds of tender. Restaurants configure named methods (e.g. "Mada", "Visa") of these types. */
+/** Kinds of tender. Tenants configure named methods (e.g. "Mada", "Visa") of these types. */
 export const PaymentMethodType = {
   CASH: 'CASH',
   /** Card approved on an external terminal; the POS records the approval reference. */
@@ -174,7 +198,7 @@ export type FulfillmentType = ValueOf<typeof FulfillmentType>;
 
 /**
  * How a website customer pays. PAY_AT_PICKUP and CASH_ON_DELIVERY record nothing until the
- * restaurant takes the money; ONLINE_CARD goes through the online payment provider at checkout.
+ * tenant takes the money; ONLINE_CARD goes through the online payment provider at checkout.
  */
 export const WebPaymentOption = {
   PAY_AT_PICKUP: 'PAY_AT_PICKUP',
@@ -183,7 +207,7 @@ export const WebPaymentOption = {
 } as const;
 export type WebPaymentOption = ValueOf<typeof WebPaymentOption>;
 
-/** Why a restaurant rejected a website order (stored as the cancel reason, shown to customers). */
+/** Why a tenant rejected a website order (stored as the cancel reason, shown to customers). */
 export const WebRejectReason = {
   TOO_BUSY: 'TOO_BUSY',
   ITEM_UNAVAILABLE: 'ITEM_UNAVAILABLE',
@@ -193,7 +217,7 @@ export const WebRejectReason = {
 } as const;
 export type WebRejectReason = ValueOf<typeof WebRejectReason>;
 
-/** Cancel reason of a website order the restaurant did not accept in time. */
+/** Cancel reason of a website order the tenant did not accept in time. */
 export const WEB_ACCEPTANCE_TIMEOUT_REASON = 'ACCEPTANCE_TIMEOUT';
 
 export const OnlineOrderingState = {
@@ -218,7 +242,7 @@ export const SyncOperationType = {
   ORDER_UPSERT: 'ORDER_UPSERT',
   SHIFT_UPSERT: 'SHIFT_UPSERT',
   KITCHEN_TICKET_UPSERT: 'KITCHEN_TICKET_UPSERT',
-  /** An audit-trail entry recorded at the restaurant; append-only (ADR 0016). */
+  /** An audit-trail entry recorded at the location; append-only (ADR 0016). */
   AUDIT_LOG_APPEND: 'AUDIT_LOG_APPEND',
 } as const;
 export type SyncOperationType = ValueOf<typeof SyncOperationType>;

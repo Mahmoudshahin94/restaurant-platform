@@ -40,7 +40,7 @@ export const ORDER_TRANSITIONS: readonly TransitionRule[] = [
 
   rule('PLACED', 'CONFIRMED'),
   rule('PLACED', 'CANCELLED', { permission: 'orders.cancel', requiresReason: true }),
-  // A website order the restaurant did not accept in time is cancelled by the cloud (ADR 0013).
+  // A website order the tenant did not accept in time is cancelled by the cloud (ADR 0013).
   rule('PLACED', 'CANCELLED', { trigger: 'SYSTEM', permission: null, requiresReason: true }),
 
   rule('CONFIRMED', 'PREPARING', { trigger: 'SYSTEM', permission: null }),

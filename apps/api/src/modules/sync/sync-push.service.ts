@@ -169,10 +169,10 @@ export class SyncPushService {
       const status = refusal.status;
       const payload = JSON.stringify(op.payload ?? null);
       await this.prisma.$executeRaw`
-        INSERT INTO processed_operations (operation_id, restaurant_id, location_id, device_id,
+        INSERT INTO processed_operations (operation_id, tenant_id, location_id, device_id,
           entity_type, entity_id, operation_type, entity_version, status, error_code,
           error_message, attempts, payload, updated_at)
-        VALUES (${op.operationId}::uuid, ${device.restaurantId}::uuid, ${device.locationId}::uuid,
+        VALUES (${op.operationId}::uuid, ${device.tenantId}::uuid, ${device.locationId}::uuid,
           ${device.id}::uuid, ${op.entityType}, ${op.entityId}::uuid, ${op.operationType},
           ${op.entityVersion}, ${status}::processed_operation_status, ${refusal.code},
           ${refusal.message}, 1, ${payload}::jsonb, now())
@@ -189,7 +189,7 @@ export class SyncPushService {
   private ledgerKey(device: AuthenticatedDevice, op: Envelope) {
     return {
       operationId: op.operationId,
-      restaurantId: device.restaurantId,
+      tenantId: device.tenantId,
       locationId: device.locationId,
       deviceId: device.id,
       entityType: op.entityType,

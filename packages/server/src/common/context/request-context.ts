@@ -11,7 +11,7 @@ export interface RequestContextStore {
   userId?: string;
   /** A paired hub calling the cloud with its device credential. */
   deviceId?: string;
-  restaurantId?: string;
+  tenantId?: string;
   locationId?: string;
   /** The order the request is about, when its route names one. */
   orderId?: string;

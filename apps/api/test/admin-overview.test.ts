@@ -60,7 +60,7 @@ beforeEach(async () => {
   menu = await createMenuFixture(prisma, tenant);
   cashId = (
     await prisma.paymentMethod.create({
-      data: { restaurantId: tenant.restaurantId, type: 'CASH', nameEn: 'Cash', nameAr: 'نقدًا' },
+      data: { tenantId: tenant.tenantId, type: 'CASH', nameEn: 'Cash', nameAr: 'نقدًا' },
     })
   ).id;
   registerId = (
@@ -70,7 +70,7 @@ beforeEach(async () => {
   ).id;
   owner = bearer(await login(app, tenant.owner.email));
   cashier = bearer(await login(app, tenant.cashier.email));
-  base = `/api/v1/restaurants/${tenant.restaurantId}`;
+  base = `/api/v1/tenants/${tenant.tenantId}`;
 });
 
 // The caller names the response type, as with light-my-request's `json<T>()`.
@@ -128,7 +128,7 @@ async function payCash(order: Order, shift: Shift) {
 async function onlineCharge(order: Order, amount = order.total) {
   const method = await prisma.paymentMethod.create({
     data: {
-      restaurantId: tenant.restaurantId,
+      tenantId: tenant.tenantId,
       type: 'ONLINE',
       nameEn: 'Online',
       nameAr: 'إلكتروني',
@@ -137,7 +137,7 @@ async function onlineCharge(order: Order, amount = order.total) {
   const charge = await prisma.payment.create({
     data: {
       id: newId(),
-      restaurantId: tenant.restaurantId,
+      tenantId: tenant.tenantId,
       locationId: tenant.locationA,
       orderId: order.id,
       shiftId: null,
@@ -456,7 +456,7 @@ describe('admin refunds', () => {
     });
     expect(cancel, JSON.stringify(cancel.body)).toMatchObject({
       status: 409,
-      body: { details: { reason: 'OWNED_BY_RESTAURANT' } },
+      body: { details: { reason: 'OWNED_BY_LOCATION' } },
     });
     // The hub's shift holds drawer 1; the cloud's own shift uses another drawer.
     const drawer2 = await prisma.cashRegister.create({
@@ -477,7 +477,7 @@ describe('admin refunds', () => {
     );
     expect(refund).toMatchObject({
       status: 409,
-      body: { details: { reason: 'OWNED_BY_RESTAURANT' } },
+      body: { details: { reason: 'OWNED_BY_LOCATION' } },
     });
   });
 });
@@ -487,10 +487,10 @@ describe('admin refunds', () => {
 describe('audit log', () => {
   it('filters entries, hides other scopes and never shows secrets', async () => {
     await createOrder();
-    await call('PATCH', `/api/v1/restaurants/${tenant.restaurantId}`, owner, { nameEn: 'Renamed' });
+    await call('PATCH', `/api/v1/tenants/${tenant.tenantId}`, owner, { nameEn: 'Renamed' });
     await prisma.auditLog.create({
       data: {
-        restaurantId: tenant.restaurantId,
+        tenantId: tenant.tenantId,
         locationId: tenant.locationA,
         actorType: 'SYSTEM',
         action: 'test.legacy',
@@ -503,7 +503,7 @@ describe('audit log', () => {
     expect(page.status).toBe(200);
     const actions = page.body.items.map((e) => e.action);
     expect(actions).toEqual(
-      expect.arrayContaining(['order.created', 'restaurant.updated', 'auth.login']),
+      expect.arrayContaining(['order.created', 'tenant.updated', 'auth.login']),
     );
     const legacy = page.body.items.find((e) => e.action === 'test.legacy');
     expect(legacy?.metadata).toEqual({
@@ -518,10 +518,10 @@ describe('audit log', () => {
     expect(orders.body.items.every((e) => e.action.startsWith('order.'))).toBe(true);
     expect(orders.body.items[0]).toMatchObject({ actorName: 'Owner', source: 'ADMIN' });
 
-    // A location auditor sees that location's entries only, not restaurant-level ones.
+    // A location auditor sees that location's entries only, not tenant-level ones.
     const auditor = await prisma.role.create({
       data: {
-        restaurantId: tenant.restaurantId,
+        tenantId: tenant.tenantId,
         name: 'Auditor A',
         permissions: { create: [{ permissionKey: 'audit.view' }] },
       },
@@ -531,7 +531,7 @@ describe('audit log', () => {
     });
     const scoped = await call<Paginated<AuditLogEntry>>('GET', `${base}/audit-logs`, cashier);
     expect(scoped.body.items.every((e) => e.locationId === tenant.locationA)).toBe(true);
-    expect(scoped.body.items.map((e) => e.action)).not.toContain('restaurant.updated');
+    expect(scoped.body.items.map((e) => e.action)).not.toContain('tenant.updated');
     expect(
       (await call('GET', `${base}/audit-logs?locationId=${tenant.locationB}`, cashier)).status,
     ).toBe(404);

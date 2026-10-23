@@ -30,7 +30,7 @@ const id = new ZodValidationPipe(idSchema);
 const customerKey = new ZodValidationPipe(z.string().regex(/^[a-f0-9]{64}$/));
 
 /**
- * Restaurant-wide views for the admin portal. `any-location` routes are open to whoever holds the
+ * Tenant-wide views for the admin portal. `any-location` routes are open to whoever holds the
  * permission at some location and filter their results to those locations.
  */
 @Controller()
@@ -43,18 +43,18 @@ export class OverviewController {
   ) {}
 
   @RequirePermissions(['orders.view'], { scope: 'any-location' })
-  @Get('restaurants/:restaurantId/dashboard')
+  @Get('tenants/:tenantId/dashboard')
   getDashboard(
-    @Param('restaurantId', id) _restaurantId: string,
+    @Param('tenantId', id) _tenantId: string,
     @CurrentPrincipal() principal: Principal,
   ): Promise<Dashboard> {
     return this.dashboard.build(principal);
   }
 
   @RequirePermissions(['orders.view'], { scope: 'any-location' })
-  @Get('restaurants/:restaurantId/orders')
+  @Get('tenants/:tenantId/orders')
   orders(
-    @Param('restaurantId', id) _restaurantId: string,
+    @Param('tenantId', id) _tenantId: string,
     @CurrentPrincipal() principal: Principal,
     @Query(new ZodValidationPipe(orderSearchQuerySchema))
     query: z.output<typeof orderSearchQuerySchema>,
@@ -63,9 +63,9 @@ export class OverviewController {
   }
 
   @RequirePermissions(['customers.view'], { scope: 'any-location' })
-  @Get('restaurants/:restaurantId/customers')
+  @Get('tenants/:tenantId/customers')
   customers(
-    @Param('restaurantId', id) _restaurantId: string,
+    @Param('tenantId', id) _tenantId: string,
     @CurrentPrincipal() principal: Principal,
     @Query(new ZodValidationPipe(customerQuerySchema)) query: z.output<typeof customerQuerySchema>,
   ): Promise<Paginated<CustomerSummary>> {
@@ -73,9 +73,9 @@ export class OverviewController {
   }
 
   @RequirePermissions(['customers.view'], { scope: 'any-location' })
-  @Get('restaurants/:restaurantId/customers/:customerKey')
+  @Get('tenants/:tenantId/customers/:customerKey')
   customer(
-    @Param('restaurantId', id) _restaurantId: string,
+    @Param('tenantId', id) _tenantId: string,
     @Param('customerKey', customerKey) key: string,
     @CurrentPrincipal() principal: Principal,
   ): Promise<CustomerDetail> {
@@ -83,9 +83,9 @@ export class OverviewController {
   }
 
   @RequirePermissions(['payments.view'], { scope: 'any-location' })
-  @Get('restaurants/:restaurantId/payments')
+  @Get('tenants/:tenantId/payments')
   payments(
-    @Param('restaurantId', id) _restaurantId: string,
+    @Param('tenantId', id) _tenantId: string,
     @CurrentPrincipal() principal: Principal,
     @Query(new ZodValidationPipe(paymentSearchQuerySchema))
     query: z.output<typeof paymentSearchQuerySchema>,
@@ -106,9 +106,9 @@ export class OverviewController {
   }
 
   @RequirePermissions(['audit.view'], { scope: 'any-location' })
-  @Get('restaurants/:restaurantId/audit-logs')
+  @Get('tenants/:tenantId/audit-logs')
   auditLogs(
-    @Param('restaurantId', id) _restaurantId: string,
+    @Param('tenantId', id) _tenantId: string,
     @CurrentPrincipal() principal: Principal,
     @Query(new ZodValidationPipe(auditLogQuerySchema)) query: z.output<typeof auditLogQuerySchema>,
   ): Promise<Paginated<AuditLogEntry>> {

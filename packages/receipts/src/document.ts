@@ -25,7 +25,7 @@ export interface ReceiptDocument {
 
 export interface ReceiptContext {
   order: Order;
-  restaurant: { nameEn: string; nameAr: string };
+  tenant: { nameEn: string; nameAr: string };
   location: {
     nameEn: string;
     nameAr: string;
@@ -78,14 +78,14 @@ export function buildReceipt(
   context: ReceiptContext,
   extensions: readonly ReceiptExtension[] = [],
 ): ReceiptDocument {
-  const { order, restaurant, location, locale, t } = context;
+  const { order, tenant, location, locale, t } = context;
   const money = (amount: number) =>
     formatMoney(amount, order.currencyCode, locale, { digits: context.digits ?? 'latn' });
   const name = (entity: { nameEn: string; nameAr: string }) =>
     pickLocalized(entity, 'name', locale);
   const blocks: ReceiptBlock[] = [];
 
-  blocks.push(text(name(restaurant), 'center', 'large', true));
+  blocks.push(text(name(tenant), 'center', 'large', true));
   blocks.push(text(name(location), 'center'));
   if (location.addressLine) blocks.push(text(location.addressLine, 'center'));
   if (location.phone) blocks.push(text(location.phone, 'center'));

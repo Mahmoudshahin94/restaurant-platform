@@ -37,10 +37,10 @@ export class PublishedMenuService {
   ): Promise<{ location: Location; currencyCode: string; menu: LocationMenu }> {
     const location = await this.prisma.location.findUnique({
       where: { id: locationId },
-      include: { restaurant: { select: { currencyCode: true } } },
+      include: { tenant: { select: { currencyCode: true } } },
     });
     if (!location) throw new DomainError('LOCATION_NOT_FOUND', 'Location not found');
-    const live = { restaurantId: location.restaurantId, archivedAt: null };
+    const live = { tenantId: location.tenantId, archivedAt: null };
 
     const [categories, products, modifierGroups, kitchenStations, taxes, settings] =
       await Promise.all([
@@ -62,13 +62,13 @@ export class PublishedMenuService {
       },
       settings,
     );
-    return { location, currencyCode: location.restaurant.currencyCode, menu };
+    return { location, currencyCode: location.tenant.currencyCode, menu };
   }
 
   async getForLocation(locationId: string): Promise<PublishedMenu> {
     const { location, currencyCode, menu } = await this.resolve(locationId);
     const body = {
-      restaurantId: location.restaurantId,
+      tenantId: location.tenantId,
       locationId,
       currencyCode,
       taxInclusive: location.taxInclusive,
@@ -88,14 +88,14 @@ export class PublishedMenuService {
   }
 
   async setProductSetting(
-    restaurantId: string,
+    tenantId: string,
     locationId: string,
     productId: string,
     input: z.output<typeof setLocationProductSchema>,
   ): Promise<LocationProductSetting> {
     return this.prisma.$transaction(async (tx) => {
       const product = await tx.product.findFirst({
-        where: { id: productId, restaurantId },
+        where: { id: productId, tenantId },
         include: { variants: { where: { archivedAt: null }, select: { id: true } } },
       });
       if (!product) throw new DomainError('PRODUCT_NOT_FOUND', 'Product not found', { productId });

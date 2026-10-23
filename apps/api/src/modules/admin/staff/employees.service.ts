@@ -57,9 +57,9 @@ export class EmployeesService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(restaurantId: string): Promise<Employee[]> {
+  async list(tenantId: string): Promise<Employee[]> {
     const rows = await this.prisma.employee.findMany({
-      where: { restaurantId },
+      where: { tenantId },
       include: employeeInclude,
       orderBy: [{ isActive: 'desc' }, { employeeCode: 'asc' }],
     });
@@ -73,11 +73,11 @@ export class EmployeesService {
     const pinHash = input.pin ? await hashSecret(input.pin) : null;
     return this.unique(() =>
       this.prisma.$transaction(async (tx) => {
-        await this.checkRefs(tx, principal.restaurantId, input.homeLocationId, input.userId, null);
+        await this.checkRefs(tx, principal.tenantId, input.homeLocationId, input.userId, null);
         if (input.userId) await this.assertCanActAs(tx, principal, input.userId);
         const row = await tx.employee.create({
           data: {
-            restaurantId: principal.restaurantId,
+            tenantId: principal.tenantId,
             employeeCode: input.employeeCode,
             displayName: input.displayName,
             homeLocationId: input.homeLocationId,
@@ -113,10 +113,10 @@ export class EmployeesService {
   ): Promise<Employee> {
     return this.unique(() =>
       this.prisma.$transaction(async (tx) => {
-        const before = await this.load(tx, principal.restaurantId, employeeId);
+        const before = await this.load(tx, principal.tenantId, employeeId);
         await this.checkRefs(
           tx,
-          principal.restaurantId,
+          principal.tenantId,
           input.homeLocationId ?? null,
           input.userId ?? null,
           employeeId,
@@ -168,7 +168,7 @@ export class EmployeesService {
   async setPin(principal: Principal, employeeId: string, pin: string): Promise<Employee> {
     const pinHash = await hashSecret(pin);
     return this.prisma.$transaction(async (tx) => {
-      const before = await this.load(tx, principal.restaurantId, employeeId);
+      const before = await this.load(tx, principal.tenantId, employeeId);
       if (before.userId) await this.assertCanActAs(tx, principal, before.userId);
       const row = await tx.employee.update({
         where: { id: employeeId },
@@ -189,9 +189,9 @@ export class EmployeesService {
     });
   }
 
-  private async load(tx: PrismaTx, restaurantId: string, employeeId: string) {
+  private async load(tx: PrismaTx, tenantId: string, employeeId: string) {
     const row = await tx.employee.findFirst({
-      where: { id: employeeId, restaurantId },
+      where: { id: employeeId, tenantId },
       include: employeeInclude,
     });
     if (!row) throw new DomainError('EMPLOYEE_NOT_FOUND', 'Employee not found', { employeeId });
@@ -200,21 +200,21 @@ export class EmployeesService {
 
   private async checkRefs(
     tx: PrismaTx,
-    restaurantId: string,
+    tenantId: string,
     homeLocationId: string | null,
     userId: string | null,
     employeeId: string | null,
   ): Promise<void> {
     if (homeLocationId) {
       const location = await tx.location.findFirst({
-        where: { id: homeLocationId, restaurantId },
+        where: { id: homeLocationId, tenantId },
         select: { id: true },
       });
       if (!location) throw new DomainError('LOCATION_NOT_FOUND', 'Location not found');
     }
     if (userId) {
       const user = await tx.user.findFirst({
-        where: { id: userId, restaurantId },
+        where: { id: userId, tenantId },
         select: { employee: { select: { id: true } } },
       });
       if (!user) throw new DomainError('USER_NOT_FOUND', 'User not found', { userId });

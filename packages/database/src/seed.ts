@@ -1,40 +1,18 @@
 /**
- * Development seed. Reads seed/demo.json and SEED_* environment variables; idempotent
- * (re-running updates instead of duplicating). Never run against production.
+ * Development seed. Reads seed/demo.json, the extra demo tenants in seed/tenants/ (one per
+ * business type, ADR 0017) and SEED_* environment variables; idempotent (re-running updates
+ * instead of duplicating). Never run against production.
  */
-import { readFileSync } from 'node:fs';
-import { PERMISSIONS, type Permission, isPermission } from '@pos/shared-types';
+import { readFileSync, readdirSync } from 'node:fs';
 import { PrismaClient, type Locale } from '@prisma/client';
 import { hashSecret } from './credentials';
 import { syncPermissionCatalog } from './permissions';
+import { type LocationSpec, type RoleSpec, type TenantSpec, provisionTenant } from './provisioning';
 
 interface SeedFile {
-  restaurant: {
-    slug: string;
-    nameEn: string;
-    nameAr: string;
-    currencyCode: string;
-    defaultLocale: Locale;
-    timezone: string;
-  };
-  locations: {
-    code: string;
-    nameEn: string;
-    nameAr: string;
-    timezone: string;
-    taxInclusive: boolean;
-    addressLine: string | null;
-    phone: string | null;
-    /** Online ordering at creation (later changes are the restaurant's, ADR 0013). */
-    online?: {
-      state: 'OPEN' | 'PAUSED' | 'CLOSED';
-      acceptMinutes: number;
-      pickupEnabled: boolean;
-      deliveryEnabled: boolean;
-      deliveryFee: number;
-    };
-  }[];
-  roles: { name: string; description: string; isSystem: boolean; permissions: '*' | string[] }[];
+  tenant: TenantSpec;
+  locations: LocationSpec[];
+  roles: RoleSpec[];
   menu?: SeedMenu;
   taxes?: { nameEn: string; nameAr: string; rateBps: number; isDefault: boolean }[];
   discounts?: { nameEn: string; nameAr: string; type: 'PERCENTAGE' | 'FIXED'; value: number }[];
@@ -54,6 +32,8 @@ interface SeedFile {
     location: string | null;
     /** POS sign-in at the location hub: employee code + PIN from `<envPrefix>_PIN`. */
     employeeCode?: string;
+    /** Skipped (with a note) when its SEED_* variables are not set: extra demo tenants only. */
+    optional?: boolean;
   }[];
 }
 
@@ -84,14 +64,14 @@ interface SeedMenu {
   }[];
 }
 
-/** Creates the demo menu once; skipped when the restaurant already has categories. */
-async function seedMenu(prisma: PrismaClient, restaurantId: string, menu: SeedMenu): Promise<void> {
-  if ((await prisma.category.count({ where: { restaurantId } })) > 0) return;
+/** Creates the demo menu once; skipped when the tenant already has categories. */
+async function seedMenu(prisma: PrismaClient, tenantId: string, menu: SeedMenu): Promise<void> {
+  if ((await prisma.category.count({ where: { tenantId } })) > 0) return;
 
   const stationIds = new Map<string, string>();
   for (const [i, station] of menu.kitchenStations.entries()) {
     const row = await prisma.kitchenStation.create({
-      data: { ...station, restaurantId, sortOrder: i },
+      data: { ...station, tenantId, sortOrder: i },
     });
     stationIds.set(station.code, row.id);
   }
@@ -100,7 +80,7 @@ async function seedMenu(prisma: PrismaClient, restaurantId: string, menu: SeedMe
     const row = await prisma.modifierGroup.create({
       data: {
         ...group,
-        restaurantId,
+        tenantId,
         sortOrder: i,
         modifiers: { create: modifiers.map((m, j) => ({ ...m, sortOrder: j })) },
       },
@@ -113,12 +93,12 @@ async function seedMenu(prisma: PrismaClient, restaurantId: string, menu: SeedMe
     return id;
   };
   for (const [i, { products, ...category }] of menu.categories.entries()) {
-    const cat = await prisma.category.create({ data: { ...category, restaurantId, sortOrder: i } });
+    const cat = await prisma.category.create({ data: { ...category, tenantId, sortOrder: i } });
     for (const [j, { stations, groups, variants = [], ...product }] of products.entries()) {
       await prisma.product.create({
         data: {
           ...product,
-          restaurantId,
+          tenantId,
           categoryId: cat.id,
           sortOrder: j,
           variants: { create: variants.map((v, k) => ({ ...v, sortOrder: k })) },
@@ -137,20 +117,20 @@ async function seedMenu(prisma: PrismaClient, restaurantId: string, menu: SeedMe
 /** Taxes (assigned to every product), discounts and floor plans; each skipped if present. */
 async function seedConfiguration(
   prisma: PrismaClient,
-  restaurantId: string,
+  tenantId: string,
   locationIds: Map<string, string>,
   file: SeedFile,
 ): Promise<void> {
-  if (file.taxes && (await prisma.tax.count({ where: { restaurantId } })) === 0) {
+  if (file.taxes && (await prisma.tax.count({ where: { tenantId } })) === 0) {
     const products = await prisma.product.findMany({
-      where: { restaurantId },
+      where: { tenantId },
       select: { id: true },
     });
     for (const tax of file.taxes) {
       await prisma.tax.create({
         data: {
           ...tax,
-          restaurantId,
+          tenantId,
           products: tax.isDefault
             ? { create: products.map((p) => ({ productId: p.id })) }
             : undefined,
@@ -158,16 +138,16 @@ async function seedConfiguration(
       });
     }
   }
-  if (file.discounts && (await prisma.discount.count({ where: { restaurantId } })) === 0) {
-    await prisma.discount.createMany({ data: file.discounts.map((d) => ({ ...d, restaurantId })) });
+  if (file.discounts && (await prisma.discount.count({ where: { tenantId } })) === 0) {
+    await prisma.discount.createMany({ data: file.discounts.map((d) => ({ ...d, tenantId })) });
   }
   // Methods are added when missing (by type and name), so a new one reaches existing databases.
   for (const [i, method] of (file.paymentMethods ?? []).entries()) {
     const found = await prisma.paymentMethod.count({
-      where: { restaurantId, type: method.type, nameEn: method.nameEn },
+      where: { tenantId, type: method.type, nameEn: method.nameEn },
     });
     if (found === 0) {
-      await prisma.paymentMethod.create({ data: { ...method, restaurantId, sortOrder: i } });
+      await prisma.paymentMethod.create({ data: { ...method, tenantId, sortOrder: i } });
     }
   }
   for (const [code, registers] of Object.entries(file.cashRegisters ?? {})) {
@@ -200,70 +180,23 @@ function requireEnv(name: string): string {
   return value;
 }
 
-function resolveRolePermissions(spec: '*' | string[]): Permission[] {
-  if (spec === '*') return [...PERMISSIONS];
-  const unknown = spec.filter((p) => !isPermission(p));
-  if (unknown.length > 0) throw new Error(`Unknown permissions in seed: ${unknown.join(', ')}`);
-  return spec as Permission[];
-}
-
 export async function seed(prisma: PrismaClient, file: SeedFile): Promise<void> {
   if (process.env.NODE_ENV === 'production') throw new Error('Refusing to seed in production');
 
   await syncPermissionCatalog(prisma);
 
-  const restaurant = await prisma.restaurant.upsert({
-    where: { slug: file.restaurant.slug },
-    update: {},
-    create: file.restaurant,
-  });
+  const provisioned = await provisionTenant(prisma, file);
+  const tenant = { id: provisioned.tenantId };
+  const { locationIds, roleIds } = provisioned;
 
-  const locationIds = new Map<string, string>();
-  for (const { online, ...loc } of file.locations) {
-    const location = await prisma.location.upsert({
-      where: { restaurantId_code: { restaurantId: restaurant.id, code: loc.code } },
-      update: {},
-      create: {
-        ...loc,
-        restaurantId: restaurant.id,
-        ...(online
-          ? {
-              onlineOrderingState: online.state,
-              onlineAcceptMinutes: online.acceptMinutes,
-              onlinePickupEnabled: online.pickupEnabled,
-              onlineDeliveryEnabled: online.deliveryEnabled,
-              onlineDeliveryFee: online.deliveryFee,
-            }
-          : {}),
-      },
-    });
-    locationIds.set(loc.code, location.id);
-  }
-
-  const roleIds = new Map<string, string>();
-  for (const roleSpec of file.roles) {
-    const permissions = resolveRolePermissions(roleSpec.permissions);
-    const role = await prisma.role.upsert({
-      where: { restaurantId_name: { restaurantId: restaurant.id, name: roleSpec.name } },
-      update: { description: roleSpec.description, isSystem: roleSpec.isSystem },
-      create: {
-        restaurantId: restaurant.id,
-        name: roleSpec.name,
-        description: roleSpec.description,
-        isSystem: roleSpec.isSystem,
-      },
-    });
-    await prisma.rolePermission.deleteMany({ where: { roleId: role.id } });
-    await prisma.rolePermission.createMany({
-      data: permissions.map((permissionKey) => ({ roleId: role.id, permissionKey })),
-    });
-    roleIds.set(roleSpec.name, role.id);
-  }
-
-  if (file.menu) await seedMenu(prisma, restaurant.id, file.menu);
-  await seedConfiguration(prisma, restaurant.id, locationIds, file);
+  if (file.menu) await seedMenu(prisma, tenant.id, file.menu);
+  await seedConfiguration(prisma, tenant.id, locationIds, file);
 
   for (const userSpec of file.users) {
+    if (userSpec.optional && !process.env[`${userSpec.envPrefix}_EMAIL`]) {
+      console.info(`Skipped ${userSpec.envPrefix} (set ${userSpec.envPrefix}_EMAIL/_PASSWORD)`);
+      continue;
+    }
     const email = requireEnv(`${userSpec.envPrefix}_EMAIL`).toLowerCase();
     const password = requireEnv(`${userSpec.envPrefix}_PASSWORD`);
     const roleId = roleIds.get(userSpec.role);
@@ -276,7 +209,7 @@ export async function seed(prisma: PrismaClient, file: SeedFile): Promise<void> 
       update: { passwordHash: await hashSecret(password), displayName: userSpec.displayName },
       create: {
         email,
-        restaurantId: restaurant.id,
+        tenantId: tenant.id,
         passwordHash: await hashSecret(password),
         displayName: userSpec.displayName,
         preferredLocale: userSpec.preferredLocale,
@@ -299,26 +232,36 @@ export async function seed(prisma: PrismaClient, file: SeedFile): Promise<void> 
       };
       await prisma.employee.upsert({
         where: {
-          restaurantId_employeeCode: {
-            restaurantId: restaurant.id,
+          tenantId_employeeCode: {
+            tenantId: tenant.id,
             employeeCode: userSpec.employeeCode,
           },
         },
         update: employee,
-        create: { ...employee, restaurantId: restaurant.id, employeeCode: userSpec.employeeCode },
+        create: { ...employee, tenantId: tenant.id, employeeCode: userSpec.employeeCode },
       });
     }
   }
 }
 
 async function main(): Promise<void> {
-  const file = JSON.parse(
-    readFileSync(new URL('../seed/demo.json', import.meta.url), 'utf8'),
-  ) as SeedFile;
+  const read = (url: URL) => JSON.parse(readFileSync(url, 'utf8')) as SeedFile;
+  const extras = new URL('../seed/tenants/', import.meta.url);
+  const files = [
+    read(new URL('../seed/demo.json', import.meta.url)),
+    ...readdirSync(extras)
+      .filter((name) => name.endsWith('.json'))
+      .sort()
+      .map((name) => read(new URL(name, extras))),
+  ];
   const prisma = new PrismaClient();
   try {
-    await seed(prisma, file);
-    console.info(`Seeded restaurant "${file.restaurant.slug}"`);
+    for (const file of files) {
+      await seed(prisma, file);
+      console.info(
+        `Seeded tenant "${file.tenant.slug}" (${file.tenant.businessType ?? 'RESTAURANT'})`,
+      );
+    }
   } finally {
     await prisma.$disconnect();
   }

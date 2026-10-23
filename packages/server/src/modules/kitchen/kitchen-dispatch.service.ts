@@ -10,7 +10,7 @@ import { type TicketEventType, modifiersOf, ticketEventPayload } from './kitchen
 /** The order fields kitchen dispatch needs (an order row satisfies it). */
 export interface DispatchOrder {
   id: string;
-  restaurantId: string;
+  tenantId: string;
   locationId: string;
   orderNumber: string;
   status: Prisma.OrderGetPayload<object>['status'];
@@ -89,7 +89,7 @@ export class KitchenDispatchService {
     for (const stationId of plan.create) {
       const ticket = await tx.kitchenTicket.create({
         data: {
-          restaurantId: order.restaurantId,
+          tenantId: order.tenantId,
           locationId: order.locationId,
           orderId: order.id,
           stationId,

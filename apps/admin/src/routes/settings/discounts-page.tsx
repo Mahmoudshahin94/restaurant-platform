@@ -37,7 +37,7 @@ import { ArchivedBadge } from '../../components/status-badge';
 import { api } from '../../lib/api';
 import { useMoney } from '../../lib/money';
 import { usePermissions } from '../../lib/permissions';
-import { useCatalogMutation, useDiscounts, useRestaurantId } from '../../lib/queries';
+import { useCatalogMutation, useDiscounts, useTenantId } from '../../lib/queries';
 
 const required = 'common:validation.required';
 
@@ -77,7 +77,7 @@ function DiscountDialog({
   onClose: () => void;
 }) {
   const { t } = useTranslation(['pricing', 'common']);
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const errorText = useErrorText();
   const { toInput } = useMoney();
   const [formError, setFormError] = useState<string | null>(null);
@@ -97,8 +97,8 @@ function DiscountDialog({
   const type = form.watch('type');
   const save = useCatalogMutation((values: DiscountFormOutput) =>
     discount
-      ? api.menu.discounts.update(rid, discount.id, values)
-      : api.menu.discounts.create(rid, values),
+      ? api.menu.discounts.update(tid, discount.id, values)
+      : api.menu.discounts.create(tid, values),
   );
   const onSubmit = form.handleSubmit(async (values) => {
     setFormError(null);
@@ -163,14 +163,14 @@ function DiscountDialog({
 export function DiscountsPage() {
   const { t } = useTranslation(['pricing', 'common', 'menu']);
   const locale = useCurrentLocale();
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const { can } = usePermissions();
   const { currency, format } = useMoney();
   const [showArchived, setShowArchived] = useState(false);
   const [editing, setEditing] = useState<Discount | 'new' | null>(null);
   const query = useDiscounts(showArchived);
-  const archive = useCatalogMutation((id: string) => api.menu.discounts.archive(rid, id));
-  const restore = useCatalogMutation((id: string) => api.menu.discounts.restore(rid, id));
+  const archive = useCatalogMutation((id: string) => api.menu.discounts.archive(tid, id));
+  const restore = useCatalogMutation((id: string) => api.menu.discounts.restore(tid, id));
   const canManage = can('settings.manage');
 
   return (

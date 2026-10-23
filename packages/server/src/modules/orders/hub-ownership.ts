@@ -22,7 +22,7 @@ export async function isHubOwnedOrder(
 
 /**
  * Staff changes in the cloud to an order a hub owns would be overwritten by, or conflict with, the
- * hub's next push. They are refused: the order is changed at the restaurant's POS (ADR 0014). The
+ * hub's next push. They are refused: the order is changed at the location's POS (ADR 0014). The
  * cloud still settles online card payments, which never touch the order row's version.
  */
 export async function assertCloudMayChangeOrder(
@@ -33,8 +33,8 @@ export async function assertCloudMayChangeOrder(
   if (await isHubOwnedOrder(mode, tx, orderId)) {
     throw new DomainError(
       'INVALID_ORDER_STATE',
-      'This order belongs to the restaurant’s hub; change it at the POS',
-      { reason: 'OWNED_BY_RESTAURANT' },
+      'This order belongs to the location’s hub; change it at the POS',
+      { reason: 'OWNED_BY_LOCATION' },
     );
   }
 }

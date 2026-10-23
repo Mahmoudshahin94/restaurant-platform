@@ -10,12 +10,13 @@ import {
 import type { Permission } from '@pos/shared-types';
 import type { FastifyRequest } from 'fastify';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TenantContext } from '../tenancy/tenant-context';
 import { IS_PUBLIC_KEY, PERMISSIONS_KEY, type PermissionRequirement } from './decorators';
 import type { Principal, RequestScope } from './principal';
 
 /**
  * Global guard, runs after AuthGuard. Deny-by-default: a protected route without
- * @RequirePermissions is rejected. Verifies tenant ownership of `:restaurantId` / `:locationId`
+ * @RequirePermissions is rejected. Verifies tenant ownership of `:tenantId` / `:locationId`
  * (answering 404 so other tenants' ids are not disclosed), then checks permissions in scope.
  */
 @Injectable()
@@ -56,22 +57,21 @@ export class PermissionsGuard implements CanActivate {
     principal: Principal,
     params: Record<string, string | undefined>,
   ): Promise<RequestScope> {
-    const { restaurantId, locationId } = params;
-    if (restaurantId !== undefined && restaurantId !== principal.restaurantId) {
-      throw new DomainError('RESTAURANT_NOT_FOUND', 'Restaurant not found');
+    const { tenantId, locationId } = params;
+    if (tenantId !== undefined && tenantId !== principal.tenantId) {
+      throw new DomainError('TENANT_NOT_FOUND', 'Tenant not found');
     }
     if (locationId !== undefined) {
       if (!isUuid(locationId)) throw new DomainError('LOCATION_NOT_FOUND', 'Location not found');
-      const location = await this.prisma.location.findUnique({
-        where: { id: locationId },
-        select: { restaurantId: true },
-      });
-      if (location?.restaurantId !== principal.restaurantId) {
+      const location = await TenantContext.runInTenant(principal.tenantId, () =>
+        this.prisma.location.findUnique({ where: { id: locationId }, select: { tenantId: true } }),
+      );
+      if (location?.tenantId !== principal.tenantId) {
         throw new DomainError('LOCATION_NOT_FOUND', 'Location not found');
       }
-      return { restaurantId: principal.restaurantId, locationId };
+      return { tenantId: principal.tenantId, locationId };
     }
-    return { restaurantId: principal.restaurantId, locationId: null };
+    return { tenantId: principal.tenantId, locationId: null };
   }
 
   private assertGranted(

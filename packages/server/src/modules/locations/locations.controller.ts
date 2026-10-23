@@ -20,21 +20,21 @@ export class LocationsController {
   constructor(private readonly locations: LocationsService) {}
 
   @RequirePermissions(['locations.view'], { scope: 'any-location' })
-  @Get('restaurants/:restaurantId/locations')
+  @Get('tenants/:tenantId/locations')
   list(
-    @Param('restaurantId', idPipe) _restaurantId: string,
+    @Param('tenantId', idPipe) _tenantId: string,
     @CurrentPrincipal() principal: Principal,
   ): Promise<Location[]> {
     return this.locations.list(principal);
   }
 
   @RequirePermissions(['settings.manage'])
-  @Post('restaurants/:restaurantId/locations')
+  @Post('tenants/:tenantId/locations')
   create(
-    @Param('restaurantId', idPipe) restaurantId: string,
+    @Param('tenantId', idPipe) tenantId: string,
     @Body(new ZodValidationPipe(createLocationSchema)) body: z.output<typeof createLocationSchema>,
   ): Promise<Location> {
-    return this.locations.create(restaurantId, body);
+    return this.locations.create(tenantId, body);
   }
 
   @RequirePermissions(['locations.view'])

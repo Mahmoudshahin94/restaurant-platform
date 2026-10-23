@@ -20,7 +20,7 @@ export function syncBuilders({ tenant, menu, cashMethodId, registerId }: SyncCon
     const at = now();
     return {
       id,
-      restaurantId: tenant.restaurantId,
+      tenantId: tenant.tenantId,
       locationId: tenant.locationA,
       orderNumber: `LOCA-${String(Math.floor(Math.random() * 900) + 100)}`,
       businessDate: '2026-10-17T00:00:00.000Z',
@@ -122,7 +122,7 @@ export function syncBuilders({ tenant, menu, cashMethodId, registerId }: SyncCon
     const at = now();
     return {
       id,
-      restaurantId: tenant.restaurantId,
+      tenantId: tenant.tenantId,
       locationId: tenant.locationA,
       cashRegisterId: registerId,
       status: 'OPEN',
@@ -165,7 +165,7 @@ export function syncBuilders({ tenant, menu, cashMethodId, registerId }: SyncCon
       payments: [
         {
           id: paymentId,
-          restaurantId: order.restaurantId,
+          tenantId: order.tenantId,
           locationId: order.locationId,
           orderId: order.id,
           shiftId: shift.id,
@@ -212,7 +212,7 @@ export function syncBuilders({ tenant, menu, cashMethodId, registerId }: SyncCon
     const item = order.items[0]!;
     return {
       id,
-      restaurantId: order.restaurantId,
+      tenantId: order.tenantId,
       locationId: order.locationId,
       orderId: order.id,
       stationId: menu.grill.id,

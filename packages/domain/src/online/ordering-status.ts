@@ -7,7 +7,7 @@ export type OnlineOrderingReason =
   'LOCATION_INACTIVE' | 'SETTING_CLOSED' | 'SETTING_PAUSED' | 'OUTSIDE_HOURS' | 'HUB_OFFLINE';
 
 export interface OnlineOrderingInput {
-  /** What the restaurant chose in its settings (OPEN, PAUSED or CLOSED). */
+  /** What the tenant chose in its settings (OPEN, PAUSED or CLOSED). */
   setting: OnlineOrderingState;
   isActive: boolean;
   openingHours: readonly OpeningWindow[];
@@ -25,8 +25,8 @@ export interface OnlineOrderingStatus {
 }
 
 /**
- * What a customer sees for a location (ADR 0013). The restaurant's own choice comes first (closed,
- * then paused), then its opening hours; an open restaurant whose hub stopped talking to the cloud
+ * What a customer sees for a location (ADR 0013). The tenant's own choice comes first (closed,
+ * then paused), then its opening hours; an open tenant whose hub stopped talking to the cloud
  * is OFFLINE, because a new order could not reach the kitchen.
  */
 export function onlineOrderingStatus(input: OnlineOrderingInput): OnlineOrderingStatus {
@@ -51,7 +51,7 @@ export function onlineOrderingStatus(input: OnlineOrderingInput): OnlineOrdering
 export function assertOnlineOrderingOpen(status: OnlineOrderingStatus): void {
   if (status.state === 'OPEN') return;
   if (status.state === 'OFFLINE') {
-    throw new DomainError('RESTAURANT_OFFLINE', 'The restaurant cannot receive orders right now', {
+    throw new DomainError('LOCATION_OFFLINE', 'The tenant cannot receive orders right now', {
       reason: status.reason,
     });
   }

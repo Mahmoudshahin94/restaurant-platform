@@ -33,7 +33,7 @@ import { ConfirmDialog } from '../../components/confirm-dialog';
 import { useAdminErrorText } from '../../lib/admin-errors';
 import { api } from '../../lib/api';
 import { useDateTime, useLocationLookup } from '../../lib/format';
-import { keys, useAdminMutation, useRestaurantId } from '../../lib/queries';
+import { keys, useAdminMutation, useTenantId } from '../../lib/queries';
 import { useSession } from '../../stores/session';
 
 const required = 'common:validation.required';
@@ -43,7 +43,7 @@ const passwordField = z
   .min(10, 'common:validation.invalid')
   .max(256, 'common:validation.tooLong');
 
-/** Role assignments editor: each row is a role, restaurant-wide or at one location. */
+/** Role assignments editor: each row is a role, tenant-wide or at one location. */
 function AssignmentsEditor({
   value,
   onChange,
@@ -89,7 +89,7 @@ function AssignmentsEditor({
                 update(index, { locationId: e.target.value || null });
               }}
             >
-              <option value="">{t('admin:users.restaurantWide')}</option>
+              <option value="">{t('admin:users.tenantWide')}</option>
               {list.map((l) => (
                 <option key={l.id} value={l.id}>
                   {name(l.id)}
@@ -137,7 +137,7 @@ type NewUserValues = z.infer<typeof newUserForm>;
 
 function NewUserDialog({ roles, onClose }: { roles: Role[]; onClose: () => void }) {
   const { t } = useTranslation(['admin', 'common']);
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const errorText = useAdminErrorText();
   const [assignments, setAssignments] = useState<RoleAssignmentInput[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
@@ -146,7 +146,7 @@ function NewUserDialog({ roles, onClose }: { roles: Role[]; onClose: () => void 
     defaultValues: { email: '', displayName: '', preferredLocale: 'en', password: '' },
   });
   const save = useAdminMutation(
-    (values: NewUserValues) => api.admin.users.create(rid, { ...values, roles: assignments }),
+    (values: NewUserValues) => api.admin.users.create(tid, { ...values, roles: assignments }),
     AFFECTS,
   );
   const onSubmit = form.handleSubmit(async (values) => {
@@ -215,7 +215,7 @@ type EditUserValues = z.infer<typeof editUserForm>;
 
 function EditUserDialog({ user, onClose }: { user: StaffUser; onClose: () => void }) {
   const { t } = useTranslation(['admin', 'common']);
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const errorText = useAdminErrorText();
   const [formError, setFormError] = useState<string | null>(null);
   const form = useForm<EditUserValues>({
@@ -223,7 +223,7 @@ function EditUserDialog({ user, onClose }: { user: StaffUser; onClose: () => voi
     defaultValues: { displayName: user.displayName, preferredLocale: user.preferredLocale },
   });
   const save = useAdminMutation(
-    (values: EditUserValues) => api.admin.users.update(rid, user.id, values),
+    (values: EditUserValues) => api.admin.users.update(tid, user.id, values),
     AFFECTS,
   );
   const onSubmit = form.handleSubmit(async (values) => {
@@ -276,13 +276,13 @@ function RolesDialog({
   onClose: () => void;
 }) {
   const { t } = useTranslation(['admin', 'common']);
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const errorText = useAdminErrorText();
   const [assignments, setAssignments] = useState<RoleAssignmentInput[]>(
     user.roles.map((r) => ({ roleId: r.roleId, locationId: r.locationId })),
   );
   const [error, setError] = useState<string | null>(null);
-  const save = useAdminMutation(() => api.admin.users.setRoles(rid, user.id, assignments), AFFECTS);
+  const save = useAdminMutation(() => api.admin.users.setRoles(tid, user.id, assignments), AFFECTS);
   return (
     <DialogContent closeLabel={t('common:actions.close')} className="max-w-2xl">
       <DialogHeader>
@@ -312,7 +312,7 @@ function RolesDialog({
 
 function PasswordDialog({ user, onClose }: { user: StaffUser; onClose: () => void }) {
   const { t } = useTranslation(['admin', 'common']);
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const errorText = useAdminErrorText();
   const [formError, setFormError] = useState<string | null>(null);
   const form = useForm<{ password: string }>({
@@ -320,7 +320,7 @@ function PasswordDialog({ user, onClose }: { user: StaffUser; onClose: () => voi
     defaultValues: { password: '' },
   });
   const save = useAdminMutation(
-    ({ password }: { password: string }) => api.admin.users.resetPassword(rid, user.id, password),
+    ({ password }: { password: string }) => api.admin.users.resetPassword(tid, user.id, password),
     AFFECTS,
   );
   const onSubmit = form.handleSubmit(async (values) => {
@@ -371,16 +371,16 @@ type Editing =
 
 export function UsersPage() {
   const { t } = useTranslation(['admin', 'common']);
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const me = useSession((s) => s.user);
   const formatDate = useDateTime();
   const { name } = useLocationLookup();
   const [editing, setEditing] = useState<Editing>(null);
-  const users = useQuery({ queryKey: keys.users(rid), queryFn: () => api.admin.users.list(rid) });
-  const roles = useQuery({ queryKey: keys.roles(rid), queryFn: () => api.admin.roles.list(rid) });
+  const users = useQuery({ queryKey: keys.users(tid), queryFn: () => api.admin.users.list(tid) });
+  const roles = useQuery({ queryKey: keys.roles(tid), queryFn: () => api.admin.roles.list(tid) });
   const setActive = useAdminMutation(
     ({ id, isActive }: { id: string; isActive: boolean }) =>
-      api.admin.users.update(rid, id, { isActive }),
+      api.admin.users.update(tid, id, { isActive }),
     AFFECTS,
   );
   const errorText = useAdminErrorText();
@@ -447,7 +447,7 @@ export function UsersPage() {
                           {user.roles.map((r) => (
                             <Badge key={`${r.roleId}:${r.locationId ?? '*'}`} variant="secondary">
                               {r.roleName} ·{' '}
-                              {r.locationId ? name(r.locationId) : t('admin:users.restaurantWide')}
+                              {r.locationId ? name(r.locationId) : t('admin:users.tenantWide')}
                             </Badge>
                           ))}
                         </div>

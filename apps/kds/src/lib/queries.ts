@@ -6,10 +6,10 @@ import { api, useSession } from './session';
 
 export type BoardView = 'active' | 'completed';
 
-export function useRestaurantId(): string {
+export function useTenantId(): string {
   const user = useSession((s) => s.user);
   if (!user) throw new Error('Not signed in');
-  return user.restaurantId;
+  return user.tenantId;
 }
 
 export function useLocationId(): string {
@@ -19,10 +19,10 @@ export function useLocationId(): string {
 }
 
 export function useLocations() {
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   return useQuery({
-    queryKey: ['locations', rid],
-    queryFn: () => api.locations.list(rid),
+    queryKey: ['locations', tid],
+    queryFn: () => api.locations.list(tid),
     staleTime: 5 * 60_000,
   });
 }

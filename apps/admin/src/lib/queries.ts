@@ -9,31 +9,31 @@ import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tansta
 import { useSession } from '../stores/session';
 import { api } from './api';
 
-/** Query keys are namespaced by restaurant so data never leaks between sessions. */
+/** Query keys are namespaced by tenant so data never leaks between sessions. */
 export const keys = {
-  restaurant: (rid: string) => ['restaurant', rid] as const,
-  locations: (rid: string) => ['locations', rid] as const,
-  categories: (rid: string, archived: boolean) => ['categories', rid, archived] as const,
-  stations: (rid: string, archived: boolean) => ['kitchen-stations', rid, archived] as const,
-  modifierGroups: (rid: string, archived: boolean) => ['modifier-groups', rid, archived] as const,
-  products: (rid: string, query: ListProductsQuery) => ['products', rid, query] as const,
+  tenant: (tid: string) => ['tenant', tid] as const,
+  locations: (tid: string) => ['locations', tid] as const,
+  categories: (tid: string, archived: boolean) => ['categories', tid, archived] as const,
+  stations: (tid: string, archived: boolean) => ['kitchen-stations', tid, archived] as const,
+  modifierGroups: (tid: string, archived: boolean) => ['modifier-groups', tid, archived] as const,
+  products: (tid: string, query: ListProductsQuery) => ['products', tid, query] as const,
   productSettings: (locationId: string) => ['product-settings', locationId] as const,
-  taxes: (rid: string, archived: boolean) => ['taxes', rid, archived] as const,
-  discounts: (rid: string, archived: boolean) => ['discounts', rid, archived] as const,
+  taxes: (tid: string, archived: boolean) => ['taxes', tid, archived] as const,
+  discounts: (tid: string, archived: boolean) => ['discounts', tid, archived] as const,
   floor: (locationId: string) => ['floor', locationId] as const,
   locationMenu: (locationId: string) => ['location-menu', locationId] as const,
-  dashboard: (rid: string) => ['dashboard', rid] as const,
-  users: (rid: string) => ['users', rid] as const,
-  roles: (rid: string) => ['roles', rid] as const,
-  employees: (rid: string) => ['employees', rid] as const,
-  paymentMethods: (rid: string) => ['payment-methods', rid] as const,
+  dashboard: (tid: string) => ['dashboard', tid] as const,
+  users: (tid: string) => ['users', tid] as const,
+  roles: (tid: string) => ['roles', tid] as const,
+  employees: (tid: string) => ['employees', tid] as const,
+  paymentMethods: (tid: string) => ['payment-methods', tid] as const,
   cashRegisters: (locationId: string) => ['cash-registers', locationId] as const,
   onlineOrdering: (locationId: string) => ['online-ordering', locationId] as const,
-  orders: (rid: string, query: object) => ['orders', rid, query] as const,
+  orders: (tid: string, query: object) => ['orders', tid, query] as const,
   order: (locationId: string, orderId: string) => ['order', locationId, orderId] as const,
-  customers: (rid: string, query: CustomerQuery) => ['customers', rid, query] as const,
-  customer: (rid: string, key: string) => ['customer', rid, key] as const,
-  payments: (rid: string, query: PaymentSearchQuery) => ['payments', rid, query] as const,
+  customers: (tid: string, query: CustomerQuery) => ['customers', tid, query] as const,
+  customer: (tid: string, key: string) => ['customer', tid, key] as const,
+  payments: (tid: string, query: PaymentSearchQuery) => ['payments', tid, query] as const,
   shifts: (locationId: string, status: string) => ['shifts', locationId, status] as const,
   shift: (locationId: string, shiftId: string) => ['shift', locationId, shiftId] as const,
   devices: (locationId: string) => ['devices', locationId] as const,
@@ -42,75 +42,75 @@ export const keys = {
     ['sync-issues', locationId, query] as const,
   syncIssue: (locationId: string, operationId: string) =>
     ['sync-issue', locationId, operationId] as const,
-  auditLogs: (rid: string, query: AuditLogQuery) => ['audit-logs', rid, query] as const,
-  report: (rid: string, kind: string, query: object) => ['report', rid, kind, query] as const,
+  auditLogs: (tid: string, query: AuditLogQuery) => ['audit-logs', tid, query] as const,
+  report: (tid: string, kind: string, query: object) => ['report', tid, kind, query] as const,
 };
 
-export function useRestaurantId(): string {
+export function useTenantId(): string {
   const user = useSession((s) => s.user);
-  if (!user) throw new Error('useRestaurantId used outside an authenticated route');
-  return user.restaurantId;
+  if (!user) throw new Error('useTenantId used outside an authenticated route');
+  return user.tenantId;
 }
 
-export function useRestaurant() {
-  const rid = useRestaurantId();
+export function useTenant() {
+  const tid = useTenantId();
   return useQuery({
-    queryKey: keys.restaurant(rid),
-    queryFn: () => api.restaurants.get(rid),
+    queryKey: keys.tenant(tid),
+    queryFn: () => api.tenants.get(tid),
     staleTime: 5 * 60_000,
   });
 }
 
 export function useLocations() {
-  const rid = useRestaurantId();
-  return useQuery({ queryKey: keys.locations(rid), queryFn: () => api.locations.list(rid) });
+  const tid = useTenantId();
+  return useQuery({ queryKey: keys.locations(tid), queryFn: () => api.locations.list(tid) });
 }
 
 export function useCategories(includeArchived = false) {
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   return useQuery({
-    queryKey: keys.categories(rid, includeArchived),
-    queryFn: () => api.menu.categories.list(rid, { includeArchived }),
+    queryKey: keys.categories(tid, includeArchived),
+    queryFn: () => api.menu.categories.list(tid, { includeArchived }),
   });
 }
 
 export function useKitchenStations(includeArchived = false) {
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   return useQuery({
-    queryKey: keys.stations(rid, includeArchived),
-    queryFn: () => api.menu.kitchenStations.list(rid, { includeArchived }),
+    queryKey: keys.stations(tid, includeArchived),
+    queryFn: () => api.menu.kitchenStations.list(tid, { includeArchived }),
   });
 }
 
 export function useModifierGroups(includeArchived = false) {
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   return useQuery({
-    queryKey: keys.modifierGroups(rid, includeArchived),
-    queryFn: () => api.menu.modifierGroups.list(rid, { includeArchived }),
+    queryKey: keys.modifierGroups(tid, includeArchived),
+    queryFn: () => api.menu.modifierGroups.list(tid, { includeArchived }),
   });
 }
 
 export function useProducts(query: ListProductsQuery) {
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   return useQuery({
-    queryKey: keys.products(rid, query),
-    queryFn: () => api.menu.products.list(rid, query),
+    queryKey: keys.products(tid, query),
+    queryFn: () => api.menu.products.list(tid, query),
   });
 }
 
 export function useTaxes(includeArchived = false) {
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   return useQuery({
-    queryKey: keys.taxes(rid, includeArchived),
-    queryFn: () => api.menu.taxes.list(rid, { includeArchived }),
+    queryKey: keys.taxes(tid, includeArchived),
+    queryFn: () => api.menu.taxes.list(tid, { includeArchived }),
   });
 }
 
 export function useDiscounts(includeArchived = false) {
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   return useQuery({
-    queryKey: keys.discounts(rid, includeArchived),
-    queryFn: () => api.menu.discounts.list(rid, { includeArchived }),
+    queryKey: keys.discounts(tid, includeArchived),
+    queryFn: () => api.menu.discounts.list(tid, { includeArchived }),
   });
 }
 

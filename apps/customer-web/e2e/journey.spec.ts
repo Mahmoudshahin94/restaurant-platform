@@ -78,7 +78,7 @@ test('one order through every app: website, cloud, hub, POS, kitchen and back', 
   const number = /W-\d+/.exec(sent)?.[0] ?? '';
   expect(number).not.toBe('');
   await page.getByRole('link', { name: 'Follow your order' }).click();
-  await expect(status).toHaveText('Waiting for the restaurant');
+  await expect(status).toHaveText('Waiting for the store');
 
   // The kitchen display is on, showing every station (expo view).
   const kds = await app(browser, KDS, 'kds-screen-preferences', {

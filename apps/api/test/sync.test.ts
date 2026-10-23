@@ -61,7 +61,7 @@ beforeEach(async () => {
   menu = await createMenuFixture(prisma, tenant);
   cashMethodId = (
     await prisma.paymentMethod.create({
-      data: { restaurantId: tenant.restaurantId, type: 'CASH', nameEn: 'Cash', nameAr: 'نقدًا' },
+      data: { tenantId: tenant.tenantId, type: 'CASH', nameEn: 'Cash', nameAr: 'نقدًا' },
     })
   ).id;
   registerId = (
@@ -317,7 +317,7 @@ describe('POST /sync/push', () => {
     ]);
   });
 
-  it('rejects data for another location or restaurant, and malformed operations, one by one', async () => {
+  it('rejects data for another location or tenant, and malformed operations, one by one', async () => {
     const elsewhere = orderRow({ locationId: tenant.locationB });
     const malformed = { ...op('Order', orderRow(), 1), payload: { id: newId(), total: 'free' } };
     const unknown = { ...op('Order', orderRow(), 1), operationType: 'ORDER_DELETE' };
@@ -346,7 +346,7 @@ describe('POST /sync/push', () => {
     });
 
     const otherTenant = await createTenant(prisma);
-    const foreign = orderRow({ restaurantId: otherTenant.restaurantId });
+    const foreign = orderRow({ tenantId: otherTenant.tenantId });
     expect((await push([op('Order', foreign, 1)]))[0]?.code).toBe('SYNC_SCOPE_MISMATCH');
   });
 
@@ -407,7 +407,7 @@ async function pull(query: string): Promise<SyncPullResponse> {
 describe('hub audit trail (ADR 0016)', () => {
   const entry = (overrides: Record<string, unknown> = {}) => ({
     id: newId(),
-    restaurantId: tenant.restaurantId,
+    tenantId: tenant.tenantId,
     locationId: tenant.locationA,
     actorType: 'USER',
     actorId: tenant.cashier.id,
@@ -421,10 +421,10 @@ describe('hub audit trail (ADR 0016)', () => {
     ...overrides,
   });
 
-  it('stores the restaurant’s audit entries once, under the hub’s location', async () => {
+  it('stores the hub’s audit entries once, under the hub’s location', async () => {
     const signIn = entry();
     const system = entry({
-      restaurantId: null,
+      tenantId: null,
       locationId: null,
       actorType: 'SYSTEM',
       actorId: null,
@@ -446,7 +446,7 @@ describe('hub audit trail (ADR 0016)', () => {
     expect(stored).toHaveLength(2);
     expect(stored[0]).toMatchObject({
       action: 'auth.pin_login',
-      restaurantId: tenant.restaurantId,
+      tenantId: tenant.tenantId,
       locationId: tenant.locationA,
       actorId: tenant.cashier.id,
       source: 'POS',
@@ -455,7 +455,7 @@ describe('hub audit trail (ADR 0016)', () => {
     });
     // Rows without a tenant are the hub's own; secrets are redacted again on the way in.
     expect(stored[1]).toMatchObject({
-      restaurantId: tenant.restaurantId,
+      tenantId: tenant.tenantId,
       locationId: tenant.locationA,
       source: 'HUB',
       metadata: { reason: 'BAD_PIN', pin: '[REDACTED]', nested: { refreshToken: '[REDACTED]' } },
@@ -464,18 +464,18 @@ describe('hub audit trail (ADR 0016)', () => {
     // The owner reads them in the cloud's audit log.
     const res = await app.inject({
       method: 'GET',
-      url: `/api/v1/restaurants/${tenant.restaurantId}/audit-logs?action=auth.pin_login`,
+      url: `/api/v1/tenants/${tenant.tenantId}/audit-logs?action=auth.pin_login`,
       headers: owner,
     });
     expect(res.statusCode).toBe(200);
     expect(JSON.stringify(res.json())).toContain(signIn.id);
   });
 
-  it('refuses entries of another location or restaurant, and never rewrites one', async () => {
+  it('refuses entries of another location or tenant, and never rewrites one', async () => {
     const otherTenant = await createTenant(prisma);
     const results = await push([
       op('AuditLog', entry({ locationId: tenant.locationB }), 1),
-      op('AuditLog', entry({ restaurantId: otherTenant.restaurantId }), 1),
+      op('AuditLog', entry({ tenantId: otherTenant.tenantId }), 1),
       op('AuditLog', entry({ action: '' }), 1),
     ]);
     expect(results.map((r) => [r.status, r.code])).toEqual([
@@ -496,29 +496,29 @@ describe('hub audit trail (ADR 0016)', () => {
 });
 
 describe('GET /sync/pull', () => {
-  it('starts a new hub at the head of its restaurant’s feed', async () => {
+  it('starts a new hub at the head of its tenant’s feed', async () => {
     const head = await pull('');
     expect(head.changes).toEqual([]);
     const max = await prisma.changeLog.aggregate({
-      where: { restaurantId: tenant.restaurantId },
+      where: { tenantId: tenant.tenantId },
       _max: { seq: true },
     });
     expect(head.cursor).toBe(String(max._max.seq));
   });
 
-  it('records one CONFIG change per transaction, for that restaurant only', async () => {
+  it('records one CONFIG change per transaction, for that tenant only', async () => {
     const { cursor } = await pull('');
     expect((await pull(`cursor=${cursor}`)).changes).toEqual([]);
 
     // A price change through the admin API (one transaction, several rows).
     const res = await app.inject({
       method: 'PATCH',
-      url: `/api/v1/restaurants/${tenant.restaurantId}/products/${menu.burger.id}`,
+      url: `/api/v1/tenants/${tenant.tenantId}/products/${menu.burger.id}`,
       headers: owner,
       payload: { price: 2700 },
     });
     expect(res.statusCode).toBe(200);
-    // Another restaurant's change is not visible to this hub.
+    // Another tenant's change is not visible to this hub.
     await createTenant(prisma);
     // A write that changes nothing is not a change.
     await prisma.product.update({ where: { id: menu.cola.id }, data: { price: 600 } });
@@ -550,7 +550,7 @@ describe('GET /sync/pull', () => {
     setTimeout(() => {
       // Prisma queries run when awaited or `then`-ed.
       void prisma.category
-        .updateMany({ where: { restaurantId: tenant.restaurantId }, data: { nameEn: 'Mains!' } })
+        .updateMany({ where: { tenantId: tenant.tenantId }, data: { nameEn: 'Mains!' } })
         .then(() => undefined);
     }, 300);
     const answer = await waiting;

@@ -4,17 +4,17 @@ import { usePermissions } from '../lib/permissions';
 import { ForbiddenPage } from '../routes/not-found-page';
 
 /**
- * Hides routes the user cannot use (restaurant-wide pages need the permission restaurant-wide).
+ * Hides routes the user cannot use (tenant-wide pages need the permission tenant-wide).
  * The API still enforces every permission.
  */
 export function RequirePermission({
   permission,
-  restaurantWide = false,
+  tenantWide = false,
 }: {
   permission: Permission;
-  restaurantWide?: boolean;
+  tenantWide?: boolean;
 }) {
   const { can, canAnywhere } = usePermissions();
-  const allowed = restaurantWide ? can(permission) : canAnywhere(permission);
+  const allowed = tenantWide ? can(permission) : canAnywhere(permission);
   return allowed ? <Outlet /> : <ForbiddenPage />;
 }

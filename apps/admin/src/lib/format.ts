@@ -2,13 +2,13 @@ import { useCurrentLocale } from '@pos/app-kit';
 import { formatDateTime, pickLocalized } from '@pos/i18n';
 import type { Location } from '@pos/validation';
 import { useCallback, useMemo } from 'react';
-import { useLocations, useRestaurant } from './queries';
+import { useLocations, useTenant } from './queries';
 
 /** Location names and time zones by id, for lists that span locations. */
 export function useLocationLookup() {
   const locale = useCurrentLocale();
   const locations = useLocations();
-  const restaurant = useRestaurant();
+  const tenant = useTenant();
   const byId = useMemo(
     () => new Map((locations.data ?? []).map((l) => [l.id, l] as const)),
     [locations.data],
@@ -20,11 +20,11 @@ export function useLocationLookup() {
     },
     [byId, locale],
   );
-  /** The location's time zone, else the restaurant's. */
+  /** The location's time zone, else the tenant's. */
   const timeZone = useCallback(
     (id: string | null): string =>
-      (id ? byId.get(id)?.timezone : undefined) ?? restaurant.data?.timezone ?? 'UTC',
-    [byId, restaurant.data],
+      (id ? byId.get(id)?.timezone : undefined) ?? tenant.data?.timezone ?? 'UTC',
+    [byId, tenant.data],
   );
   return { list: locations.data ?? ([] as Location[]), byId, name, timeZone };
 }

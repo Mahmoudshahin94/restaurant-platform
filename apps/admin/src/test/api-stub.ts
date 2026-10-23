@@ -7,13 +7,17 @@ import { useSession } from '../stores/session';
 export const RID = '01a146e8-0000-7000-8000-000000000001';
 export const LOC = '01a146e8-0000-7000-8000-000000000002';
 
-export const restaurant = {
+export const tenant = {
   id: RID,
   slug: 'demo',
   nameEn: 'Demo',
   nameAr: 'تجريبي',
+  legalName: null,
+  businessType: 'RESTAURANT',
+  status: 'ACTIVE',
   currencyCode: 'SAR',
   defaultLocale: 'en',
+  supportedLocales: ['en', 'ar'],
   timezone: 'Asia/Riyadh',
   createdAt: '2026-10-01T00:00:00.000Z',
   updatedAt: '2026-10-01T00:00:00.000Z',
@@ -21,7 +25,7 @@ export const restaurant = {
 
 export const location = {
   id: LOC,
-  restaurantId: RID,
+  tenantId: RID,
   code: 'MAIN',
   nameEn: 'Main Branch',
   nameAr: 'الفرع الرئيسي',
@@ -38,7 +42,7 @@ export const location = {
   updatedAt: '2026-10-01T00:00:00.000Z',
 };
 
-/** Signs a user in for component tests, restaurant-wide with the given permissions. */
+/** Signs a user in for component tests, tenant-wide with the given permissions. */
 export function signIn(
   permissions: readonly Permission[] = PERMISSIONS,
   locationId: string | null = null,
@@ -48,7 +52,7 @@ export function signIn(
     email: 'owner@test.local',
     displayName: 'Test Owner',
     preferredLocale: 'en',
-    restaurantId: RID,
+    tenantId: RID,
     roles: [
       {
         roleId: '01a146e8-0000-7000-8000-0000000000bb',
@@ -79,7 +83,7 @@ export interface ApiStub {
 }
 
 /**
- * Stubs `fetch` with routes matched by method and path (the restaurant and its location are
+ * Stubs `fetch` with routes matched by method and path (the tenant and its location are
  * always served). Unmatched requests answer 404 so a missing stub shows up in the test.
  */
 export function stubApi(): ApiStub {
@@ -96,8 +100,8 @@ export function stubApi(): ApiStub {
       return stub;
     },
   };
-  stub.on('GET', /\/restaurants\/[^/]+$/, restaurant);
-  stub.on('GET', /\/restaurants\/[^/]+\/locations$/, [location]);
+  stub.on('GET', /\/tenants\/[^/]+$/, tenant);
+  stub.on('GET', /\/tenants\/[^/]+\/locations$/, [location]);
   vi.stubGlobal(
     'fetch',
     vi.fn((input: RequestInfo | URL, init?: RequestInit) => {

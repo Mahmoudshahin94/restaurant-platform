@@ -9,6 +9,7 @@ import {
   type Provider,
   type Type,
 } from '@nestjs/common';
+import { type WithoutTenant, scopeToTenant } from '../common/tenancy/scoped-prisma';
 import { ChangeRecorder, NoopChangeRecorder } from './change-recorder';
 import { PostgresDialect, SqlDialect, SqliteDialect } from './dialect';
 import { PrismaService } from './prisma.service';
@@ -37,11 +38,18 @@ export interface DatabaseOptions {
 @Global()
 @Module({})
 export class PrismaModule {
-  static forRoot(options: DatabaseOptions): DynamicModule {
+  static forRoot(options: DatabaseOptions, withoutTenant: WithoutTenant): DynamicModule {
+    const { useFactory, inject } = options.client;
     return {
       module: PrismaModule,
       providers: [
-        { provide: PrismaService, ...options.client },
+        {
+          // Every service receives the tenant-scoped client (ADR 0017).
+          provide: PrismaService,
+          useFactory: async (...deps: unknown[]) =>
+            scopeToTenant((await useFactory(...deps)) as object, withoutTenant),
+          ...(inject ? { inject } : {}),
+        },
         {
           provide: SqlDialect,
           useClass: options.dialect === 'sqlite' ? SqliteDialect : PostgresDialect,

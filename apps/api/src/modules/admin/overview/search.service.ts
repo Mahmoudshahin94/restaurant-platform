@@ -100,7 +100,7 @@ export class SearchService {
       q.locationId,
     );
     const where: Prisma.OrderWhereInput = {
-      restaurantId: principal.restaurantId,
+      tenantId: principal.tenantId,
       locationId: { in: locationIds },
       ...(q.status ? { status: { in: q.status } } : {}),
       ...(q.channel ? { channel: { in: q.channel } } : {}),
@@ -179,7 +179,7 @@ export class SearchService {
     );
     const range = dateRange(q.from, q.to);
     const where: Prisma.PaymentWhereInput = {
-      restaurantId: principal.restaurantId,
+      tenantId: principal.tenantId,
       locationId: { in: locationIds },
       ...(q.type ? { type: q.type } : {}),
       ...(q.methodType ? { methodType: q.methodType } : {}),

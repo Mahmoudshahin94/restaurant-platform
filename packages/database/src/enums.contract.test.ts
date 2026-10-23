@@ -19,6 +19,7 @@ import {
   OnlineOrderingState,
   FulfillmentType,
   SyncIssueResolution,
+  TenantStatus,
 } from '@pos/shared-types';
 import { $Enums } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
@@ -26,6 +27,7 @@ import { describe, expect, it } from 'vitest';
 /** The database enums must match the shared contract exactly, or sync payloads will break. */
 describe('Prisma enums mirror @pos/shared-types', () => {
   it.each([
+    ['TenantStatus', $Enums.TenantStatus, TenantStatus],
     ['OnlineOrderingState', $Enums.OnlineOrderingState, OnlineOrderingState],
     ['DeviceType', $Enums.DeviceType, DeviceType],
     ['DeviceStatus', $Enums.DeviceStatus, DeviceStatus],

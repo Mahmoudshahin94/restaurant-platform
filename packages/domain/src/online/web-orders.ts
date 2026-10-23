@@ -63,7 +63,7 @@ interface WebOrderState {
   acceptBy: Date | null;
 }
 
-/** A website order the restaurant has not accepted or rejected yet (owned by the cloud). */
+/** A website order the tenant has not accepted or rejected yet (owned by the cloud). */
 export function isAwaitingAcceptance(order: { channel: OrderChannel; status: OrderStatus }) {
   return order.channel === 'WEBSITE' && order.status === 'PLACED';
 }
@@ -89,7 +89,7 @@ export function assertWebOrderDecision(order: WebOrderState, to: OrderStatus, no
 
 /**
  * The content of a website order is what the customer ordered and paid for: it cannot be edited
- * until the restaurant accepts it (the cloud owns it until then, ADR 0013).
+ * until the location accepts it (the cloud owns it until then, ADR 0013).
  */
 export function assertEditableByStaff(order: { channel: OrderChannel; status: OrderStatus }) {
   if (isAwaitingAcceptance(order)) {
@@ -102,7 +102,7 @@ export function assertEditableByStaff(order: { channel: OrderChannel; status: Or
 
 /**
  * Online payments of a website order still awaiting acceptance are voided by the cloud when the
- * order is rejected or times out, so they do not block a cancellation at the restaurant.
+ * order is rejected or times out, so they do not block a cancellation at the location.
  */
 export function isVoidedOnCancel(
   order: { channel: OrderChannel; status: OrderStatus },

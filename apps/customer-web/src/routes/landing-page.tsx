@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { OpeningHours } from '../components/opening-hours';
 import { OrderingBadge } from '../components/ordering-status';
-import { useRestaurant } from '../lib/queries';
+import { useTenant } from '../lib/queries';
 
 function LocationCard({ location }: { location: PublicLocation }) {
   const { t } = useTranslation('customer');
@@ -68,14 +68,14 @@ function LocationCard({ location }: { location: PublicLocation }) {
   );
 }
 
-/** The restaurant's branches, each with whether it takes orders and how. */
+/** The tenant's branches, each with whether it takes orders and how. */
 export function LandingPage() {
   const { t } = useTranslation('customer');
   const locale = useCurrentLocale();
-  const restaurant = useRestaurant();
+  const tenant = useTenant();
   return (
     <QueryState
-      query={restaurant}
+      query={tenant}
       isEmpty={(r) => r.locations.length === 0}
       empty={{ title: t('landing.noLocations'), description: t('landing.noLocationsHint') }}
     >

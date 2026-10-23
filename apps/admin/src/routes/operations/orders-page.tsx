@@ -22,7 +22,7 @@ import { OrderStatusBadge, PaymentStatusBadge } from '../../components/order-bad
 import { Pagination } from '../../components/pagination';
 import { api } from '../../lib/api';
 import { useLocationLookup } from '../../lib/format';
-import { keys, useRestaurant, useRestaurantId } from '../../lib/queries';
+import { keys, useTenant, useTenantId } from '../../lib/queries';
 
 interface Filters {
   locationId: string;
@@ -46,9 +46,9 @@ const PAGE_SIZE = 25;
 
 export function OrdersPage() {
   const { t } = useTranslation(['admin', 'orders', 'common']);
-  const rid = useRestaurantId();
-  const restaurant = useRestaurant();
-  const { format } = useMoneyFormat(restaurant.data?.currencyCode ?? null);
+  const tid = useTenantId();
+  const tenant = useTenant();
+  const { format } = useMoneyFormat(tenant.data?.currencyCode ?? null);
   const { list, name } = useLocationLookup();
   const [filters, setFilters] = useState<Filters>(EMPTY);
   const [page, setPage] = useState(1);
@@ -64,8 +64,8 @@ export function OrdersPage() {
     pageSize: PAGE_SIZE,
   };
   const orders = useQuery({
-    queryKey: keys.orders(rid, query),
-    queryFn: () => api.admin.orders(rid, query),
+    queryKey: keys.orders(tid, query),
+    queryFn: () => api.admin.orders(tid, query),
     placeholderData: keepPreviousData,
   });
   const set = (patch: Partial<Filters>) => {

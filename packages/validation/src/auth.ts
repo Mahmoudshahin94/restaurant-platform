@@ -47,7 +47,7 @@ export const authUserSchema = z.object({
   email: z.email(),
   displayName: z.string(),
   preferredLocale: localeSchema,
-  restaurantId: idSchema,
+  tenantId: idSchema,
   roles: z.array(roleAssignmentDtoSchema),
 });
 export type AuthUser = z.infer<typeof authUserSchema>;

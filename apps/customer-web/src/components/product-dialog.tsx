@@ -29,7 +29,7 @@ interface ProductDialogProps {
 /**
  * Size, options, quantity and notes for one product. Whether the choice is complete and what it
  * costs come from the domain's `validateSelection`, the rule the cloud enforces, so the customer
- * cannot send a selection the restaurant would refuse.
+ * cannot send a selection the tenant would refuse.
  */
 export function ProductDialog({ product, currency, initial, onConfirm }: ProductDialogProps) {
   const { t } = useTranslation(['customer', 'common']);

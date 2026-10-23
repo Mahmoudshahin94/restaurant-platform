@@ -8,7 +8,7 @@ import type { AuthenticatedDevice } from '../devices/device.guard';
 const POLL_MS = 1000;
 
 /**
- * The change feed a hub reads (`GET /sync/pull`): entries for its restaurant (all locations) or its
+ * The change feed a hub reads (`GET /sync/pull`): entries for its tenant (all locations) or its
  * own location, after its cursor, in `seq` order. With `wait`, the request is held until a change
  * arrives or the wait ends (long poll), so changes reach the hub within about a second.
  */
@@ -29,7 +29,7 @@ export class ChangeFeedService implements OnModuleDestroy {
     disconnected?: AbortSignal,
   ): Promise<SyncPullResponse> {
     const scope = {
-      restaurantId: device.restaurantId,
+      tenantId: device.tenantId,
       OR: [{ locationId: null }, { locationId: device.locationId }],
     };
     if (query.cursor === undefined) {

@@ -26,16 +26,16 @@ import { RefundDialog } from '../../components/refund-dialog';
 import { api } from '../../lib/api';
 import { useDateTime, useLocationLookup } from '../../lib/format';
 import { usePermissions } from '../../lib/permissions';
-import { keys, useRestaurant, useRestaurantId } from '../../lib/queries';
+import { keys, useTenant, useTenantId } from '../../lib/queries';
 
 const PAGE_SIZE = 25;
 
 export function PaymentsPage() {
   const { t } = useTranslation(['admin', 'common']);
   const locale = useCurrentLocale();
-  const rid = useRestaurantId();
-  const restaurant = useRestaurant();
-  const { format } = useMoneyFormat(restaurant.data?.currencyCode ?? null);
+  const tid = useTenantId();
+  const tenant = useTenant();
+  const { format } = useMoneyFormat(tenant.data?.currencyCode ?? null);
   const formatDate = useDateTime();
   const { list, name } = useLocationLookup();
   const { canAt } = usePermissions();
@@ -60,8 +60,8 @@ export function PaymentsPage() {
     pageSize: PAGE_SIZE,
   };
   const payments = useQuery({
-    queryKey: keys.payments(rid, query),
-    queryFn: () => api.admin.payments(rid, query),
+    queryKey: keys.payments(tid, query),
+    queryFn: () => api.admin.payments(tid, query),
     placeholderData: keepPreviousData,
   });
   const set = (patch: Partial<typeof filters>) => {

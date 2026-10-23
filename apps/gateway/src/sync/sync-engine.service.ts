@@ -162,7 +162,7 @@ export class SyncEngineService implements OnApplicationBootstrap, OnModuleDestro
   }
 
   private publish<K extends SyncEvent>(pairing: Pairing, type: K, payload: EventMap[K]): void {
-    const scope = { restaurantId: pairing.restaurantId, locationId: pairing.locationId };
+    const scope = { tenantId: pairing.tenantId, locationId: pairing.locationId };
     this.bus.publish([this.bus.event(type, scope, payload)]);
   }
 

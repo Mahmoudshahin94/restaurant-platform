@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { defineConfig } from '@playwright/test';
 
 /**
- * Kitchen display end-to-end tests, the way a restaurant runs: the KDS talks to a location hub
+ * Kitchen display end-to-end tests, the way a tenant runs: the KDS talks to a location hub
  * while the cloud is OFF (it only runs to pair the hub, from `pos_kds_kds_e2e`). Orders are placed
  * through the hub's API, as the POS would, so each test controls what reaches the kitchen.
  */

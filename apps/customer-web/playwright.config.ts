@@ -5,7 +5,7 @@ import { defineConfig } from '@playwright/test';
 
 /**
  * Customer website end-to-end tests: the specification's acceptance steps 14–17. A customer orders
- * on the website (cloud API, `pos_kds_web_e2e`), the order reaches the restaurant's hub through the
+ * on the website (cloud API, `pos_kds_web_e2e`), the order reaches the location's hub through the
  * change feed, the POS (served from the hub) accepts or rejects it, and the customer sees the new
  * status. Everything runs: cloud, hub, POS, kitchen display and website; journey.spec.ts follows
  * one order through all of them.

@@ -60,9 +60,9 @@ export class PaymentsService {
     @Inject(SERVER_MODE) private readonly mode: ServerMode,
   ) {}
 
-  async listMethods(restaurantId: string): Promise<PaymentMethod[]> {
+  async listMethods(tenantId: string): Promise<PaymentMethod[]> {
     const rows = await this.prisma.paymentMethod.findMany({
-      where: { restaurantId, archivedAt: null },
+      where: { tenantId, archivedAt: null },
       orderBy: [{ sortOrder: 'asc' }, { nameEn: 'asc' }],
     });
     return rows.map((m) => ({
@@ -96,7 +96,7 @@ export class PaymentsService {
         });
         await this.requireOpenShift(tx, locationId, input.shiftId);
         const method = await tx.paymentMethod.findFirst({
-          where: { id: input.paymentMethodId, restaurantId: order.restaurantId, archivedAt: null },
+          where: { id: input.paymentMethodId, tenantId: order.tenantId, archivedAt: null },
         });
         if (!method)
           throw new DomainError('PAYMENT_FAILED', 'Unknown payment method', {
@@ -143,7 +143,7 @@ export class PaymentsService {
         const payment = await tx.payment.create({
           data: {
             id: input.id,
-            restaurantId: order.restaurantId,
+            tenantId: order.tenantId,
             locationId,
             orderId,
             shiftId: input.shiftId,
@@ -253,7 +253,7 @@ export class PaymentsService {
         const refund = await tx.payment.create({
           data: {
             id: input.id,
-            restaurantId: order.restaurantId,
+            tenantId: order.tenantId,
             locationId,
             orderId,
             shiftId: input.shiftId,

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { hashSecret, verifySecret } from '@pos/database';
 import { DomainError, newId } from '@pos/domain';
 import type { TokenResponse } from '@pos/validation';
+import { TenantContext } from '../../common/tenancy/tenant-context';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AccessService } from './access.service';
@@ -31,13 +32,23 @@ export class AuthService {
   ) {}
 
   async login(email: string, password: string): Promise<IssuedSession> {
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    // E-mail addresses are unique across tenants, so sign-in needs no tenant selector; the rest
+    // of the sign-in runs inside the account's tenant.
+    const user = await TenantContext.runUnscoped('sign-in: find the account by e-mail', () =>
+      this.prisma.user.findUnique({ where: { email } }),
+    );
     if (!user) {
       this.timingDummyHash ??= hashSecret(newId());
       await verifySecret(await this.timingDummyHash, password);
       throw new DomainError('INVALID_CREDENTIALS', 'Invalid email or password');
     }
+    return TenantContext.runInTenant(user.tenantId, () => this.completeLogin(user, password));
+  }
 
+  private async completeLogin(
+    user: { id: string; tenantId: string; passwordHash: string; isActive: boolean },
+    password: string,
+  ): Promise<IssuedSession> {
     const valid = await verifySecret(user.passwordHash, password);
     if (!valid) {
       await this.audit.record({
@@ -46,14 +57,14 @@ export class AuthService {
         entityId: user.id,
         actorType: 'USER',
         actorId: user.id,
-        restaurantId: user.restaurantId,
+        tenantId: user.tenantId,
         metadata: { reason: 'INVALID_CREDENTIALS' },
       });
       throw new DomainError('INVALID_CREDENTIALS', 'Invalid email or password');
     }
     if (!user.isActive) throw new DomainError('ACCOUNT_DISABLED', 'Account is disabled');
 
-    const session = await this.issueSession(user.id, user.restaurantId, newId());
+    const session = await this.issueSession(user.id, user.tenantId, newId());
     await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     await this.audit.record({
       action: 'auth.login',
@@ -61,7 +72,7 @@ export class AuthService {
       entityId: user.id,
       actorType: 'USER',
       actorId: user.id,
-      restaurantId: user.restaurantId,
+      tenantId: user.tenantId,
     });
     return session;
   }
@@ -79,10 +90,15 @@ export class AuthService {
         retryAfterMs: attempts.lockedUntil - Date.now(),
       });
     }
-    const employee = await this.prisma.employee.findFirst({
+    // Only on the hub (the cloud's route answers 404), whose database holds its paired tenant
+    // only (ADR 0017). Should the code ever match staff of two tenants, nobody is signed in rather
+    // than an arbitrary one.
+    const matches = await this.prisma.employee.findMany({
       where: { employeeCode: { in: [employeeCode, key] }, isActive: true },
       include: { user: true },
+      take: 2,
     });
+    const employee = matches.length === 1 ? matches[0] : undefined;
     const valid = employee?.pinHash ? await verifySecret(employee.pinHash, pin) : false;
     if (!employee?.pinHash) {
       this.timingDummyHash ??= hashSecret(newId());
@@ -99,7 +115,7 @@ export class AuthService {
           action: 'auth.pin_login_failed',
           entityType: 'Employee',
           entityId: employee.id,
-          restaurantId: employee.restaurantId,
+          tenantId: employee.tenantId,
           metadata: { reason: 'INVALID_CREDENTIALS', locked: count >= PIN_MAX_FAILURES },
         });
       }
@@ -108,14 +124,14 @@ export class AuthService {
     this.pinFailures.delete(key);
     if (!employee.user.isActive) throw new DomainError('ACCOUNT_DISABLED', 'Account is disabled');
 
-    const session = await this.issueSession(employee.user.id, employee.restaurantId, newId());
+    const session = await this.issueSession(employee.user.id, employee.tenantId, newId());
     await this.audit.record({
       action: 'auth.pin_login',
       entityType: 'User',
       entityId: employee.user.id,
       actorType: 'EMPLOYEE',
       actorId: employee.id,
-      restaurantId: employee.restaurantId,
+      tenantId: employee.tenantId,
     });
     return session;
   }
@@ -131,7 +147,18 @@ export class AuthService {
       include: { user: true },
     });
     if (!stored) throw new DomainError('UNAUTHENTICATED', 'Unknown refresh token');
+    return TenantContext.runInTenant(stored.user.tenantId, () => this.rotate(stored));
+  }
 
+  private async rotate(stored: {
+    id: string;
+    userId: string;
+    familyId: string;
+    revokedAt: Date | null;
+    replacedById: string | null;
+    expiresAt: Date;
+    user: { tenantId: string; isActive: boolean };
+  }): Promise<IssuedSession> {
     if (stored.revokedAt !== null) {
       // Just rotated by a concurrent request from the same client: fail this one, keep the session.
       if (stored.replacedById !== null && this.tokens.withinReuseGrace(stored.revokedAt)) {
@@ -146,7 +173,7 @@ export class AuthService {
         entityId: stored.userId,
         actorType: 'USER',
         actorId: stored.userId,
-        restaurantId: stored.user.restaurantId,
+        tenantId: stored.user.tenantId,
         metadata: { familyId: stored.familyId },
       });
       throw new DomainError('TOKEN_REUSED', 'Refresh token was already used; session revoked');
@@ -184,7 +211,7 @@ export class AuthService {
     });
 
     return {
-      response: await this.buildResponse(stored.userId, stored.user.restaurantId),
+      response: await this.buildResponse(stored.userId, stored.user.tenantId),
       refreshToken: nextRaw,
     };
   }
@@ -193,23 +220,25 @@ export class AuthService {
     if (!rawToken) return;
     const stored = await this.prisma.refreshToken.findUnique({
       where: { tokenHash: this.tokens.hashRefreshToken(rawToken) },
-      include: { user: { select: { restaurantId: true } } },
+      include: { user: { select: { tenantId: true } } },
     });
     if (!stored) return;
     await this.revokeFamily(stored.familyId);
-    await this.audit.record({
-      action: 'auth.logout',
-      entityType: 'User',
-      entityId: stored.userId,
-      actorType: 'USER',
-      actorId: stored.userId,
-      restaurantId: stored.user.restaurantId,
-    });
+    await TenantContext.runInTenant(stored.user.tenantId, () =>
+      this.audit.record({
+        action: 'auth.logout',
+        entityType: 'User',
+        entityId: stored.userId,
+        actorType: 'USER',
+        actorId: stored.userId,
+        tenantId: stored.user.tenantId,
+      }),
+    );
   }
 
   private async issueSession(
     userId: string,
-    restaurantId: string,
+    tenantId: string,
     familyId: string,
   ): Promise<IssuedSession> {
     const refreshToken = this.tokens.generateRefreshToken();
@@ -221,15 +250,15 @@ export class AuthService {
         expiresAt: this.tokens.refreshTokenExpiry(),
       },
     });
-    return { response: await this.buildResponse(userId, restaurantId), refreshToken };
+    return { response: await this.buildResponse(userId, tenantId), refreshToken };
   }
 
   private async buildResponse(
     userId: string,
-    restaurantId: string,
+    tenantId: string,
   ): Promise<Omit<TokenResponse, 'refreshToken'>> {
     return {
-      accessToken: await this.tokens.signAccessToken({ userId, restaurantId }),
+      accessToken: await this.tokens.signAccessToken({ userId, tenantId }),
       expiresIn: this.tokens.accessTtlSeconds,
       user: await this.access.loadAuthUser(userId),
     };

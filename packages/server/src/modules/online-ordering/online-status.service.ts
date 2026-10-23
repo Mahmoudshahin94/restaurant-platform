@@ -5,7 +5,7 @@ import { APP_CONFIG, type AppConfig } from '../../config/env';
 import { PrismaService } from '../../prisma/prisma.service';
 
 /**
- * What customers see for a location right now: the restaurant's setting and hours, and whether
+ * What customers see for a location right now: the tenant's setting and hours, and whether
  * its hub is talking to the cloud (the latest `lastSeenAt` of its active hub devices).
  */
 @Injectable()

@@ -58,7 +58,7 @@ export const newPasswordSchema = z.string().min(10).max(256);
 
 export const roleAssignmentInputSchema = z.object({
   roleId: idSchema,
-  /** null = restaurant-wide. */
+  /** null = tenant-wide. */
   locationId: idSchema.nullable(),
 });
 export type RoleAssignmentInput = z.infer<typeof roleAssignmentInputSchema>;
@@ -496,7 +496,7 @@ export type SyncIssuesQuery = z.input<typeof syncIssuesQuerySchema>;
 
 export const resolveSyncIssueSchema = z.object({
   /**
-   * APPLY_HUB: store the restaurant's version (the cloud's copy goes to the audit log first).
+   * APPLY_HUB: store the hub's version (the cloud's copy goes to the audit log first).
    * KEEP_CLOUD: keep the cloud's version; the hub replaces its copy (orders only).
    * RESEND: ask the hub to send the change again (after its cause was fixed elsewhere).
    */

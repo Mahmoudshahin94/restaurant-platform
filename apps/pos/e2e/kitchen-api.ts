@@ -17,11 +17,11 @@ export async function kitchenMarksReady(
   });
   const { accessToken, user } = (await login.json()) as {
     accessToken: string;
-    user: { restaurantId: string };
+    user: { tenantId: string };
   };
   const headers = { authorization: `Bearer ${accessToken}`, 'x-client-source': 'KDS' };
   const locations = (await (
-    await request.get(`${API}/restaurants/${user.restaurantId}/locations`, { headers })
+    await request.get(`${API}/tenants/${user.tenantId}/locations`, { headers })
   ).json()) as { id: string }[];
   for (const location of locations) {
     const tickets = (await (

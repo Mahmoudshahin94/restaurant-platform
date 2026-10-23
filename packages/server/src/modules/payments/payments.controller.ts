@@ -17,9 +17,9 @@ export class PaymentsController {
   constructor(private readonly payments: PaymentsService) {}
 
   @RequirePermissions([], { scope: 'any-location' })
-  @Get('restaurants/:restaurantId/payment-methods')
-  methods(@Param('restaurantId', id) restaurantId: string): Promise<PaymentMethod[]> {
-    return this.payments.listMethods(restaurantId);
+  @Get('tenants/:tenantId/payment-methods')
+  methods(@Param('tenantId', id) tenantId: string): Promise<PaymentMethod[]> {
+    return this.payments.listMethods(tenantId);
   }
 
   /** Idempotent on the payment id: a retry returns the recorded payment, never a second charge. */

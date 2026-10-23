@@ -37,7 +37,7 @@ import { tKey, useErrorText } from '@pos/app-kit';
 import { useCurrentLocale } from '@pos/app-kit';
 import { moneyField, useMoney } from '../../lib/money';
 import { usePermissions } from '../../lib/permissions';
-import { useCatalogMutation, useModifierGroups, useRestaurantId } from '../../lib/queries';
+import { useCatalogMutation, useModifierGroups, useTenantId } from '../../lib/queries';
 
 const required = 'common:validation.required';
 const count = z.coerce
@@ -98,7 +98,7 @@ function GroupDialog({
   onClose: () => void;
 }) {
   const { t } = useTranslation(['menu', 'common']);
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const errorText = useErrorText();
   const { toInput } = useMoney();
   const [formError, setFormError] = useState<string | null>(null);
@@ -125,8 +125,8 @@ function GroupDialog({
   const save = useCatalogMutation((values: GroupFormOutput) => {
     const list = values.modifiers.map((m, i) => ({ ...m, sortOrder: i }));
     return group
-      ? api.menu.modifierGroups.update(rid, group.id, { ...values, modifiers: list })
-      : api.menu.modifierGroups.create(rid, {
+      ? api.menu.modifierGroups.update(tid, group.id, { ...values, modifiers: list })
+      : api.menu.modifierGroups.create(tid, {
           ...values,
           modifiers: list.map(({ id: _id, ...m }) => m),
         });
@@ -262,14 +262,14 @@ function GroupDialog({
 export function ModifierGroupsPage() {
   const { t } = useTranslation(['menu', 'common']);
   const locale = useCurrentLocale();
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const { can } = usePermissions();
   const { currency, format } = useMoney();
   const [showArchived, setShowArchived] = useState(false);
   const [editing, setEditing] = useState<ModifierGroup | 'new' | null>(null);
   const query = useModifierGroups(showArchived);
-  const archive = useCatalogMutation((id: string) => api.menu.modifierGroups.archive(rid, id));
-  const restore = useCatalogMutation((id: string) => api.menu.modifierGroups.restore(rid, id));
+  const archive = useCatalogMutation((id: string) => api.menu.modifierGroups.archive(tid, id));
+  const restore = useCatalogMutation((id: string) => api.menu.modifierGroups.restore(tid, id));
 
   return (
     <>

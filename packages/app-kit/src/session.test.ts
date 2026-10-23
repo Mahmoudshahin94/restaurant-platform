@@ -6,7 +6,7 @@ const user = {
   email: 'a@b.co',
   displayName: 'A',
   preferredLocale: 'en',
-  restaurantId: '01890a5d-ac96-774b-bcce-b302099a8058',
+  tenantId: '01890a5d-ac96-774b-bcce-b302099a8058',
   roles: [],
 };
 

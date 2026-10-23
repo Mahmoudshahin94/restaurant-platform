@@ -447,7 +447,7 @@ describe('floor plan and lists', () => {
 
 describe('pricing configuration', () => {
   it('manages taxes with settings.manage and exposes them in the menu', async () => {
-    const r = `/api/v1/restaurants/${tenant.restaurantId}`;
+    const r = `/api/v1/tenants/${tenant.tenantId}`;
     const denied = await app.inject({
       method: 'POST',
       url: `${r}/taxes`,
@@ -481,7 +481,7 @@ describe('pricing configuration', () => {
   });
 
   it('lists discounts to every member but restricts changes', async () => {
-    const url = `/api/v1/restaurants/${tenant.restaurantId}/discounts`;
+    const url = `/api/v1/tenants/${tenant.tenantId}/discounts`;
     expect((await app.inject({ method: 'GET', url, headers: cashier })).statusCode).toBe(200);
     const bad = await app.inject({
       method: 'POST',

@@ -21,7 +21,7 @@
     "customers": "Customers",
     "payments": "Payments",
     "shifts": "Shifts",
-    "restaurant": "Restaurant",
+    "tenant": "Business",
     "onlineOrdering": "Online ordering",
     "paymentMethods": "Payment methods",
     "cashRegisters": "Cash drawers",
@@ -87,7 +87,7 @@
     "collected": "Collected",
     "openShifts": "Open shifts",
     "online": "Online ordering",
-    "hub": "Restaurant hub",
+    "hub": "Location hub",
     "lastSeen": "Last contact {{time}}",
     "outbox": "Waiting {{pending}} · failed {{failed}}",
     "issues": "Sync issues",
@@ -225,20 +225,33 @@
   },
   "onlineReason": {
     "LOCATION_INACTIVE": "The location is inactive.",
-    "SETTING_CLOSED": "Closed by the restaurant.",
-    "SETTING_PAUSED": "Paused by the restaurant.",
+    "SETTING_CLOSED": "Closed by the business.",
+    "SETTING_PAUSED": "Paused by the business.",
     "OUTSIDE_HOURS": "Outside opening hours.",
-    "HUB_OFFLINE": "The restaurant hub is not connected to the cloud."
+    "HUB_OFFLINE": "The location hub is not connected to the cloud."
   },
-  "restaurant": {
-    "title": "Restaurant",
+  "tenant": {
+    "title": "Business",
     "description": "Names, language and time zone used across all locations.",
     "currency": "Currency",
-    "currencyHint": "Set when the restaurant was created; every amount is stored in it.",
+    "currencyHint": "Set when the business was created; every amount is stored in it.",
     "slug": "Web address name",
     "defaultLocale": "Default language",
     "timezone": "Time zone",
-    "timezoneHint": "IANA name, e.g. Asia/Riyadh."
+    "timezoneHint": "IANA name, e.g. Asia/Riyadh.",
+    "legalName": "Legal name",
+    "legalNameHint": "Registered company name for invoices, if different.",
+    "businessType": "Business type",
+    "businessTypeHint": "Chosen when the business was set up; it decides which modules start enabled.",
+    "businessTypes": {
+      "RESTAURANT": "Restaurant",
+      "COFFEE_SHOP": "Coffee shop",
+      "SUPERMARKET": "Supermarket",
+      "GROCERY": "Grocery",
+      "CLOTHING": "Clothing store",
+      "RETAIL": "Retail store",
+      "OTHER": "Other"
+    }
   },
   "locations": {
     "title": "Locations",
@@ -332,11 +345,11 @@
     "password": "Password",
     "passwordHint": "At least 10 characters. Share it privately; the user can be asked to change it.",
     "roles": "Roles",
-    "rolesHint": "Restaurant-wide roles apply to every location.",
+    "rolesHint": "Business-wide roles apply to every location.",
     "addRole": "Add role",
     "role": "Role",
     "where": "Where",
-    "restaurantWide": "Every location",
+    "tenantWide": "Every location",
     "noRoles": "No roles: this user cannot do anything yet.",
     "lastLogin": "Last sign-in",
     "deactivate": "Deactivate",
@@ -462,7 +475,7 @@
     "setPin": "Set PIN",
     "resetPin": "Reset PIN",
     "pinTitle": "PIN for {{name}}",
-    "pinDone": "PIN saved. It reaches the restaurant hub within a minute.",
+    "pinDone": "PIN saved. It reaches the location hub within a minute.",
     "hasPin": "PIN set",
     "noPin": "No PIN",
     "empty": "No employees"
@@ -496,7 +509,7 @@
       "reason": "Reason: {{reason}}",
       "by": "By",
       "station": "Station",
-      "hubOwned": "This order is managed at the restaurant's POS; changes are made there."
+      "hubOwned": "This order is managed at the location's POS; changes are made there."
     }
   },
   "sources": {
@@ -504,7 +517,7 @@
     "KDS": "Kitchen screen",
     "WEBSITE": "Website",
     "ADMIN": "Admin portal",
-    "HUB": "Restaurant hub",
+    "HUB": "Location hub",
     "SYSTEM": "System"
   },
   "actorTypes": {
@@ -599,9 +612,9 @@
   },
   "devices": {
     "title": "Devices",
-    "description": "The restaurant hub of this location and its connection to the cloud.",
+    "description": "The location hub of this location and its connection to the cloud.",
     "pair": "Pair a hub",
-    "pairTitle": "Pair a restaurant hub",
+    "pairTitle": "Pair a location hub",
     "name": "Name",
     "type": "Type",
     "types": {
@@ -610,7 +623,7 @@
       "PRINTER": "Printer",
       "KITCHEN_DISPLAY": "Kitchen display",
       "CUSTOMER_DISPLAY": "Customer display",
-      "GATEWAY": "Restaurant hub"
+      "GATEWAY": "Location hub"
     },
     "statuses": {
       "PENDING": "Pending",
@@ -630,7 +643,7 @@
     "emptyHint": "Pair the location's hub so the POS and kitchen screens work offline.",
     "steps": {
       "title": "How pairing works",
-      "one": "Install the restaurant hub on a computer at the location (it runs on the restaurant's network).",
+      "one": "Install the location hub on a computer at the location (it runs on the location's network).",
       "two": "On that computer, run the pairing command below with an owner's email and this location's code; it asks for the password.",
       "three": "The hub downloads the location's menu, staff and settings, then keeps them in sync by itself.",
       "four": "Point the POS terminals and kitchen screens at the hub's address on the local network.",
@@ -676,17 +689,17 @@
       "REJECTED": "Refused"
     },
     "resolution": {
-      "APPLIED_HUB": "Restaurant's version applied",
+      "APPLIED_HUB": "Location's version applied",
       "KEPT_CLOUD": "Cloud's version kept"
     },
     "resendRequested": "Resend requested",
     "noIssues": "Nothing was refused",
-    "noIssuesHint": "Every change from the restaurant reached the cloud.",
+    "noIssuesHint": "Every change from the locations reached the cloud.",
     "detail": {
       "title": "Refused change",
       "back": "All issues",
-      "rule": "Nothing is overwritten silently. Compare both versions and choose; the version that loses is kept in the audit log, and the restaurant hub follows your decision automatically.",
-      "hubVersion": "Restaurant's version",
+      "rule": "Nothing is overwritten silently. Compare both versions and choose; the version that loses is kept in the audit log, and the location hub follows your decision automatically.",
+      "hubVersion": "Location's version",
       "cloudVersion": "Cloud's version",
       "notInCloud": "The cloud has no copy.",
       "noHubVersion": "Not kept (refused before this was recorded).",
@@ -709,12 +722,12 @@
       "noteHint": "Required: why this is the right choice.",
       "rawData": "Full data",
       "actions": {
-        "APPLY_HUB": "Use the restaurant's version",
+        "APPLY_HUB": "Use the location's version",
         "KEEP_CLOUD": "Keep the cloud's version",
         "RESEND": "Ask the hub to send it again"
       },
       "explain": {
-        "APPLY_HUB": "The restaurant's state replaces the cloud's; the cloud's copy is saved in the audit log first.",
+        "APPLY_HUB": "The location's state replaces the cloud's; the cloud's copy is saved in the audit log first.",
         "KEEP_CLOUD": "The hub replaces its copy with the cloud's; its refused change stays on record.",
         "RESEND": "For when the cause was fixed elsewhere; the cloud checks the change again."
       },
@@ -733,7 +746,7 @@
     "source": "From",
     "when": "When",
     "location": "Location",
-    "restaurantLevel": "Restaurant",
+    "tenantLevel": "Business",
     "metadata": "Details",
     "requestId": "Request",
     "empty": "No entries match",
@@ -742,7 +755,7 @@
   "reasons": {
     "EMAIL_TAKEN": "This email is already in use.",
     "SELF": "You cannot do this to your own account.",
-    "LAST_OWNER": "The restaurant needs at least one active owner.",
+    "LAST_OWNER": "The business needs at least one active owner.",
     "ESCALATION": "You cannot grant or remove permissions you do not hold.",
     "SYSTEM_ROLE": "System roles cannot be changed.",
     "IN_USE": "Remove this role from its users first.",
@@ -752,18 +765,18 @@
     "LAST_CASH_METHOD": "Keep at least one cash method.",
     "SHIFT_OPEN": "Close the drawer's shift at the POS first.",
     "IN_STORE_METHOD": "Refund this payment at the POS.",
-    "AWAITING_ACCEPTANCE": "The order is still waiting for the restaurant.",
+    "AWAITING_ACCEPTANCE": "The order is still waiting for the business.",
     "EXCEEDS_REFUNDABLE": "That is more than can be refunded.",
     "PROVIDER_NOT_CONFIGURED": "No online payment provider is set up.",
-    "OWNED_BY_RESTAURANT": "This order is managed at the restaurant's POS.",
-    "APPLY_FAILED": "The restaurant's version could not be applied (it clashes with another record). Fix the cause, then ask the hub to resend.",
-    "INVALID_HUB_VERSION": "The restaurant's version is not valid data.",
+    "OWNED_BY_LOCATION": "This order is managed at the location's POS.",
+    "APPLY_FAILED": "The location's version could not be applied (it clashes with another record). Fix the cause, then ask the hub to resend.",
+    "INVALID_HUB_VERSION": "The location's version is not valid data.",
     "ALREADY_RESOLVED": "Already resolved.",
-    "NOT_A_CONFLICT": "Only version conflicts can take the restaurant's version.",
-    "NO_HUB_VERSION": "The restaurant's version was not kept.",
+    "NOT_A_CONFLICT": "Only version conflicts can take the location's version.",
+    "NO_HUB_VERSION": "The location's version was not kept.",
     "ORDERS_ONLY": "Only orders can take the cloud's version.",
     "NOT_IN_CLOUD": "The cloud has no copy to keep: the sale would be lost.",
-    "HUB_HAS_PAYMENTS": "The restaurant's version has payments the cloud has not recorded.",
+    "HUB_HAS_PAYMENTS": "The location's version has payments the cloud has not recorded.",
     "HUB_DISABLED": "The hub that sent it is disabled."
   }
 }

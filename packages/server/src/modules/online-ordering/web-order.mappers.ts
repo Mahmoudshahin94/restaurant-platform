@@ -100,7 +100,7 @@ export function toPublicLocation(
 ): PublicLocation {
   return {
     id: location.id,
-    restaurantId: location.restaurantId,
+    tenantId: location.tenantId,
     code: location.code,
     nameEn: location.nameEn,
     nameAr: location.nameAr,

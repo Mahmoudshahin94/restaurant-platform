@@ -22,7 +22,7 @@ import { DiscountsPage } from './routes/settings/discounts-page';
 import { LocationsPage } from './routes/settings/locations-page';
 import { OnlineOrderingPage } from './routes/settings/online-ordering-page';
 import { PaymentMethodsPage } from './routes/settings/payment-methods-page';
-import { RestaurantPage } from './routes/settings/restaurant-page';
+import { TenantPage } from './routes/settings/tenant-page';
 import { TablesPage } from './routes/settings/tables-page';
 import { TaxesPage } from './routes/settings/taxes-page';
 import { EmployeesPage } from './routes/staff/employees-page';
@@ -35,11 +35,11 @@ import { NotFoundPage } from './routes/not-found-page';
 import { ReportsIndex, ReportsPage } from './routes/reports/reports-page';
 
 /** A page behind a permission (checked again by the API). */
-function guarded(path: string, permission: Permission, element: ReactNode, restaurantWide = false) {
+function guarded(path: string, permission: Permission, element: ReactNode, tenantWide = false) {
   return (
     <Route
       key={path}
-      element={<RequirePermission permission={permission} restaurantWide={restaurantWide} />}
+      element={<RequirePermission permission={permission} tenantWide={tenantWide} />}
     >
       <Route path={path} element={element} />
     </Route>
@@ -75,7 +75,7 @@ export function AppRoutes() {
             <Route path="kitchen-stations" element={<KitchenStationsPage />} />
             <Route path="availability" element={<AvailabilityPage />} />
           </Route>
-          {guarded('settings/restaurant', 'settings.manage', <RestaurantPage />, true)}
+          {guarded('settings/tenant', 'settings.manage', <TenantPage />, true)}
           {guarded('settings/locations', 'locations.view', <LocationsPage />)}
           {guarded('settings/online-ordering', 'locations.view', <OnlineOrderingPage />)}
           {guarded('settings/taxes', 'products.view', <TaxesPage />)}

@@ -21,7 +21,7 @@ import { useTranslation } from 'react-i18next';
 import { Pagination } from '../../components/pagination';
 import { api } from '../../lib/api';
 import { useDateTime, useLocationLookup } from '../../lib/format';
-import { keys, useRestaurantId } from '../../lib/queries';
+import { keys, useTenantId } from '../../lib/queries';
 
 const PAGE_SIZE = 50;
 const EMPTY = {
@@ -65,9 +65,7 @@ function Entry({ entry }: { entry: AuditLogEntry }) {
           ) : null}
         </TableCell>
         <TableCell>{entry.source ? t(`sources.${entry.source}`) : ''}</TableCell>
-        <TableCell>
-          {entry.locationId ? name(entry.locationId) : t('audit.restaurantLevel')}
-        </TableCell>
+        <TableCell>{entry.locationId ? name(entry.locationId) : t('audit.tenantLevel')}</TableCell>
         <TableCell className="text-end">
           <Button
             variant="ghost"
@@ -104,7 +102,7 @@ function Entry({ entry }: { entry: AuditLogEntry }) {
 
 export function AuditLogPage() {
   const { t } = useTranslation(['admin', 'common']);
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const { list, name } = useLocationLookup();
   const [draft, setDraft] = useState(EMPTY);
   const [filters, setFilters] = useState(EMPTY);
@@ -115,8 +113,8 @@ export function AuditLogPage() {
     pageSize: PAGE_SIZE,
   };
   const entries = useQuery({
-    queryKey: keys.auditLogs(rid, query),
-    queryFn: () => api.admin.auditLogs(rid, query),
+    queryKey: keys.auditLogs(tid, query),
+    queryFn: () => api.admin.auditLogs(tid, query),
     placeholderData: keepPreviousData,
   });
   const text = (key: keyof typeof EMPTY, label: string, hint?: string) => (

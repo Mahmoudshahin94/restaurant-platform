@@ -94,7 +94,7 @@ export class OrdersService {
     if (existing) return { order: this.replay(existing, locationId), created: false };
 
     const { location, currencyCode, menu } = await this.menus.resolve(locationId);
-    const discounts = await this.loadDiscounts(location.restaurantId, input.discountIds);
+    const discounts = await this.loadDiscounts(location.tenantId, input.discountIds);
     if (discounts.length > 0)
       assertPermissions(principal.assignments, locationId, ['orders.discount']);
     if (input.tableId) await this.requireTable(this.prisma, locationId, input.tableId);
@@ -115,7 +115,7 @@ export class OrdersService {
         await tx.order.create({
           data: {
             id: input.id,
-            restaurantId: location.restaurantId,
+            tenantId: location.tenantId,
             locationId,
             orderNumber: formatOrderNumber(location.code, sequence),
             businessDate: new Date(`${businessDate}T00:00:00Z`),
@@ -181,7 +181,7 @@ export class OrdersService {
           input.status === 'CONFIRMED'
             ? await this.kitchen.syncTickets(tx, {
                 id: input.id,
-                restaurantId: location.restaurantId,
+                tenantId: location.tenantId,
                 locationId,
                 orderNumber: formatOrderNumber(location.code, sequence),
                 status: input.status,
@@ -256,7 +256,7 @@ export class OrdersService {
     this.assertVersion(current, input.version);
 
     const { location, menu } = await this.menus.resolve(locationId);
-    const discounts = await this.loadDiscounts(location.restaurantId, input.discountIds);
+    const discounts = await this.loadDiscounts(location.tenantId, input.discountIds);
     const discountsChanged = !sameSet(
       current.discounts.map((d) => d.discountId),
       input.discountIds,
@@ -380,10 +380,10 @@ export class OrdersService {
     if (rule.permission) assertPermissions(principal.assignments, locationId, [rule.permission]);
     assertWebOrderDecision(current, input.to, new Date());
     if (this.mode === 'cloud' && isAwaitingAcceptance(current)) {
-      // The restaurant accepts or rejects at its hub, where the kitchen is; the cloud's only
+      // The tenant accepts or rejects at its hub, where the kitchen is; the cloud's only
       // decision is the acceptance timeout, which also voids the payment (ADR 0013).
-      throw new DomainError('INVALID_ORDER_STATE', 'Website orders are decided at the restaurant', {
-        reason: 'DECIDED_AT_RESTAURANT',
+      throw new DomainError('INVALID_ORDER_STATE', 'Website orders are decided at the location', {
+        reason: 'DECIDED_AT_LOCATION',
       });
     }
     if (input.to === 'CANCELLED') {
@@ -521,10 +521,10 @@ export class OrdersService {
     }
   }
 
-  private async loadDiscounts(restaurantId: string, ids: readonly string[]) {
+  private async loadDiscounts(tenantId: string, ids: readonly string[]) {
     if (ids.length === 0) return [];
     const rows = await this.prisma.discount.findMany({
-      where: { id: { in: [...ids] }, restaurantId, archivedAt: null },
+      where: { id: { in: [...ids] }, tenantId, archivedAt: null },
     });
     const missing = ids.filter((id) => !rows.some((r) => r.id === id));
     if (missing.length > 0)

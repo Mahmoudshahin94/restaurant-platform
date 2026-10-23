@@ -14,57 +14,57 @@ import { PaymentSetupService } from './payment-setup.service';
 
 const id = new ZodValidationPipe(idSchema);
 
-/** Payment methods (restaurant-wide) and cash drawers (per location). Cloud only. */
+/** Payment methods (tenant-wide) and cash drawers (per location). Cloud only. */
 @Controller()
 export class PaymentSetupController {
   constructor(private readonly setup: PaymentSetupService) {}
 
   /** Every method including archived ones (the POS list, `GET …/payment-methods`, omits them). */
   @RequirePermissions(['settings.manage'])
-  @Get('restaurants/:restaurantId/payment-methods/all')
-  listMethods(@Param('restaurantId', id) restaurantId: string): Promise<PaymentMethodAdmin[]> {
-    return this.setup.listMethods(restaurantId);
+  @Get('tenants/:tenantId/payment-methods/all')
+  listMethods(@Param('tenantId', id) tenantId: string): Promise<PaymentMethodAdmin[]> {
+    return this.setup.listMethods(tenantId);
   }
 
   @RequirePermissions(['settings.manage'])
-  @Post('restaurants/:restaurantId/payment-methods')
+  @Post('tenants/:tenantId/payment-methods')
   createMethod(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Body(new ZodValidationPipe(createPaymentMethodSchema))
     body: z.output<typeof createPaymentMethodSchema>,
   ): Promise<PaymentMethodAdmin> {
-    return this.setup.createMethod(restaurantId, body);
+    return this.setup.createMethod(tenantId, body);
   }
 
   @RequirePermissions(['settings.manage'])
-  @Patch('restaurants/:restaurantId/payment-methods/:methodId')
+  @Patch('tenants/:tenantId/payment-methods/:methodId')
   updateMethod(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Param('methodId', id) methodId: string,
     @Body(new ZodValidationPipe(updatePaymentMethodSchema))
     body: z.output<typeof updatePaymentMethodSchema>,
   ): Promise<PaymentMethodAdmin> {
-    return this.setup.updateMethod(restaurantId, methodId, body);
+    return this.setup.updateMethod(tenantId, methodId, body);
   }
 
   @RequirePermissions(['settings.manage'])
-  @Post('restaurants/:restaurantId/payment-methods/:methodId/archive')
+  @Post('tenants/:tenantId/payment-methods/:methodId/archive')
   @HttpCode(200)
   archiveMethod(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Param('methodId', id) methodId: string,
   ): Promise<PaymentMethodAdmin> {
-    return this.setup.archiveMethod(restaurantId, methodId, true);
+    return this.setup.archiveMethod(tenantId, methodId, true);
   }
 
   @RequirePermissions(['settings.manage'])
-  @Post('restaurants/:restaurantId/payment-methods/:methodId/restore')
+  @Post('tenants/:tenantId/payment-methods/:methodId/restore')
   @HttpCode(200)
   restoreMethod(
-    @Param('restaurantId', id) restaurantId: string,
+    @Param('tenantId', id) tenantId: string,
     @Param('methodId', id) methodId: string,
   ): Promise<PaymentMethodAdmin> {
-    return this.setup.archiveMethod(restaurantId, methodId, false);
+    return this.setup.archiveMethod(tenantId, methodId, false);
   }
 
   @RequirePermissions(['settings.manage'])

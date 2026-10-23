@@ -65,7 +65,7 @@ const order = {
 const t = (key: string, o?: Record<string, unknown>) => `${key}${o ? JSON.stringify(o) : ''}`;
 const context = {
   order,
-  restaurant: { nameEn: 'Demo Kitchen', nameAr: 'مطبخ تجريبي' },
+  tenant: { nameEn: 'Demo Kitchen', nameAr: 'مطبخ تجريبي' },
   location: {
     nameEn: 'Main',
     nameAr: 'الرئيسي',

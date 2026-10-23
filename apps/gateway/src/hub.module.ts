@@ -10,7 +10,7 @@ import {
   PaymentsModule,
   PricingConfigModule,
   ReportsModule,
-  RestaurantsModule,
+  TenantsModule,
   ServerCoreModule,
   ShiftsModule,
 } from '@pos/server';
@@ -59,7 +59,7 @@ export class HubModule {
             changeRecorder: OutboxRecorder,
           },
         }),
-        RestaurantsModule,
+        TenantsModule,
         LocationsModule,
         MenuModule,
         PricingConfigModule,

@@ -10,7 +10,7 @@ import { locationSnapshotSchema } from '@pos/validation';
 import { HUB_CONFIG, type HubConfig } from '../config';
 import { asHubTx } from '../database/hub-database';
 import { HubStateService } from '../hub-state.service';
-import { applySnapshot } from './apply-snapshot';
+import { applySnapshot, belongsToTenant } from './apply-snapshot';
 
 export type SnapshotOutcome = 'applied' | 'unchanged' | 'offline' | 'rejected' | 'not-paired';
 
@@ -89,8 +89,11 @@ export class SnapshotSyncService implements OnApplicationBootstrap, OnModuleDest
     }
 
     const snapshot = locationSnapshotSchema.parse(await response.json());
-    if (snapshot.locationId !== pairing.locationId) {
-      this.state.markCloud('ONLINE', 'Snapshot for another location');
+    if (
+      snapshot.locationId !== pairing.locationId ||
+      !belongsToTenant(snapshot, pairing.tenantId)
+    ) {
+      this.state.markCloud('ONLINE', 'Snapshot for another tenant or location');
       return 'rejected';
     }
     await this.prisma.$transaction(
@@ -112,7 +115,7 @@ export class SnapshotSyncService implements OnApplicationBootstrap, OnModuleDest
     this.bus.publish([
       this.bus.event(
         'menu.updated',
-        { restaurantId: pairing.restaurantId, locationId: pairing.locationId },
+        { tenantId: pairing.tenantId, locationId: pairing.locationId },
         { locationId: pairing.locationId, version: snapshot.version },
       ),
     ]);

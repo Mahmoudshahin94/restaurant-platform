@@ -1,6 +1,6 @@
 # Release readiness checklist
 
-Run through this before shipping a build to a restaurant or deploying the cloud. Commands are from
+Run through this before shipping a build to a location or deploying the cloud. Commands are from
 [dev-setup.md](dev-setup.md) and [testing.md](testing.md).
 
 ## 1. The gate
@@ -26,7 +26,7 @@ Run through this before shipping a build to a restaurant or deploying the cloud.
 - [ ] `RATE_LIMIT_PER_MINUTE`, `AUTH_RATE_LIMIT_PER_MINUTE`, `WEB_ORDER_RATE_LIMIT_PER_MINUTE`,
       `TRACKING_RATE_LIMIT_PER_MINUTE` reviewed for the expected traffic
 - [ ] `ONLINE_PAYMENT_PROVIDER=none` until a real gateway adapter exists (ADR 0013)
-- [ ] `LOG_LEVEL=info`; logs shipped to a store that keeps `requestId`, `restaurantId`,
+- [ ] `LOG_LEVEL=info`; logs shipped to a store that keeps `requestId`, `tenantId`,
       `locationId`, `userId`, `orderId`, `deviceId`
 - [ ] Load balancer health checks: liveness `GET /health`, readiness `GET /ready` (503
       `SERVICE_UNAVAILABLE` while the database is unreachable)
@@ -34,12 +34,12 @@ Run through this before shipping a build to a restaurant or deploying the cloud.
 - [ ] One API instance, or accept the known multi-instance limits (in-memory realtime and rate
       limits, per-instance timeout sweep, polled change feed; ADR 0016)
 
-## 3. Restaurant (hub, POS, KDS)
+## 3. Location (hub, POS, KDS)
 
 - [ ] Hub paired with `pnpm --filter @pos/gateway pair` by an owner; System → Devices shows it
       online in the admin portal
 - [ ] `HUB_CORS_ORIGINS` lists the POS/KDS origins served on the LAN; `HUB_DATA_DIR` on a disk
-      that is backed up (it holds the restaurant's open orders until they sync)
+      that is backed up (it holds the location's open orders until they sync)
 - [ ] POS desktop build points at the hub (`VITE_API_URL`); signing in, restarting the app and
       still being signed in works (refresh token in the OS keychain)
 - [ ] Unplug the Internet: the POS footer says "Offline", an order reaches the KDS; plug it back:
@@ -52,7 +52,7 @@ Run through this before shipping a build to a restaurant or deploying the cloud.
 - [ ] Spot-check the main journey in English and Arabic: website order → POS accept → KDS start
       and ready → payment → the customer's page shows "Completed" / "مكتمل"
 - [ ] Admin portal: reports for today match the till's shift close-out
-- [ ] Known gaps reviewed with the restaurant ([architecture.md](architecture.md#known-gaps))
+- [ ] Known gaps reviewed with the tenant ([architecture.md](architecture.md#known-gaps))
 
 ## 5. After deploy
 

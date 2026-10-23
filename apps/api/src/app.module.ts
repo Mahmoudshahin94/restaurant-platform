@@ -11,7 +11,7 @@ import {
   PaymentsModule,
   PricingConfigModule,
   ReportsModule,
-  RestaurantsModule,
+  TenantsModule,
   ServerCoreModule,
   ShiftsModule,
 } from '@pos/server';
@@ -38,7 +38,7 @@ export class AppModule {
             changeRecorder: WebOrderChangeRecorder,
           },
         }),
-        RestaurantsModule,
+        TenantsModule,
         LocationsModule,
         MenuModule,
         PricingConfigModule,

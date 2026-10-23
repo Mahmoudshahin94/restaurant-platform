@@ -14,7 +14,7 @@ const REPLACED: ReadonlySet<SnapshotTable> = new Set([
 ]);
 
 const DELEGATE: Record<SnapshotTable, string> = {
-  restaurants: 'restaurant',
+  tenants: 'tenant',
   locations: 'location',
   roles: 'role',
   rolePermissions: 'rolePermission',
@@ -48,6 +48,19 @@ interface Delegate {
   deleteMany(args?: object): Promise<unknown>;
   createMany(args: { data: Row[] }): Promise<unknown>;
   updateMany(args: { where: object; data: Row }): Promise<unknown>;
+}
+
+/**
+ * Whether every row of the snapshot belongs to `tenantId` (ADR 0017): the tenant row itself, and
+ * each row carrying a `tenantId`. The hub's database holds its paired tenant only.
+ */
+export function belongsToTenant(snapshot: LocationSnapshot, tenantId: string): boolean {
+  if (snapshot.tenantId !== tenantId) return false;
+  return SNAPSHOT_TABLES.every((table) =>
+    (snapshot.tables[table] as Row[]).every((row) =>
+      table === 'tenants' ? row.id === tenantId : !('tenantId' in row) || row.tenantId === tenantId,
+    ),
+  );
 }
 
 /**

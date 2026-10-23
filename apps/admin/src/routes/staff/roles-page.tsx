@@ -36,7 +36,7 @@ import { useAdminErrorText } from '../../lib/admin-errors';
 import { api } from '../../lib/api';
 import { PERMISSION_GROUPS, permissionsOf } from '../../lib/permission-groups';
 import { usePermissions } from '../../lib/permissions';
-import { keys, useAdminMutation, useRestaurantId } from '../../lib/queries';
+import { keys, useAdminMutation, useTenantId } from '../../lib/queries';
 import { useSession } from '../../stores/session';
 
 const required = 'common:validation.required';
@@ -48,7 +48,7 @@ const roleForm = z.object({
 type FormValues = z.infer<typeof roleForm>;
 const AFFECTS = ['roles', 'users'];
 
-/** Permissions the signed-in user holds restaurant-wide: the only ones they can hand out. */
+/** Permissions the signed-in user holds tenant-wide: the only ones they can hand out. */
 function useGrantable(): ReadonlySet<Permission> {
   const user = useSession((s) => s.user);
   return useMemo(() => resolvePermissions(user?.roles ?? [], null), [user]);
@@ -61,7 +61,7 @@ function PermissionLabel({ permission }: { permission: Permission }) {
 
 function RoleDialog({ role, onClose }: { role: Role | null; onClose: () => void }) {
   const { t } = useTranslation(['admin', 'common']);
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const errorText = useAdminErrorText();
   const grantable = useGrantable();
   const [formError, setFormError] = useState<string | null>(null);
@@ -79,7 +79,7 @@ function RoleDialog({ role, onClose }: { role: Role | null; onClose: () => void 
       description: values.description || null,
       permissions: values.permissions as Permission[],
     };
-    return role ? api.admin.roles.update(rid, role.id, body) : api.admin.roles.create(rid, body);
+    return role ? api.admin.roles.update(tid, role.id, body) : api.admin.roles.create(tid, body);
   }, AFFECTS);
   const onSubmit = form.handleSubmit(async (values) => {
     setFormError(null);
@@ -218,13 +218,13 @@ function Matrix({ roles }: { roles: Role[] }) {
 
 export function RolesPage() {
   const { t } = useTranslation(['admin', 'common']);
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const { can } = usePermissions();
   const canManage = can('roles.manage');
   const [editing, setEditing] = useState<Role | 'new' | null>(null);
   const [deleting, setDeleting] = useState<Role | null>(null);
-  const query = useQuery({ queryKey: keys.roles(rid), queryFn: () => api.admin.roles.list(rid) });
-  const remove = useAdminMutation((id: string) => api.admin.roles.remove(rid, id), AFFECTS);
+  const query = useQuery({ queryKey: keys.roles(tid), queryFn: () => api.admin.roles.list(tid) });
+  const remove = useAdminMutation((id: string) => api.admin.roles.remove(tid, id), AFFECTS);
 
   return (
     <>

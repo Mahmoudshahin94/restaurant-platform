@@ -28,7 +28,7 @@ export class AuthGuard implements CanActivate {
       throw new DomainError('UNAUTHENTICATED', 'Missing bearer token');
     }
     const claims = await this.tokens.verifyAccessToken(header.slice('Bearer '.length).trim());
-    request.principal = await this.access.loadPrincipal(claims.userId, claims.restaurantId);
+    request.principal = await this.access.loadPrincipal(claims.userId, claims.tenantId);
     return true;
   }
 }

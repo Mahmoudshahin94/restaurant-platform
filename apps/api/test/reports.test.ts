@@ -36,7 +36,7 @@ import {
 
 /*
  * Phase 9 reports against a seeded history whose figures were worked out by hand (see each
- * order's comment). The restaurant is in SAR (2 decimals) and Asia/Riyadh (UTC+3): business date
+ * order's comment). The tenant is in SAR (2 decimals) and Asia/Riyadh (UTC+3): business date
  * 2026-10-10 runs from 2026-10-09T21:00Z to 2026-10-10T21:00Z. Location A prices include VAT 15%,
  * location B adds it.
  */
@@ -58,19 +58,19 @@ beforeAll(async () => {
   await resetDatabase(prisma);
   tenant = await createTenant(prisma, ['orders.view', 'reports.view', 'locations.view']);
   const menu = await createMenuFixture(prisma, tenant);
-  const rid = tenant.restaurantId;
+  const tid = tenant.tenantId;
   await prisma.location.update({ where: { id: tenant.locationB }, data: { taxInclusive: false } });
 
   const waiterRole = await prisma.role.create({
     data: {
-      restaurantId: rid,
+      tenantId: tid,
       name: 'Waiter',
       permissions: { create: [{ permissionKey: 'orders.view' }] },
     },
   });
   const waiterUser = await prisma.user.create({
     data: {
-      restaurantId: rid,
+      tenantId: tid,
       email: `waiter-${newId()}@test.local`,
       passwordHash: await hashSecret(PASSWORD),
       displayName: 'Waiter',
@@ -80,17 +80,17 @@ beforeAll(async () => {
 
   // Catalog beyond the menu fixture: an untaxed drink and a taxed dessert in their categories.
   const drinks = await prisma.category.create({
-    data: { restaurantId: rid, nameEn: 'Drinks', nameAr: 'مشروبات' },
+    data: { tenantId: tid, nameEn: 'Drinks', nameAr: 'مشروبات' },
   });
   const desserts = await prisma.category.create({
-    data: { restaurantId: rid, nameEn: 'Desserts', nameAr: 'حلويات' },
+    data: { tenantId: tid, nameEn: 'Desserts', nameAr: 'حلويات' },
   });
   const water = await prisma.product.create({
-    data: { restaurantId: rid, categoryId: drinks.id, nameEn: 'Water', nameAr: 'ماء', price: 300 },
+    data: { tenantId: tid, categoryId: drinks.id, nameEn: 'Water', nameAr: 'ماء', price: 300 },
   });
   const cake = await prisma.product.create({
     data: {
-      restaurantId: rid,
+      tenantId: tid,
       categoryId: desserts.id,
       nameEn: 'Cake',
       nameAr: 'كعكة',
@@ -98,15 +98,15 @@ beforeAll(async () => {
     },
   });
   const bar = await prisma.kitchenStation.create({
-    data: { restaurantId: rid, code: 'BAR', nameEn: 'Bar', nameAr: 'المشروبات', sortOrder: 1 },
+    data: { tenantId: tid, code: 'BAR', nameEn: 'Bar', nameAr: 'المشروبات', sortOrder: 1 },
   });
   stations = { grill: menu.grill.id, bar: bar.id };
   const fiveOff = await prisma.discount.create({
-    data: { restaurantId: rid, nameEn: '5 off', nameAr: 'خصم 5', type: 'FIXED', value: 500 },
+    data: { tenantId: tid, nameEn: '5 off', nameAr: 'خصم 5', type: 'FIXED', value: 500 },
   });
   const method = async (type: SeedMethod['type'], nameEn: string, nameAr: string) => {
     const m = await prisma.paymentMethod.create({
-      data: { restaurantId: rid, type, nameEn, nameAr },
+      data: { tenantId: tid, type, nameEn, nameAr },
     });
     return { id: m.id, type, nameEn, nameAr };
   };
@@ -134,7 +134,7 @@ beforeAll(async () => {
     quantity,
     taxes: [vat],
   });
-  const seed = reportSeeder(prisma, rid);
+  const seed = reportSeeder(prisma, tid);
   const A = tenant.locationA;
   const B = tenant.locationB;
   const ownerId = tenant.owner.id;
@@ -391,7 +391,7 @@ beforeAll(async () => {
   owner = bearer(await login(app, tenant.owner.email));
   manager = bearer(await login(app, tenant.cashier.email));
   waiter = bearer(await login(app, waiterUser.email));
-  base = `/api/v1/restaurants/${rid}/reports`;
+  base = `/api/v1/tenants/${tid}/reports`;
 });
 
 afterAll(async () => {
@@ -929,13 +929,13 @@ describe('access', () => {
     expect(other.body.code).toBe('LOCATION_NOT_FOUND');
   });
 
-  it('refuses callers without reports.view and other restaurants', async () => {
+  it('refuses callers without reports.view and other tenants', async () => {
     const denied = await get<{ code: string }>('daily-sales', PERIOD, waiter);
     expect(denied.status).toBe(403);
     expect(denied.body.code).toBe('INSUFFICIENT_PERMISSION');
     const res = await app.inject({
       method: 'GET',
-      url: `/api/v1/restaurants/${newId()}/reports/daily-sales?${PERIOD}`,
+      url: `/api/v1/tenants/${newId()}/reports/daily-sales?${PERIOD}`,
       headers: owner,
     });
     expect(res.statusCode).toBe(404);
@@ -963,8 +963,8 @@ describe('access', () => {
 describe('3-decimal currency', () => {
   it('reports KWD amounts in fils and splits refunds by largest remainder', async () => {
     const kw = await createTenant(prisma);
-    await prisma.restaurant.update({
-      where: { id: kw.restaurantId },
+    await prisma.tenant.update({
+      where: { id: kw.tenantId },
       data: { currencyCode: 'KWD', timezone: 'Asia/Kuwait' },
     });
     await prisma.location.update({
@@ -972,11 +972,11 @@ describe('3-decimal currency', () => {
       data: { timezone: 'Asia/Kuwait', taxInclusive: false },
     });
     const category = await prisma.category.create({
-      data: { restaurantId: kw.restaurantId, nameEn: 'Mains', nameAr: 'رئيسية' },
+      data: { tenantId: kw.tenantId, nameEn: 'Mains', nameAr: 'رئيسية' },
     });
     const product = await prisma.product.create({
       data: {
-        restaurantId: kw.restaurantId,
+        tenantId: kw.tenantId,
         categoryId: category.id,
         nameEn: 'Machboos',
         nameAr: 'مكبوس',
@@ -984,12 +984,12 @@ describe('3-decimal currency', () => {
       },
     });
     const tax = await prisma.tax.create({
-      data: { restaurantId: kw.restaurantId, nameEn: 'Tax', nameAr: 'ضريبة', rateBps: 500 },
+      data: { tenantId: kw.tenantId, nameEn: 'Tax', nameAr: 'ضريبة', rateBps: 500 },
     });
     const method = await prisma.paymentMethod.create({
-      data: { restaurantId: kw.restaurantId, type: 'ONLINE', nameEn: 'Online', nameAr: 'إلكتروني' },
+      data: { tenantId: kw.tenantId, type: 'ONLINE', nameEn: 'Online', nameAr: 'إلكتروني' },
     });
-    const seed = reportSeeder(prisma, kw.restaurantId, 'KWD');
+    const seed = reportSeeder(prisma, kw.tenantId, 'KWD');
     // 2 × 1.250 = 2.500 + 5% = 0.125 → 2.625 KWD; 1.000 refunded → tax 0.048, net 0.952.
     const sale = await seed.order({
       locationId: kw.locationA,
@@ -1017,7 +1017,7 @@ describe('3-decimal currency', () => {
     });
 
     const kwOwner = bearer(await login(app, kw.owner.email));
-    const url = `/api/v1/restaurants/${kw.restaurantId}/reports`;
+    const url = `/api/v1/tenants/${kw.tenantId}/reports`;
     const daily = (
       await app.inject({
         method: 'GET',
@@ -1061,7 +1061,7 @@ describe('orders taken through the API', () => {
     const t = await createTenant(prisma);
     const menu = await createMenuFixture(prisma, t);
     const cash = await prisma.paymentMethod.create({
-      data: { restaurantId: t.restaurantId, type: 'CASH', nameEn: 'Cash', nameAr: 'نقدًا' },
+      data: { tenantId: t.tenantId, type: 'CASH', nameEn: 'Cash', nameAr: 'نقدًا' },
     });
     const register = await prisma.cashRegister.create({
       data: { locationId: t.locationA, nameEn: 'Drawer', nameAr: 'الدرج' },
@@ -1102,7 +1102,7 @@ describe('orders taken through the API', () => {
     });
 
     const today = businessDateFor(new Date(), 'Asia/Riyadh');
-    const url = `/api/v1/restaurants/${t.restaurantId}/reports`;
+    const url = `/api/v1/tenants/${t.tenantId}/reports`;
     const q = `from=${today}&to=${today}`;
     const read = async <T>(name: string) =>
       (await app.inject({ method: 'GET', url: `${url}/${name}?${q}`, headers })).json<T>();

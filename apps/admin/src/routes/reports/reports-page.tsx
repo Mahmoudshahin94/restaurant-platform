@@ -18,7 +18,7 @@ import { Navigate, NavLink, useLocation, useParams, useSearchParams } from 'reac
 import { api } from '../../lib/api';
 import { useLocationLookup } from '../../lib/format';
 import { usePermissions } from '../../lib/permissions';
-import { keys, useRestaurant, useRestaurantId } from '../../lib/queries';
+import { keys, useTenant, useTenantId } from '../../lib/queries';
 import {
   CategoriesView,
   ChannelsView,
@@ -40,7 +40,7 @@ const WITHOUT_CHANNELS: readonly ReportKind[] = ['shifts'];
 const addDays = (date: string, days: number) =>
   new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 
-/** A preset's business dates, relative to today in the restaurant's time zone. */
+/** A preset's business dates, relative to today in the tenant's time zone. */
 export function periodRange(period: Period, today: string): { from: string; to: string } {
   const monthStart = `${today.slice(0, 8)}01`;
   switch (period) {
@@ -74,11 +74,11 @@ export function ReportsPage() {
   const { kind } = useParams();
   const { search } = useLocation();
   const [params, setParams] = useSearchParams();
-  const restaurant = useRestaurant();
+  const tenant = useTenant();
   const { list, name } = useLocationLookup();
   const { canAt } = usePermissions();
 
-  const today = businessDateFor(new Date(), restaurant.data?.timezone ?? 'UTC');
+  const today = businessDateFor(new Date(), tenant.data?.timezone ?? 'UTC');
   const fallback = periodRange('last7', today);
   const from = params.get('from') ?? fallback.from;
   const to = params.get('to') ?? fallback.to;
@@ -223,7 +223,7 @@ export function ReportsPage() {
         <Alert variant="destructive" title={rangeError} />
       ) : (
         // Keyed by report so a previous report's data is never shown as another kind.
-        <ReportContent key={kind} kind={kind} query={query} ready={restaurant.isSuccess} />
+        <ReportContent key={kind} kind={kind} query={query} ready={tenant.isSuccess} />
       )}
     </>
   );
@@ -253,7 +253,7 @@ function ReportContent({
   ready: boolean;
 }) {
   const { t } = useTranslation('admin');
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const fetchers = useMemo(
     () =>
       ({
@@ -266,12 +266,12 @@ function ReportContent({
         discounts: api.admin.reports.discounts,
         shifts: api.admin.reports.shifts,
         'prep-times': api.admin.reports.prepTimes,
-      }) satisfies Record<ReportKind, (rid: string, q: ReportQuery) => Promise<unknown>>,
+      }) satisfies Record<ReportKind, (tid: string, q: ReportQuery) => Promise<unknown>>,
     [],
   );
   const report = useQuery({
-    queryKey: keys.report(rid, kind, query),
-    queryFn: (): Promise<unknown> => fetchers[kind](rid, query),
+    queryKey: keys.report(tid, kind, query),
+    queryFn: (): Promise<unknown> => fetchers[kind](tid, query),
     placeholderData: keepPreviousData,
     enabled: ready,
   });

@@ -21,7 +21,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Set by the cloud's device guard on hub-authenticated routes (`/sync/*`). */
 interface DeviceScope {
   id: string;
-  restaurantId: string;
+  tenantId: string;
   locationId: string;
 }
 const deviceOf = (request: FastifyRequest): DeviceScope | undefined =>
@@ -51,7 +51,7 @@ export class RequestContextInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest<FastifyRequest>();
     const device = deviceOf(request);
-    const restaurantId = request.scope?.restaurantId ?? device?.restaurantId;
+    const tenantId = request.scope?.tenantId ?? device?.tenantId;
     const locationId = request.scope?.locationId ?? device?.locationId;
     const orderId = orderIdOf(request);
     const store: RequestContextStore = {
@@ -59,14 +59,14 @@ export class RequestContextInterceptor implements NestInterceptor {
       source: sourceOf(request),
       ...(request.principal ? { userId: request.principal.userId } : {}),
       ...(device ? { deviceId: device.id } : {}),
-      ...(restaurantId ? { restaurantId } : {}),
+      ...(tenantId ? { tenantId } : {}),
       ...(locationId ? { locationId } : {}),
       ...(orderId ? { orderId } : {}),
     };
     request.log = request.log.child({
       userId: store.userId,
       deviceId: store.deviceId,
-      restaurantId: store.restaurantId,
+      tenantId: store.tenantId,
       locationId: store.locationId,
       orderId: store.orderId,
     });

@@ -15,7 +15,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { api } from '../lib/api';
-import { keys, useRestaurantId } from '../lib/queries';
+import { keys, useTenantId } from '../lib/queries';
 import { usePermissions } from '../lib/permissions';
 import { usePreferences } from '../stores/preferences';
 import { useSession } from '../stores/session';
@@ -122,11 +122,11 @@ function LocationCard({ row, currency }: { row: DashboardLocation; currency: str
 export function DashboardPage() {
   const { t } = useTranslation('admin');
   const user = useSession((s) => s.user);
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const { canAnywhere } = usePermissions();
   const query = useQuery({
-    queryKey: keys.dashboard(rid),
-    queryFn: () => api.admin.dashboard(rid),
+    queryKey: keys.dashboard(tid),
+    queryFn: () => api.admin.dashboard(tid),
     enabled: canAnywhere('orders.view'),
     refetchInterval: 60_000,
   });

@@ -5,7 +5,7 @@ import { idSchema, isoDateTimeSchema } from './common';
 
 /*
  * Reports (Phase 9, ADR 0015): cloud only, `reports.view`, over business dates (the calendar date
- * in each location's time zone). Every amount is in integer minor units of the restaurant
+ * in each location's time zone). Every amount is in integer minor units of the tenant
  * currency.
  */
 

@@ -11,7 +11,7 @@ import { idSchema, isoDateTimeSchema, localeSchema, minorUnitsSchema } from './c
 import { orderItemInputSchema } from './orders';
 
 /*
- * Online ordering (Phase 7, ADR 0013): the public customer API and the restaurant's settings.
+ * Online ordering (Phase 7, ADR 0013): the public customer API and the tenant's settings.
  * Customer requests never carry prices: the cloud re-prices every order with the domain engine.
  */
 
@@ -40,10 +40,10 @@ export const onlineOrderingStatusSchema = z.object({
 });
 export type OnlineOrderingStatusDto = z.infer<typeof onlineOrderingStatusSchema>;
 
-// --- Restaurant settings (admin, cloud) -----------------------------------------------------------
+// --- Tenant settings (admin, cloud) -----------------------------------------------------------
 
 export const onlineOrderingSettingsSchema = z.object({
-  /** What the restaurant chose; OFFLINE is never set by hand (it comes from the hub heartbeat). */
+  /** What the tenant chose; OFFLINE is never set by hand (it comes from the hub heartbeat). */
   state: z.enum(['OPEN', 'PAUSED', 'CLOSED']),
   openingHours: z.array(openingWindowSchema).max(28),
   acceptMinutes: z.int().min(1).max(240),
@@ -69,7 +69,7 @@ export type OnlineOrderingOverview = z.infer<typeof onlineOrderingOverviewSchema
 
 export const publicLocationSchema = z.object({
   id: idSchema,
-  restaurantId: idSchema,
+  tenantId: idSchema,
   code: z.string(),
   nameEn: z.string(),
   nameAr: z.string(),
@@ -89,7 +89,7 @@ export const publicLocationSchema = z.object({
 });
 export type PublicLocation = z.infer<typeof publicLocationSchema>;
 
-export const publicRestaurantSchema = z.object({
+export const publicTenantSchema = z.object({
   id: idSchema,
   slug: z.string(),
   nameEn: z.string(),
@@ -99,7 +99,7 @@ export const publicRestaurantSchema = z.object({
   timezone: z.string(),
   locations: z.array(publicLocationSchema),
 });
-export type PublicRestaurant = z.infer<typeof publicRestaurantSchema>;
+export type PublicTenant = z.infer<typeof publicTenantSchema>;
 
 // --- Customer orders ------------------------------------------------------------------------------
 

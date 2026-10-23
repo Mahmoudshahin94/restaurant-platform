@@ -60,7 +60,7 @@ export interface SeedMethod {
 
 let numbers = 0;
 
-export function reportSeeder(prisma: PrismaClient, restaurantId: string, currencyCode = 'SAR') {
+export function reportSeeder(prisma: PrismaClient, tenantId: string, currencyCode = 'SAR') {
   return {
     async order(o: SeedOrder): Promise<SeededOrder> {
       const lines = o.lines.map((l) => ({ ...l, lineId: newId() }));
@@ -87,7 +87,7 @@ export function reportSeeder(prisma: PrismaClient, restaurantId: string, currenc
       await prisma.order.create({
         data: {
           id,
-          restaurantId,
+          tenantId,
           locationId: o.locationId,
           orderNumber: `R-${String(numbers).padStart(4, '0')}`,
           businessDate: new Date(`${o.businessDate}T00:00:00Z`),
@@ -180,7 +180,7 @@ export function reportSeeder(prisma: PrismaClient, restaurantId: string, currenc
       await prisma.payment.create({
         data: {
           id,
-          restaurantId,
+          tenantId,
           locationId: p.order.locationId,
           orderId: p.order.id,
           shiftId: p.shiftId,
@@ -225,7 +225,7 @@ export function reportSeeder(prisma: PrismaClient, restaurantId: string, currenc
       await prisma.shift.create({
         data: {
           id,
-          restaurantId,
+          tenantId,
           locationId: s.locationId,
           cashRegisterId: s.registerId,
           status: s.closed ? 'CLOSED' : 'OPEN',
@@ -267,7 +267,7 @@ export function reportSeeder(prisma: PrismaClient, restaurantId: string, currenc
         s === undefined ? null : new Date(at.getTime() + s * 1000);
       await prisma.kitchenTicket.create({
         data: {
-          restaurantId,
+          tenantId,
           locationId: t.order.locationId,
           orderId: t.order.id,
           stationId: t.stationId,

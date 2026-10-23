@@ -110,7 +110,7 @@ export class HubController {
     const figures = await this.engine.figures();
     return {
       paired: pairing !== null,
-      restaurantId: pairing?.restaurantId ?? null,
+      tenantId: pairing?.tenantId ?? null,
       locationId: pairing?.locationId ?? null,
       cloud: this.state.cloud.status,
       state: pairing ? figures.state : 'OFFLINE',

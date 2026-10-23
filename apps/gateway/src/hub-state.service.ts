@@ -7,7 +7,7 @@ export interface Pairing {
   deviceId: string;
   /** `<deviceId>.<secret>`; never logged or returned by the API. */
   credential: string;
-  restaurantId: string;
+  tenantId: string;
   locationId: string;
   pairedAt: string;
 }

@@ -21,7 +21,7 @@ function statements(sql: string): string[] {
 }
 
 /**
- * Applies pending hub migrations at start-up, without the Prisma CLI (a restaurant PC only gets
+ * Applies pending hub migrations at start-up, without the Prisma CLI (a tenant PC only gets
  * the hub). Each migration runs in one transaction and is recorded with its checksum; a migration
  * that changed after being applied stops the hub instead of silently diverging.
  */

@@ -29,7 +29,7 @@ beforeEach(async () => {
   await resetDatabase(prisma);
   tenant = await createTenant(prisma);
   owner = bearer(await login(app, tenant.owner.email));
-  base = `/api/v1/restaurants/${tenant.restaurantId}`;
+  base = `/api/v1/tenants/${tenant.tenantId}`;
 });
 
 // The caller names the response type, as with light-my-request's `json<T>()`.
@@ -52,15 +52,15 @@ async function call<T>(
 const roleId = async (name: string) =>
   (
     await prisma.role.findFirstOrThrow({
-      where: { restaurantId: tenant.restaurantId, name },
+      where: { tenantId: tenant.tenantId, name },
     })
   ).id;
 
-/** A restaurant-wide "Staff admin" who manages users and roles but holds little else. */
+/** A tenant-wide "Staff admin" who manages users and roles but holds little else. */
 async function staffAdmin(): Promise<{ id: string; headers: Record<string, string> }> {
   const role = await prisma.role.create({
     data: {
-      restaurantId: tenant.restaurantId,
+      tenantId: tenant.tenantId,
       name: 'Staff admin',
       permissions: {
         create: ['users.manage', 'roles.manage', 'orders.view', 'locations.view'].map(
@@ -131,7 +131,7 @@ describe('users', () => {
   it('changes roles (audited), and deactivation ends the user’s sessions at once', async () => {
     const manager = await prisma.role.create({
       data: {
-        restaurantId: tenant.restaurantId,
+        tenantId: tenant.tenantId,
         name: 'Manager',
         permissions: { create: [{ permissionKey: 'orders.view' }] },
       },
@@ -257,7 +257,7 @@ describe('users', () => {
         })
       ).status,
     ).toBe(403);
-    // A location-scoped role of a foreign restaurant or location is not found.
+    // A location-scoped role of a foreign tenant or location is not found.
     const other = await createTenant(prisma);
     const foreign = await call('PUT', `${base}/users/${tenant.cashier.id}/roles`, owner, {
       roles: [{ roleId: await roleId('Cashier'), locationId: other.locationA }],
@@ -278,11 +278,11 @@ describe('users', () => {
     expect(JSON.stringify(entry.metadata)).not.toContain('brand-new-password');
   });
 
-  it('is restaurant-wide: branch staff and other tenants are refused', async () => {
+  it('is tenant-wide: branch staff and other tenants are refused', async () => {
     const cashier = bearer(await login(app, tenant.cashier.email));
     expect((await call('GET', `${base}/users`, cashier)).status).toBe(403);
     const other = await createTenant(prisma);
-    const foreign = await call('GET', `/api/v1/restaurants/${other.restaurantId}/users`, owner);
+    const foreign = await call('GET', `/api/v1/tenants/${other.tenantId}/users`, owner);
     expect(foreign.status).toBe(404);
     expect(
       (await call('PATCH', `${base}/users/${other.owner.id}`, owner, { displayName: 'X' })).body,

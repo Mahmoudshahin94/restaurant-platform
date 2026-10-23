@@ -11,7 +11,7 @@ const acceptBy = '2026-10-17T12:10:00.000Z';
 function webOrder(overrides: Partial<Order> = {}): Order {
   return {
     id: id(1),
-    restaurantId: id(2),
+    tenantId: id(2),
     locationId: id(3),
     orderNumber: 'W-003',
     businessDate: '2026-10-17',
@@ -95,7 +95,7 @@ afterEach(() => {
 });
 
 describe('WebOrderDetails', () => {
-  it('shows what the restaurant needs to decide: items, delivery, payment and time left', async () => {
+  it('shows what staff need to decide: items, delivery, payment and time left', async () => {
     const now = new Date('2026-10-17T12:01:30.000Z').getTime();
     await renderWithProviders(
       <WebOrderDetails order={webOrder()} now={now} timeZone="Asia/Riyadh" />,

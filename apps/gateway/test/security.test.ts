@@ -8,7 +8,7 @@ import { buildSnapshot, withVersion } from './snapshot-fixture';
 
 /**
  * The hub's share of the hardening checks (ADR 0016): it serves the same server code on the
- * restaurant LAN, so the same rules hold — every route protected, refusals on every route, the
+ * location LAN, so the same rules hold — every route protected, refusals on every route, the
  * CORS allowlist and no secrets on its unauthenticated status.
  */
 let cloud: FakeCloud;

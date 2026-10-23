@@ -11,7 +11,7 @@
     "subtitle": "Choose a branch to see its menu and order for pickup or delivery.",
     "noLocations": "No branch is taking online orders.",
     "noLocationsHint": "Please check back later.",
-    "notFound": "This restaurant could not be found.",
+    "notFound": "This store could not be found.",
     "viewMenu": "View menu",
     "pickup": "Pickup",
     "delivery": "Delivery",
@@ -25,9 +25,9 @@
     "reason": {
       "LOCATION_INACTIVE": "This branch is not taking orders.",
       "SETTING_CLOSED": "Online ordering is closed at this branch.",
-      "SETTING_PAUSED": "The restaurant paused online orders for a moment. Please try again soon.",
+      "SETTING_PAUSED": "The store paused online orders for a moment. Please try again soon.",
       "OUTSIDE_HOURS": "We are outside our opening hours.",
-      "HUB_OFFLINE": "The restaurant cannot receive online orders right now."
+      "HUB_OFFLINE": "The store cannot receive online orders right now."
     },
     "hours": "Opening hours",
     "noHours": "Open whenever online ordering is on",
@@ -80,7 +80,7 @@
     "items_one": "{{count}} item",
     "items_other": "{{count}} items",
     "unavailable": "An item in your cart is no longer available. Remove it to continue.",
-    "previewNote": "Prices are confirmed by the restaurant when you place the order."
+    "previewNote": "Prices are confirmed by the store when you place the order."
   },
   "checkout": {
     "title": "Checkout",
@@ -119,7 +119,7 @@
   "confirmation": {
     "title": "Thank you, {{name}}!",
     "received": "Order {{number}} was sent to {{location}}.",
-    "waiting": "The restaurant will confirm it shortly. You can follow it live.",
+    "waiting": "The store will confirm it shortly. You can follow it live.",
     "track": "Follow your order",
     "keepLink": "Keep this link to check your order later:",
     "copy": "Copy link",
@@ -130,12 +130,12 @@
     "title": "Order {{number}}",
     "liveUpdates": "This page updates automatically.",
     "updatedAt": "Updated {{time}}",
-    "acceptBy": "The restaurant has until {{time}} to accept it.",
+    "acceptBy": "The store has until {{time}} to accept it.",
     "notFound": "We could not find this order.",
     "notFoundHint": "Check the link you received when you ordered.",
     "label": {
       "DRAFT": "Draft",
-      "PLACED": "Waiting for the restaurant",
+      "PLACED": "Waiting for the store",
       "CONFIRMED": "Accepted",
       "PREPARING": "Being prepared",
       "READY": "Ready",
@@ -145,8 +145,8 @@
     },
     "detail": {
       "DRAFT": "This order has not been sent.",
-      "PLACED": "The restaurant has your order and will confirm it shortly.",
-      "CONFIRMED": "The restaurant accepted your order.",
+      "PLACED": "The store has your order and will confirm it shortly.",
+      "CONFIRMED": "The store accepted your order.",
       "PREPARING": "The kitchen is preparing your order.",
       "READY_PICKUP": "Your order is ready to collect.",
       "READY_DELIVERY": "Your order is ready and will be on its way soon.",
@@ -155,12 +155,12 @@
       "REFUNDED": "This order was refunded."
     },
     "cancelReason": {
-      "TOO_BUSY": "The restaurant is too busy to take your order right now.",
+      "TOO_BUSY": "The store is too busy to take your order right now.",
       "ITEM_UNAVAILABLE": "An item you ordered is not available.",
-      "CLOSING_SOON": "The restaurant is about to close.",
+      "CLOSING_SOON": "The store is about to close.",
       "DELIVERY_AREA": "Your address is outside the delivery area.",
-      "OTHER": "The restaurant could not accept this order.",
-      "ACCEPTANCE_TIMEOUT": "The restaurant did not confirm the order in time."
+      "OTHER": "The store could not accept this order.",
+      "ACCEPTANCE_TIMEOUT": "The store did not confirm the order in time."
     },
     "voided": "Your online payment was cancelled: you will not be charged.",
     "progress": "Progress",

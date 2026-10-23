@@ -10,7 +10,7 @@ import type {
 } from '@pos/validation';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { asHubTx } from '../src/database/hub-database';
-import { PrismaService } from '@pos/server';
+import { PrismaService, TenantContext, TenantScopeError } from '@pos/server';
 import { CASHIER_PIN, PASSWORD, buildSnapshot, withVersion } from './snapshot-fixture';
 import { FakeCloud, type TestHub, bearer, pair, removeDir, startHub } from './harness';
 
@@ -144,9 +144,28 @@ describe('signing in at the hub', () => {
       'INVALID_CREDENTIALS',
     );
   });
+  it('signs nobody in when an employee code matches staff of two tenants (ADR 0017)', async () => {
+    // Cannot come from the cloud (snapshots of another tenant are refused); written directly.
+    const db = hub.app.get(PrismaService);
+    const stray = newId();
+    await db.tenant.create({
+      data: {
+        id: stray,
+        slug: 'stray',
+        nameEn: 'S',
+        nameAr: 'S',
+        currencyCode: 'SAR',
+        timezone: 'UTC',
+      },
+    });
+    await db.employee.create({
+      data: { tenantId: stray, employeeCode: '1001', displayName: 'Other', pinHash: 'x' },
+    });
+    expect((await pinSignIn()).json<ApiErrorBody>().code).toBe('INVALID_CREDENTIALS');
+  });
 });
 
-describe('running the restaurant on the hub', () => {
+describe('running a location on the hub', () => {
   beforeEach(provision);
 
   it('takes an order through payment, kitchen and handover, recording each change in the outbox', async () => {
@@ -318,7 +337,7 @@ describe('running the restaurant on the hub', () => {
     const owner = await signIn('owner@hub.test');
     const write = await hub.app.inject({
       method: 'POST',
-      url: `${api}/restaurants/${fixture.ids.restaurantId}/categories`,
+      url: `${api}/tenants/${fixture.ids.tenantId}/categories`,
       headers: owner,
       payload: { nameEn: 'New', nameAr: 'جديد' },
     });
@@ -326,10 +345,29 @@ describe('running the restaurant on the hub', () => {
     expect(write.json<ApiErrorBody>().code).toBe('MANAGED_IN_CLOUD');
     const read = await hub.app.inject({
       method: 'GET',
-      url: `${api}/restaurants/${fixture.ids.restaurantId}/categories`,
+      url: `${api}/tenants/${fixture.ids.tenantId}/categories`,
       headers: owner,
     });
     expect(read.statusCode).toBe(200);
+  });
+});
+
+describe('the tenant-scoped client on SQLite (ADR 0017)', () => {
+  beforeEach(provision);
+
+  it('limits queries to the tenant in scope and refuses writes for another', async () => {
+    const db = hub.app.get(PrismaService);
+    const { tenantId } = fixture.ids;
+    // Outside a request the hub works on its own (single-tenant) database.
+    const all = await db.product.count();
+    expect(all).toBeGreaterThan(0);
+    expect(await TenantContext.runInTenant(tenantId, () => db.product.count())).toBe(all);
+    expect(await TenantContext.runInTenant(newId(), () => db.product.count())).toBe(0);
+    await expect(
+      TenantContext.runInTenant(tenantId, () =>
+        db.category.create({ data: { tenantId: newId(), nameEn: 'x', nameAr: 'x' } }),
+      ),
+    ).rejects.toThrow(TenantScopeError);
   });
 });
 
@@ -389,6 +427,23 @@ describe('configuration from the cloud', () => {
     ).json<PublishedMenu>();
     const price = menu.categories.flatMap((c) => c.products).find((p) => p.nameEn === 'Fries');
     expect(price?.price).toBe(1100);
+  });
+
+  it('refuses a snapshot holding another tenant’s rows, keeping its last copy (ADR 0017)', async () => {
+    const fries = fixture.tables.products.find((p) => p.id === fixture.ids.fries);
+    if (fries) Object.assign(fries, { tenantId: newId(), price: 1 });
+    cloud.snapshot = withVersion(fixture.ids, fixture.tables);
+    expect(await hub.snapshots.syncNow()).toBe('rejected');
+    const status = (
+      await hub.app.inject({ method: 'GET', url: `${api}/hub/status` })
+    ).json<HubStatus>();
+    expect(status.lastError).toMatch(/another tenant/);
+    const owner = await signIn('owner@hub.test');
+    const menu = (
+      await hub.app.inject({ method: 'GET', url: `${loc()}/menu`, headers: owner })
+    ).json<PublishedMenu>();
+    const kept = menu.categories.flatMap((c) => c.products).find((p) => p.nameEn === 'Fries');
+    expect(kept?.price).not.toBe(1);
   });
 
   it('continues the cloud’s order numbers for the day, and never goes backwards', async () => {

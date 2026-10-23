@@ -1,9 +1,9 @@
 import { useMoneyFormat } from '@pos/app-kit';
-import { useRestaurant } from './queries';
+import { useTenant } from './queries';
 
 export { moneyField, optionalMoneyField } from '@pos/app-kit';
 
-/** Money helpers bound to the restaurant currency and the active locale. */
+/** Money helpers bound to the tenant currency and the active locale. */
 export function useMoney() {
-  return useMoneyFormat(useRestaurant().data?.currencyCode ?? null);
+  return useMoneyFormat(useTenant().data?.currencyCode ?? null);
 }

@@ -41,7 +41,7 @@ import { LocalizedFields } from '../../components/localized-fields';
 import { ArchivedBadge } from '../../components/status-badge';
 import { api } from '../../lib/api';
 import { usePermissions } from '../../lib/permissions';
-import { useCatalogMutation, useRestaurantId, useTaxes } from '../../lib/queries';
+import { useCatalogMutation, useTenantId, useTaxes } from '../../lib/queries';
 
 const required = 'common:validation.required';
 const percentField = z
@@ -67,7 +67,7 @@ type TaxFormOutput = z.output<typeof taxForm>;
 
 function TaxDialog({ tax, onClose }: { tax: Tax | null; onClose: () => void }) {
   const { t } = useTranslation(['pricing', 'common', 'menu']);
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const errorText = useErrorText();
   const [formError, setFormError] = useState<string | null>(null);
   const form = useForm<TaxFormInput, unknown, TaxFormOutput>({
@@ -81,7 +81,7 @@ function TaxDialog({ tax, onClose }: { tax: Tax | null; onClose: () => void }) {
   });
   const save = useCatalogMutation(({ rate, ...values }: TaxFormOutput) => {
     const body = { ...values, rateBps: rate };
-    return tax ? api.menu.taxes.update(rid, tax.id, body) : api.menu.taxes.create(rid, body);
+    return tax ? api.menu.taxes.update(tid, tax.id, body) : api.menu.taxes.create(tid, body);
   });
   const onSubmit = form.handleSubmit(async (values) => {
     setFormError(null);
@@ -138,13 +138,13 @@ function TaxDialog({ tax, onClose }: { tax: Tax | null; onClose: () => void }) {
 export function TaxesPage() {
   const { t } = useTranslation(['pricing', 'common', 'menu']);
   const locale = useCurrentLocale();
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const { can } = usePermissions();
   const [showArchived, setShowArchived] = useState(false);
   const [editing, setEditing] = useState<Tax | 'new' | null>(null);
   const query = useTaxes(showArchived);
-  const archive = useCatalogMutation((id: string) => api.menu.taxes.archive(rid, id));
-  const restore = useCatalogMutation((id: string) => api.menu.taxes.restore(rid, id));
+  const archive = useCatalogMutation((id: string) => api.menu.taxes.archive(tid, id));
+  const restore = useCatalogMutation((id: string) => api.menu.taxes.restore(tid, id));
   const canManage = can('settings.manage');
 
   return (

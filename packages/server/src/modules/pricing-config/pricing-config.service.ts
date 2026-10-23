@@ -18,7 +18,7 @@ const iso = (d: Date) => d.toISOString();
 export function toTaxDto(row: TaxRow): Tax {
   return {
     id: row.id,
-    restaurantId: row.restaurantId,
+    tenantId: row.tenantId,
     nameEn: row.nameEn,
     nameAr: row.nameAr,
     rateBps: row.rateBps,
@@ -32,7 +32,7 @@ export function toTaxDto(row: TaxRow): Tax {
 export function toDiscountDto(row: DiscountRow): Discount {
   return {
     id: row.id,
-    restaurantId: row.restaurantId,
+    tenantId: row.tenantId,
     nameEn: row.nameEn,
     nameAr: row.nameAr,
     type: row.type,
@@ -54,17 +54,17 @@ export class PricingConfigService {
     private readonly audit: AuditService,
   ) {}
 
-  async listTaxes(restaurantId: string, includeArchived: boolean): Promise<Tax[]> {
+  async listTaxes(tenantId: string, includeArchived: boolean): Promise<Tax[]> {
     const rows = await this.prisma.tax.findMany({
-      where: { restaurantId, ...(includeArchived ? {} : { archivedAt: null }) },
+      where: { tenantId, ...(includeArchived ? {} : { archivedAt: null }) },
       orderBy: [{ createdAt: 'asc' }],
     });
     return rows.map(toTaxDto);
   }
 
-  async createTax(restaurantId: string, input: z.output<typeof createTaxSchema>): Promise<Tax> {
+  async createTax(tenantId: string, input: z.output<typeof createTaxSchema>): Promise<Tax> {
     return this.prisma.$transaction(async (tx) => {
-      const row = await tx.tax.create({ data: { ...input, restaurantId } });
+      const row = await tx.tax.create({ data: { ...input, tenantId } });
       await this.audit.record(
         { action: 'tax.created', entityType: 'Tax', entityId: row.id, metadata: { tax: input } },
         tx,
@@ -74,12 +74,12 @@ export class PricingConfigService {
   }
 
   async updateTax(
-    restaurantId: string,
+    tenantId: string,
     taxId: string,
     changes: z.output<typeof updateTaxSchema>,
   ): Promise<Tax> {
     return this.prisma.$transaction(async (tx) => {
-      const before = await tx.tax.findFirst({ where: { id: taxId, restaurantId } });
+      const before = await tx.tax.findFirst({ where: { id: taxId, tenantId } });
       if (!before) throw new DomainError('TAX_NOT_FOUND', 'Tax not found', { taxId });
       const row = await tx.tax.update({ where: { id: taxId }, data: changes });
       await this.audit.record(
@@ -98,9 +98,9 @@ export class PricingConfigService {
     });
   }
 
-  async setTaxArchived(restaurantId: string, taxId: string, archived: boolean): Promise<Tax> {
+  async setTaxArchived(tenantId: string, taxId: string, archived: boolean): Promise<Tax> {
     return this.prisma.$transaction(async (tx) => {
-      const found = await tx.tax.count({ where: { id: taxId, restaurantId } });
+      const found = await tx.tax.count({ where: { id: taxId, tenantId } });
       if (found !== 1) throw new DomainError('TAX_NOT_FOUND', 'Tax not found', { taxId });
       const row = await tx.tax.update({
         where: { id: taxId },
@@ -114,20 +114,20 @@ export class PricingConfigService {
     });
   }
 
-  async listDiscounts(restaurantId: string, includeArchived: boolean): Promise<Discount[]> {
+  async listDiscounts(tenantId: string, includeArchived: boolean): Promise<Discount[]> {
     const rows = await this.prisma.discount.findMany({
-      where: { restaurantId, ...(includeArchived ? {} : { archivedAt: null }) },
+      where: { tenantId, ...(includeArchived ? {} : { archivedAt: null }) },
       orderBy: [{ createdAt: 'asc' }],
     });
     return rows.map(toDiscountDto);
   }
 
   async createDiscount(
-    restaurantId: string,
+    tenantId: string,
     input: z.output<typeof createDiscountSchema>,
   ): Promise<Discount> {
     return this.prisma.$transaction(async (tx) => {
-      const row = await tx.discount.create({ data: { ...input, restaurantId } });
+      const row = await tx.discount.create({ data: { ...input, tenantId } });
       await this.audit.record(
         {
           action: 'discount.created',
@@ -142,12 +142,12 @@ export class PricingConfigService {
   }
 
   async updateDiscount(
-    restaurantId: string,
+    tenantId: string,
     discountId: string,
     changes: z.output<typeof updateDiscountSchema>,
   ): Promise<Discount> {
     return this.prisma.$transaction(async (tx) => {
-      const before = await tx.discount.findFirst({ where: { id: discountId, restaurantId } });
+      const before = await tx.discount.findFirst({ where: { id: discountId, tenantId } });
       if (!before)
         throw new DomainError('DISCOUNT_NOT_FOUND', 'Discount not found', { discountId });
       const row = await tx.discount.update({ where: { id: discountId }, data: changes });
@@ -165,12 +165,12 @@ export class PricingConfigService {
   }
 
   async setDiscountArchived(
-    restaurantId: string,
+    tenantId: string,
     discountId: string,
     archived: boolean,
   ): Promise<Discount> {
     return this.prisma.$transaction(async (tx) => {
-      const found = await tx.discount.count({ where: { id: discountId, restaurantId } });
+      const found = await tx.discount.count({ where: { id: discountId, tenantId } });
       if (found !== 1)
         throw new DomainError('DISCOUNT_NOT_FOUND', 'Discount not found', { discountId });
       const row = await tx.discount.update({

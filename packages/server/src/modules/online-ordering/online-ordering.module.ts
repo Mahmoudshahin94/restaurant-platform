@@ -7,6 +7,7 @@ import {
 } from './online-ordering.controllers';
 import { OnlinePaymentsService } from './online-payments.service';
 import { OnlineStatusService } from './online-status.service';
+import { PublicTenantResolver } from './public-tenant.resolver';
 import { StorefrontService } from './storefront.service';
 import { WebOrdersService } from './web-orders.service';
 
@@ -18,7 +19,13 @@ import { WebOrdersService } from './web-orders.service';
 @Module({
   imports: [MenuModule],
   controllers: [StorefrontController, WebOrdersController, OnlineOrderingSettingsController],
-  providers: [OnlineStatusService, OnlinePaymentsService, StorefrontService, WebOrdersService],
+  providers: [
+    OnlineStatusService,
+    OnlinePaymentsService,
+    PublicTenantResolver,
+    StorefrontService,
+    WebOrdersService,
+  ],
   exports: [OnlinePaymentsService, WebOrdersService, OnlineStatusService],
 })
 export class OnlineOrderingModule {}

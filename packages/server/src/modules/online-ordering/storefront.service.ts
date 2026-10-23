@@ -4,7 +4,7 @@ import { DomainError, parseOpeningHours } from '@pos/domain';
 import type {
   OnlineOrderingOverview,
   PublicLocation,
-  PublicRestaurant,
+  PublicTenant,
   PublishedMenu,
   updateOnlineOrderingSchema,
 } from '@pos/validation';
@@ -16,7 +16,7 @@ import { OnlinePaymentsService } from './online-payments.service';
 import { OnlineStatusService } from './online-status.service';
 import { toPublicLocation } from './web-order.mappers';
 
-/** The public storefront (restaurant, locations, menus) and the restaurant's ordering settings. */
+/** The public storefront (tenant, locations, menus) and the tenant's ordering settings. */
 @Injectable()
 export class StorefrontService {
   constructor(
@@ -27,26 +27,26 @@ export class StorefrontService {
     private readonly audit: AuditService,
   ) {}
 
-  async restaurant(slug: string): Promise<PublicRestaurant> {
-    const restaurant = await this.prisma.restaurant.findUnique({
+  async tenant(slug: string): Promise<PublicTenant> {
+    const tenant = await this.prisma.tenant.findUnique({
       where: { slug },
       include: { locations: { where: { isActive: true }, orderBy: { code: 'asc' } } },
     });
-    if (!restaurant) throw new DomainError('RESTAURANT_NOT_FOUND', 'Restaurant not found');
-    const card = (await this.payments.methodFor(this.prisma, restaurant.id)) !== null;
+    if (!tenant) throw new DomainError('TENANT_NOT_FOUND', 'Tenant not found');
+    const card = (await this.payments.methodFor(this.prisma, tenant.id)) !== null;
     const locations: PublicLocation[] = [];
-    for (const location of restaurant.locations) {
+    for (const location of tenant.locations) {
       const status = await this.status.statusOf(location);
-      locations.push(toPublicLocation(location, restaurant.currencyCode, status, card));
+      locations.push(toPublicLocation(location, tenant.currencyCode, status, card));
     }
     return {
-      id: restaurant.id,
-      slug: restaurant.slug,
-      nameEn: restaurant.nameEn,
-      nameAr: restaurant.nameAr,
-      currencyCode: restaurant.currencyCode,
-      defaultLocale: restaurant.defaultLocale,
-      timezone: restaurant.timezone,
+      id: tenant.id,
+      slug: tenant.slug,
+      nameEn: tenant.nameEn,
+      nameAr: tenant.nameAr,
+      currencyCode: tenant.currencyCode,
+      defaultLocale: tenant.defaultLocale,
+      timezone: tenant.timezone,
       locations,
     };
   }
@@ -54,12 +54,12 @@ export class StorefrontService {
   async location(locationId: string): Promise<PublicLocation> {
     const location = await this.prisma.location.findUnique({
       where: { id: locationId },
-      include: { restaurant: { select: { currencyCode: true } } },
+      include: { tenant: { select: { currencyCode: true } } },
     });
     if (!location?.isActive) throw new DomainError('LOCATION_NOT_FOUND', 'Location not found');
-    const card = (await this.payments.methodFor(this.prisma, location.restaurantId)) !== null;
+    const card = (await this.payments.methodFor(this.prisma, location.tenantId)) !== null;
     const status = await this.status.statusOf(location);
-    return toPublicLocation(location, location.restaurant.currencyCode, status, card);
+    return toPublicLocation(location, location.tenant.currencyCode, status, card);
   }
 
   /** The location's published menu (same shape and ETag as the staff endpoint). */

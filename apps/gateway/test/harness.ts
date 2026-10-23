@@ -206,7 +206,7 @@ export async function pair(hub: TestHub, cloud: FakeCloud): Promise<void> {
     cloudUrl: cloud.url,
     deviceId: 'device-id',
     credential: cloud.credential,
-    restaurantId: cloud.snapshot.restaurantId,
+    tenantId: cloud.snapshot.tenantId,
     locationId: cloud.snapshot.locationId,
     pairedAt: new Date().toISOString(),
   });

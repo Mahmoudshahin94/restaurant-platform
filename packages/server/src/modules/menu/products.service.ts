@@ -29,9 +29,9 @@ export class ProductsService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(restaurantId: string, query: ListQuery): Promise<Product[]> {
+  async list(tenantId: string, query: ListQuery): Promise<Product[]> {
     const where: Prisma.ProductWhereInput = {
-      restaurantId,
+      tenantId,
       ...(query.categoryId ? { categoryId: query.categoryId } : {}),
       ...(query.includeArchived ? {} : { archivedAt: null }),
       ...(query.search
@@ -52,26 +52,26 @@ export class ProductsService {
     return rows.map(toProductDto);
   }
 
-  async get(restaurantId: string, productId: string): Promise<Product> {
-    return toProductDto(await this.load(this.prisma, restaurantId, productId));
+  async get(tenantId: string, productId: string): Promise<Product> {
+    return toProductDto(await this.load(this.prisma, tenantId, productId));
   }
 
-  async create(restaurantId: string, input: CreateInput): Promise<Product> {
+  async create(tenantId: string, input: CreateInput): Promise<Product> {
     return this.prisma.$transaction(async (tx) => {
-      await assertCategory(tx, restaurantId, input.categoryId);
+      await assertCategory(tx, tenantId, input.categoryId);
       await assertModifierGroups(
         tx,
-        restaurantId,
+        tenantId,
         input.modifierGroups.map((l) => l.modifierGroupId),
       );
-      await assertKitchenStations(tx, restaurantId, input.stationIds);
-      await assertTaxes(tx, restaurantId, input.taxIds);
+      await assertKitchenStations(tx, tenantId, input.stationIds);
+      await assertTaxes(tx, tenantId, input.taxIds);
 
       const { variants, modifierGroups, stationIds, taxIds, ...fields } = input;
       const row = await tx.product.create({
         data: {
           ...fields,
-          restaurantId,
+          tenantId,
           variants: { create: variants.map(({ id: _ignored, ...v }) => v) },
           modifierGroups: { create: modifierGroups },
           stations: { create: stationIds.map((kitchenStationId) => ({ kitchenStationId })) },
@@ -92,22 +92,22 @@ export class ProductsService {
     });
   }
 
-  async update(restaurantId: string, productId: string, input: UpdateInput): Promise<Product> {
+  async update(tenantId: string, productId: string, input: UpdateInput): Promise<Product> {
     return this.prisma.$transaction(async (tx) => {
-      const current = await this.load(tx, restaurantId, productId);
+      const current = await this.load(tx, tenantId, productId);
       const { variants, modifierGroups, stationIds, taxIds, ...fields } = input;
       const priceChanges: Record<string, unknown>[] = [];
 
-      if (fields.categoryId) await assertCategory(tx, restaurantId, fields.categoryId);
+      if (fields.categoryId) await assertCategory(tx, tenantId, fields.categoryId);
       if (modifierGroups) {
         await assertModifierGroups(
           tx,
-          restaurantId,
+          tenantId,
           modifierGroups.map((l) => l.modifierGroupId),
         );
       }
-      if (stationIds) await assertKitchenStations(tx, restaurantId, stationIds);
-      if (taxIds) await assertTaxes(tx, restaurantId, taxIds);
+      if (stationIds) await assertKitchenStations(tx, tenantId, stationIds);
+      if (taxIds) await assertTaxes(tx, tenantId, taxIds);
 
       if (Object.keys(fields).length > 0) {
         await tx.product.update({ where: { id: productId }, data: fields });
@@ -181,13 +181,13 @@ export class ProductsService {
           tx,
         );
       }
-      return toProductDto(await this.load(tx, restaurantId, productId));
+      return toProductDto(await this.load(tx, tenantId, productId));
     });
   }
 
-  async setArchived(restaurantId: string, productId: string, archived: boolean): Promise<Product> {
+  async setArchived(tenantId: string, productId: string, archived: boolean): Promise<Product> {
     return this.prisma.$transaction(async (tx) => {
-      await this.load(tx, restaurantId, productId);
+      await this.load(tx, tenantId, productId);
       await tx.product.update({
         where: { id: productId },
         data: { archivedAt: archived ? new Date() : null },
@@ -200,17 +200,17 @@ export class ProductsService {
         },
         tx,
       );
-      return toProductDto(await this.load(tx, restaurantId, productId));
+      return toProductDto(await this.load(tx, tenantId, productId));
     });
   }
 
   private async load(
     tx: PrismaTx,
-    restaurantId: string,
+    tenantId: string,
     productId: string,
   ): Promise<ProductWithRelations> {
     const row = await tx.product.findFirst({
-      where: { id: productId, restaurantId },
+      where: { id: productId, tenantId },
       include: productInclude,
     });
     if (!row) throw new DomainError('PRODUCT_NOT_FOUND', 'Product not found', { productId });

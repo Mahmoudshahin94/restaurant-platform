@@ -1,0 +1,131 @@
+{
+  "$comment": "Development/demo data only: a coffee shop tenant (ADR 0017). Its owner account is created only when SEED_CAFE_OWNER_EMAIL/_PASSWORD are set.",
+  "tenant": {
+    "slug": "ramallah-roasters",
+    "nameEn": "Ramallah Roasters",
+    "nameAr": "محمصة رام الله",
+    "businessType": "COFFEE_SHOP",
+    "currencyCode": "ILS",
+    "defaultLocale": "ar",
+    "supportedLocales": ["ar", "en"],
+    "timezone": "Asia/Hebron"
+  },
+  "locations": [
+    {
+      "code": "RMH",
+      "nameEn": "Al-Tireh",
+      "nameAr": "الطيرة",
+      "timezone": "Asia/Hebron",
+      "taxInclusive": true,
+      "addressLine": "Al-Tireh Street, Ramallah",
+      "phone": null
+    }
+  ],
+  "roles": [
+    {
+      "name": "Owner",
+      "description": "Full access",
+      "isSystem": true,
+      "permissions": "*"
+    }
+  ],
+  "menu": {
+    "kitchenStations": [
+      {
+        "code": "BAR",
+        "nameEn": "Coffee bar",
+        "nameAr": "بار القهوة"
+      }
+    ],
+    "modifierGroups": [
+      {
+        "key": "milk",
+        "nameEn": "Milk",
+        "nameAr": "الحليب",
+        "minSelect": 0,
+        "maxSelect": 1,
+        "modifiers": [
+          {
+            "nameEn": "Oat milk",
+            "nameAr": "حليب الشوفان",
+            "priceDelta": 300
+          }
+        ]
+      }
+    ],
+    "categories": [
+      {
+        "nameEn": "Coffee",
+        "nameAr": "قهوة",
+        "products": [
+          {
+            "sku": "ESP",
+            "nameEn": "Espresso",
+            "nameAr": "إسبريسو",
+            "price": 900,
+            "stations": ["BAR"],
+            "groups": []
+          },
+          {
+            "sku": "LAT",
+            "nameEn": "Latte",
+            "nameAr": "لاتيه",
+            "price": 1400,
+            "stations": ["BAR"],
+            "groups": ["milk"],
+            "variants": [
+              {
+                "nameEn": "Small",
+                "nameAr": "صغير",
+                "price": 1400
+              },
+              {
+                "nameEn": "Large",
+                "nameAr": "كبير",
+                "price": 1700
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "taxes": [
+    {
+      "nameEn": "VAT",
+      "nameAr": "ضريبة القيمة المضافة",
+      "rateBps": 1600,
+      "isDefault": true
+    }
+  ],
+  "paymentMethods": [
+    {
+      "type": "CASH",
+      "nameEn": "Cash",
+      "nameAr": "نقدًا"
+    },
+    {
+      "type": "CARD",
+      "nameEn": "Card",
+      "nameAr": "بطاقة"
+    }
+  ],
+  "cashRegisters": {
+    "RMH": [
+      {
+        "nameEn": "Drawer 1",
+        "nameAr": "الدرج 1"
+      }
+    ]
+  },
+  "users": [
+    {
+      "envPrefix": "SEED_CAFE_OWNER",
+      "displayName": "Owner",
+      "preferredLocale": "ar",
+      "role": "Owner",
+      "location": null,
+      "optional": true
+    }
+  ]
+}

@@ -30,7 +30,7 @@ const query = new ZodValidationPipe(reportQuerySchema);
  * only the locations where they hold it (`locationIds` narrows that, 404 for others).
  */
 @RequirePermissions(['reports.view'], { scope: 'any-location' })
-@Controller('restaurants/:restaurantId/reports')
+@Controller('tenants/:tenantId/reports')
 export class ReportsController {
   constructor(
     private readonly context: ReportContextResolver,
@@ -40,7 +40,7 @@ export class ReportsController {
 
   @Get('daily-sales')
   async dailySales(
-    @Param('restaurantId', id) _rid: string,
+    @Param('tenantId', id) _rid: string,
     @CurrentPrincipal() principal: Principal,
     @Query(query) q: ReportQueryInput,
   ): Promise<DailySalesReport> {
@@ -49,7 +49,7 @@ export class ReportsController {
 
   @Get('channels')
   async channels(
-    @Param('restaurantId', id) _rid: string,
+    @Param('tenantId', id) _rid: string,
     @CurrentPrincipal() principal: Principal,
     @Query(query) q: ReportQueryInput,
   ): Promise<ChannelReport> {
@@ -58,7 +58,7 @@ export class ReportsController {
 
   @Get('payments')
   async payments(
-    @Param('restaurantId', id) _rid: string,
+    @Param('tenantId', id) _rid: string,
     @CurrentPrincipal() principal: Principal,
     @Query(query) q: ReportQueryInput,
   ): Promise<PaymentReport> {
@@ -67,7 +67,7 @@ export class ReportsController {
 
   @Get('products')
   async products(
-    @Param('restaurantId', id) _rid: string,
+    @Param('tenantId', id) _rid: string,
     @CurrentPrincipal() principal: Principal,
     @Query(query) q: ReportQueryInput,
   ): Promise<ProductReport> {
@@ -76,7 +76,7 @@ export class ReportsController {
 
   @Get('categories')
   async categories(
-    @Param('restaurantId', id) _rid: string,
+    @Param('tenantId', id) _rid: string,
     @CurrentPrincipal() principal: Principal,
     @Query(query) q: ReportQueryInput,
   ): Promise<CategoryReport> {
@@ -85,7 +85,7 @@ export class ReportsController {
 
   @Get('taxes')
   async taxes(
-    @Param('restaurantId', id) _rid: string,
+    @Param('tenantId', id) _rid: string,
     @CurrentPrincipal() principal: Principal,
     @Query(query) q: ReportQueryInput,
   ): Promise<TaxReport> {
@@ -94,7 +94,7 @@ export class ReportsController {
 
   @Get('discounts')
   async discounts(
-    @Param('restaurantId', id) _rid: string,
+    @Param('tenantId', id) _rid: string,
     @CurrentPrincipal() principal: Principal,
     @Query(query) q: ReportQueryInput,
   ): Promise<DiscountReport> {
@@ -103,7 +103,7 @@ export class ReportsController {
 
   @Get('shifts')
   async shifts(
-    @Param('restaurantId', id) _rid: string,
+    @Param('tenantId', id) _rid: string,
     @CurrentPrincipal() principal: Principal,
     @Query(query) q: ReportQueryInput,
   ): Promise<ShiftReport> {
@@ -112,7 +112,7 @@ export class ReportsController {
 
   @Get('prep-times')
   async prepTimes(
-    @Param('restaurantId', id) _rid: string,
+    @Param('tenantId', id) _rid: string,
     @CurrentPrincipal() principal: Principal,
     @Query(query) q: ReportQueryInput,
   ): Promise<PrepTimeReport> {

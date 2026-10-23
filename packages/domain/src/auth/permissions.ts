@@ -3,7 +3,7 @@ import { DomainError } from '../errors';
 
 /**
  * One role granted to a user. `locationId: null` means the role applies to every location of
- * the user's restaurant; otherwise it applies to that location only.
+ * the user's tenant; otherwise it applies to that location only.
  */
 export interface RoleAssignment {
   locationId: string | null;
@@ -12,9 +12,9 @@ export interface RoleAssignment {
 
 /**
  * Effective permissions in a scope. For a location-scoped action pass the location id:
- * restaurant-wide roles and roles for that location both count. For a restaurant-level action
- * pass `null`: only restaurant-wide roles count, so a branch manager cannot change
- * restaurant-wide settings.
+ * tenant-wide roles and roles for that location both count. For a tenant-level action
+ * pass `null`: only tenant-wide roles count, so a branch manager cannot change
+ * tenant-wide settings.
  */
 export function resolvePermissions(
   assignments: readonly RoleAssignment[],
@@ -45,7 +45,7 @@ export function canAccessLocation(
   return assignments.some((a) => a.locationId === null || a.locationId === locationId);
 }
 
-/** Locations a user may operate in; `'ALL'` when they hold a restaurant-wide role. */
+/** Locations a user may operate in; `'ALL'` when they hold a tenant-wide role. */
 export function accessibleLocations(assignments: readonly RoleAssignment[]): 'ALL' | string[] {
   if (assignments.some((a) => a.locationId === null)) return 'ALL';
   return [
@@ -67,7 +67,7 @@ export function assertPermissions(
 
 /**
  * Locations (of `allLocationIds`) where every `required` permission is granted: all of them for a
- * restaurant-wide grant, otherwise those of matching location roles. Used to filter lists that
+ * tenant-wide grant, otherwise those of matching location roles. Used to filter lists that
  * span locations (orders, payments, audit) to what the caller may see.
  */
 export function locationsWithPermissions(
@@ -82,8 +82,8 @@ export function locationsWithPermissions(
 
 /**
  * Nobody can hand out more than they hold (privilege escalation). Granting or revoking a role at
- * a scope (a location, or `null` for restaurant-wide) requires holding each of the role's
- * permissions at that scope; creating or editing a role requires holding them restaurant-wide.
+ * a scope (a location, or `null` for tenant-wide) requires holding each of the role's
+ * permissions at that scope; creating or editing a role requires holding them tenant-wide.
  */
 export function assertCanGrant(
   actor: readonly RoleAssignment[],

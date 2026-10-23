@@ -48,7 +48,7 @@ export function localWeekMinute(instant: Date, timeZone: string): { day: number;
 
 /**
  * Whether the location is open at an instant. No windows means no restriction (always open):
- * a restaurant that has not configured hours relies on its OPEN/PAUSED/CLOSED switch alone.
+ * a tenant that has not configured hours relies on its OPEN/PAUSED/CLOSED switch alone.
  */
 export function isWithinOpeningHours(
   windows: readonly OpeningWindow[],

@@ -19,7 +19,7 @@ async function signIn(page: Page, email = owner.email, password = owner.password
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
 }
 
-/** The owner's bearer token and the seeded restaurant and main location, through the API. */
+/** The owner's bearer token and the seeded tenant and main location, through the API. */
 async function ownerContext(request: APIRequestContext) {
   const login = await request.post(`${API}/auth/login`, {
     data: { ...owner, client: 'native' },
@@ -27,15 +27,15 @@ async function ownerContext(request: APIRequestContext) {
   expect(login.ok()).toBe(true);
   const { accessToken, user } = (await login.json()) as {
     accessToken: string;
-    user: { restaurantId: string };
+    user: { tenantId: string };
   };
   const headers = { authorization: `Bearer ${accessToken}` };
   const locations = (await (
-    await request.get(`${API}/restaurants/${user.restaurantId}/locations`, { headers })
+    await request.get(`${API}/tenants/${user.tenantId}/locations`, { headers })
   ).json()) as { id: string; code: string }[];
   const main = locations.find((l) => l.code === 'MAIN');
   if (!main) throw new Error('seeded MAIN location missing');
-  return { headers, restaurantId: user.restaurantId, locationId: main.id };
+  return { headers, tenantId: user.tenantId, locationId: main.id };
 }
 
 test.beforeEach(async ({ page }) => {
@@ -148,7 +148,7 @@ test('Arabic: branch settings, online ordering and payment setup in RTL', async 
     'aria-checked',
     'true',
   );
-  await expect(page.getByText('أوقفه المطعم مؤقتًا.')).toBeVisible();
+  await expect(page.getByText('أوقفته المنشأة مؤقتًا.')).toBeVisible();
 
   // Payment method and cash drawer.
   await page.getByRole('link', { name: 'طرق الدفع' }).click();
@@ -284,7 +284,7 @@ test('an administrator resolves a change the cloud refused from the hub', async 
     'CONFLICT',
   );
 
-  // The administrator compares both versions and applies the restaurant's, in Arabic.
+  // The administrator compares both versions and applies the hub's, in Arabic.
   await signIn(page);
   await page.getByRole('combobox', { name: 'Language' }).selectOption('ar');
   await page.getByRole('link', { name: 'المزامنة', exact: true }).click();

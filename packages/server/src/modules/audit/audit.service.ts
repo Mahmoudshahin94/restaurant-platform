@@ -17,14 +17,14 @@ export interface AuditEntry {
   /** Defaults come from the request context; override for events without one (e.g. login). */
   actorType?: ActorType;
   actorId?: string | null;
-  restaurantId?: string | null;
+  tenantId?: string | null;
   locationId?: string | null;
 }
 
 /**
  * Append-only audit trail. Pass the transaction client so the record commits with the change. On
  * the location hub each entry also goes to the sync outbox in the same transaction, so the cloud's
- * audit log receives what happened at the restaurant (ADR 0016).
+ * audit log receives what happened at the location (ADR 0016).
  */
 @Injectable()
 export class AuditService {
@@ -52,8 +52,7 @@ export class AuditService {
         metadata: redactForAudit(entry.metadata ?? {}) as Prisma.InputJsonValue,
         actorType: entry.actorType ?? (actorId ? 'USER' : 'SYSTEM'),
         actorId,
-        restaurantId:
-          entry.restaurantId !== undefined ? entry.restaurantId : (ctx?.restaurantId ?? null),
+        tenantId: entry.tenantId !== undefined ? entry.tenantId : (ctx?.tenantId ?? null),
         locationId: entry.locationId !== undefined ? entry.locationId : (ctx?.locationId ?? null),
         source: ctx?.source ?? 'SYSTEM',
         requestId: ctx?.requestId ?? null,

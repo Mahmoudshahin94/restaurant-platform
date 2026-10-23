@@ -1,0 +1,107 @@
+{
+  "$comment": "Development/demo data only: a clothing store tenant (ADR 0017). Its owner account is created only when SEED_STYLE_OWNER_EMAIL/_PASSWORD are set.",
+  "tenant": {
+    "slug": "nablus-style",
+    "nameEn": "Nablus Style",
+    "nameAr": "ستايل نابلس",
+    "businessType": "CLOTHING",
+    "currencyCode": "ILS",
+    "defaultLocale": "en",
+    "supportedLocales": ["en", "ar"],
+    "timezone": "Asia/Hebron"
+  },
+  "locations": [
+    {
+      "code": "NBS",
+      "nameEn": "Rafidia",
+      "nameAr": "رفيديا",
+      "timezone": "Asia/Hebron",
+      "taxInclusive": true,
+      "addressLine": "Rafidia Street, Nablus",
+      "phone": null
+    }
+  ],
+  "roles": [
+    {
+      "name": "Owner",
+      "description": "Full access",
+      "isSystem": true,
+      "permissions": "*"
+    }
+  ],
+  "menu": {
+    "kitchenStations": [],
+    "modifierGroups": [],
+    "categories": [
+      {
+        "nameEn": "T-shirts",
+        "nameAr": "قمصان",
+        "products": [
+          {
+            "sku": "TEE-BASIC",
+            "nameEn": "Basic T-shirt",
+            "nameAr": "قميص أساسي",
+            "price": 6000,
+            "stations": [],
+            "groups": [],
+            "variants": [
+              {
+                "nameEn": "Small",
+                "nameAr": "صغير",
+                "price": 6000
+              },
+              {
+                "nameEn": "Medium",
+                "nameAr": "وسط",
+                "price": 6000
+              },
+              {
+                "nameEn": "Large",
+                "nameAr": "كبير",
+                "price": 6500
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "taxes": [
+    {
+      "nameEn": "VAT",
+      "nameAr": "ضريبة القيمة المضافة",
+      "rateBps": 1600,
+      "isDefault": true
+    }
+  ],
+  "paymentMethods": [
+    {
+      "type": "CASH",
+      "nameEn": "Cash",
+      "nameAr": "نقدًا"
+    },
+    {
+      "type": "CARD",
+      "nameEn": "Card",
+      "nameAr": "بطاقة"
+    }
+  ],
+  "cashRegisters": {
+    "NBS": [
+      {
+        "nameEn": "Till 1",
+        "nameAr": "الصندوق 1"
+      }
+    ]
+  },
+  "users": [
+    {
+      "envPrefix": "SEED_STYLE_OWNER",
+      "displayName": "Owner",
+      "preferredLocale": "ar",
+      "role": "Owner",
+      "location": null,
+      "optional": true
+    }
+  ]
+}

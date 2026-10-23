@@ -1,7 +1,7 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { PrismaClient } from '@pos/database';
 import { newId } from '@pos/domain';
-import { OnlinePaymentsService, PrismaService } from '@pos/server';
+import { OnlinePaymentsService, PrismaService, TenantContext } from '@pos/server';
 import type { Order, Role, Shift } from '@pos/validation';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PASSWORD, bearer, createTenant, resetDatabase, startApp } from './helpers';
@@ -30,13 +30,13 @@ describe('audit coverage', () => {
     const tenant = await createTenant(prisma);
     const menu = await createMenuFixture(prisma, tenant);
     const cash = await prisma.paymentMethod.create({
-      data: { restaurantId: tenant.restaurantId, type: 'CASH', nameEn: 'Cash', nameAr: 'نقدًا' },
+      data: { tenantId: tenant.tenantId, type: 'CASH', nameEn: 'Cash', nameAr: 'نقدًا' },
     });
     const register = await prisma.cashRegister.create({
       data: { locationId: tenant.locationA, nameEn: 'Drawer', nameAr: 'درج' },
     });
     const loc = `/api/v1/locations/${tenant.locationA}`;
-    const base = `/api/v1/restaurants/${tenant.restaurantId}`;
+    const base = `/api/v1/tenants/${tenant.tenantId}`;
     // Login (and, at the end, logout).
     const login = await app.inject({
       method: 'POST',
@@ -111,7 +111,7 @@ describe('audit coverage', () => {
     // Payment correction: an online charge voided by the cloud.
     const online = await prisma.paymentMethod.create({
       data: {
-        restaurantId: tenant.restaurantId,
+        tenantId: tenant.tenantId,
         type: 'ONLINE',
         nameEn: 'Online',
         nameAr: 'إلكتروني',
@@ -120,7 +120,7 @@ describe('audit coverage', () => {
     await prisma.payment.create({
       data: {
         id: newId(),
-        restaurantId: tenant.restaurantId,
+        tenantId: tenant.tenantId,
         locationId: tenant.locationA,
         orderId: other.id,
         paymentMethodId: online.id,
@@ -135,7 +135,10 @@ describe('audit coverage', () => {
       },
     });
     const payments = app.get(OnlinePaymentsService);
-    await app.get(PrismaService).$transaction((tx) => payments.voidAll(tx, other.id, 'TOO_BUSY'));
+    // Outside a request, services work only for a tenant they are given (ADR 0017).
+    await TenantContext.runInTenant(tenant.tenantId, () =>
+      app.get(PrismaService).$transaction((tx) => payments.voidAll(tx, other.id, 'TOO_BUSY')),
+    );
 
     // Permission changes and configuration changes.
     const role = await call<Role>('POST', `${base}/roles`, {
@@ -160,7 +163,7 @@ describe('audit coverage', () => {
     });
 
     const entries = await prisma.auditLog.findMany({
-      where: { restaurantId: tenant.restaurantId },
+      where: { tenantId: tenant.tenantId },
     });
     const actions = new Set(entries.map((e) => e.action));
     for (const action of [
@@ -178,7 +181,7 @@ describe('audit coverage', () => {
       'role.permissions_changed',
       'user.roles_changed',
       'location.updated',
-      'restaurant.updated',
+      'tenant.updated',
       'online_ordering.updated',
       'payment_method.created',
     ]) {

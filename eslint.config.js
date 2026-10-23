@@ -58,6 +58,29 @@ export default tseslint.config(
     },
   },
   {
+    // Tenant isolation (ADR 0017): server code works inside one tenant. Cross-tenant work is
+    // limited to the reviewed files below.
+    files: ['apps/api/src/**/*.ts', 'apps/gateway/src/**/*.ts', 'packages/server/src/**/*.ts'],
+    plugins: { 'pos-local': posLocal },
+    rules: { 'pos-local/no-unscoped-prisma': 'error' },
+  },
+  {
+    files: [
+      // Finding an account by e-mail, a device by its credential.
+      'packages/server/src/modules/auth/auth.service.ts',
+      'apps/api/src/modules/devices/device.guard.ts',
+      // Start-up: new permissions reach every tenant's system roles.
+      'packages/server/src/modules/auth/permission-catalog.initializer.ts',
+      // The customer website: finding the tenant of a slug, location or tracked order.
+      'packages/server/src/modules/online-ordering/public-tenant.resolver.ts',
+      // The acceptance-timeout sweep finds due orders across tenants.
+      'packages/server/src/modules/online-ordering/web-orders.service.ts',
+      // The definition itself.
+      'packages/server/src/common/tenancy/**/*.ts',
+    ],
+    rules: { 'pos-local/no-unscoped-prisma': ['error', { allowed: true }] },
+  },
+  {
     files: ['apps/*/src/**/*.tsx', 'packages/ui/src/**/*.tsx'],
     languageOptions: { globals: { ...globals.browser } },
     plugins: { 'react-hooks': reactHooks, 'pos-local': posLocal },

@@ -34,7 +34,7 @@ import { ArchivedBadge } from '../../components/status-badge';
 import { useAdminErrorText } from '../../lib/admin-errors';
 import { api } from '../../lib/api';
 import { usePermissions } from '../../lib/permissions';
-import { keys, useAdminMutation, useRestaurantId } from '../../lib/queries';
+import { keys, useAdminMutation, useTenantId } from '../../lib/queries';
 
 const TYPES = ['CASH', 'CARD', 'ONLINE'] as const;
 const required = 'common:validation.required';
@@ -59,7 +59,7 @@ function MethodDialog({
   onClose: () => void;
 }) {
   const { t } = useTranslation(['admin', 'common']);
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const errorText = useAdminErrorText();
   const [formError, setFormError] = useState<string | null>(null);
   const form = useForm<FormInput, unknown, FormOutput>({
@@ -74,8 +74,8 @@ function MethodDialog({
   const save = useAdminMutation(
     ({ type, ...values }: FormOutput) =>
       method
-        ? api.admin.paymentMethods.update(rid, method.id, values)
-        : api.admin.paymentMethods.create(rid, { type, ...values }),
+        ? api.admin.paymentMethods.update(tid, method.id, values)
+        : api.admin.paymentMethods.create(tid, { type, ...values }),
     AFFECTS,
   );
   const onSubmit = form.handleSubmit(async (values) => {
@@ -135,22 +135,22 @@ function MethodDialog({
 export function PaymentMethodsPage() {
   const { t } = useTranslation(['admin', 'common', 'menu']);
   const locale = useCurrentLocale();
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const errorText = useAdminErrorText();
   const { can } = usePermissions();
   const canManage = can('settings.manage');
   const [editing, setEditing] = useState<PaymentMethodAdmin | 'new' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const query = useQuery({
-    queryKey: keys.paymentMethods(rid),
-    queryFn: () => api.admin.paymentMethods.list(rid),
+    queryKey: keys.paymentMethods(tid),
+    queryFn: () => api.admin.paymentMethods.list(tid),
   });
   const archive = useAdminMutation(
-    (id: string) => api.admin.paymentMethods.archive(rid, id),
+    (id: string) => api.admin.paymentMethods.archive(tid, id),
     AFFECTS,
   );
   const restore = useAdminMutation(
-    (id: string) => api.admin.paymentMethods.restore(rid, id),
+    (id: string) => api.admin.paymentMethods.restore(tid, id),
     AFFECTS,
   );
   const guarded = (fn: () => Promise<unknown>) => () =>

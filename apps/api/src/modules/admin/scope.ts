@@ -3,7 +3,7 @@ import type { Principal, PrismaService } from '@pos/server';
 import type { Permission } from '@pos/shared-types';
 
 /**
- * Locations of the caller's restaurant where they hold every `required` permission, for lists
+ * Locations of the caller's tenant where they hold every `required` permission, for lists
  * that span locations. With `only`, that one location (404 when it is not among them, so other
  * tenants' or unreachable locations are not disclosed).
  */
@@ -14,7 +14,7 @@ export async function permittedLocationIds(
   only?: string,
 ): Promise<string[]> {
   const all = await prisma.location.findMany({
-    where: { restaurantId: principal.restaurantId },
+    where: { tenantId: principal.tenantId },
     select: { id: true },
     orderBy: { createdAt: 'asc' },
   });
@@ -28,17 +28,14 @@ export async function permittedLocationIds(
   return [only];
 }
 
-/** Whether the caller holds `permission` restaurant-wide (not only at some locations). */
-export function holdsRestaurantWide(principal: Principal, permission: Permission): boolean {
+/** Whether the caller holds `permission` tenant-wide (not only at some locations). */
+export function holdsTenantWide(principal: Principal, permission: Permission): boolean {
   return resolvePermissions(principal.assignments, null).has(permission);
 }
 
-/** Requires at least one of the permissions restaurant-wide. */
-export function assertAnyRestaurantWide(
-  principal: Principal,
-  options: readonly Permission[],
-): void {
-  if (!options.some((p) => holdsRestaurantWide(principal, p))) {
+/** Requires at least one of the permissions tenant-wide. */
+export function assertAnyTenantWide(principal: Principal, options: readonly Permission[]): void {
+  if (!options.some((p) => holdsTenantWide(principal, p))) {
     throw new DomainError('INSUFFICIENT_PERMISSION', 'Missing required permissions', {
       missing: options,
     });

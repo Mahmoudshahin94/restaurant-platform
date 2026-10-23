@@ -8,7 +8,7 @@ mirrors the operational subset.
 
 | Area      | Entity                                                                                                                            | Status                             |
 | --------- | --------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| Tenancy   | Restaurant, Location                                                                                                              | ✅ 0001                            |
+| Tenancy   | Tenant, Location                                                                                                                  | ✅ 0001                            |
 | Identity  | User, Role, Permission, RolePermission, UserRole, RefreshToken, Employee                                                          | ✅ 0001                            |
 | Devices   | Device                                                                                                                            | ✅ 0001                            |
 | Audit     | AuditLog                                                                                                                          | ✅ 0001                            |
@@ -29,15 +29,15 @@ mirrors the operational subset.
 
 ```mermaid
 erDiagram
-  Restaurant ||--o{ Location : has
-  Restaurant ||--o{ User : employs
-  Restaurant ||--o{ Role : defines
-  Restaurant ||--o{ Employee : has
-  Restaurant ||--o{ Category : owns
-  Restaurant ||--o{ Product : owns
-  Restaurant ||--o{ ModifierGroup : owns
-  Restaurant ||--o{ KitchenStation : owns
-  Restaurant ||--o{ Tax : defines
+  Tenant ||--o{ Location : has
+  Tenant ||--o{ User : employs
+  Tenant ||--o{ Role : defines
+  Tenant ||--o{ Employee : has
+  Tenant ||--o{ Category : owns
+  Tenant ||--o{ Product : owns
+  Tenant ||--o{ ModifierGroup : owns
+  Tenant ||--o{ KitchenStation : owns
+  Tenant ||--o{ Tax : defines
 
   Role ||--o{ RolePermission : grants
   Permission ||--o{ RolePermission : "granted by"
@@ -89,18 +89,31 @@ erDiagram
 
 ## Entity notes
 
-**Restaurant**: tenant root. `currencyCode` is immutable after provisioning, because every stored
-amount is in its minor units. `timezone` is used for restaurant-level reports.
+**Tenant** ([ADR 0017](adr/0017-tenant-root-and-isolation.md)): the root business entity (a
+restaurant, café, supermarket, shop…); every business row belongs to exactly one tenant. `slug` is
+unique. `legalName` is optional. `businessType` is text validated against `BusinessType` in
+`@pos/shared-types` (`RESTAURANT`, `COFFEE_SHOP`, `SUPERMARKET`, `GROCERY`, `CLOTHING`, `RETAIL`,
+`OTHER`); it only picks default configuration. `status` (`ACTIVE`/`SUSPENDED`/`ARCHIVED`) belongs
+to the platform operator. `currencyCode` is immutable after provisioning, because every stored
+amount is in its minor units. `defaultLocale` is one of `supportedLocales` (JSON array).
+`timezone` is used for tenant-level reports. Tenants are created by `provisionTenant`
+(`@pos/database`), always with a system Owner role.
 
-**Location**: a branch. `code` is unique per restaurant and prefixes hub-generated order numbers.
-`taxInclusive` says whether menu prices include tax. `onlineOrderingState` is the restaurant's
+**Tenant isolation**: services use a Prisma client scoped to the tenant in scope
+(`TenantContext`). It adds the tenant to every filter on a model holding a `tenantId` (and on
+`Tenant` by `id`) and refuses writes for another tenant. Child rows without a `tenantId` are reached
+through their scoped parent. See ADR 0017.
+
+**Location**: a branch or store. `code` is unique per tenant and prefixes hub-generated order
+numbers.
+`taxInclusive` says whether menu prices include tax. `onlineOrderingState` is the location's
 online-ordering switch (`OPEN/PAUSED/CLOSED`; what customers see is derived, see Online ordering
 below), with `openingHours` (JSON weekly windows), `onlineAcceptMinutes`, `onlinePickupEnabled`,
 `onlineDeliveryEnabled` and `onlineDeliveryFee`.
 
 **User / Role / Permission / UserRole**: permission keys are defined in code
 (`@pos/shared-types` `PERMISSIONS`) and upserted into `permissions` at API start. Roles are
-per-restaurant. A `UserRole` with `locationId = null` applies to all locations. Effective
+per-tenant. A `UserRole` with `locationId = null` applies to all locations. Effective
 permissions are resolved by `resolvePermissions()` in `@pos/domain`. Uniqueness of (user, role,
 location) is enforced in the service layer, because Postgres treats NULL location ids as
 distinct.
@@ -134,7 +147,7 @@ insert. It records `actorType/actorId`, `source` (POS/KDS/WEBSITE/ADMIN/HUB/SYST
   names. `Modifier` has a `priceDelta` (minor units, may be 0) and `isDefault`.
 - `ProductModifierGroup`: attaches groups to products with a sort order and optional per-product
   min/max overrides.
-- `KitchenStation` (Kitchen, Grill, Fryer, Bar, Dessert, …) is defined **per restaurant**
+- `KitchenStation` (Kitchen, Grill, Fryer, Bar, Dessert, …) is defined **per tenant**
   with a unique `code`; each location's KDS screens subscribe to the stations they serve.
   `ProductStation` is many-to-many, and an order item is routed to every live station its
   product is assigned to.
@@ -169,7 +182,7 @@ historical orders.
 
 **Payments and cash** (Phase 3):
 
-- `PaymentMethod`: per restaurant, typed `CASH`, `CARD` or `ONLINE`, with localized names and a
+- `PaymentMethod`: per tenant, typed `CASH`, `CARD` or `ONLINE`, with localized names and a
   sort order.
 - `Payment`: append-only. The id is the client's UUID (idempotency key). A row is a `CHARGE` or a
   `REFUND` (`refundOfId` points at its charge) and snapshots the method's type and names. It

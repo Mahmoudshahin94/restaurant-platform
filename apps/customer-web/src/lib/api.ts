@@ -9,6 +9,6 @@ export const storefront = createStorefrontClient({
   validateResponses: import.meta.env.DEV,
 });
 
-/** Which restaurant this site sells for (one deployment per restaurant brand). */
-export const RESTAURANT_SLUG =
-  (import.meta.env.VITE_RESTAURANT_SLUG as string | undefined) ?? 'demo-kitchen';
+/** Which tenant this site sells for (one deployment per tenant brand). */
+export const TENANT_SLUG =
+  (import.meta.env.VITE_TENANT_SLUG as string | undefined) ?? 'demo-kitchen';

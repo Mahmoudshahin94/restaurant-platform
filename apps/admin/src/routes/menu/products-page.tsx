@@ -34,7 +34,7 @@ import {
   useKitchenStations,
   useModifierGroups,
   useProducts,
-  useRestaurantId,
+  useTenantId,
   useTaxes,
 } from '../../lib/queries';
 import { ProductDialog } from './product-dialog';
@@ -42,7 +42,7 @@ import { ProductDialog } from './product-dialog';
 export function ProductsPage() {
   const { t } = useTranslation(['menu', 'common']);
   const locale = useCurrentLocale();
-  const rid = useRestaurantId();
+  const tid = useTenantId();
   const { can } = usePermissions();
   const { currency, format } = useMoney();
   const [categoryId, setCategoryId] = useState('');
@@ -60,8 +60,8 @@ export function ProductsPage() {
     ...(deferredSearch ? { search: deferredSearch } : {}),
     ...(showArchived ? { includeArchived: 'true' as const } : {}),
   });
-  const archive = useCatalogMutation((id: string) => api.menu.products.archive(rid, id));
-  const restore = useCatalogMutation((id: string) => api.menu.products.restore(rid, id));
+  const archive = useCatalogMutation((id: string) => api.menu.products.archive(tid, id));
+  const restore = useCatalogMutation((id: string) => api.menu.products.restore(tid, id));
 
   const categoryName = useMemo(() => {
     const map = new Map(

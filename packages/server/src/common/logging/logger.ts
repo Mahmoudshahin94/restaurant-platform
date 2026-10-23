@@ -81,7 +81,7 @@ export class PinoNestLogger implements LoggerService {
             requestId: store.requestId,
             userId: store.userId,
             deviceId: store.deviceId,
-            restaurantId: store.restaurantId,
+            tenantId: store.tenantId,
             locationId: store.locationId,
             orderId: store.orderId,
           }
