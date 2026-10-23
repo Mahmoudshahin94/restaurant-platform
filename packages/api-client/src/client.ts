@@ -55,6 +55,10 @@ import {
   type LoginRequest,
   type UpdateLocationRequest,
   type UpdateTenantRequest,
+  type UpdateBrandingRequest,
+  tenantBrandingSchema,
+  tenantFileSchema,
+  resolvedBrandingSchema,
   authUserSchema,
   locationSchema,
   tenantSchema,
@@ -65,7 +69,7 @@ import {
   featureSettingSchema,
   tenantContextSchema,
 } from '@pos/validation';
-import type { Feature, OrderStatus } from '@pos/shared-types';
+import type { BrandSurface, Feature, OrderStatus, TenantFileKind } from '@pos/shared-types';
 import { z } from 'zod';
 import { adminApi } from './admin';
 import { HttpClient, type HttpClientOptions } from './http';
@@ -130,6 +134,15 @@ export function createApiClient(options: HttpClientOptions) {
       /** Answers only on a location hub (the cloud returns 404): pairing, cloud link, outbox. */
       status: () =>
         http.request('GET', `${API}/hub/status`, { schema: hubStatusSchema, noRetry: true }),
+      /** The paired tenant's branding for the sign-in screens (public, ADR 0019). */
+      branding: (surface: BrandSurface = 'login') =>
+        http.request('GET', `${API}/hub/branding`, {
+          query: { surface },
+          schema: resolvedBrandingSchema,
+          noRetry: true,
+        }),
+      /** The URL of a file of that branding (public: an <img> can show it directly). */
+      brandingFileUrl: (fileId: string) => `${http.baseUrl}${API}/hub/branding/files/${fileId}`,
       /** "Sync now": sends the outbox and checks the cloud for configuration changes. */
       sync: () =>
         http.request('POST', `${API}/hub/sync`, { schema: hubStatusSchema, noRetry: true }),
@@ -166,12 +179,44 @@ export function createApiClient(options: HttpClientOptions) {
           body,
           schema: tenantSchema,
         }),
-      /** Branding, currency, locales and the modules of a location (cloud and hub, ADR 0018). */
-      context: (tenantId: string, locationId?: string | null) =>
+      /**
+       * Currency, locales, the modules of a location (ADR 0018) and the branding of a surface
+       * (ADR 0019); cloud and hub.
+       */
+      context: (tenantId: string, locationId?: string | null, surface?: BrandSurface | null) =>
         http.request('GET', `${API}/tenants/${tenantId}/context`, {
-          query: { locationId: locationId ?? undefined },
+          query: { locationId: locationId ?? undefined, surface: surface ?? undefined },
           schema: tenantContextSchema,
         }),
+    },
+    branding: {
+      /** The Branding page (`settings.manage`). */
+      get: (tenantId: string) =>
+        http.request('GET', `${API}/tenants/${tenantId}/branding`, {
+          schema: tenantBrandingSchema,
+        }),
+      /** Replaces the tenant's branding (cloud only); unreadable colours: BRANDING_UNREADABLE. */
+      update: (tenantId: string, body: UpdateBrandingRequest) =>
+        http.request('PUT', `${API}/tenants/${tenantId}/branding`, {
+          body,
+          schema: tenantBrandingSchema,
+        }),
+    },
+    files: {
+      /** Uploads a logo or favicon: PNG, JPEG, WebP (or ICO for favicons), checked by the server. */
+      upload: (tenantId: string, kind: TenantFileKind, file: Blob) =>
+        http.request('POST', `${API}/tenants/${tenantId}/files`, {
+          query: { kind },
+          raw: { bytes: file, contentType: file.type },
+          schema: tenantFileSchema,
+        }),
+      list: (tenantId: string) =>
+        http.request('GET', `${API}/tenants/${tenantId}/files`, {
+          schema: z.array(tenantFileSchema),
+        }),
+      /** A file's bytes (any member of the tenant; cloud and hub). */
+      content: (tenantId: string, fileId: string) =>
+        http.blob(`${API}/tenants/${tenantId}/files/${fileId}/content`),
     },
     features: {
       /** The Modules page of the tenant, a location or a device (`settings.manage`). */

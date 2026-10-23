@@ -92,6 +92,28 @@ export default tseslint.config(
     rules: { 'pos-local/no-business-type-branching': 'off' },
   },
   {
+    // Branding (ADR 0019): colours come from the design tokens, so the theme and the tenant's
+    // branding reach every screen.
+    files: ['apps/*/src/**/*.{ts,tsx}', 'packages/*/src/**/*.{ts,tsx}'],
+    plugins: { 'pos-local': posLocal },
+    rules: { 'pos-local/no-raw-colors': 'error' },
+  },
+  {
+    files: [
+      // Token files: the colours themselves.
+      'packages/domain/src/branding/theme-tokens.ts',
+      // Receipts are printed: black on white paper, whatever the screen's theme.
+      'packages/receipts/src/**/*.ts',
+      'apps/pos/src/components/receipt-preview.tsx',
+      'apps/pos/src/lib/printing.ts',
+      // Tests state colours to check contrast and branding.
+      '**/*.test.{ts,tsx}',
+      '**/test/**/*.{ts,tsx}',
+      '**/e2e/**/*.ts',
+    ],
+    rules: { 'pos-local/no-raw-colors': 'off' },
+  },
+  {
     files: ['apps/*/src/**/*.tsx', 'packages/ui/src/**/*.tsx'],
     languageOptions: { globals: { ...globals.browser } },
     plugins: { 'react-hooks': reactHooks, 'pos-local': posLocal },

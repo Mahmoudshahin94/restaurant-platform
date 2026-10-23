@@ -35,6 +35,9 @@ export function createStorefrontClient(options: StorefrontClientOptions) {
       http.request('GET', `${API}/public/locations/${locationId}/menu`, {
         schema: publishedMenuSchema,
       }),
+    /** The URL of a logo or favicon of the tenant's branding (public files, ADR 0019). */
+    brandingFileUrl: (slug: string, fileId: string) =>
+      `${options.baseUrl}${API}/public/tenants/${encodeURIComponent(slug)}/files/${fileId}`,
     /** Idempotent by `order.id`: resending after a lost response returns the same order. */
     placeOrder: (order: CreateWebOrderRequest) =>
       http.request('POST', `${API}/orders`, { body: order, schema: webOrderCreatedSchema }),

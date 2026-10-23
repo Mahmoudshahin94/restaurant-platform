@@ -22,6 +22,8 @@ export type QueryValue = string | number | boolean | null | undefined;
 
 export interface RequestOptions<S extends z.ZodType | undefined> {
   body?: unknown;
+  /** Raw bytes sent as they are (file uploads), with this content type, instead of JSON. */
+  raw?: { bytes: Blob; contentType: string };
   query?: Record<string, QueryValue>;
   schema?: S;
   headers?: Record<string, string>;
@@ -35,6 +37,11 @@ export class HttpClient {
   private refreshing: Promise<boolean> | null = null;
 
   constructor(private readonly options: HttpClientOptions) {}
+
+  /** The origin requests go to (`''` for same-origin). */
+  get baseUrl(): string {
+    return this.options.baseUrl;
+  }
 
   async request<S extends z.ZodType | undefined = undefined>(
     method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
@@ -50,6 +57,22 @@ export class HttpClient {
       }
     }
     return this.parse(response, opts.schema);
+  }
+
+  /** A binary response (a tenant file), with the same session refresh as `request`. */
+  async blob(path: string): Promise<Blob> {
+    let response = await this.send('GET', path, {});
+    if (response.status === 401 && this.options.refreshSession) {
+      const body = await safeJson(response.clone());
+      if (
+        (body as { code?: string } | undefined)?.code === 'TOKEN_EXPIRED' &&
+        (await this.refreshOnce())
+      ) {
+        response = await this.send('GET', path, {});
+      }
+    }
+    if (!response.ok) throw toApiError(response.status, await safeJson(response));
+    return response.blob();
   }
 
   /** Concurrent requests that all hit an expired token share one refresh call. */
@@ -80,7 +103,8 @@ export class HttpClient {
     };
     const token = this.options.getAccessToken();
     if (token) headers.authorization = `Bearer ${token}`;
-    if (opts.body !== undefined) headers['content-type'] = 'application/json';
+    if (opts.raw) headers['content-type'] = opts.raw.contentType;
+    else if (opts.body !== undefined) headers['content-type'] = 'application/json';
 
     const fetchImpl = this.options.fetchImpl ?? globalThis.fetch.bind(globalThis);
     try {
@@ -88,7 +112,11 @@ export class HttpClient {
         method,
         headers,
         credentials: 'include',
-        ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
+        ...(opts.raw
+          ? { body: opts.raw.bytes }
+          : opts.body !== undefined
+            ? { body: JSON.stringify(opts.body) }
+            : {}),
       });
     } catch (cause) {
       throw new ApiError(

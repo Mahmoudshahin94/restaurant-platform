@@ -15,7 +15,7 @@ export interface DialogContentProps extends ComponentProps<typeof DialogPrimitiv
 export function DialogContent({ className, children, closeLabel, ...props }: DialogContentProps) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50" />
+      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-overlay" />
       <DialogPrimitive.Content
         className={cn(
           'fixed start-1/2 top-1/2 z-50 grid max-h-[90vh] w-full max-w-lg -translate-y-1/2 gap-4 overflow-y-auto rounded-lg border bg-card p-6 shadow-lg ltr:-translate-x-1/2 rtl:translate-x-1/2',

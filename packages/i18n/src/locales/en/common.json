@@ -31,6 +31,13 @@
     "optional": "Optional",
     "required": "Required"
   },
+  "theme": {
+    "label": "Appearance",
+    "inherit": "Business default",
+    "LIGHT": "Light",
+    "DARK": "Dark",
+    "SYSTEM": "System"
+  },
   "language": {
     "label": "Language",
     "en": "English",
