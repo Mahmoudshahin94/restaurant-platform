@@ -238,7 +238,20 @@
     "slug": "اسم عنوان الموقع",
     "defaultLocale": "اللغة الافتراضية",
     "timezone": "المنطقة الزمنية",
-    "timezoneHint": "اسم IANA، مثل Asia/Riyadh."
+    "timezoneHint": "اسم IANA، مثل Asia/Riyadh.",
+    "legalName": "الاسم القانوني",
+    "legalNameHint": "اسم الشركة المسجل للفواتير، إن كان مختلفًا.",
+    "businessType": "نوع النشاط",
+    "businessTypeHint": "حُدّد عند إعداد المنشأة؛ ويحدد الوحدات المفعّلة في البداية.",
+    "businessTypes": {
+      "RESTAURANT": "مطعم",
+      "COFFEE_SHOP": "مقهى",
+      "SUPERMARKET": "سوبرماركت",
+      "GROCERY": "بقالة",
+      "CLOTHING": "متجر ملابس",
+      "RETAIL": "متجر تجزئة",
+      "OTHER": "أخرى"
+    }
   },
   "locations": {
     "title": "الفروع",

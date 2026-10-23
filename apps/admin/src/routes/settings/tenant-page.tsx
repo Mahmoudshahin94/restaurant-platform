@@ -16,6 +16,7 @@ const required = 'common:validation.required';
 const tenantForm = z.object({
   nameEn: z.string().trim().min(1, required).max(120, 'common:validation.tooLong'),
   nameAr: z.string().trim().min(1, required).max(120, 'common:validation.tooLong'),
+  legalName: z.string().trim().max(200, 'common:validation.tooLong'),
   defaultLocale: z.enum(['en', 'ar']),
   timezone: z.string().trim().min(1, required),
 });
@@ -32,12 +33,14 @@ function TenantForm({ tenant }: { tenant: Tenant }) {
     defaultValues: {
       nameEn: tenant.nameEn,
       nameAr: tenant.nameAr,
+      legalName: tenant.legalName ?? '',
       defaultLocale: tenant.defaultLocale,
       timezone: tenant.timezone,
     },
   });
   const save = useAdminMutation(
-    (values: FormValues) => api.tenants.update(tenant.id, values),
+    ({ legalName, ...values }: FormValues) =>
+      api.tenants.update(tenant.id, { ...values, legalName: legalName === '' ? null : legalName }),
     ['tenant'],
   );
   const onSubmit = form.handleSubmit(async (values) => {
@@ -46,12 +49,15 @@ function TenantForm({ tenant }: { tenant: Tenant }) {
       await save.mutateAsync(values);
       setMessage({ ok: true, text: t('admin:shared.saved') });
     } catch (error) {
-      if (!applyServerValidation(error, form.setError, ['timezone', 'nameEn', 'nameAr'])) {
+      if (
+        !applyServerValidation(error, form.setError, ['timezone', 'nameEn', 'nameAr', 'legalName'])
+      ) {
         setMessage({ ok: false, text: errorText(error) });
       }
     }
   });
   const tzError = form.formState.errors.timezone?.message;
+  const legalNameError = form.formState.errors.legalName?.message;
   return (
     <Card>
       <CardContent className="pt-6">
@@ -61,6 +67,13 @@ function TenantForm({ tenant }: { tenant: Tenant }) {
           ) : null}
           <fieldset disabled={!canManage} className="grid gap-4">
             <LocalizedFields register={form.register} errors={form.formState.errors} />
+            <Field
+              label={t('admin:tenant.legalName')}
+              hint={t('admin:tenant.legalNameHint')}
+              error={legalNameError ? tKey(t, legalNameError) : undefined}
+            >
+              <Input autoComplete="organization" {...form.register('legalName')} />
+            </Field>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label={t('admin:tenant.defaultLocale')}>
                 <NativeSelect {...form.register('defaultLocale')}>
@@ -80,6 +93,12 @@ function TenantForm({ tenant }: { tenant: Tenant }) {
               </Field>
               <Field label={t('admin:tenant.slug')}>
                 <Input dir="ltr" value={tenant.slug} readOnly />
+              </Field>
+              <Field
+                label={t('admin:tenant.businessType')}
+                hint={t('admin:tenant.businessTypeHint')}
+              >
+                <Input value={t(`admin:tenant.businessTypes.${tenant.businessType}`)} readOnly />
               </Field>
             </div>
           </fieldset>

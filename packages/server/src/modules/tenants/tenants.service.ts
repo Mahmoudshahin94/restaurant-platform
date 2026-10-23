@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import type { Tenant as TenantRow } from '@pos/database';
 import { DomainError } from '@pos/domain';
-import type { Tenant, UpdateTenantRequest } from '@pos/validation';
+import type { BusinessType, Locale } from '@pos/shared-types';
+import { type Tenant, type UpdateTenantRequest, supportedLocalesSchema } from '@pos/validation';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 
@@ -11,8 +12,12 @@ export function toTenantDto(row: TenantRow): Tenant {
     slug: row.slug,
     nameEn: row.nameEn,
     nameAr: row.nameAr,
+    legalName: row.legalName,
+    businessType: row.businessType as BusinessType,
+    status: row.status,
     currencyCode: row.currencyCode,
     defaultLocale: row.defaultLocale,
+    supportedLocales: supportedLocalesOf(row),
     timezone: row.timezone,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -36,6 +41,12 @@ export class TenantsService {
     return this.prisma.$transaction(async (tx) => {
       const before = await tx.tenant.findUnique({ where: { id: tenantId } });
       if (!before) throw new DomainError('TENANT_NOT_FOUND', 'Tenant not found');
+      const defaultLocale = changes.defaultLocale ?? before.defaultLocale;
+      if (!(changes.supportedLocales ?? supportedLocalesOf(before)).includes(defaultLocale)) {
+        throw new DomainError('VALIDATION_FAILED', 'The default locale must be supported', {
+          issues: [{ path: ['supportedLocales'], message: 'The default locale must be supported' }],
+        });
+      }
       const after = await tx.tenant.update({ where: { id: tenantId }, data: changes });
       await this.audit.record(
         {
@@ -50,6 +61,14 @@ export class TenantsService {
       return toTenantDto(after);
     });
   }
+}
+
+/** The stored JSON, falling back to the default locale alone if it was ever written badly. */
+export function supportedLocalesOf(
+  row: Pick<TenantRow, 'supportedLocales' | 'defaultLocale'>,
+): Locale[] {
+  const parsed = supportedLocalesSchema.safeParse(row.supportedLocales);
+  return parsed.success ? parsed.data : [row.defaultLocale];
 }
 
 function pick(row: object, keys: string[]): Record<string, unknown> {

@@ -9,6 +9,30 @@
 type ValueOf<T> = T[keyof T];
 
 /**
+ * What kind of business a tenant is (ADR 0017). It only chooses default configuration (which
+ * modules start enabled); behaviour is decided by capabilities, never by comparing the type.
+ * Stored as text, so a new type is a code change here, not a database migration.
+ */
+export const BusinessType = {
+  RESTAURANT: 'RESTAURANT',
+  COFFEE_SHOP: 'COFFEE_SHOP',
+  SUPERMARKET: 'SUPERMARKET',
+  GROCERY: 'GROCERY',
+  CLOTHING: 'CLOTHING',
+  RETAIL: 'RETAIL',
+  OTHER: 'OTHER',
+} as const;
+export type BusinessType = ValueOf<typeof BusinessType>;
+
+/** Lifecycle of a tenant, set by the platform operator (Phase 9 enforces SUSPENDED). */
+export const TenantStatus = {
+  ACTIVE: 'ACTIVE',
+  SUSPENDED: 'SUSPENDED',
+  ARCHIVED: 'ARCHIVED',
+} as const;
+export type TenantStatus = ValueOf<typeof TenantStatus>;
+
+/**
  * How the customer ordered. Third-party marketplaces (UBER_EATS, DOORDASH, TALABAT, CAREEM, ...)
  * are added here as new values plus a Postgres enum migration; there is never a separate order
  * table per channel.

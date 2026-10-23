@@ -1,4 +1,4 @@
-import { OnlineOrderingState, enumValues } from '@pos/shared-types';
+import { BusinessType, OnlineOrderingState, TenantStatus, enumValues } from '@pos/shared-types';
 import { z } from 'zod';
 import {
   currencyCodeSchema,
@@ -11,14 +11,28 @@ import {
 } from './common';
 
 export const onlineOrderingStateSchema = z.enum(enumValues(OnlineOrderingState));
+export const businessTypeSchema = z.enum(enumValues(BusinessType));
+export const tenantStatusSchema = z.enum(enumValues(TenantStatus));
+
+/** The locales a tenant offers: at least one, each at most once (ADR 0017). */
+export const supportedLocalesSchema = z
+  .array(localeSchema)
+  .min(1)
+  .refine((v) => new Set(v).size === v.length, { message: 'Duplicate locale' });
+
+const legalNameSchema = z.string().trim().min(1).max(200).nullable();
 
 export const tenantSchema = z.object({
   id: idSchema,
   slug: z.string(),
   nameEn: z.string(),
   nameAr: z.string(),
+  legalName: z.string().nullable(),
+  businessType: businessTypeSchema,
+  status: tenantStatusSchema,
   currencyCode: z.string(),
   defaultLocale: localeSchema,
+  supportedLocales: z.array(localeSchema),
   timezone: z.string(),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
@@ -27,33 +41,45 @@ export type Tenant = z.infer<typeof tenantSchema>;
 
 /**
  * Currency is not updatable: every stored amount is in that currency's minor units, so a change
- * would silently rescale history. It is set when the tenant is provisioned.
+ * would silently rescale history. It is set when the tenant is provisioned. The business type and
+ * status belong to the platform operator. The default locale must stay among the supported ones
+ * (checked against the stored values, since either may be sent alone).
  */
 export const updateTenantSchema = z
   .object({
     nameEn: nameEnSchema,
     nameAr: nameArSchema,
+    legalName: legalNameSchema,
     defaultLocale: localeSchema,
+    supportedLocales: supportedLocalesSchema,
     timezone: timezoneSchema,
   })
   .partial()
   .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' });
 export type UpdateTenantRequest = z.infer<typeof updateTenantSchema>;
 
-export const createTenantSchema = z.object({
-  slug: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
-    .max(60),
-  nameEn: nameEnSchema,
-  nameAr: nameArSchema,
-  currencyCode: currencyCodeSchema,
-  defaultLocale: localeSchema,
-  timezone: timezoneSchema,
-});
-export type CreateTenantRequest = z.infer<typeof createTenantSchema>;
+export const createTenantSchema = z
+  .object({
+    slug: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+      .max(60),
+    nameEn: nameEnSchema,
+    nameAr: nameArSchema,
+    legalName: legalNameSchema.default(null),
+    businessType: businessTypeSchema.default(BusinessType.RESTAURANT),
+    currencyCode: currencyCodeSchema,
+    defaultLocale: localeSchema,
+    supportedLocales: supportedLocalesSchema.optional(),
+    timezone: timezoneSchema,
+  })
+  .refine((v) => !v.supportedLocales || v.supportedLocales.includes(v.defaultLocale), {
+    message: 'The default locale must be supported',
+    path: ['supportedLocales'],
+  });
+export type CreateTenantRequest = z.input<typeof createTenantSchema>;
 
 export const locationSchema = z.object({
   id: idSchema,

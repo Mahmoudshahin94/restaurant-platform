@@ -25,6 +25,14 @@ enum Locale {
   @@map("locale")
 }
 
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+
+  @@map("tenant_status")
+}
+
 enum OnlineOrderingState {
   OPEN
   PAUSED
@@ -184,18 +192,28 @@ enum ActionSource {
 // Tenancy
 // ---------------------------------------------------------------------------
 
+/// The root business entity (ADR 0017): a restaurant, café, supermarket, shop... Every business
+/// row belongs to exactly one tenant.
 model Tenant {
-  id            String   @id @default(uuid(7)) @db.Uuid
-  slug          String   @unique
-  nameEn        String   @map("name_en")
-  nameAr        String   @map("name_ar")
+  id               String       @id @default(uuid(7)) @db.Uuid
+  slug             String       @unique
+  nameEn           String       @map("name_en")
+  nameAr           String       @map("name_ar")
+  /// Registered company name for invoices and contracts, when it differs from the display name.
+  legalName        String?      @map("legal_name")
+  /// @pos/shared-types BusinessType, stored as text so new types need no migration. It only picks
+  /// default configuration; code asks for capabilities, never for the type.
+  businessType     String       @default("RESTAURANT") @map("business_type")
+  status           TenantStatus @default(ACTIVE)
   /// ISO 4217. Immutable after provisioning: all amounts are stored in its minor units.
-  currencyCode  String   @map("currency_code") @db.Char(3)
-  defaultLocale Locale   @default(en) @map("default_locale")
+  currencyCode     String       @map("currency_code") @db.Char(3)
+  defaultLocale    Locale       @default(en) @map("default_locale")
+  /// Locales the tenant offers (JSON array of Locale, includes `defaultLocale`).
+  supportedLocales Json         @default("[\"en\",\"ar\"]") @map("supported_locales")
   /// IANA timezone used for tenant-level reporting.
-  timezone      String
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  timezone         String
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   locations       Location[]
   users           User[]

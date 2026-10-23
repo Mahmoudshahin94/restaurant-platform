@@ -238,7 +238,20 @@
     "slug": "Web address name",
     "defaultLocale": "Default language",
     "timezone": "Time zone",
-    "timezoneHint": "IANA name, e.g. Asia/Riyadh."
+    "timezoneHint": "IANA name, e.g. Asia/Riyadh.",
+    "legalName": "Legal name",
+    "legalNameHint": "Registered company name for invoices, if different.",
+    "businessType": "Business type",
+    "businessTypeHint": "Chosen when the business was set up; it decides which modules start enabled.",
+    "businessTypes": {
+      "RESTAURANT": "Restaurant",
+      "COFFEE_SHOP": "Coffee shop",
+      "SUPERMARKET": "Supermarket",
+      "GROCERY": "Grocery",
+      "CLOTHING": "Clothing store",
+      "RETAIL": "Retail store",
+      "OTHER": "Other"
+    }
   },
   "locations": {
     "title": "Locations",

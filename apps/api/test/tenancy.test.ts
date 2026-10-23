@@ -73,6 +73,45 @@ describe('tenants', () => {
     expect(res.json<Tenant>().currencyCode).toBe('SAR');
   });
 
+  it('describes the tenant’s profile: legal name, business type, status and locales', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/tenants/${tenant.tenantId}`,
+      headers: bearer(cashierToken),
+    });
+    expect(res.json<Tenant>()).toMatchObject({
+      legalName: null,
+      businessType: 'RESTAURANT',
+      status: 'ACTIVE',
+      supportedLocales: ['en', 'ar'],
+    });
+  });
+
+  it('keeps the default locale among the supported ones, and the business type to the platform', async () => {
+    const patch = (payload: object) =>
+      app.inject({
+        method: 'PATCH',
+        url: `/api/v1/tenants/${tenant.tenantId}`,
+        headers: bearer(ownerToken),
+        payload,
+      });
+    const narrowed = await patch({ supportedLocales: ['en'], legalName: 'Demo Kitchen LLC' });
+    expect(narrowed.statusCode).toBe(200);
+    expect(narrowed.json<Tenant>()).toMatchObject({
+      supportedLocales: ['en'],
+      legalName: 'Demo Kitchen LLC',
+    });
+    const refused = await patch({ defaultLocale: 'ar' });
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json<ApiErrorBody>().code).toBe('VALIDATION_FAILED');
+    expect((await patch({ defaultLocale: 'ar', supportedLocales: ['ar'] })).statusCode).toBe(200);
+    const typed = await patch({ nameEn: 'Still a kitchen', businessType: 'SUPERMARKET' });
+    expect(typed.json<Tenant>()).toMatchObject({
+      nameEn: 'Still a kitchen',
+      businessType: 'RESTAURANT',
+    });
+  });
+
   it('hides other tenants', async () => {
     const other = await createTenant(prisma);
     const res = await app.inject({
