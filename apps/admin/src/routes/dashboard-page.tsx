@@ -1,4 +1,10 @@
-import { FeatureGate, QueryState, useCurrentLocale, useMoneyFormat } from '@pos/app-kit';
+import {
+  FeatureGate,
+  QueryState,
+  useCurrentLocale,
+  useFormatOptions,
+  useMoneyFormat,
+} from '@pos/app-kit';
 import { formatDateTime, pickLocalized } from '@pos/i18n';
 import { Feature } from '@pos/shared-types';
 import type { DashboardLocation } from '@pos/validation';
@@ -48,6 +54,7 @@ function Figure({ label, value }: { label: string; value: string }) {
 function LocationCard({ row, currency }: { row: DashboardLocation; currency: string }) {
   const { t } = useTranslation(['admin', 'common']);
   const locale = useCurrentLocale();
+  const formatOptions = useFormatOptions();
   const { format } = useMoneyFormat(currency);
   const { canAt } = usePermissions();
   const setLocationId = usePreferences((s) => s.setLocationId);
@@ -95,7 +102,7 @@ function LocationCard({ row, currency }: { row: DashboardLocation; currency: str
             {sync.lastSeenAt ? (
               <span className="text-xs text-muted-foreground">
                 {t('admin:dashboard.lastSeen', {
-                  time: formatDateTime(sync.lastSeenAt, row.timezone, locale),
+                  time: formatDateTime(sync.lastSeenAt, row.timezone, locale, formatOptions),
                 })}
               </span>
             ) : null}

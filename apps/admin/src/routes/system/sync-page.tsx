@@ -29,7 +29,7 @@ import { useAdminErrorText } from '../../lib/admin-errors';
 import { api } from '../../lib/api';
 import { useDateTime } from '../../lib/format';
 import { usePermissions } from '../../lib/permissions';
-import { keys, useAdminMutation, useTenant } from '../../lib/queries';
+import { keys, useAdminMutation } from '../../lib/queries';
 
 type State = 'open' | 'resolved' | 'all';
 const STATES: State[] = ['open', 'resolved', 'all'];
@@ -225,8 +225,7 @@ type Action = (typeof ACTIONS)[number];
 
 function Comparison({ detail, locationId }: { detail: SyncIssueDetail; locationId: string }) {
   const { t } = useTranslation(['admin', 'orders']);
-  const tenant = useTenant();
-  const { format } = useMoneyFormat(tenant.data?.currencyCode ?? null);
+  const { format } = useMoneyFormat();
   const formatDate = useDateTime();
   const show = (version: SyncEntityVersion | null, field: FieldKey): string => {
     const value = version?.[field];

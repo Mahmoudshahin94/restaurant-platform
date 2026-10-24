@@ -1,25 +1,53 @@
-import { DomainError, formatMinorAsDecimal, parseDecimalToMinor } from '@pos/domain';
+import {
+  DomainError,
+  formatMinorAsDecimal,
+  parseDecimalToMinor,
+  resolveCurrency,
+} from '@pos/domain';
 import { formatMoney } from '@pos/i18n';
-import { useCallback } from 'react';
+import type { CurrencyConfiguration } from '@pos/shared-types';
+import { useCallback, useMemo } from 'react';
 import { z } from 'zod';
 import { useCurrentLocale } from './locale';
+import { useFormatOptions, useLocalization } from './localization';
 
 export type SignDisplay = 'auto' | 'exceptZero';
 
-/** Money formatting bound to a currency and the active locale. */
-export function useMoneyFormat(currency: string | null) {
+/**
+ * The configuration to show amounts of `code` with: the tenant's (ADR 0020) when it is the
+ * tenant's currency, else MADAR's display of that currency. Without a code, the tenant's.
+ */
+export function moneyConfiguration(
+  code: string | null | undefined,
+  tenant: CurrencyConfiguration | null,
+): CurrencyConfiguration | null {
+  const wanted = code ?? tenant?.code ?? null;
+  if (!wanted) return null;
+  return tenant?.code === wanted ? tenant : resolveCurrency(wanted);
+}
+
+/**
+ * Money formatting in the active language with the tenant's currency configuration (symbol,
+ * display, format locale) and digit style. `currency` is the amount's own currency (an order's,
+ * a menu's), which is the tenant's; leave it out to use the tenant's directly. Formats exact
+ * decimal strings: never a float.
+ */
+export function useMoneyFormat(currency?: string | null) {
   const locale = useCurrentLocale();
+  const options = useFormatOptions();
+  const tenant = useLocalization().currency;
+  const config = useMemo(() => moneyConfiguration(currency, tenant), [currency, tenant]);
   const format = useCallback(
-    (minor: number, options?: { sign?: SignDisplay }) =>
-      currency ? formatMoney(minor, currency, locale, options) : String(minor),
-    [currency, locale],
+    (minor: number, signOptions?: { sign?: SignDisplay }) =>
+      config ? formatMoney(minor, config, locale, { ...options, ...signOptions }) : String(minor),
+    [config, locale, options],
   );
   const toInput = useCallback(
     (minor: number | null) =>
-      minor === null || !currency ? '' : formatMinorAsDecimal(minor, currency),
-    [currency],
+      minor === null || !config ? '' : formatMinorAsDecimal(minor, config.code),
+    [config],
   );
-  return { currency, format, toInput };
+  return { currency: config?.code ?? null, config, format, toInput };
 }
 
 function parseMoney(value: string, currency: string, ctx: z.RefinementCtx): number {

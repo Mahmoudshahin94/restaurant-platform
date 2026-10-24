@@ -1,4 +1,4 @@
-import { useCurrentLocale, useErrorText } from '@pos/app-kit';
+import { useCurrentLocale, useErrorText, useFormatOptions } from '@pos/app-kit';
 import { isApiError } from '@pos/api-client';
 import { formatTime } from '@pos/i18n';
 import { Alert, Button, EmptyState, Spinner } from '@pos/ui';
@@ -11,6 +11,7 @@ import { useTrackedOrder } from '../lib/queries';
 export function TrackPage() {
   const { t } = useTranslation(['customer', 'common']);
   const locale = useCurrentLocale();
+  const formatOptions = useFormatOptions();
   const errorText = useErrorText();
   const { token = '' } = useParams();
   const order = useTrackedOrder(token);
@@ -52,6 +53,7 @@ export function TrackPage() {
             new Date(order.dataUpdatedAt).toISOString(),
             order.data.location.timezone,
             locale,
+            formatOptions,
           ),
         })}
       </p>

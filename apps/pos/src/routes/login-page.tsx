@@ -7,6 +7,8 @@ import {
   tKey,
   useErrorText,
   useHubSignInBranding,
+  useHubSignInLocales,
+  useLocaleSelection,
 } from '@pos/app-kit';
 import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Field, Input, cn } from '@pos/ui';
 import { useState } from 'react';
@@ -35,6 +37,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const status = useSession((s) => s.status);
   const setLocale = usePreferences((s) => s.setLocale);
+  const storedLocale = usePreferences((s) => s.locale);
   const [error, setError] = useState<string | null>(null);
   // Behind a location hub staff sign in with a PIN; email stays available for managers.
   const hub = useHubStatus();
@@ -42,6 +45,9 @@ export function LoginPage() {
   const method = mode ?? (hub.data ? 'pin' : 'email');
   // The location's business, from its hub (ADR 0019); MADAR's look without one.
   useHubSignInBranding(api, Boolean(hub.data));
+  // …and its languages (ADR 0020): only those are offered; without a choice, its default.
+  const locales = useHubSignInLocales(api, Boolean(hub.data));
+  useLocaleSelection(locales, { stored: storedLocale });
   const form = useForm<LoginForm>({
     resolver: zodResolver(loginForm),
     defaultValues: { email: '', password: '' },
@@ -134,7 +140,11 @@ export function LoginPage() {
         </CardContent>
       </Card>
       <div className="flex flex-wrap items-center justify-center gap-3">
-        <LanguageSwitcher className="h-12 w-auto" onLocaleChange={setLocale} />
+        <LanguageSwitcher
+          className="h-12 w-auto"
+          locales={locales?.supported}
+          onLocaleChange={setLocale}
+        />
         <ThemeSwitcher className="h-12 w-auto" />
       </div>
       <PlatformFooter app="pos" />

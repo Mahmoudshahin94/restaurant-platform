@@ -3,8 +3,10 @@ import {
   QueryState,
   useCurrentLocale,
   useErrorText,
+  useFormatOptions,
   useMoneyFormat,
   usePermissionChecks,
+  useTenantContext,
 } from '@pos/app-kit';
 import { newId, parseDecimalToMinor } from '@pos/domain';
 import { formatDateTime, pickLocalized } from '@pos/i18n';
@@ -366,9 +368,10 @@ function DailySummaryCard({ locationId }: { locationId: string }) {
 export function ShiftPage() {
   const { t } = useTranslation(['payments', 'common']);
   const locale = useCurrentLocale();
+  const formatOptions = useFormatOptions();
   const locationId = useLocationId();
   const location = useLocations().data?.find((l) => l.id === locationId);
-  const currency = useCashCurrency();
+  const currency = useTenantContext().currency.code;
   const { format } = useMoneyFormat(currency);
   const { shift, query, shiftId } = useCurrentShift(locationId);
   const setShiftId = usePreferences((s) => s.setShiftId);
@@ -382,7 +385,7 @@ export function ShiftPage() {
     if (query.data && query.data.status !== 'OPEN') setShiftId(null);
   }, [query.data, setShiftId]);
 
-  if (!currency || !location) return <Spinner label={t('common:states.loading')} />;
+  if (!location) return <Spinner label={t('common:states.loading')} />;
 
   return (
     <div className="grid h-full content-start gap-4 overflow-y-auto">
@@ -404,7 +407,7 @@ export function ShiftPage() {
               <p className="text-sm text-muted-foreground">
                 {t('payments:shift.openedBy', {
                   name: shift.openedByName,
-                  time: formatDateTime(shift.openedAt, location.timezone, locale),
+                  time: formatDateTime(shift.openedAt, location.timezone, locale, formatOptions),
                 })}
               </p>
             </div>
@@ -508,10 +511,4 @@ export function ShiftPage() {
       <DailySummaryCard locationId={locationId} />
     </div>
   );
-}
-
-/** The tenant currency (from the tenant settings). */
-function useCashCurrency(): string | null {
-  const summary = useDailySummary(useLocationId());
-  return summary.data?.currencyCode ?? null;
 }

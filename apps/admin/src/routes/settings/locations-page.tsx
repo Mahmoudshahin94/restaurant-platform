@@ -1,5 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { QueryState, applyServerValidation, tKey, useCurrentLocale } from '@pos/app-kit';
+import {
+  QueryState,
+  applyServerValidation,
+  tKey,
+  useCurrentLocale,
+  useTenantContext,
+} from '@pos/app-kit';
 import { pickLocalized } from '@pos/i18n';
 import type { Location } from '@pos/validation';
 import {
@@ -77,15 +83,16 @@ function LocationDialog({ location, onClose }: { location: Location | null; onCl
   const { t } = useTranslation(['admin', 'common']);
   const tid = useTenantId();
   const errorText = useAdminErrorText();
-  const { currency, toInput } = useMoney();
+  const { toInput } = useMoney();
+  const { currency, tenant } = useTenantContext();
   const [formError, setFormError] = useState<string | null>(null);
   const form = useForm<FormInput, unknown, FormOutput>({
-    resolver: zodResolver(locationForm(currency ?? 'SAR')),
+    resolver: zodResolver(locationForm(currency.code)),
     defaultValues: {
       code: location?.code ?? '',
       nameEn: location?.nameEn ?? '',
       nameAr: location?.nameAr ?? '',
-      timezone: location?.timezone ?? 'Asia/Riyadh',
+      timezone: location?.timezone ?? tenant.timezone,
       addressLine: location?.addressLine ?? '',
       phone: location?.phone ?? '',
       taxInclusive: location?.taxInclusive ?? true,
@@ -201,7 +208,7 @@ function LocationDialog({ location, onClose }: { location: Location | null; onCl
         )}
         <div className="grid gap-4 sm:grid-cols-3">
           <Field
-            label={`${t('admin:locations.cashRounding')} (${currency ?? ''})`}
+            label={`${t('admin:locations.cashRounding')} (${currency.code})`}
             hint={t('admin:locations.cashRoundingHint')}
             error={msg(errors.cashRoundingIncrement?.message)}
           >

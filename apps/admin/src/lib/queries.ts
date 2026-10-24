@@ -14,6 +14,7 @@ export const keys = {
   tenant: (tid: string) => ['tenant', tid] as const,
   features: (tid: string, locationId: string | null) => ['features', tid, locationId] as const,
   branding: (tid: string) => ['branding', tid] as const,
+  localization: (tid: string) => ['localization', tid] as const,
   locations: (tid: string) => ['locations', tid] as const,
   categories: (tid: string, archived: boolean) => ['categories', tid, archived] as const,
   stations: (tid: string, archived: boolean) => ['kitchen-stations', tid, archived] as const,

@@ -1,4 +1,4 @@
-import { useCurrentLocale, useMoneyFormat } from '@pos/app-kit';
+import { useCurrentLocale, useFormatOptions, useMoneyFormat } from '@pos/app-kit';
 import { formatMinorAsDecimal } from '@pos/domain';
 import { formatBps, formatBusinessDate, formatNumber } from '@pos/i18n';
 import {
@@ -105,25 +105,26 @@ export function downloadFile(name: string, content: string, type = 'text/csv;cha
 /** Formats report values for the screen: money in the report's currency, Intl numbers and dates. */
 export function useCellFormat(currency: string) {
   const locale = useCurrentLocale();
+  const formatOptions = useFormatOptions();
   const { format } = useMoneyFormat(currency);
   return useCallback(
     (kind: CellKind, value: CellValue): string => {
       if (value === null) return '';
       if (typeof value === 'string') {
-        return kind === 'date' ? formatBusinessDate(value, locale) : value;
+        return kind === 'date' ? formatBusinessDate(value, locale, formatOptions) : value;
       }
       switch (kind) {
         case 'money':
           return format(value);
         case 'percent':
-          return formatBps(value, locale);
+          return formatBps(value, locale, formatOptions);
         case 'duration':
           return formatDuration(value);
         default:
-          return formatNumber(value, locale);
+          return formatNumber(value, locale, formatOptions);
       }
     },
-    [format, locale],
+    [format, formatOptions, locale],
   );
 }
 

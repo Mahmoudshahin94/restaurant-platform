@@ -5,6 +5,7 @@ import {
   useCurrentLocale,
   useErrorText,
   useFeature,
+  useFormatOptions,
   useMoneyFormat,
   usePermissionChecks,
 } from '@pos/app-kit';
@@ -178,6 +179,7 @@ function PaymentsList({
 function OrderDetail({ order, timeZone }: { order: Order; timeZone: string }) {
   const { t } = useTranslation(['orders', 'pos', 'common', 'payments']);
   const locale = useCurrentLocale();
+  const formatOptions = useFormatOptions();
   const errorText = useErrorText();
   const { format } = useMoneyFormat(order.currencyCode);
   const user = useSession((s) => s.user);
@@ -232,7 +234,7 @@ function OrderDetail({ order, timeZone }: { order: Order; timeZone: string }) {
         <span className="text-muted-foreground">{t(`orders:channel.${order.channel}`)}</span>
         {order.tableLabel ? <span className="ltr-nums font-medium">{order.tableLabel}</span> : null}
         <span className="ms-auto text-sm text-muted-foreground">
-          {formatDateTime(order.createdAt, timeZone, locale)}
+          {formatDateTime(order.createdAt, timeZone, locale, formatOptions)}
         </span>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
@@ -313,7 +315,8 @@ function OrderDetail({ order, timeZone }: { order: Order; timeZone: string }) {
         <ol className="grid gap-1 text-sm text-muted-foreground">
           {order.statusHistory.map((h) => (
             <li key={h.createdAt + h.toStatus}>
-              {formatDateTime(h.createdAt, timeZone, locale)} · {t(`orders:status.${h.toStatus}`)}
+              {formatDateTime(h.createdAt, timeZone, locale, formatOptions)} ·{' '}
+              {t(`orders:status.${h.toStatus}`)}
               {h.reason ? ` — ${h.reason}` : ''}
             </li>
           ))}

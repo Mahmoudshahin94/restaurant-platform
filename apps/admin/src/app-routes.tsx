@@ -22,6 +22,7 @@ import { ShiftDetailPage, ShiftsPage } from './routes/operations/shifts-page';
 import { BrandingPage } from './routes/settings/branding-page';
 import { CashRegistersPage } from './routes/settings/cash-registers-page';
 import { DiscountsPage } from './routes/settings/discounts-page';
+import { LocalizationPage } from './routes/settings/localization-page';
 import { LocationsPage } from './routes/settings/locations-page';
 import { ModulesPage } from './routes/settings/modules-page';
 import { OnlineOrderingPage } from './routes/settings/online-ordering-page';
@@ -59,13 +60,23 @@ function moduleGuarded(features: readonly Feature[], route: ReactNode) {
   );
 }
 
-/** The tenant's modules at the location chosen in the header (ADR 0018). */
+/**
+ * The tenant's modules at the location chosen in the header (ADR 0018), in the language this
+ * browser chose, else the user's, else the tenant's default (ADR 0020).
+ */
 function TenantScope({ children }: { children: ReactNode }) {
   const tenantId = useSession((s) => s.user?.tenantId);
+  const preferred = useSession((s) => s.user?.preferredLocale ?? null);
   const locationId = usePreferences((s) => s.locationId);
+  const stored = usePreferences((s) => s.locale);
   if (!tenantId) return null;
   return (
-    <TenantProvider api={api} tenantId={tenantId} locationId={locationId}>
+    <TenantProvider
+      api={api}
+      tenantId={tenantId}
+      locationId={locationId}
+      locale={{ stored, preferred }}
+    >
       {children}
     </TenantProvider>
   );
@@ -111,6 +122,7 @@ export function AppRoutes() {
           {guarded('settings/tenant', 'settings.manage', <TenantPage />, true)}
           {guarded('settings/modules', 'settings.manage', <ModulesPage />, true)}
           {guarded('settings/branding', 'settings.manage', <BrandingPage />, true)}
+          {guarded('settings/localization', 'settings.manage', <LocalizationPage />, true)}
           {guarded('settings/locations', 'locations.view', <LocationsPage />)}
           {moduleGuarded(
             [Feature.ONLINE_ORDERING],

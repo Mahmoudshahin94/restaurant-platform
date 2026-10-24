@@ -7,6 +7,8 @@ import {
   tKey,
   useErrorText,
   useHubSignInBranding,
+  useHubSignInLocales,
+  useLocaleSelection,
 } from '@pos/app-kit';
 import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Field, Input } from '@pos/ui';
 import { useState } from 'react';
@@ -33,6 +35,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const status = useSession((s) => s.status);
   const setLocale = usePreferences((s) => s.setLocale);
+  const storedLocale = usePreferences((s) => s.locale);
   const [error, setError] = useState<string | null>(null);
   const form = useForm<LoginForm>({
     resolver: zodResolver(loginForm),
@@ -41,6 +44,9 @@ export function LoginPage() {
   const fieldError = (message?: string) => (message ? tKey(t, message) : undefined);
   // The kitchen's business, from the location hub (ADR 0019); MADAR's look elsewhere.
   useHubSignInBranding(api, true);
+  // …and its languages (ADR 0020): only those are offered; without a choice, its default.
+  const locales = useHubSignInLocales(api, true);
+  useLocaleSelection(locales, { stored: storedLocale });
 
   if (status === 'authenticated') return <Navigate to="/" replace />;
 
@@ -95,7 +101,11 @@ export function LoginPage() {
         </CardContent>
       </Card>
       <div className="flex flex-wrap items-center justify-center gap-3">
-        <LanguageSwitcher className="h-12 w-auto" onLocaleChange={setLocale} />
+        <LanguageSwitcher
+          className="h-12 w-auto"
+          locales={locales?.supported}
+          onLocaleChange={setLocale}
+        />
         <ThemeSwitcher className="h-12 w-auto" />
       </div>
       <PlatformFooter app="kds" />
