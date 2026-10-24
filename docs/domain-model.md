@@ -104,7 +104,9 @@ unique. `legalName` is optional. `businessType` is text validated against `Busin
 `@pos/shared-types` (`RESTAURANT`, `COFFEE_SHOP`, `SUPERMARKET`, `GROCERY`, `CLOTHING`, `RETAIL`,
 `OTHER`); it only picks default configuration. `status` (`ACTIVE`/`SUSPENDED`/`ARCHIVED`) belongs
 to the platform operator. `currencyCode` is immutable after provisioning, because every stored
-amount is in its minor units. `defaultLocale` is one of `supportedLocales` (JSON array).
+amount is in its minor units; new tenants are in `ILS`. `defaultLocale` is one of
+`supportedLocales` (JSON array). How amounts are shown and the digit style are tenant settings
+(see **Currency and languages** below).
 `timezone` is used for tenant-level reports. Tenants are created by `provisionTenant`
 (`@pos/database`), always with a system Owner role.
 
@@ -142,6 +144,16 @@ tenant → surface (`login`, `pos`, `kds`, `kiosk`, `website`) → the device's 
 
 The platform's own brand (MADAR · Powered by JudyTech) is not data: it is `PLATFORM_BRAND` in
 `@pos/shared-types`.
+
+**Currency and languages** ([ADR 0020](adr/0020-currency-and-localization.md)) are tenant
+columns, resolved MADAR's defaults → tenant:
+
+- `currencyCode` (ISO 4217, fixed at provisioning, `ILS` by default) with its decimal places from
+  ISO 4217, never stored. `currencySymbol` (1–8 characters), `currencyDisplay` (`narrowSymbol`,
+  `symbol`, `code`) and `currencyFormatLocale` (one of `FORMAT_LOCALES`) are null to inherit;
+  database checks keep the display and the symbol's length valid.
+- `defaultLocale`, `supportedLocales` (JSON, includes the default) and `digits` (`latn`, `arab`;
+  null inherits Latin).
 
 **Location**: a branch or store. `code` is unique per tenant and prefixes hub-generated order
 numbers.

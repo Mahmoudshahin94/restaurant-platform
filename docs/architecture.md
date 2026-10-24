@@ -694,7 +694,7 @@ Configuration precedence is in [configuration.md](configuration.md).
 | M1    | Multi-tenant foundation: Tenant root, profile, tenant context, tenant-scoped client, provisioning, tests | ✅ Done |
 | M2    | Feature/module system: catalog, business-type defaults, overrides, FeatureService, UI capability guards  | ✅ Done |
 | M3    | Branding and theme: platform and tenant branding, design tokens, dark/light/system, tenant files         | ✅ Done |
-| M4    | Currency and localization: currency configuration (ILS default), supported locales                       | ⏳      |
+| M4    | Currency and localization: currency configuration (ILS default), supported locales                       | ✅ Done |
 | M5    | Retail: SKU, barcodes, generic product options and variants, scanner abstraction                         | ⏳      |
 | M6    | Self-service: kiosk app, terminal devices, shared order engine, self-checkout                            | ⏳      |
 | M7    | Multi-tenant website: host resolution, verified domains, configurable sections                           | ⏳      |
@@ -818,6 +818,30 @@ surface's light override, then the device's dark choice winning over it), the KD
 without the old forced class, light by choice) and the customer website (public logo and favicon).
 An SVG upload was refused with `415`.
 
+### Phase M4 decisions
+
+See [ADR 0020](adr/0020-currency-and-localization.md) and
+[configuration.md](configuration.md#currency-and-languages-m4).
+
+- **The currency stays fixed; its display is configuration.** `CurrencyConfiguration` is the code
+  and its ISO decimal places (read-only) plus the tenant's symbol (₪ by default for ILS), display
+  (narrow symbol, symbol or code) and format locale (a closed list). `resolveCurrency` runs
+  platform → tenant on `resolveLayered`. The settings are nullable tenant columns, so they ride the
+  tenant row's change feed and snapshot to the hubs.
+- **Formatting takes the configuration:** `formatMoney` and `useMoneyFormat` format the exact
+  decimal string with the ISO decimal places (never `Intl`'s guess) and write the symbol override.
+  Lint refuses `parseFloat`. New tenants default to ILS (column, `createTenantSchema`,
+  `provisionTenant`); the demo restaurant is in shekels in `Asia/Hebron`, and no app hardcodes
+  `SAR` or `Asia/Riyadh`: the admin's forms read the tenant context.
+- **Languages drive every app:** the screen language is the device's stored choice if supported,
+  else the user's `preferredLocale`, else the tenant default (the website: the visitor's choice,
+  else the default). The switcher offers only the supported locales and disappears for a
+  single-locale tenant, on the hub's sign-in screens too (`GET /hub/locales`). Arabic-Indic digits
+  are a tenant setting for Arabic money, numbers, dates and receipts; English stays Latin.
+- **Admin:** Settings → Language and currency (EN/AR, RTL), backed by
+  `GET`/`PUT /tenants/:tid/localization` (strict: the currency and decimal places are refused,
+  audited as `localization.updated`). The Business page keeps names, legal name and time zone.
+
 ## Architectural decisions and open questions
 
 Recorded as ADRs in [adr/](adr/):
@@ -878,6 +902,11 @@ Recorded as ADRs in [adr/](adr/):
     tenant branding resolved in layers (platform → tenant → surface → device theme mode) on
     semantic design tokens with dark, light and system themes, contrast checked on save, and
     tenant files in an isolated, immutable storage that reaches the hubs with the snapshot.
+20. [0020](adr/0020-currency-and-localization.md): MADAR currency and languages: the currency is
+    fixed at provisioning (ILS by default) while its symbol, display and format locale are tenant
+    configuration resolved platform → tenant; formatting uses ISO decimal places and never a
+    float; the tenant's supported locales, default and digit style drive every app's language
+    switcher and initial language.
 
 Open items to revisit:
 

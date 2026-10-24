@@ -40,12 +40,12 @@ Device configuration       one terminal, screen or kiosk differing from its loca
 | Setting                                       | Layers today                                          | Phase |
 | --------------------------------------------- | ----------------------------------------------------- | ----- |
 | Business type, status, legal name             | tenant (type and status set by the platform)          | M1 ✅ |
-| Default and supported locales                 | tenant                                                | M1 ✅ |
-| Currency                                      | tenant (fixed at provisioning, ADR 0002)              | M1 ✅ |
+| Default and supported locales, digit style    | platform → tenant (digits); tenant (locales)          | M4 ✅ |
+| Currency                                      | tenant (fixed at provisioning, ADR 0002; ILS default) | M4 ✅ |
 | Time zone, tax mode, cash rounding, KDS times | tenant time zone; location settings                   | ✅    |
 | Modules (POS, KDS, TABLES, BARCODE, …)        | platform → business type → tenant → location → device | M2 ✅ |
 | Branding and theme                            | platform → tenant → surface → device (theme mode)     | M3 ✅ |
-| Currency display (symbol, format locale)      | platform → tenant                                     | M4    |
+| Currency display (symbol, display, format)    | platform → tenant                                     | M4 ✅ |
 | Website sections and domains                  | tenant                                                | M7    |
 | Payment providers                             | tenant → location                                     | M8    |
 | Release channel                               | platform → tenant                                     | M10   |
@@ -141,3 +141,38 @@ files it shows reach every hub of the tenant through the change feed and the sna
 shows the tenant's look offline. Apps read branding from
 `GET /tenants/:tenantId/context?surface=` (`ThemeProvider`, `TenantLogo` in `@pos/app-kit`);
 the website and the sign-in screens read the public branding of the storefront and of the hub.
+
+## Currency and languages (M4)
+
+See [ADR 0020](adr/0020-currency-and-localization.md). The currency itself is not a setting: it is
+chosen when the tenant is provisioned (ILS unless the platform operator chooses another) and every
+amount is stored in its minor units ([ADR 0002](adr/0002-money-integer-minor-units.md)). How amounts
+look, and which languages the screens offer, are:
+
+| Setting                                    | MADAR default                     | Tenant | Notes                                            |
+| ------------------------------------------ | --------------------------------- | ------ | ------------------------------------------------ |
+| Decimal places                             | ISO 4217 of the currency          |        | read-only: 2 for ILS, USD, EUR, GBP; 3 for JOD   |
+| Symbol                                     | `₪` for ILS, else `Intl`'s symbol | ✓      | 1–8 characters, no digits or control marks       |
+| Display (`narrowSymbol`, `symbol`, `code`) | `narrowSymbol`                    | ✓      | the code display ignores the symbol              |
+| Format locale (`FORMAT_LOCALES`)           | none: the screen's language       | ✓      | e.g. `de-DE` writes `1.234,56 €` on every screen |
+| Supported locales                          | English and Arabic                | ✓      | at least one; one language hides the switcher    |
+| Default locale                             | `en`                              | ✓      | always among the supported                       |
+| Digits in Arabic (`latn`, `arab`)          | `latn` (0–9)                      | ✓      | English is always written in 0–9                 |
+
+- `resolveCurrency` and `resolveLocales` (`@pos/domain`) resolve them on the cloud, the hub and in
+  the apps; every display setting and the digit style name their layer.
+- **Which language a screen shows:** the device's stored choice if the tenant offers it, else the
+  signed-in user's preferred locale if offered, else the tenant's default (`selectLocale`). The
+  website has no user: the visitor's choice, else the store's default.
+
+Where the layers are written:
+
+| Layer    | Stored in                                                                                                                            | Written by                               |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
+| Platform | `PLATFORM_CURRENCY_SYMBOLS`, `PLATFORM_CURRENCY_DISPLAY`, `PLATFORM_DIGIT_STYLE`                                                     | MADAR releases                           |
+| Tenant   | `tenants` columns (`currency_symbol`, `currency_display`, `currency_format_locale`, `supported_locales`, `default_locale`, `digits`) | admin → Settings → Language and currency |
+
+They ride the tenant row, so the change feed and the snapshot bring them to every hub. Apps read
+them from `GET /tenants/:tenantId/context` (`useMoneyFormat`, `useFormatOptions`,
+`LanguageSwitcher` in `@pos/app-kit`); the website from `GET /public/tenants/:slug`; the hub's
+sign-in screens from `GET /hub/locales`.

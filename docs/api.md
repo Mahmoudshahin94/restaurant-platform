@@ -9,7 +9,7 @@ Base path `/api/v1`. Health endpoints are unversioned: `GET /health` (liveness) 
   `@pos/validation`. Response types are inferred from the same schemas and used by
   `@pos/api-client`, which can also validate responses at runtime.
 - **IDs** are UUIDs (v7 for new rows). Malformed ids answer `404`, the same as unknown ones.
-- **Money** is integer minor units of the tenant currency (`1850` = 18.50 SAR).
+- **Money** is integer minor units of the tenant currency (`1850` = ₪18.50).
 - **Timestamps** are ISO-8601 UTC strings.
 - **Request ids:** send `x-request-id` (8–128 chars `[A-Za-z0-9._-]`) to correlate; otherwise
   one is generated. It is always echoed in the `x-request-id` response header and the error
@@ -94,17 +94,19 @@ Validation failures (`400 VALIDATION_FAILED`) list
 
 A tenant answers its profile too: `legalName`, `businessType` (`RESTAURANT`, `COFFEE_SHOP`,
 `SUPERMARKET`, `GROCERY`, `CLOTHING`, `RETAIL`, `OTHER`), `status` and `supportedLocales`. `PATCH`
-accepts the names, `legalName`, `defaultLocale`, `supportedLocales` and `timezone`; the default
-locale must stay supported (`400 VALIDATION_FAILED`). The business type and status are the
-platform operator's (fields sent are ignored).
+accepts the names, `legalName` and `timezone` only, strictly: the business type and status are
+the platform operator's, the currency is fixed (ADR 0002) and the languages have their own
+endpoint (below), so sending any of them answers `400 VALIDATION_FAILED`.
 
 Tenants are provisioned by the seed (development, through `provisionTenant`) or the platform
 operator (Phase M9). There is no self-service signup.
 
 `GET /tenants/:tenantId/context?locationId=&surface=` is what every app renders from
 ([ADR 0018](adr/0018-feature-modules.md)): `tenant` (id, slug, names, business type, status,
-time zone), `branding` (resolved for `surface`, see below), `currency` (`code`, `exponent`),
-`locales` (`default`, `supported`), `locationId` and `features`. `features` holds every module, resolved for the
+time zone), `branding` (resolved for `surface`, see below), `currency`, `locales`,
+`locationId` and `features`. `currency` ([ADR 0020](adr/0020-currency-and-localization.md)) is
+`{ code, decimalPlaces, symbol, display, formatLocale, sources }`; `locales` is
+`{ default, supported, digits, sources }`. `features` holds every module, resolved for the
 location (or the tenant):
 
 - `{ feature, enabled, source, entitled, configurable }`;
@@ -119,6 +121,31 @@ or null for the theme's own), `fontFamily`, `logoSize`, `themeMode`, `surfaceSty
 `SURFACE`). The device's own light/dark choice is applied by the app.
 
 A location of another tenant answers `404 LOCATION_NOT_FOUND`.
+
+## Language and currency (Phase M4)
+
+[ADR 0020](adr/0020-currency-and-localization.md).
+
+| Method | Path                                            | Permission                      |
+| ------ | ----------------------------------------------- | ------------------------------- |
+| GET    | `/tenants/:tid/localization`                    | `settings.manage` (tenant-wide) |
+| PUT    | `/tenants/:tid/localization` (cloud; hub `403`) | `settings.manage` (tenant-wide) |
+| GET    | `/hub/locales` (hub only)                       | public                          |
+
+- **GET** answers `{ settings, currency, locales, updatedAt }`: the tenant's own values
+  (`defaultLocale`, `supportedLocales`, and `digits`, `currencySymbol`, `currencyDisplay`,
+  `currencyFormatLocale`, each null to inherit MADAR's) and what its screens get, as in the
+  context.
+- **PUT** replaces all six settings. The body is strict: `currencyCode` or `decimalPlaces` (or
+  any unknown field) answers `400 VALIDATION_FAILED`, as do an empty or repeated locale list, a
+  default locale outside the supported ones (`path: supportedLocales`), a symbol longer than 8
+  characters or containing digits or control marks, a display other than `narrowSymbol`,
+  `symbol`, `code`, a format locale outside `FORMAT_LOCALES` and digits other than `latn`,
+  `arab`. Audit: `localization.updated` (with the values before).
+- **`/hub/locales`** gives the POS and KDS sign-in screens their business's languages
+  (`{ default, supported, digits, sources }`) from the hub's snapshot; `503 HUB_NOT_PROVISIONED`
+  before the first one.
+- `GET /public/tenants/:slug` carries the same `currency` and `locales` for the website.
 
 ## Modules (Phase M2)
 

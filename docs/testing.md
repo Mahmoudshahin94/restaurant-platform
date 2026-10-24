@@ -62,6 +62,7 @@ starts and stops it); the customer-website suite runs cloud, hub, POS, KDS and w
 | 19  | English LTR mode works                    | [pos.spec.ts](../apps/pos/e2e/pos.spec.ts) “the POS works in Arabic (RTL) and English (LTR)”; [menu-and-rtl.spec.ts](../apps/admin/e2e/menu-and-rtl.spec.ts) “Arabic switches the whole UI to RTL and back to LTR”; [reports.spec.ts](../apps/admin/e2e/reports.spec.ts) “the owner reads today’s sales, channels and kitchen times in English and Arabic”                                                                                                                  |
 | 20  | Tenant switches a module (MADAR M2)       | [admin-portal.spec.ts](../apps/admin/e2e/admin-portal.spec.ts) “the owner switches a module off for one location and its pages follow”                                                                                                                                                                                                                                                                                                                                      |
 | 21  | Tenant brands its screens (MADAR M3)      | [admin-portal.spec.ts](../apps/admin/e2e/admin-portal.spec.ts) “the owner brands the business and its screens follow”                                                                                                                                                                                                                                                                                                                                                       |
+| 22  | Tenant languages and currency (MADAR M4)  | [admin-portal.spec.ts](../apps/admin/e2e/admin-portal.spec.ts) “the owner offers one language and writes the currency their way”                                                                                                                                                                                                                                                                                                                                            |
 
 Other end-to-end tests cover payments (split, card numbers refused, shift close-out, an Arabic
 ESC/POS receipt), kitchen cancellations and rush, admin roles and users, branch settings, order
@@ -117,6 +118,25 @@ Component tests render with a restaurant's modules (`tenantContextFixture`); pas
 
 Component tests that render a shell or a logo get a `ThemeProvider` from the apps' render helpers;
 `tenantContextFixture(features, locationId, branding, surface)` gives them a tenant's branding.
+
+## Currency and languages (MADAR, ADR 0020)
+
+| What                                                                                                                          | Where                                                                                                               |
+| ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| ISO decimal places (ILS, USD, EUR, GBP 2; JOD, KWD, BHD 3…), minor-unit round trips in every currency, extra decimals refused | `packages/domain/src/localization/localization.test.ts`, `packages/domain/src/money`                                |
+| Currency and locale resolution (platform → tenant), the locale selection rule, switcher visibility                            | `packages/domain/src/localization/localization.test.ts`                                                             |
+| ILS, USD, EUR, JOD and GBP in English and Arabic; symbol override, code display, format locale, Arabic-Indic digits           | `packages/i18n/src/format.test.ts`                                                                                  |
+| Settings validation: strict body, currency and decimal places refused, symbol rules, default among supported                  | `packages/validation/src/localization.test.ts`, `packages/validation/src/tenancy.test.ts`                           |
+| The Language and currency API: read, save, audit, refusals, permissions, isolation, context and storefront                    | `apps/api/test/localization.test.ts`, `apps/api/test/tenancy.test.ts`                                               |
+| New tenants in shekels; context shape                                                                                         | `apps/api/test/tenant-isolation.test.ts`, `apps/api/test/features.test.ts`                                          |
+| The hub serves the currency display and languages from its snapshot offline, and `GET /hub/locales` before sign-in            | `apps/gateway/test/hub.test.ts`                                                                                     |
+| Switcher offers only supported locales and hides for one; RTL/LTR per supported-locale set; tenant money formatting           | `packages/app-kit/src/localization.test.tsx`                                                                        |
+| Admin Language and currency page in English and Arabic (RTL); the website follows the store's languages and shows ₪           | `apps/admin/src/routes/settings/localization-page.test.tsx`, `apps/customer-web/src/components/site-shell.test.tsx` |
+| No `parseFloat` anywhere                                                                                                      | lint (`no-restricted-globals`, `no-restricted-properties` in `eslint.config.js`)                                    |
+
+`tenantContextFixture(features, locationId, branding, surface, localization)` takes a currency
+(`currencyCode`, `currency` display settings) and languages (`locales`); it defaults to ILS with
+English and Arabic.
 
 ## Testing requirements (specification section 32)
 
