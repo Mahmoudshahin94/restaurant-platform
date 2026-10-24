@@ -160,7 +160,7 @@ test('the owner reads today’s sales, channels and kitchen times in English and
   await page.getByRole('link', { name: 'Orders by channel' }).click();
   const channels = page.getByRole('table', { name: 'Orders by channel' });
   await expect(channels.getByRole('row', { name: /Takeaway/ })).toContainText(money(order.total));
-  await expect(channels.getByRole('row')).toHaveCount(7); // header, five channels, total
+  await expect(channels.getByRole('row')).toHaveCount(8); // header, six channels, total
 
   await page.getByRole('link', { name: 'Kitchen prep times' }).click();
   const prep = page.getByRole('table', { name: 'Kitchen prep times' });
