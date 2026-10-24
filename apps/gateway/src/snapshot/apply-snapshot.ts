@@ -139,10 +139,8 @@ export async function applySnapshot(tx: HubTx, snapshot: LocationSnapshot): Prom
     const delegate = delegates[DELEGATE[table]];
     if (!delegate) throw new Error(`No hub model for snapshot table ${table}`);
     const rows = snapshot.tables[table] as Row[];
-    if (table === 'orderCounters') {
-      await mergeOrderCounters(tx, rows);
-    } else if (table === 'devices') {
-      await mergeDevices(tx, rows);
+    if (MERGED.has(table)) {
+      await (table === 'devices' ? mergeDevices(tx, rows) : mergeOrderCounters(tx, rows));
     } else if (REPLACED.has(table)) {
       if (rows.length > 0) await delegate.createMany({ data: rows });
     } else {

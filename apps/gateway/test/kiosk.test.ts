@@ -245,8 +245,8 @@ describe('the kiosk at a restaurant', () => {
       shiftId: null,
       deviceId: kioskRow.id,
       amount: 3100,
-      reference: expect.stringMatching(/^MT\d{6}$/),
     });
+    expect(outcome.payment.reference).toMatch(/^MT\d{6}$/);
     expect(outcome.order).toMatchObject({ status: 'CONFIRMED', paymentStatus: 'PAID' });
     expect(outcome.order.statusHistory.map((h) => [h.toStatus, h.source, h.actorId])).toEqual([
       ['PLACED', 'KIOSK', kioskRow.id],

@@ -41,7 +41,7 @@ export const PAIRING_CODE_TTL_MS = 24 * 60 * 60_000;
 export function newPairingCode(): string {
   let code = '';
   for (let i = 0; i < PAIRING_CODE_LENGTH; i += 1) {
-    code += PAIRING_CODE_ALPHABET[randomInt(PAIRING_CODE_ALPHABET.length)];
+    code += PAIRING_CODE_ALPHABET.charAt(randomInt(PAIRING_CODE_ALPHABET.length));
   }
   return code;
 }

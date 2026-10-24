@@ -58,7 +58,7 @@ describe('pairing a location hub', () => {
     const paired = await pair();
     expect(paired.device).toMatchObject({ type: 'GATEWAY', status: 'ACTIVE', name: 'Main hub' });
     expect(paired.pairing).toBeNull();
-    const [deviceId, secret] = (paired.credential ?? '').split('.');
+    const [deviceId, secret] = paired.credential.split('.');
     expect(deviceId).toBe(paired.device.id);
     const row = await prisma.device.findUniqueOrThrow({ where: { id: paired.device.id } });
     expect(row.credentialHash).not.toContain(secret);

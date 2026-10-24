@@ -55,10 +55,8 @@ describe('payment providers', () => {
     const terminal = new MockPaymentTerminal();
     const charge = { ...request, deviceId: 'kiosk-1' };
     const first = await terminal.chargeAtTerminal(charge);
-    expect(first).toMatchObject({
-      status: 'CAPTURED',
-      reference: expect.stringMatching(/^MT\d{6}$/),
-    });
+    expect(first.status).toBe('CAPTURED');
+    expect(first.reference).toMatch(/^MT\d{6}$/);
     await expect(terminal.chargeAtTerminal(charge)).resolves.toEqual(first);
     terminal.declineNext();
     await expect(terminal.chargeAtTerminal({ ...charge, paymentId: 'p2' })).resolves.toMatchObject({

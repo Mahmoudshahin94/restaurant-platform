@@ -542,7 +542,7 @@ describe('daily sales', () => {
 });
 
 describe('orders by channel', () => {
-  it('distinguishes all five channels with their share of net sales', async () => {
+  it('distinguishes every channel with its share of net sales', async () => {
     const { body } = await get<ChannelReport>('channels', PERIOD);
     expect(body.rows.map((r) => r.channel)).toEqual([
       'DINE_IN',
@@ -550,6 +550,7 @@ describe('orders by channel', () => {
       'PHONE',
       'WEBSITE',
       'DELIVERY',
+      'KIOSK',
     ]);
     const row = (channel: string) => body.rows.find((r) => r.channel === channel);
     expect(row('DINE_IN')).toEqual({
@@ -664,6 +665,7 @@ describe('payment summary', () => {
         refundCount: 1,
         net: 2_300,
       },
+      { channel: 'KIOSK', charges: 0, chargeCount: 0, refunds: 0, refundCount: 0, net: 0 },
     ]);
     expect(body.totals).toEqual({
       charges: 14_495,
