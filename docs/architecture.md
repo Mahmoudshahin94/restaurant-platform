@@ -927,6 +927,26 @@ See [ADR 0022](adr/0022-self-service-kiosk.md) and
 - **`apps/kiosk`:** touch-first, branded for the kiosk surface, EN/AR with RTL, scanning where
   `BARCODE` is on, idle reset, attendant exit, larger text, live announcements and focus per step.
 
+**Phase M6 verification (2026-10-24):** `pnpm build`, `typecheck`, `lint` and `test` green (931
+unit, integration and component tests: API 296, domain 241, gateway 88, app-kit 56, i18n 45, admin
+43, validation 34, server 25, database 24, POS 22, customer-web 16, kiosk 11, api-client 11, KDS 9,
+receipts 8, ui 2), `pnpm test:tools` (13), the hub schema check, a clean `migrate status`,
+`format:check`, and all 39 Playwright E2E tests (admin 12, POS 16, KDS 4, customer-web 4, kiosk 3)
+in one `pnpm e2e` run, including the new scenarios 25–27. A manual browser check against a freshly
+seeded database: in the admin, Devices → Add a device → Self-service kiosk showed a pairing code;
+a newly paired hub of the demo restaurant paired the kiosk with it typed in lower case. A burger
+(well done, extra cheese) and fries, paid by the mock card terminal, became MAIN-001 on the KDS at
+three stations, labelled "Kiosk" with the customer's name. In Arabic (RTL), two large colas paid at
+the counter became MAIN-002, which the POS (signed in by PIN) listed under kiosk orders to collect
+and opened for payment. The hub was then paired with the supermarket: the kiosk's old credential
+was refused and it returned to its pairing screen in the market's branding, paired with the
+market's code and started in Arabic, the market's default. Scanner bursts added rice and olive oil
+(the first from the welcome screen), an unknown code showed its notice, English with larger text
+kept the cart, labneh was typed in, and the card payment completed BLD-001 at once. The cloud
+received both sales with drawer-less card payments naming their kiosks, and both kiosks ACTIVE with
+version 0.1.0. The market cashier opened the attendant menu with code and PIN. The check led to one
+change: the attendant menu's version label is no longer forced left to right in Arabic.
+
 ## Architectural decisions and open questions
 
 Recorded as ADRs in [adr/](adr/):
