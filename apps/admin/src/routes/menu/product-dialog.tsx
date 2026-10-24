@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { formatBpsAsPercent } from '@pos/domain';
+import { barcodeIssue, detectSymbology, formatBpsAsPercent } from '@pos/domain';
 import { pickLocalized } from '@pos/i18n';
+import { Feature } from '@pos/shared-types';
 import type { Category, KitchenStation, ModifierGroup, Product, Tax } from '@pos/validation';
 import {
   Alert,
@@ -15,17 +16,18 @@ import {
   Label,
   NativeSelect,
 } from '@pos/ui';
-import { Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import { Controller, useFieldArray, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 import { LocalizedFields } from '../../components/localized-fields';
 import { api } from '../../lib/api';
-import { applyServerValidation, tKey, useErrorText } from '@pos/app-kit';
+import { applyServerValidation, tKey, useErrorText, useFeature } from '@pos/app-kit';
 import { useCurrentLocale } from '@pos/app-kit';
-import { moneyField, useMoney } from '../../lib/money';
+import { moneyField, optionalMoneyField, useMoney } from '../../lib/money';
 import { useCatalogMutation, useTenantId } from '../../lib/queries';
+import { catalogRequest, draftOf } from './variant-matrix';
+import { BarcodeList, type CatalogErrors, VariantsEditor } from './variants-editor';
 
 const required = 'common:validation.required';
 const selectionCount = z
@@ -53,6 +55,82 @@ export function validOverride(rule: GroupRule, min: string, max: string): boolea
   return maxValue === null || minValue <= maxValue;
 }
 
+const text = z.string();
+const named = { nameEn: text, nameAr: text };
+
+/** The issue of a typed barcode, as a translation key, or undefined when it is valid. */
+function barcodeMessage(code: string): string | undefined {
+  const issue = barcodeIssue(code.trim(), detectSymbology(code.trim()));
+  return issue ? `menu:barcodes.issues.${issue}` : undefined;
+}
+
+/**
+ * Options and variants as edited (ADR 0021). Money stays as typed and is checked here only for
+ * the variants sold; names are required for options, their values, and hand-named variants.
+ */
+function catalogForm(currency: string) {
+  const price = moneyField(currency);
+  const cost = optionalMoneyField(currency);
+  return z
+    .object({
+      options: z.array(
+        z.object({
+          id: z.string().optional(),
+          key: z.string(),
+          ...named,
+          values: z.array(z.object({ id: z.string().optional(), key: z.string(), ...named })),
+        }),
+      ),
+      variants: z.array(
+        z.object({
+          id: z.string().optional(),
+          valueKeys: z.array(z.string()),
+          enabled: z.boolean(),
+          ...named,
+          sku: text,
+          price: text,
+          cost: text,
+          trackInventory: z.boolean(),
+          barcodes: z.array(z.string()),
+        }),
+      ),
+    })
+    .superRefine(({ options, variants }, ctx) => {
+      const issue = (path: (string | number)[], message: string) => {
+        ctx.addIssue({ code: 'custom', path, message });
+      };
+      options.forEach((option, i) => {
+        if (!option.nameEn.trim()) issue(['options', i, 'nameEn'], required);
+        if (!option.nameAr.trim()) issue(['options', i, 'nameAr'], required);
+        if (option.values.length === 0) issue(['options', i, 'values'], 'menu:options.needValue');
+        option.values.forEach((v, j) => {
+          if (!v.nameEn.trim()) issue(['options', i, 'values', j, 'nameEn'], required);
+          if (!v.nameAr.trim()) issue(['options', i, 'values', j, 'nameAr'], required);
+        });
+      });
+      if (options.length > 0 && !variants.some((v) => v.enabled)) {
+        issue(['variants'], 'menu:options.noneSold');
+      }
+      variants.forEach((v, i) => {
+        if (!v.enabled) return;
+        if (options.length === 0) {
+          if (!v.nameEn.trim()) issue(['variants', i, 'nameEn'], required);
+          if (!v.nameAr.trim()) issue(['variants', i, 'nameAr'], required);
+        }
+        if (v.sku.trim().length > 40) issue(['variants', i, 'sku'], 'common:validation.tooLong');
+        const priced = price.safeParse(v.price);
+        if (!priced.success)
+          issue(['variants', i, 'price'], priced.error.issues[0]?.message ?? required);
+        const costed = cost.safeParse(v.cost);
+        if (!costed.success)
+          issue(['variants', i, 'cost'], costed.error.issues[0]?.message ?? required);
+        const code = v.barcodes[0]?.trim() ?? '';
+        const message = code === '' ? undefined : barcodeMessage(code);
+        if (message) issue(['variants', i, 'barcodes'], message);
+      });
+    });
+}
+
 function productForm(currency: string, groups: readonly GroupRule[]) {
   return z.object({
     categoryId: z.string().min(1, required),
@@ -66,14 +144,8 @@ function productForm(currency: string, groups: readonly GroupRule[]) {
       .number<string>()
       .int('common:validation.invalid')
       .min(0, 'common:validation.invalid'),
-    variants: z.array(
-      z.object({
-        id: z.string().optional(),
-        nameEn: z.string().trim().min(1, required),
-        nameAr: z.string().trim().min(1, required),
-        price: moneyField(currency),
-      }),
-    ),
+    catalog: catalogForm(currency),
+    barcodes: z.array(z.string()),
     modifierGroups: z
       .array(z.object({ id: z.string(), min: selectionCount, max: selectionCount }))
       .superRefine((links, ctx) => {
@@ -150,6 +222,12 @@ export function ProductDialog({
   const errorText = useErrorText();
   const { toInput } = useMoney();
   const [formError, setFormError] = useState<string | null>(null);
+  // Retail capabilities (ADR 0021): what the editor offers follows the tenant's modules.
+  const optionsOn = useFeature(Feature.PRODUCT_VARIANTS);
+  const barcodesOn = useFeature(Feature.BARCODE);
+  const inventoryOn = useFeature(Feature.INVENTORY);
+  const modifiersOn = useFeature(Feature.MODIFIERS);
+  const kitchenOn = useFeature(Feature.KDS);
 
   const rules: GroupRule[] = modifierGroups.map((g) => ({
     id: g.id,
@@ -168,13 +246,8 @@ export function ProductDialog({
       descriptionAr: product?.descriptionAr ?? '',
       price: product ? toInput(product.price) : '',
       sortOrder: String(product?.sortOrder ?? 0),
-      variants:
-        product?.variants.map((v) => ({
-          id: v.id,
-          nameEn: v.nameEn,
-          nameAr: v.nameAr,
-          price: toInput(v.price),
-        })) ?? [],
+      catalog: draftOf(product, toInput),
+      barcodes: product?.barcodes.map((b) => b.code) ?? [],
       modifierGroups:
         product?.modifierGroups.map((l) => ({
           id: l.modifierGroupId,
@@ -186,8 +259,11 @@ export function ProductDialog({
       taxIds: product?.taxIds ?? taxes.filter((t) => t.isDefault).map((t) => t.id),
     },
   });
-  const variants = useFieldArray({ control: form.control, name: 'variants' });
   const errors = form.formState.errors;
+  const typedPrice = useWatch({ control: form.control, name: 'price' });
+  const catalog = useWatch({ control: form.control, name: 'catalog' });
+  // A product with variants is scanned by its variants' codes.
+  const hasVariants = catalog.options.length > 0 || catalog.variants.length > 0;
   const msg = (m?: string) => (m ? tKey(t, m) : undefined);
 
   const save = useCatalogMutation((values: ProductFormOutput) => {
@@ -201,7 +277,10 @@ export function ProductDialog({
       descriptionAr: values.descriptionAr || null,
       price: values.price,
       sortOrder: values.sortOrder,
-      variants: values.variants.map((v, i) => ({ ...v, sortOrder: i })),
+      ...catalogRequest(values.catalog.options, values.catalog.variants, (input) =>
+        moneyField(currency).parse(input),
+      ),
+      barcodes: hasVariants ? [] : values.barcodes.map((code, i) => ({ code, isPrimary: i === 0 })),
       // Per-product overrides of the group's min/max; empty = the group's own rule.
       modifierGroups: values.modifierGroups.map((link, i) => ({
         modifierGroupId: link.id,
@@ -240,7 +319,7 @@ export function ProductDialog({
   });
 
   return (
-    <DialogContent closeLabel={t('common:actions.close')} className="max-w-3xl">
+    <DialogContent closeLabel={t('common:actions.close')} className="max-w-5xl">
       <DialogHeader>
         <DialogTitle>{product ? t('menu:products.edit') : t('menu:products.new')}</DialogTitle>
       </DialogHeader>
@@ -289,174 +368,158 @@ export function ProductDialog({
           </Field>
         </div>
 
-        <fieldset className="grid gap-3">
-          <legend className="text-sm font-medium">{t('menu:products.variants')}</legend>
-          <p className="text-xs text-muted-foreground">{t('menu:products.variantsHint')}</p>
-          {variants.fields.map((field, index) => {
-            const rowErrors = errors.variants?.[index];
-            return (
-              <div
-                key={field.id}
-                className="grid gap-3 rounded-md border p-3 sm:grid-cols-[1fr_1fr_9rem_auto] sm:items-end"
-              >
-                <Field label={t('menu:fields.nameEn')} error={msg(rowErrors?.nameEn?.message)}>
-                  <Input lang="en" dir="ltr" {...form.register(`variants.${index}.nameEn`)} />
-                </Field>
-                <Field label={t('menu:fields.nameAr')} error={msg(rowErrors?.nameAr?.message)}>
-                  <Input lang="ar" dir="rtl" {...form.register(`variants.${index}.nameAr`)} />
-                </Field>
-                <Field label={t('menu:products.price')} error={msg(rowErrors?.price?.message)}>
-                  <Input
-                    inputMode="decimal"
-                    dir="ltr"
-                    {...form.register(`variants.${index}.price`)}
-                  />
-                </Field>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={t('common:actions.remove')}
-                  onClick={() => {
-                    variants.remove(index);
-                  }}
-                >
-                  <Trash2 aria-hidden />
-                </Button>
-              </div>
-            );
-          })}
-          <div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                variants.append({ nameEn: '', nameAr: '', price: '' });
-              }}
-            >
-              <Plus aria-hidden />
-              {t('menu:products.addVariant')}
-            </Button>
-          </div>
-        </fieldset>
+        <Controller
+          control={form.control}
+          name="catalog"
+          render={({ field }) => (
+            <VariantsEditor
+              value={field.value}
+              onChange={field.onChange}
+              errors={errors.catalog as CatalogErrors | undefined}
+              price={typedPrice}
+              currency={currency}
+              optionsOn={optionsOn}
+              barcodesOn={barcodesOn}
+              inventoryOn={inventoryOn}
+            />
+          )}
+        />
+
+        {barcodesOn && !hasVariants ? (
+          <Controller
+            control={form.control}
+            name="barcodes"
+            render={({ field }) => <BarcodeList codes={field.value} onChange={field.onChange} />}
+          />
+        ) : null}
 
         <div className="grid gap-5 sm:grid-cols-2">
-          <fieldset className="grid content-start gap-2">
-            <legend className="text-sm font-medium">{t('menu:products.modifierGroups')}</legend>
-            <p className="text-xs text-muted-foreground">{t('menu:products.modifierGroupsHint')}</p>
-            {modifierGroups.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t('menu:products.noModifierGroups')}</p>
-            ) : (
-              <Controller
-                control={form.control}
-                name="modifierGroups"
-                render={({ field }) => (
-                  <div className="grid gap-3">
-                    {modifierGroups.map((g) => {
-                      const index = field.value.findIndex((l) => l.id === g.id);
-                      const link = index >= 0 ? field.value[index] : undefined;
-                      const linkError =
-                        index >= 0 ? errors.modifierGroups?.[index]?.max?.message : undefined;
-                      const setLink = (patch: Partial<GroupLinkInput>) => {
-                        field.onChange(
-                          field.value.map((l) => (l.id === g.id ? { ...l, ...patch } : l)),
-                        );
-                      };
-                      return (
-                        <div key={g.id} className="grid gap-2">
-                          <div className="flex items-center gap-2">
-                            <Checkbox
-                              id={`group-${g.id}`}
-                              checked={link !== undefined}
-                              onCheckedChange={(v) => {
-                                field.onChange(
-                                  toggleGroup(field.value, g.id, v === true, modifierGroups),
-                                );
-                              }}
-                            />
-                            <Label htmlFor={`group-${g.id}`}>
-                              {pickLocalized(g, 'name', locale)}
-                            </Label>
-                          </div>
-                          {link ? (
-                            <div className="grid gap-1 ps-6">
-                              <div className="flex flex-wrap items-end gap-2">
-                                <Field label={t('menu:products.overrideMin')} className="w-24">
-                                  <Input
-                                    inputMode="numeric"
-                                    dir="ltr"
-                                    placeholder={String(g.minSelect)}
-                                    value={link.min}
-                                    onChange={(e) => {
-                                      setLink({ min: e.target.value });
-                                    }}
-                                  />
-                                </Field>
-                                <Field label={t('menu:products.overrideMax')} className="w-24">
-                                  <Input
-                                    inputMode="numeric"
-                                    dir="ltr"
-                                    placeholder={g.maxSelect === null ? '—' : String(g.maxSelect)}
-                                    value={link.max}
-                                    onChange={(e) => {
-                                      setLink({ max: e.target.value });
-                                    }}
-                                  />
-                                </Field>
-                              </div>
-                              <p
-                                className={
-                                  linkError
-                                    ? 'text-xs text-destructive'
-                                    : 'text-xs text-muted-foreground'
-                                }
-                              >
-                                {linkError
-                                  ? tKey(t, linkError)
-                                  : t('menu:products.overrideHint', {
-                                      min: g.minSelect,
-                                      max: g.maxSelect ?? t('menu:products.unlimited'),
-                                    })}
-                              </p>
+          {/* Modules a business does not use stay out of its way (ADR 0018). */}
+          {modifiersOn ? (
+            <fieldset className="grid content-start gap-2">
+              <legend className="text-sm font-medium">{t('menu:products.modifierGroups')}</legend>
+              <p className="text-xs text-muted-foreground">
+                {t('menu:products.modifierGroupsHint')}
+              </p>
+              {modifierGroups.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {t('menu:products.noModifierGroups')}
+                </p>
+              ) : (
+                <Controller
+                  control={form.control}
+                  name="modifierGroups"
+                  render={({ field }) => (
+                    <div className="grid gap-3">
+                      {modifierGroups.map((g) => {
+                        const index = field.value.findIndex((l) => l.id === g.id);
+                        const link = index >= 0 ? field.value[index] : undefined;
+                        const linkError =
+                          index >= 0 ? errors.modifierGroups?.[index]?.max?.message : undefined;
+                        const setLink = (patch: Partial<GroupLinkInput>) => {
+                          field.onChange(
+                            field.value.map((l) => (l.id === g.id ? { ...l, ...patch } : l)),
+                          );
+                        };
+                        return (
+                          <div key={g.id} className="grid gap-2">
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                id={`group-${g.id}`}
+                                checked={link !== undefined}
+                                onCheckedChange={(v) => {
+                                  field.onChange(
+                                    toggleGroup(field.value, g.id, v === true, modifierGroups),
+                                  );
+                                }}
+                              />
+                              <Label htmlFor={`group-${g.id}`}>
+                                {pickLocalized(g, 'name', locale)}
+                              </Label>
                             </div>
-                          ) : null}
+                            {link ? (
+                              <div className="grid gap-1 ps-6">
+                                <div className="flex flex-wrap items-end gap-2">
+                                  <Field label={t('menu:products.overrideMin')} className="w-24">
+                                    <Input
+                                      inputMode="numeric"
+                                      dir="ltr"
+                                      placeholder={String(g.minSelect)}
+                                      value={link.min}
+                                      onChange={(e) => {
+                                        setLink({ min: e.target.value });
+                                      }}
+                                    />
+                                  </Field>
+                                  <Field label={t('menu:products.overrideMax')} className="w-24">
+                                    <Input
+                                      inputMode="numeric"
+                                      dir="ltr"
+                                      placeholder={g.maxSelect === null ? '—' : String(g.maxSelect)}
+                                      value={link.max}
+                                      onChange={(e) => {
+                                        setLink({ max: e.target.value });
+                                      }}
+                                    />
+                                  </Field>
+                                </div>
+                                <p
+                                  className={
+                                    linkError
+                                      ? 'text-xs text-destructive'
+                                      : 'text-xs text-muted-foreground'
+                                  }
+                                >
+                                  {linkError
+                                    ? tKey(t, linkError)
+                                    : t('menu:products.overrideHint', {
+                                        min: g.minSelect,
+                                        max: g.maxSelect ?? t('menu:products.unlimited'),
+                                      })}
+                                </p>
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                />
+              )}
+            </fieldset>
+          ) : null}
+          {kitchenOn ? (
+            <fieldset className="grid content-start gap-2">
+              <legend className="text-sm font-medium">{t('menu:products.stations')}</legend>
+              <p className="text-xs text-muted-foreground">{t('menu:products.stationsHint')}</p>
+              {stations.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t('menu:products.noStations')}</p>
+              ) : (
+                <Controller
+                  control={form.control}
+                  name="stationIds"
+                  render={({ field }) => (
+                    <div className="grid gap-2">
+                      {stations.map((s) => (
+                        <div key={s.id} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`station-${s.id}`}
+                            checked={field.value.includes(s.id)}
+                            onCheckedChange={(v) => {
+                              field.onChange(toggle(field.value, s.id, v === true, stations));
+                            }}
+                          />
+                          <Label htmlFor={`station-${s.id}`}>
+                            {pickLocalized(s, 'name', locale)}
+                          </Label>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              />
-            )}
-          </fieldset>
-          <fieldset className="grid content-start gap-2">
-            <legend className="text-sm font-medium">{t('menu:products.stations')}</legend>
-            <p className="text-xs text-muted-foreground">{t('menu:products.stationsHint')}</p>
-            {stations.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t('menu:products.noStations')}</p>
-            ) : (
-              <Controller
-                control={form.control}
-                name="stationIds"
-                render={({ field }) => (
-                  <div className="grid gap-2">
-                    {stations.map((s) => (
-                      <div key={s.id} className="flex items-center gap-2">
-                        <Checkbox
-                          id={`station-${s.id}`}
-                          checked={field.value.includes(s.id)}
-                          onCheckedChange={(v) => {
-                            field.onChange(toggle(field.value, s.id, v === true, stations));
-                          }}
-                        />
-                        <Label htmlFor={`station-${s.id}`}>
-                          {pickLocalized(s, 'name', locale)}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              />
-            )}
-          </fieldset>
+                      ))}
+                    </div>
+                  )}
+                />
+              )}
+            </fieldset>
+          ) : null}
         </div>
 
         <fieldset className="grid content-start gap-2">
