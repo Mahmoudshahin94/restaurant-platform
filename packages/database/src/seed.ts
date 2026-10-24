@@ -4,7 +4,9 @@
  * instead of duplicating). Never run against production.
  */
 import { readFileSync, readdirSync } from 'node:fs';
-import { PrismaClient, type Locale } from '@prisma/client';
+import { combinationName, detectSymbology } from '@pos/domain';
+import type { Feature } from '@pos/shared-types';
+import { type Prisma, PrismaClient, type Locale } from '@prisma/client';
 import { hashSecret } from './credentials';
 import { syncPermissionCatalog } from './permissions';
 import { type LocationSpec, type RoleSpec, type TenantSpec, provisionTenant } from './provisioning';
@@ -24,6 +26,8 @@ interface SeedFile {
   paymentMethods?: { type: 'CASH' | 'CARD' | 'ONLINE'; nameEn: string; nameAr: string }[];
   /** Location code → cash drawers. */
   cashRegisters?: Record<string, { nameEn: string; nameAr: string }[]>;
+  /** Modules the tenant switches on or off (tenant-wide overrides, ADR 0018); added when missing. */
+  features?: Partial<Record<Feature, boolean>>;
   users: {
     envPrefix: string;
     displayName: string;
@@ -59,9 +63,144 @@ interface SeedMenu {
       price: number;
       stations: string[];
       groups: string[];
-      variants?: { nameEn: string; nameAr: string; price: number }[];
+      /** Codes of a product without variants; the first is primary (ADR 0021). */
+      barcodes?: string[];
+      /** Option axes; variants then name one value index of each (`optionValues`). */
+      options?: SeedOption[];
+      variants?: SeedVariant[];
     }[];
   }[];
+}
+
+interface SeedOption {
+  nameEn: string;
+  nameAr: string;
+  values: { nameEn: string; nameAr: string }[];
+}
+
+interface SeedVariant {
+  /** Required without options; a combination is named after its values. */
+  nameEn?: string;
+  nameAr?: string;
+  price: number;
+  sku?: string;
+  cost?: number;
+  trackInventory?: boolean;
+  optionValues?: number[];
+  barcodes?: string[];
+}
+
+type SeedProduct = SeedMenu['categories'][number]['products'][number];
+
+const barcodeRows = (codes: readonly string[]) =>
+  codes.map((code, i) => ({ code, symbology: detectSymbology(code), isPrimary: i === 0 }));
+
+/**
+ * The retail catalog of one seeded product (ADR 0021): its options, variants (with SKUs, costs and
+ * their barcodes) and its own barcodes. Writes nothing for a product that has options already;
+ * a product seeded before it had options gets them, its old variants archived.
+ */
+async function seedProductCatalog(
+  prisma: PrismaClient,
+  tenantId: string,
+  productId: string,
+  spec: Pick<SeedProduct, 'barcodes' | 'options' | 'variants'>,
+): Promise<void> {
+  const options = spec.options ?? [];
+  if (options.length > 0) {
+    if ((await prisma.productOption.count({ where: { productId } })) > 0) return;
+    await prisma.productVariant.updateMany({
+      where: { productId, archivedAt: null },
+      data: { archivedAt: new Date() },
+    });
+  }
+  const valueIds: string[][] = [];
+  for (const [i, { values, ...option }] of options.entries()) {
+    const row = await prisma.productOption.create({
+      data: {
+        ...option,
+        productId,
+        sortOrder: i,
+        values: { create: values.map((v, j) => ({ ...v, sortOrder: j })) },
+      },
+      include: { values: { orderBy: { sortOrder: 'asc' } } },
+    });
+    valueIds.push(row.values.map((v) => v.id));
+  }
+  const existing = await prisma.productVariant.findMany({
+    where: { productId, archivedAt: null },
+    orderBy: { sortOrder: 'asc' },
+  });
+  for (const [k, { optionValues = [], barcodes = [], ...variant }] of (
+    spec.variants ?? []
+  ).entries()) {
+    const named =
+      options.length > 0
+        ? combinationName(optionValues.map((value, option) => options[option]!.values[value]!))
+        : { nameEn: variant.nameEn ?? '', nameAr: variant.nameAr ?? '' };
+    const data: Prisma.ProductVariantUncheckedCreateInput = {
+      ...variant,
+      ...named,
+      productId,
+      sortOrder: k,
+      optionValues: {
+        create: optionValues.map((value, option) => ({ optionValueId: valueIds[option]![value]! })),
+      },
+    };
+    // Variants seeded before M5 (matched by position) get their SKU and barcodes.
+    const before = options.length === 0 ? existing[k] : undefined;
+    const row = before
+      ? await prisma.productVariant.update({
+          where: { id: before.id },
+          data: { sku: variant.sku ?? before.sku, cost: variant.cost ?? before.cost },
+        })
+      : await prisma.productVariant.create({ data });
+    await addBarcodes(prisma, tenantId, productId, row.id, barcodes);
+  }
+  await addBarcodes(prisma, tenantId, productId, null, spec.barcodes ?? []);
+}
+
+/** Adds the codes this tenant does not have yet. */
+async function addBarcodes(
+  prisma: PrismaClient,
+  tenantId: string,
+  productId: string,
+  variantId: string | null,
+  codes: readonly string[],
+): Promise<void> {
+  const taken = new Set(
+    (await prisma.productBarcode.findMany({ where: { tenantId, code: { in: [...codes] } } })).map(
+      (b) => b.code,
+    ),
+  );
+  const hasPrimary =
+    (await prisma.productBarcode.count({ where: { productId, variantId, isPrimary: true } })) > 0;
+  const rows = barcodeRows(codes)
+    .map((b) => ({ ...b, isPrimary: b.isPrimary && !hasPrimary }))
+    .filter((b) => !taken.has(b.code));
+  if (rows.length > 0) {
+    await prisma.productBarcode.createMany({
+      data: rows.map((b) => ({ ...b, tenantId, productId, variantId })),
+    });
+  }
+}
+
+/**
+ * Brings the retail catalog of an existing demo tenant up to its seed file: products are found by
+ * SKU, and get the options, variant SKUs and barcodes they were seeded without.
+ */
+async function alignCatalog(prisma: PrismaClient, tenantId: string, menu: SeedMenu): Promise<void> {
+  for (const product of menu.categories.flatMap((c) => c.products)) {
+    if (
+      !product.barcodes &&
+      !product.options &&
+      !product.variants?.some((v) => v.barcodes || v.sku)
+    ) {
+      continue;
+    }
+    const row = await prisma.product.findFirst({ where: { tenantId, sku: product.sku } });
+    if (row) await seedProductCatalog(prisma, tenantId, row.id, product);
+  }
 }
 
 /** Creates the demo menu once; skipped when the tenant already has categories. */
@@ -94,14 +233,21 @@ async function seedMenu(prisma: PrismaClient, tenantId: string, menu: SeedMenu):
   };
   for (const [i, { products, ...category }] of menu.categories.entries()) {
     const cat = await prisma.category.create({ data: { ...category, tenantId, sortOrder: i } });
-    for (const [j, { stations, groups, variants = [], ...product }] of products.entries()) {
-      await prisma.product.create({
+    for (const [j, spec] of products.entries()) {
+      const {
+        stations,
+        groups,
+        variants: _variants,
+        barcodes: _barcodes,
+        options: _options,
+        ...product
+      } = spec;
+      const row = await prisma.product.create({
         data: {
           ...product,
           tenantId,
           categoryId: cat.id,
           sortOrder: j,
-          variants: { create: variants.map((v, k) => ({ ...v, sortOrder: k })) },
           modifierGroups: {
             create: groups.map((g, k) => ({ modifierGroupId: lookup(groupIds, g), sortOrder: k })),
           },
@@ -110,6 +256,7 @@ async function seedMenu(prisma: PrismaClient, tenantId: string, menu: SeedMenu):
           },
         },
       });
+      await seedProductCatalog(prisma, tenantId, row.id, spec);
     }
   }
 }
@@ -229,7 +376,17 @@ export async function seed(prisma: PrismaClient, file: SeedFile): Promise<void> 
   if (process.env.SEED_ALIGN_TENANTS === '1') {
     await alignTenant(prisma, tenant.id, locationIds, file);
   }
-  if (file.menu) await seedMenu(prisma, tenant.id, file.menu);
+  if (file.menu) {
+    if (process.env.SEED_ALIGN_TENANTS === '1') await alignCatalog(prisma, tenant.id, file.menu);
+    await seedMenu(prisma, tenant.id, file.menu);
+  }
+  for (const [feature, enabled] of Object.entries(file.features ?? {})) {
+    await prisma.featureOverride.upsert({
+      where: { tenantId_scope_feature: { tenantId: tenant.id, scope: 'tenant', feature } },
+      create: { tenantId: tenant.id, scope: 'tenant', feature, enabled },
+      update: {},
+    });
+  }
   await seedConfiguration(prisma, tenant.id, locationIds, file);
 
   for (const userSpec of file.users) {

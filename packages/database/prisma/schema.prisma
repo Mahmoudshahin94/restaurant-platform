@@ -241,6 +241,8 @@ model Tenant {
   featureOverrides FeatureOverride[]
   branding         TenantBranding?
   files            TenantFile[]
+  productBarcodes  ProductBarcode[]
+  productImages    ProductImage[]
 
   @@map("tenants")
 }
@@ -560,6 +562,7 @@ model TenantFile {
   tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   brandingLogo    TenantBranding[] @relation("BrandingLogo")
   brandingFavicon TenantBranding[] @relation("BrandingFavicon")
+  productImages   ProductImage[]
 
   @@index([tenantId, createdAt])
   @@map("tenant_files")
@@ -640,28 +643,139 @@ model Product {
   locationSettings LocationProduct[]
   taxes            ProductTax[]
   orderItems       OrderItem[]
+  options          ProductOption[]
+  barcodes         ProductBarcode[]
+  images           ProductImage[]
 
   @@unique([tenantId, sku])
   @@index([tenantId, categoryId, sortOrder])
   @@map("products")
 }
 
+/// A sellable version of a product. Either named by hand (a size of a drink), or one combination
+/// of the product's option values (Size M × Colour Red), when the product has options (ADR 0021).
 model ProductVariant {
-  id         String    @id @default(uuid(7)) @db.Uuid
-  productId  String    @map("product_id") @db.Uuid
-  nameEn     String    @map("name_en")
-  nameAr     String    @map("name_ar")
+  id             String    @id @default(uuid(7)) @db.Uuid
+  productId      String    @map("product_id") @db.Uuid
+  nameEn         String    @map("name_en")
+  nameAr         String    @map("name_ar")
+  /// Stock-keeping code, unique within the tenant across products and variants (checked by the
+  /// catalog service: variants carry no tenant column).
+  sku            String?
   /// Absolute price in minor units (not a delta).
-  price      Int
-  sortOrder  Int       @default(0) @map("sort_order")
-  archivedAt DateTime? @map("archived_at") @db.Timestamptz(3)
-  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  price          Int
+  /// What one unit costs the business, minor units. Never published to screens or customers.
+  cost           Int?
+  /// Whether stock of this variant is counted (INVENTORY). The stock ledger is a later phase.
+  trackInventory Boolean   @default(false) @map("track_inventory")
+  sortOrder      Int       @default(0) @map("sort_order")
+  archivedAt     DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  product      Product                     @relation(fields: [productId], references: [id], onDelete: Restrict)
+  optionValues ProductVariantOptionValue[]
+  barcodes     ProductBarcode[]
+  images       ProductImage[]
 
   @@index([productId])
   @@map("product_variants")
+}
+
+/// An option axis of a product (Size, Colour, Material...). The variants of a product with
+/// options are combinations of one value of each (ADR 0021). Nothing here is clothing-specific.
+model ProductOption {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  nameEn    String   @map("name_en")
+  nameAr    String   @map("name_ar")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  product Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  values  ProductOptionValue[]
+
+  @@index([productId])
+  @@map("product_options")
+}
+
+/// One value of an option (Size: S, M, L). Removed values leave archived variants named as sold.
+model ProductOptionValue {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  optionId  String   @map("option_id") @db.Uuid
+  nameEn    String   @map("name_en")
+  nameAr    String   @map("name_ar")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  option   ProductOption               @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  variants ProductVariantOptionValue[]
+
+  @@index([optionId])
+  @@map("product_option_values")
+}
+
+/// Which value of each option a variant is: one row per option of its product.
+model ProductVariantOptionValue {
+  variantId     String @map("variant_id") @db.Uuid
+  optionValueId String @map("option_value_id") @db.Uuid
+
+  variant ProductVariant     @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  value   ProductOptionValue @relation(fields: [optionValueId], references: [id], onDelete: Cascade)
+
+  @@id([variantId, optionValueId])
+  @@index([optionValueId])
+  @@map("product_variant_option_values")
+}
+
+/// A scannable code of a product, or of one of its variants (ADR 0021). Unique within the tenant,
+/// so a scan names exactly one thing to sell. EAN/UPC check digits are verified when saved.
+model ProductBarcode {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  /// Set when the code names one variant; required for a product with variants.
+  variantId String?  @map("variant_id") @db.Uuid
+  code      String
+  /// @pos/shared-types BarcodeSymbology: EAN13, EAN8, UPC_A, CODE128 or OTHER.
+  symbology String
+  /// The code printed on labels and kept on order lines when nothing was scanned.
+  isPrimary Boolean  @default(false) @map("is_primary")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  product Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, code])
+  @@index([productId])
+  @@index([variantId])
+  @@map("product_barcodes")
+}
+
+/// A picture of a product or of one of its variants, kept in the tenant file storage (ADR 0019).
+/// Pictures stay in the cloud for now: no screen at a location shows them yet.
+model ProductImage {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  variantId String?  @map("variant_id") @db.Uuid
+  fileId    String   @map("file_id") @db.Uuid
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant  Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  product Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  file    TenantFile      @relation(fields: [fileId], references: [id], onDelete: Restrict)
+
+  @@index([productId, sortOrder])
+  @@index([variantId])
+  @@index([fileId])
+  @@map("product_images")
 }
 
 model ModifierGroup {
@@ -942,6 +1056,10 @@ model OrderItem {
   nameAr        String   @map("name_ar")
   variantNameEn String?  @map("variant_name_en")
   variantNameAr String?  @map("variant_name_ar")
+  /// The variant's (else the product's) SKU when ordered.
+  sku           String?
+  /// The code scanned for this line, else the item's primary barcode when ordered (ADR 0021).
+  barcode       String?
   quantity      Int
   /// Product or variant price, before modifiers.
   basePrice     Int      @map("base_price")

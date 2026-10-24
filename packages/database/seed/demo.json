@@ -88,6 +88,9 @@
       "permissions": ["kitchen.view", "kitchen.update", "products.view", "locations.view"]
     }
   ],
+  "features": {
+    "BARCODE": true
+  },
   "users": [
     {
       "envPrefix": "SEED_OWNER",
@@ -259,12 +262,16 @@
               {
                 "nameEn": "Regular",
                 "nameAr": "عادي",
-                "price": 600
+                "price": 600,
+                "sku": "DR-COLA-R",
+                "barcodes": ["6291000001010"]
               },
               {
                 "nameEn": "Large",
                 "nameAr": "كبير",
-                "price": 800
+                "price": 800,
+                "sku": "DR-COLA-L",
+                "barcodes": ["6291000001027"]
               }
             ]
           }

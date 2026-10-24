@@ -44,7 +44,8 @@
             "nameAr": "أرز 5 كغ",
             "price": 3500,
             "stations": [],
-            "groups": []
+            "groups": [],
+            "barcodes": ["7291000000012"]
           },
           {
             "sku": "OIL-1L",
@@ -52,7 +53,8 @@
             "nameAr": "زيت زيتون 1 لتر",
             "price": 4500,
             "stations": [],
-            "groups": []
+            "groups": [],
+            "barcodes": ["7291000000029", "OIL-1L-SHELF"]
           }
         ]
       },
@@ -66,7 +68,8 @@
             "nameAr": "لبنة 500 غ",
             "price": 1200,
             "stations": [],
-            "groups": []
+            "groups": [],
+            "barcodes": ["7291000000036"]
           }
         ]
       }
