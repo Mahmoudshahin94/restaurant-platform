@@ -58,8 +58,8 @@ export function OrderPage() {
 
   /**
    * A scanned or typed code (ADR 0021), looked up in this till's copy of the menu, so scanning
-   * works with the hub's link to the cloud down. The item goes into the cart like a tap would:
-   * straight in, or through its options when it has modifiers to choose.
+   * works with the hub's link to the cloud down. The item goes straight into the cart with its
+   * default options, unless it has a choice to make first (a required modifier group).
    */
   const scan = (menu: PublishedMenu | undefined, { code }: ScanEvent) => {
     if (!menu) return;
@@ -79,11 +79,15 @@ export function OrderPage() {
     const barcode = match.matchedBy === 'BARCODE' ? match.code : null;
     const variantId = variant?.id ?? null;
     const groups = modifiersOn ? product.modifierGroups : [];
-    if (groups.length > 0 || (product.variants.length > 0 && !variant)) {
+    // Scanning keeps the till moving: only a choice the item needs stops it.
+    if (groups.some((g) => g.minSelect > 0) || (product.variants.length > 0 && !variant)) {
       setPicking({ product, lineId: null, variantId, ...(barcode ? { barcode } : {}) });
       return;
     }
-    cart.addLine({ productId: product.id, variantId, modifierIds: [], barcode });
+    const modifierIds = groups.flatMap((g) =>
+      g.modifiers.filter((m) => m.isDefault).map((m) => m.id),
+    );
+    cart.addLine({ productId: product.id, variantId, modifierIds, barcode });
     notify('ok', t('scan.added', { name }));
   };
   const scanner = useBarcodeScanner(
