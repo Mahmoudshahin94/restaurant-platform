@@ -66,7 +66,7 @@ async function call(
   payload?: unknown,
   headers = owner,
 ) {
-  return app.inject({ method, url, headers, ...(payload ? { payload: payload as object } : {}) });
+  return app.inject({ method, url, headers, ...(payload ? { payload: payload } : {}) });
 }
 
 async function send<T>(method: 'POST' | 'PATCH', url: string, payload: unknown): Promise<T> {
@@ -138,9 +138,13 @@ describe('options and the variant matrix', () => {
     expect(tee.variants[2]?.optionValueIds).toEqual([m!.id, red!.id]);
     expect(tee.variants[0]?.optionValueIds).toEqual([s!.id, red!.id]);
     expect(tee.variants.every((v) => v.trackInventory)).toBe(true);
-    expect(tee.variants[0]?.barcodes).toEqual([
-      { id: expect.any(String), code: '6291234000018', symbology: 'EAN13', isPrimary: true },
-    ]);
+    expect(
+      tee.variants[0]?.barcodes.map(({ code, symbology, isPrimary }) => ({
+        code,
+        symbology,
+        isPrimary,
+      })),
+    ).toEqual([{ code: '6291234000018', symbology: 'EAN13', isPrimary: true }]);
     expect(tee.barcodes).toEqual([]);
   });
 

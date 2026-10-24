@@ -92,6 +92,13 @@ interface SeedVariant {
 
 type SeedProduct = SeedMenu['categories'][number]['products'][number];
 
+/** A value a seed file refers to by position; a wrong index is a broken seed file. */
+function seedRef<T>(value: T | undefined): T {
+  if (value === undefined)
+    throw new Error('Seed variant names an option value that does not exist');
+  return value;
+}
+
 const barcodeRows = (codes: readonly string[]) =>
   codes.map((code, i) => ({ code, symbology: detectSymbology(code), isPrimary: i === 0 }));
 
@@ -136,7 +143,9 @@ async function seedProductCatalog(
   ).entries()) {
     const named =
       options.length > 0
-        ? combinationName(optionValues.map((value, option) => options[option]!.values[value]!))
+        ? combinationName(
+            optionValues.map((value, option) => seedRef(options[option]?.values[value])),
+          )
         : { nameEn: variant.nameEn ?? '', nameAr: variant.nameAr ?? '' };
     const data: Prisma.ProductVariantUncheckedCreateInput = {
       ...variant,
@@ -144,7 +153,9 @@ async function seedProductCatalog(
       productId,
       sortOrder: k,
       optionValues: {
-        create: optionValues.map((value, option) => ({ optionValueId: valueIds[option]![value]! })),
+        create: optionValues.map((value, option) => ({
+          optionValueId: seedRef(valueIds[option]?.[value]),
+        })),
       },
     };
     // Variants seeded before M5 (matched by position) get their SKU and barcodes.
