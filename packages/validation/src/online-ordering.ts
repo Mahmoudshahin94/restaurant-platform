@@ -7,8 +7,6 @@ import {
   enumValues,
 } from '@pos/shared-types';
 import { z } from 'zod';
-import { resolvedBrandingSchema } from './branding';
-import { resolvedCurrencySchema, resolvedLocalesSchema } from './localization';
 import { idSchema, isoDateTimeSchema, minorUnitsSchema } from './common';
 import { orderItemInputSchema } from './orders';
 
@@ -91,21 +89,7 @@ export const publicLocationSchema = z.object({
 });
 export type PublicLocation = z.infer<typeof publicLocationSchema>;
 
-export const publicTenantSchema = z.object({
-  id: idSchema,
-  slug: z.string(),
-  nameEn: z.string(),
-  nameAr: z.string(),
-  /** How the store shows amounts (ADR 0020). */
-  currency: resolvedCurrencySchema,
-  /** The languages the store offers; the website starts in the default (ADR 0020). */
-  locales: resolvedLocalesSchema,
-  timezone: z.string(),
-  locations: z.array(publicLocationSchema),
-  /** The website's branding (surface `website`, ADR 0019); its files are public. */
-  branding: resolvedBrandingSchema,
-});
-export type PublicTenant = z.infer<typeof publicTenantSchema>;
+// The public site (tenant, its locations and its website) is `publicSiteSchema` (website.ts).
 
 // --- Customer orders ------------------------------------------------------------------------------
 

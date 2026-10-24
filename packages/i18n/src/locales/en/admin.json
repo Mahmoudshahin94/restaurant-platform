@@ -656,6 +656,9 @@
     "online_ordering": {
       "manage": "Manage online ordering"
     },
+    "website": {
+      "manage": "Edit the website and its domains"
+    },
     "devices": {
       "manage": "Manage devices"
     },

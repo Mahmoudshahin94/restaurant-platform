@@ -29,6 +29,8 @@ export const PERMISSIONS = [
   'locations.view',
   'settings.manage',
   'online_ordering.manage',
+  /** Edit and publish the website, and manage its domains (ADR 0023). */
+  'website.manage',
   'devices.manage',
   /** Leave a self-service kiosk's customer screens with a PIN (ADR 0022). */
   'kiosk.attend',
