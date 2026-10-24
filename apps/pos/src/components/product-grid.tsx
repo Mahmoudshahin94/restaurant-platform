@@ -1,8 +1,8 @@
 import { useCurrentLocale, useMoneyFormat } from '@pos/app-kit';
 import { pickLocalized } from '@pos/i18n';
 import type { PublishedMenu, PublishedMenuProduct } from '@pos/validation';
-import { Badge, EmptyState, Input, cn } from '@pos/ui';
-import { Search } from 'lucide-react';
+import { Badge, Button, EmptyState, Input, cn } from '@pos/ui';
+import { ScanBarcode, Search } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,10 +11,12 @@ export const FOCUS_SEARCH_EVENT = 'pos:focus-search';
 interface ProductGridProps {
   menu: PublishedMenu;
   onSelect: (product: PublishedMenuProduct) => void;
+  /** Opens manual barcode entry; the button shows only where barcodes are on (ADR 0021). */
+  onEnterCode?: () => void;
 }
 
 /** Category tabs, quick search and large product tiles (touch-first). */
-export function ProductGrid({ menu, onSelect }: ProductGridProps) {
+export function ProductGrid({ menu, onSelect, onEnterCode }: ProductGridProps) {
   const { t } = useTranslation('pos');
   const locale = useCurrentLocale();
   const { format } = useMoneyFormat(menu.currencyCode);
@@ -54,26 +56,34 @@ export function ProductGrid({ menu, onSelect }: ProductGridProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      <div className="relative">
-        <Search
-          aria-hidden
-          className="pointer-events-none absolute start-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground"
-        />
-        <Input
-          ref={searchRef}
-          type="search"
-          className="h-12 ps-11 text-base"
-          aria-label={t('menu.search')}
-          placeholder={`${t('menu.search')}  /`}
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setSearch('');
-            if (e.key === 'Enter' && products[0]?.isAvailable) onSelect(products[0]);
-          }}
-        />
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search
+            aria-hidden
+            className="pointer-events-none absolute start-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            ref={searchRef}
+            type="search"
+            className="h-12 ps-11 text-base"
+            aria-label={t('menu.search')}
+            placeholder={`${t('menu.search')}  /`}
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setSearch('');
+              if (e.key === 'Enter' && products[0]?.isAvailable) onSelect(products[0]);
+            }}
+          />
+        </div>
+        {onEnterCode ? (
+          <Button variant="outline" className="h-12 shrink-0" onClick={onEnterCode}>
+            <ScanBarcode aria-hidden className="size-5" />
+            {t('scan.enterCode')}
+          </Button>
+        ) : null}
       </div>
       <div role="tablist" className="flex gap-2 overflow-x-auto pb-1">
         <button

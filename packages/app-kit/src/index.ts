@@ -11,5 +11,6 @@ export * from './permissions';
 export * from './session';
 export * from './storage';
 export * from './realtime';
+export * from './scanner';
 export * from './tenant-context';
 export * from './theme';

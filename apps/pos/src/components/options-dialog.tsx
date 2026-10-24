@@ -25,7 +25,8 @@ export interface OptionsResult {
 interface OptionsDialogProps {
   product: PublishedMenuProduct;
   currency: string;
-  initial?: OptionsResult;
+  /** The line being edited, or a scanned variant to start from. */
+  initial?: Partial<OptionsResult>;
   mode: 'add' | 'update';
   onConfirm: (result: OptionsResult) => void;
 }

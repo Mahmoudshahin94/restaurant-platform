@@ -14,6 +14,16 @@
     "soldOut": "Sold out",
     "loading": "Loading menu…"
   },
+  "scan": {
+    "enterCode": "Enter barcode",
+    "title": "Enter a barcode",
+    "hint": "Type the code printed on the item, or its SKU.",
+    "code": "Barcode or SKU",
+    "add": "Add to order",
+    "added": "Added {{name}}",
+    "unknown": "No item has the code {{code}}",
+    "soldOut": "{{name}} is sold out"
+  },
   "cart": {
     "title": "Current order",
     "editing": "Editing {{number}}",

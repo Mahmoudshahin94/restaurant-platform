@@ -15,6 +15,8 @@ export interface CartLine {
   modifierIds: string[];
   quantity: number;
   notes: string | null;
+  /** The code scanned for this line (ADR 0021); kept on the order line. */
+  barcode?: string | null;
 }
 
 export interface EditingOrder {
@@ -43,7 +45,7 @@ interface CartData {
 
 interface CartActions {
   ensureLocation: (locationId: string) => void;
-  addLine: (line: Omit<CartLine, 'id' | 'quantity' | 'notes'> & { quantity?: number }) => void;
+  addLine: (line: Omit<CartLine, 'id' | 'quantity' | 'notes'> & { quantity?: number }) => string;
   updateLine: (id: string, patch: Partial<Omit<CartLine, 'id'>>) => void;
   setQuantity: (id: string, quantity: number) => void;
   removeLine: (id: string) => void;
@@ -91,17 +93,21 @@ export const useCart = create<CartData & CartActions>()(
         set((s) => (s.locationId === locationId ? s : emptyCart(locationId)));
       },
       addLine: ({ quantity = 1, ...line }) => {
+        // Scanning the same item again adds one to its line, like tapping it.
+        let lineId = newId();
         set((s) => {
           const same = s.lines.find((l) => l.notes === null && sameConfig(l, line));
           if (same) {
+            lineId = same.id;
             return {
               lines: s.lines.map((l) =>
                 l === same ? { ...l, quantity: Math.min(999, l.quantity + quantity) } : l,
               ),
             };
           }
-          return { lines: [...s.lines, { ...line, id: newId(), quantity, notes: null }] };
+          return { lines: [...s.lines, { ...line, id: lineId, quantity, notes: null }] };
         });
+        return lineId;
       },
       updateLine: (id, patch) => {
         set((s) => ({ lines: s.lines.map((l) => (l.id === id ? { ...l, ...patch } : l)) }));
@@ -179,6 +185,7 @@ export function cartToRequest(cart: CartData) {
       modifierIds: l.modifierIds,
       quantity: l.quantity,
       notes: l.notes,
+      barcode: l.barcode ?? null,
     })),
   };
 }
