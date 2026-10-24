@@ -57,6 +57,7 @@ const toItemRequests = (items: CreateInput['items']) =>
     variantId: i.variantId,
     modifierIds: i.modifierIds,
     quantity: i.quantity,
+    barcode: i.barcode,
   }));
 
 const sameSet = (a: readonly string[], b: readonly string[]) =>

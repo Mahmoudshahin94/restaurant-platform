@@ -108,6 +108,8 @@ export function toOrderDto(row: OrderRow): Order {
       nameAr: item.nameAr,
       variantNameEn: item.variantNameEn,
       variantNameAr: item.variantNameAr,
+      sku: item.sku,
+      barcode: item.barcode,
       quantity: item.quantity,
       basePrice: item.basePrice,
       unitPrice: item.unitPrice,

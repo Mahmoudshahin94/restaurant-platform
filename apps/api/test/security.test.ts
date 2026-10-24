@@ -65,6 +65,7 @@ const key = (r: RouteEntry) => `${r.method} ${r.path}`;
  * here, and every route listed is called with its module off below.
  */
 const FEATURE_ROUTES: Record<string, Feature> = {
+  'GET /locations/:locationId/catalog/lookup': 'BARCODE',
   'GET /locations/:locationId/floor': 'TABLES',
   'GET /locations/:locationId/kitchen/settings': 'KDS',
   'GET /locations/:locationId/kitchen/tickets': 'KDS',
@@ -285,6 +286,7 @@ describe('modules on every gated route (ADR 0018)', () => {
   });
 
   it('answers 403 FEATURE_DISABLED on every gated route while its module is off', async () => {
+    // BARCODE is off by default for a restaurant; the others are switched off.
     await switchOff(['KDS', 'TABLES', 'ONLINE_ORDERING']);
     const failures: string[] = [];
     for (const route of routes.filter((r) => r.features.length > 0)) {
@@ -303,6 +305,9 @@ describe('modules on every gated route (ADR 0018)', () => {
 
   it('serves the same routes again once the module is back on', async () => {
     await prisma.featureOverride.deleteMany({ where: { tenantId: tenant.tenantId } });
+    await prisma.featureOverride.create({
+      data: { tenantId: tenant.tenantId, scope: 'tenant', feature: 'BARCODE', enabled: true },
+    });
     const failures: string[] = [];
     for (const route of routes.filter((r) => r.features.length > 0)) {
       const res = await app.inject({ method: methodOf(route), ...requestFor(route) });

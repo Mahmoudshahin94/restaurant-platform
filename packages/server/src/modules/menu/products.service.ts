@@ -10,6 +10,8 @@ import type {
 import type { z } from 'zod';
 import { PrismaService, type PrismaTx } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { FeatureService } from '../features/feature.service';
+import { TenantFilesService } from '../files/tenant-files.service';
 import {
   assertCategory,
   assertKitchenStations,
@@ -17,6 +19,7 @@ import {
   assertTaxes,
 } from './catalog-refs';
 import { type ProductWithRelations, productInclude, toProductDto } from './menu.mappers';
+import { type PriceChange, writeProductCatalog } from './product-catalog';
 
 type CreateInput = z.output<typeof createProductSchema>;
 type UpdateInput = z.output<typeof updateProductSchema>;
@@ -27,6 +30,8 @@ export class ProductsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly features: FeatureService,
+    private readonly files: TenantFilesService,
   ) {}
 
   async list(tenantId: string, query: ListQuery): Promise<Product[]> {
@@ -40,6 +45,9 @@ export class ProductsService {
               { nameEn: { contains: query.search, mode: 'insensitive' } },
               { nameAr: { contains: query.search, mode: 'insensitive' } },
               { sku: { contains: query.search, mode: 'insensitive' } },
+              { variants: { some: { sku: { contains: query.search, mode: 'insensitive' } } } },
+              // A scanned code finds its product (ADR 0021).
+              { barcodes: { some: { code: query.search } } },
             ],
           }
         : {}),
@@ -67,18 +75,33 @@ export class ProductsService {
       await assertKitchenStations(tx, tenantId, input.stationIds);
       await assertTaxes(tx, tenantId, input.taxIds);
 
-      const { variants, modifierGroups, stationIds, taxIds, ...fields } = input;
-      const row = await tx.product.create({
+      const {
+        options,
+        variants,
+        barcodes,
+        imageFileIds,
+        modifierGroups,
+        stationIds,
+        taxIds,
+        ...fields
+      } = input;
+      const { id } = await tx.product.create({
         data: {
           ...fields,
           tenantId,
-          variants: { create: variants.map(({ id: _ignored, ...v }) => v) },
           modifierGroups: { create: modifierGroups },
           stations: { create: stationIds.map((kitchenStationId) => ({ kitchenStationId })) },
           taxes: { create: taxIds.map((taxId) => ({ taxId })) },
         },
-        include: productInclude,
       });
+      await writeProductCatalog(
+        tx,
+        this.catalogServices,
+        tenantId,
+        await this.load(tx, tenantId, id),
+        { sku: fields.sku, options, variants, barcodes, imageFileIds },
+      );
+      const row = await this.load(tx, tenantId, id);
       await this.audit.record(
         {
           action: 'product.created',
@@ -95,8 +118,17 @@ export class ProductsService {
   async update(tenantId: string, productId: string, input: UpdateInput): Promise<Product> {
     return this.prisma.$transaction(async (tx) => {
       const current = await this.load(tx, tenantId, productId);
-      const { variants, modifierGroups, stationIds, taxIds, ...fields } = input;
-      const priceChanges: Record<string, unknown>[] = [];
+      const {
+        options,
+        variants,
+        barcodes,
+        imageFileIds,
+        modifierGroups,
+        stationIds,
+        taxIds,
+        ...fields
+      } = input;
+      const priceChanges: PriceChange[] = [];
 
       if (fields.categoryId) await assertCategory(tx, tenantId, fields.categoryId);
       if (modifierGroups) {
@@ -116,33 +148,14 @@ export class ProductsService {
         }
       }
 
-      if (variants) {
-        const existing = new Map(current.variants.map((v) => [v.id, v]));
-        const keep = new Set<string>();
-        for (const { id, ...data } of variants) {
-          if (id) {
-            const before = existing.get(id);
-            if (!before)
-              throw new DomainError('VARIANT_NOT_FOUND', 'Variant not in product', {
-                variantId: id,
-              });
-            keep.add(id);
-            await tx.productVariant.update({ where: { id }, data: { ...data, archivedAt: null } });
-            if (before.price !== data.price) {
-              priceChanges.push({ productId, variantId: id, from: before.price, to: data.price });
-            }
-          } else {
-            await tx.productVariant.create({ data: { ...data, productId } });
-          }
-        }
-        const toArchive = current.variants.filter((v) => v.archivedAt === null && !keep.has(v.id));
-        if (toArchive.length > 0) {
-          await tx.productVariant.updateMany({
-            where: { id: { in: toArchive.map((v) => v.id) } },
-            data: { archivedAt: new Date() },
-          });
-        }
-      }
+      priceChanges.push(
+        ...(await writeProductCatalog(tx, this.catalogServices, tenantId, current, {
+          options,
+          variants,
+          barcodes,
+          imageFileIds,
+        })),
+      );
 
       if (modifierGroups) {
         await tx.productModifierGroup.deleteMany({ where: { productId } });
@@ -202,6 +215,10 @@ export class ProductsService {
       );
       return toProductDto(await this.load(tx, tenantId, productId));
     });
+  }
+
+  private get catalogServices() {
+    return { features: this.features, files: this.files };
   }
 
   private async load(

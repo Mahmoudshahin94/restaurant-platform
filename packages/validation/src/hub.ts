@@ -56,6 +56,11 @@ export const SNAPSHOT_TABLES = [
   'modifiers',
   'products',
   'productVariants',
+  /** Retail catalog (ADR 0021): option axes, their values, each variant's values, barcodes. */
+  'productOptions',
+  'productOptionValues',
+  'productVariantOptionValues',
+  'productBarcodes',
   'productModifierGroups',
   'productStations',
   'productTaxes',
@@ -79,9 +84,10 @@ export type SnapshotTable = (typeof SNAPSHOT_TABLES)[number];
 export const locationSnapshotSchema = z.object({
   /**
    * Bumped when the snapshot format changes incompatibly (2: the tenant rename, ADR 0017; 3: the
-   * modules a hub must enforce, ADR 0018; 4: branding and its files, ADR 0019).
+   * modules a hub must enforce, ADR 0018; 4: branding and its files, ADR 0019; 5: options and
+   * barcodes, ADR 0021).
    */
-  format: z.literal(4),
+  format: z.literal(5),
   tenantId: idSchema,
   locationId: idSchema,
   generatedAt: isoDateTimeSchema,

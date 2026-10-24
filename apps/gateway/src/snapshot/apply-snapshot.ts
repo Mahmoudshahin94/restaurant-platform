@@ -5,10 +5,18 @@ import type { HubTx } from '../database/hub-database';
 
 type Row = Record<string, unknown>;
 
-/** Join tables and grants: the snapshot is the complete set, so they are replaced wholesale. */
+/**
+ * Join tables, grants and rows the cloud deletes rather than archives (options, barcodes): the
+ * snapshot is the complete set, so they are replaced wholesale. A barcode moved to another item
+ * is a new row with the same code, which an upsert by id would collide with.
+ */
 const REPLACED: ReadonlySet<SnapshotTable> = new Set([
   'rolePermissions',
   'userRoles',
+  'productOptions',
+  'productOptionValues',
+  'productVariantOptionValues',
+  'productBarcodes',
   'productModifierGroups',
   'productStations',
   'productTaxes',
@@ -35,6 +43,10 @@ const DELEGATE: Record<SnapshotTable, string> = {
   modifiers: 'modifier',
   products: 'product',
   productVariants: 'productVariant',
+  productOptions: 'productOption',
+  productOptionValues: 'productOptionValue',
+  productVariantOptionValues: 'productVariantOptionValue',
+  productBarcodes: 'productBarcode',
   productModifierGroups: 'productModifierGroup',
   productStations: 'productStation',
   productTaxes: 'productTax',

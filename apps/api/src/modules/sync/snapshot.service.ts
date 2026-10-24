@@ -92,6 +92,17 @@ export class SnapshotService {
       }),
       products: await db.product.findMany({ where: { tenantId }, orderBy: byId }),
       productVariants: await db.productVariant.findMany({ where: productWhere, orderBy: byId }),
+      // Retail catalog (ADR 0021): published with the menu, so the POS can scan offline.
+      productOptions: await db.productOption.findMany({ where: productWhere, orderBy: byId }),
+      productOptionValues: await db.productOptionValue.findMany({
+        where: { option: productWhere },
+        orderBy: byId,
+      }),
+      productVariantOptionValues: await db.productVariantOptionValue.findMany({
+        where: { variant: productWhere },
+        orderBy: [{ variantId: 'asc' }, { optionValueId: 'asc' }],
+      }),
+      productBarcodes: await db.productBarcode.findMany({ where: { tenantId }, orderBy: byId }),
       productModifierGroups: await db.productModifierGroup.findMany({
         where: productWhere,
         orderBy: [{ productId: 'asc' }, { modifierGroupId: 'asc' }],
@@ -142,7 +153,7 @@ export class SnapshotService {
       .digest('hex')
       .slice(0, 32);
     return {
-      format: 4,
+      format: 5,
       tenantId,
       locationId,
       generatedAt: new Date().toISOString(),

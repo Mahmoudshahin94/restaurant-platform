@@ -62,6 +62,8 @@ export function syncBuilders({ tenant, menu, cashMethodId, registerId }: SyncCon
           nameAr: 'برجر',
           variantNameEn: null,
           variantNameAr: null,
+          sku: null,
+          barcode: null,
           quantity: 1,
           basePrice: 2500,
           unitPrice: 2800,

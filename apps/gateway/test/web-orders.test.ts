@@ -98,6 +98,8 @@ function cloudOrder(overrides: Partial<SyncOrder> = {}, paidOnline = false): Syn
         nameAr: 'برجر',
         variantNameEn: null,
         variantNameAr: null,
+        sku: null,
+        barcode: null,
         quantity: 1,
         basePrice: 2500,
         unitPrice: 2500,
