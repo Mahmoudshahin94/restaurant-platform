@@ -149,7 +149,7 @@ test('a website order reaches the store, is accepted, and the customer sees it',
   await page.getByLabel('Name', { exact: true }).fill('Sara E2E');
   await page.getByLabel('Mobile number').fill('+966500000123');
   await page.getByLabel('Order notes (optional)').fill('Ring the bell');
-  await page.getByRole('button', { name: /Place order · SAR\s?40\.00/ }).click();
+  await page.getByRole('button', { name: /Place order · ₪40\.00/ }).click();
 
   await expect(page.getByRole('heading', { name: 'Thank you, Sara E2E!' })).toBeVisible();
   const sent = await page.getByText(/Order W-\d+ was sent to Main Branch/).innerText();
