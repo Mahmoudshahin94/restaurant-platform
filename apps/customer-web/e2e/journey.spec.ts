@@ -73,7 +73,7 @@ test('one order through every app: website, cloud, hub, POS, kitchen and back', 
   await page.getByRole('link', { name: 'Checkout' }).click();
   await page.getByLabel('Name', { exact: true }).fill('Journey E2E');
   await page.getByLabel('Mobile number').fill('+966500000777');
-  await page.getByRole('button', { name: /Place order · SAR\s?37\.00/ }).click();
+  await page.getByRole('button', { name: /Place order · ₪37\.00/ }).click();
   const sent = await page.getByText(/Order W-\d+ was sent to Main Branch/).innerText();
   const number = /W-\d+/.exec(sent)?.[0] ?? '';
   expect(number).not.toBe('');

@@ -173,6 +173,43 @@ async function seedConfiguration(
   }
 }
 
+/**
+ * Brings an existing demo tenant's currency, time zone and languages, and its locations' time
+ * zones, back to the seed file (`SEED_ALIGN_TENANTS=1`; the E2E databases set it). Provisioning
+ * never overwrites a tenant's own settings, so a database seeded before a seed file changed would
+ * otherwise keep the old values. The currency is only changed while the tenant has no orders
+ * (ADR 0002: stored amounts are in its minor units).
+ */
+async function alignTenant(
+  prisma: PrismaClient,
+  tenantId: string,
+  locationIds: Map<string, string>,
+  file: SeedFile,
+): Promise<void> {
+  const { currencyCode, timezone, defaultLocale, supportedLocales } = file.tenant;
+  const current = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
+  const orders = await prisma.order.count({ where: { tenantId } });
+  const changeCurrency = currencyCode !== undefined && currencyCode !== current.currencyCode;
+  if (changeCurrency && orders > 0) {
+    console.info(
+      `Kept ${file.tenant.slug} in ${current.currencyCode}: it has ${String(orders)} orders (reset the database to switch to ${currencyCode})`,
+    );
+  }
+  await prisma.tenant.update({
+    where: { id: tenantId },
+    data: {
+      timezone,
+      defaultLocale,
+      ...(supportedLocales ? { supportedLocales } : {}),
+      ...(changeCurrency && orders === 0 ? { currencyCode } : {}),
+    },
+  });
+  for (const loc of file.locations) {
+    const id = locationIds.get(loc.code);
+    if (id) await prisma.location.update({ where: { id }, data: { timezone: loc.timezone } });
+  }
+}
+
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (!value)
@@ -189,6 +226,9 @@ export async function seed(prisma: PrismaClient, file: SeedFile): Promise<void> 
   const tenant = { id: provisioned.tenantId };
   const { locationIds, roleIds } = provisioned;
 
+  if (process.env.SEED_ALIGN_TENANTS === '1') {
+    await alignTenant(prisma, tenant.id, locationIds, file);
+  }
   if (file.menu) await seedMenu(prisma, tenant.id, file.menu);
   await seedConfiguration(prisma, tenant.id, locationIds, file);
 

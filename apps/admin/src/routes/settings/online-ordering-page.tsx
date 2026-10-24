@@ -1,5 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { QueryState, tKey, useCurrentLocale } from '@pos/app-kit';
+import {
+  QueryState,
+  tKey,
+  useCurrentLocale,
+  useFormatOptions,
+  useTenantContext,
+} from '@pos/app-kit';
 import { formatDateTime } from '@pos/i18n';
 import type { OnlineOrderingOverview } from '@pos/validation';
 import {
@@ -29,7 +35,7 @@ import { api } from '../../lib/api';
 import { useLocationLookup } from '../../lib/format';
 import { moneyField, useMoney } from '../../lib/money';
 import { usePermissions } from '../../lib/permissions';
-import { keys, useAdminMutation, useTenant } from '../../lib/queries';
+import { keys, useAdminMutation } from '../../lib/queries';
 
 const STATES = ['OPEN', 'PAUSED', 'CLOSED'] as const;
 const DAYS = ['0', '1', '2', '3', '4', '5', '6'] as const;
@@ -55,14 +61,16 @@ type FormOutput = z.output<ReturnType<typeof onlineForm>>;
 function OnlineForm({ locationId, data }: { locationId: string; data: OnlineOrderingOverview }) {
   const { t } = useTranslation(['admin', 'common']);
   const locale = useCurrentLocale();
+  const formatOptions = useFormatOptions();
   const errorText = useAdminErrorText();
-  const { currency, toInput } = useMoney();
+  const { toInput } = useMoney();
+  const currency = useTenantContext().currency.code;
   const { canAt } = usePermissions();
   const { timeZone } = useLocationLookup();
   const canManage = canAt(locationId, 'online_ordering.manage');
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const form = useForm<FormInput, unknown, FormOutput>({
-    resolver: zodResolver(onlineForm(currency ?? 'SAR')),
+    resolver: zodResolver(onlineForm(currency)),
     defaultValues: {
       state: data.state,
       openingHours: data.openingHours.map((w) => ({
@@ -128,7 +136,7 @@ function OnlineForm({ locationId, data }: { locationId: string; data: OnlineOrde
           <span className="text-muted-foreground">
             {t('admin:online.hubLastSeen', {
               time: data.hubLastSeenAt
-                ? formatDateTime(data.hubLastSeenAt, timeZone(locationId), locale)
+                ? formatDateTime(data.hubLastSeenAt, timeZone(locationId), locale, formatOptions)
                 : t('admin:shared.never'),
             })}
           </span>
@@ -243,7 +251,7 @@ function OnlineForm({ locationId, data }: { locationId: string; data: OnlineOrde
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
-                label={`${t('admin:online.deliveryFee')} (${currency ?? ''})`}
+                label={`${t('admin:online.deliveryFee')} (${currency})`}
                 error={msg(errors.deliveryFee?.message)}
               >
                 <Input inputMode="decimal" dir="ltr" {...form.register('deliveryFee')} />
@@ -276,22 +284,16 @@ function OnlineForm({ locationId, data }: { locationId: string; data: OnlineOrde
 }
 
 function OnlineOrdering({ locationId }: { locationId: string }) {
-  const tenant = useTenant();
   const query = useQuery({
     queryKey: keys.onlineOrdering(locationId),
     queryFn: () => api.onlineOrdering.get(locationId),
   });
-  // The form shows money in the tenant's currency: it waits for the tenant too.
   return (
-    <QueryState query={tenant}>
-      {() => (
-        <QueryState query={query}>
-          {(data) => (
-            // Keyed by location only: a save refreshes `data` without discarding the form's
-            // confirmation; another location starts a fresh form.
-            <OnlineForm key={locationId} locationId={locationId} data={data} />
-          )}
-        </QueryState>
+    <QueryState query={query}>
+      {(data) => (
+        // Keyed by location only: a save refreshes `data` without discarding the form's
+        // confirmation; another location starts a fresh form.
+        <OnlineForm key={locationId} locationId={locationId} data={data} />
       )}
     </QueryState>
   );

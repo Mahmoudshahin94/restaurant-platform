@@ -1,9 +1,11 @@
 import { useMoneyFormat } from '@pos/app-kit';
-import { useTenant } from './queries';
 
 export { moneyField, optionalMoneyField } from '@pos/app-kit';
 
-/** Money helpers bound to the tenant currency and the active locale. */
+/**
+ * Money helpers bound to the tenant's currency configuration (ADR 0020) and the active locale.
+ * The tenant context is loaded before any page renders, so the currency is always known.
+ */
 export function useMoney() {
-  return useMoneyFormat(useTenant().data?.currencyCode ?? null);
+  return useMoneyFormat();
 }

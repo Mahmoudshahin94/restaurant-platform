@@ -54,11 +54,13 @@ import {
   publishedMenuSchema,
   type LoginRequest,
   type UpdateLocationRequest,
+  type UpdateLocalizationRequest,
   type UpdateTenantRequest,
   type UpdateBrandingRequest,
   tenantBrandingSchema,
   tenantFileSchema,
   resolvedBrandingSchema,
+  resolvedLocalesSchema,
   authUserSchema,
   locationSchema,
   tenantSchema,
@@ -68,6 +70,7 @@ import {
   type SetFeatureOverrideRequest,
   featureSettingSchema,
   tenantContextSchema,
+  tenantLocalizationSchema,
 } from '@pos/validation';
 import type { BrandSurface, Feature, OrderStatus, TenantFileKind } from '@pos/shared-types';
 import { z } from 'zod';
@@ -141,6 +144,12 @@ export function createApiClient(options: HttpClientOptions) {
           schema: resolvedBrandingSchema,
           noRetry: true,
         }),
+      /** The paired tenant's languages for the sign-in screens (public, ADR 0020). */
+      locales: () =>
+        http.request('GET', `${API}/hub/locales`, {
+          schema: resolvedLocalesSchema,
+          noRetry: true,
+        }),
       /** The URL of a file of that branding (public: an <img> can show it directly). */
       brandingFileUrl: (fileId: string) => `${http.baseUrl}${API}/hub/branding/files/${fileId}`,
       /** "Sync now": sends the outbox and checks the cloud for configuration changes. */
@@ -187,6 +196,17 @@ export function createApiClient(options: HttpClientOptions) {
         http.request('GET', `${API}/tenants/${tenantId}/context`, {
           query: { locationId: locationId ?? undefined, surface: surface ?? undefined },
           schema: tenantContextSchema,
+        }),
+      /** Languages and currency display, as set and resolved (`settings.manage`, ADR 0020). */
+      localization: (tenantId: string) =>
+        http.request('GET', `${API}/tenants/${tenantId}/localization`, {
+          schema: tenantLocalizationSchema,
+        }),
+      /** Replaces them (cloud only); the currency itself cannot be changed. */
+      updateLocalization: (tenantId: string, body: UpdateLocalizationRequest) =>
+        http.request('PUT', `${API}/tenants/${tenantId}/localization`, {
+          body,
+          schema: tenantLocalizationSchema,
         }),
     },
     branding: {

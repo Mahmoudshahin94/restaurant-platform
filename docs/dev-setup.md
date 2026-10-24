@@ -24,9 +24,13 @@ pnpm build
 The seed provisions four tenants, one per business type ([ADR 0017](adr/0017-tenant-root-and-isolation.md)):
 the demo restaurant `demo-kitchen` (owner, cashier and kitchen accounts from `SEED_OWNER_*`,
 `SEED_CASHIER_*`, `SEED_KITCHEN_*`), and in `packages/database/seed/tenants/` the coffee shop
-`ramallah-roasters`, the supermarket `al-balad-market` and the clothing store `nablus-style` (ILS,
-Asia/Hebron), whose owners are created only when `SEED_CAFE_OWNER_*`, `SEED_MARKET_OWNER_*` and
-`SEED_STYLE_OWNER_*` are set. Re-running the seed updates instead of duplicating.
+`ramallah-roasters`, the supermarket `al-balad-market` and the clothing store `nablus-style`, whose
+owners are created only when `SEED_CAFE_OWNER_*`, `SEED_MARKET_OWNER_*` and `SEED_STYLE_OWNER_*` are
+set. All four are in shekels (ILS) in `Asia/Hebron` ([ADR 0020](adr/0020-currency-and-localization.md)).
+Re-running the seed updates instead of duplicating, but never changes a tenant's own settings: a
+database seeded before M4 keeps `demo-kitchen` in riyals until it is reset (`pnpm db:reset`), or
+until `SEED_ALIGN_TENANTS=1 pnpm db:seed` realigns it, which changes the currency only while the
+tenant has no orders. The E2E databases realign on every run.
 
 An existing development database from before MADAR is upgraded by `pnpm db:deploy` (the tenant
 rename keeps every row). A paired development hub upgrades its SQLite, including its pairing

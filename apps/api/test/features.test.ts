@@ -74,8 +74,8 @@ describe('tenant context', () => {
     const body = await context(tenant.locationA, cashier);
     expect(body).toMatchObject({
       tenant: { id: tenant.tenantId, businessType: 'RESTAURANT', status: 'ACTIVE' },
-      currency: { code: 'SAR', exponent: 2 },
-      locales: { default: 'en', supported: ['en', 'ar'] },
+      currency: { code: 'SAR', decimalPlaces: 2, symbol: null, display: 'narrowSymbol' },
+      locales: { default: 'en', supported: ['en', 'ar'], digits: 'latn' },
       locationId: tenant.locationA,
     });
     expect(body.features.KDS).toEqual({

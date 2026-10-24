@@ -8,7 +8,8 @@ import {
 } from '@pos/shared-types';
 import { z } from 'zod';
 import { resolvedBrandingSchema } from './branding';
-import { idSchema, isoDateTimeSchema, localeSchema, minorUnitsSchema } from './common';
+import { resolvedCurrencySchema, resolvedLocalesSchema } from './localization';
+import { idSchema, isoDateTimeSchema, minorUnitsSchema } from './common';
 import { orderItemInputSchema } from './orders';
 
 /*
@@ -95,8 +96,10 @@ export const publicTenantSchema = z.object({
   slug: z.string(),
   nameEn: z.string(),
   nameAr: z.string(),
-  currencyCode: z.string(),
-  defaultLocale: localeSchema,
+  /** How the store shows amounts (ADR 0020). */
+  currency: resolvedCurrencySchema,
+  /** The languages the store offers; the website starts in the default (ADR 0020). */
+  locales: resolvedLocalesSchema,
   timezone: z.string(),
   locations: z.array(publicLocationSchema),
   /** The website's branding (surface `website`, ADR 0019); its files are public. */

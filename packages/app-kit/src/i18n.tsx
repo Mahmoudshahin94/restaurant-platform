@@ -29,7 +29,11 @@ export function DirectionBridge({ i18n, children }: { i18n: I18nInstance; childr
   return <DirectionProvider dir={i18n.dir(lng)}>{children}</DirectionProvider>;
 }
 
-/** Initial locale: the stored preference, else the browser language if supported, else English. */
+/**
+ * The language an app starts in, before it knows its tenant: the stored preference, else the
+ * browser language if supported, else English. Once the tenant's languages are known,
+ * `useLocaleSelection` applies the tenant's rule (ADR 0020).
+ */
 export function initialLocale(stored: Locale | null): Locale {
   const browser = typeof navigator === 'undefined' ? '' : navigator.language.slice(0, 2);
   return stored ?? (isLocale(browser) ? browser : 'en');

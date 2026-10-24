@@ -1,4 +1,9 @@
-import { PERMISSIONS, type Permission, isPermission } from '@pos/shared-types';
+import {
+  DEFAULT_TENANT_CURRENCY,
+  PERMISSIONS,
+  type Permission,
+  isPermission,
+} from '@pos/shared-types';
 import type { Locale, Prisma, PrismaClient } from '@prisma/client';
 
 export interface TenantSpec {
@@ -8,7 +13,8 @@ export interface TenantSpec {
   legalName?: string | null;
   /** @pos/shared-types BusinessType; picks default configuration only. */
   businessType?: string;
-  currencyCode: string;
+  /** ISO 4217, fixed for the tenant's lifetime (ADR 0002); MADAR's default is ILS (ADR 0020). */
+  currencyCode?: string;
   defaultLocale: Locale;
   supportedLocales?: Locale[];
   timezone: string;
@@ -67,12 +73,16 @@ export async function provisionTenant(
   prisma: PrismaClient | Prisma.TransactionClient,
   input: { tenant: TenantSpec; locations: LocationSpec[]; roles?: RoleSpec[] },
 ): Promise<ProvisionedTenant> {
-  const { supportedLocales, ...tenantFields } = input.tenant;
+  const {
+    supportedLocales,
+    currencyCode = DEFAULT_TENANT_CURRENCY,
+    ...tenantFields
+  } = input.tenant;
   const tenant = await prisma.tenant.upsert({
     where: { slug: input.tenant.slug },
     update: {},
     // Without a choice the tenant offers every locale (the column default).
-    create: { ...tenantFields, ...(supportedLocales ? { supportedLocales } : {}) },
+    create: { ...tenantFields, currencyCode, ...(supportedLocales ? { supportedLocales } : {}) },
   });
 
   const locationIds = new Map<string, string>();

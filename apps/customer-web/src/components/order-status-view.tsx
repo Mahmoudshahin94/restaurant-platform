@@ -1,4 +1,4 @@
-import { useCurrentLocale } from '@pos/app-kit';
+import { useCurrentLocale, useFormatOptions } from '@pos/app-kit';
 import { formatTime, pickLocalized } from '@pos/i18n';
 import type { PublicOrder } from '@pos/validation';
 import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, cn } from '@pos/ui';
@@ -21,6 +21,7 @@ const REASONS = new Set([
 export function OrderStatusView({ order }: { order: PublicOrder }) {
   const { t } = useTranslation(['customer', 'orders']);
   const locale = useCurrentLocale();
+  const formatOptions = useFormatOptions();
   const tz = order.location.timezone;
   const cancelled = order.status === 'CANCELLED' || order.status === 'REFUNDED';
   const reached = new Set(order.timeline.map((e) => e.status));
@@ -108,7 +109,9 @@ export function OrderStatusView({ order }: { order: PublicOrder }) {
           )}
           {order.status === 'PLACED' && order.acceptBy ? (
             <p className="text-sm text-muted-foreground">
-              {t('customer:status.acceptBy', { time: formatTime(order.acceptBy, tz, locale) })}
+              {t('customer:status.acceptBy', {
+                time: formatTime(order.acceptBy, tz, locale, formatOptions),
+              })}
             </p>
           ) : null}
           <div className="grid gap-1 text-sm">

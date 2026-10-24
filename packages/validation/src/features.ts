@@ -1,7 +1,8 @@
 import { FEATURES, type Feature, type ResolvedFeatures } from '@pos/shared-types';
 import { z } from 'zod';
 import { brandSurfaceSchema, resolvedBrandingSchema } from './branding';
-import { configLayerSchema, idSchema, localeSchema } from './common';
+import { configLayerSchema, idSchema } from './common';
+import { resolvedCurrencySchema, resolvedLocalesSchema } from './localization';
 import { businessTypeSchema, tenantStatusSchema } from './tenancy';
 
 // --- Modules (ADR 0018) ------------------------------------------------------------------------
@@ -72,8 +73,10 @@ export const tenantContextSchema = z.object({
   }),
   /** The tenant's branding, resolved for the requested surface (ADR 0019). */
   branding: resolvedBrandingSchema,
-  currency: z.object({ code: z.string(), exponent: z.int() }),
-  locales: z.object({ default: localeSchema, supported: z.array(localeSchema) }),
+  /** How amounts are shown (ADR 0020). */
+  currency: resolvedCurrencySchema,
+  /** The languages the tenant offers and its digit style (ADR 0020). */
+  locales: resolvedLocalesSchema,
   /** The location the modules were resolved for; null: the tenant as a whole. */
   locationId: idSchema.nullable(),
   features: resolvedFeaturesSchema,

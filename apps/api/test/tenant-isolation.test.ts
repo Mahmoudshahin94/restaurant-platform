@@ -407,7 +407,7 @@ describe('provisioning', () => {
         nameEn: 'Corner Shop',
         nameAr: 'متجر الزاوية',
         businessType: 'RETAIL',
-        currencyCode: 'ILS',
+        // No currency: MADAR provisions new tenants in shekels (ADR 0020).
         defaultLocale: 'ar' as const,
         timezone: 'Asia/Hebron',
       },

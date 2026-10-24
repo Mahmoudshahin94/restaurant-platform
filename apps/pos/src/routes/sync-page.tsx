@@ -1,4 +1,10 @@
-import { tKey, useCurrentLocale, useErrorText, usePermissionChecks } from '@pos/app-kit';
+import {
+  tKey,
+  useCurrentLocale,
+  useErrorText,
+  useFormatOptions,
+  usePermissionChecks,
+} from '@pos/app-kit';
 import { formatDateTime } from '@pos/i18n';
 import {
   Alert,
@@ -84,11 +90,12 @@ export function SyncPage() {
 function Summary({ hub }: { hub: HubStatus }) {
   const { t } = useTranslation('pos');
   const locale = useCurrentLocale();
+  const formatOptions = useFormatOptions();
   const { locationId } = usePreferences();
   const locations = useLocations();
   const timeZone = locations.data?.find((l) => l.id === locationId)?.timezone ?? 'UTC';
   const when = (iso: string | null) =>
-    iso ? formatDateTime(iso, timeZone, locale) : t('sync.figures.never');
+    iso ? formatDateTime(iso, timeZone, locale, formatOptions) : t('sync.figures.never');
   const figures = [
     { label: t('sync.figures.pending'), value: String(hub.pendingOperations) },
     { label: t('sync.figures.failed'), value: String(hub.failedOperations) },
@@ -175,6 +182,7 @@ function Operations({ tab, onTab }: { tab: Tab; onTab: (tab: Tab) => void }) {
 function OperationTable({ items }: { items: HubSyncOperation[] }) {
   const { t } = useTranslation(['pos', 'errors']);
   const locale = useCurrentLocale();
+  const formatOptions = useFormatOptions();
   const { locationId } = usePreferences();
   const user = useSession((s) => s.user);
   const canRetry = usePermissionChecks(user).canAt(locationId ?? '', 'sync.view');
@@ -215,7 +223,7 @@ function OperationTable({ items }: { items: HubSyncOperation[] }) {
                 ) : null}
               </TableCell>
               <TableCell className="whitespace-nowrap">
-                {formatDateTime(op.createdAt, timeZone, locale)}
+                {formatDateTime(op.createdAt, timeZone, locale, formatOptions)}
               </TableCell>
               <TableCell>{t(`pos:sync.status.${op.status}`)}</TableCell>
               <TableCell className="text-end tabular-nums">{op.retryCount}</TableCell>

@@ -213,7 +213,11 @@ describe('public storefront', () => {
     const res = await app.inject({ method: 'GET', url: `/api/v1/public/tenants/${slug}` });
     expect(res.statusCode).toBe(200);
     const storefront = res.json<PublicTenant>();
-    expect(storefront).toMatchObject({ slug, currencyCode: 'SAR' });
+    expect(storefront).toMatchObject({
+      slug,
+      currency: { code: 'SAR', decimalPlaces: 2 },
+      locales: { default: 'en', supported: ['en', 'ar'] },
+    });
     const a = storefront.locations.find((l) => l.id === tenant.locationA);
     expect(a).toMatchObject({
       status: { state: 'OPEN', reason: null },

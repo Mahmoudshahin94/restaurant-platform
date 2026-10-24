@@ -22,7 +22,7 @@ import { OrderStatusBadge, PaymentStatusBadge } from '../../components/order-bad
 import { Pagination } from '../../components/pagination';
 import { api } from '../../lib/api';
 import { useLocationLookup } from '../../lib/format';
-import { keys, useTenant, useTenantId } from '../../lib/queries';
+import { keys, useTenantId } from '../../lib/queries';
 
 interface Filters {
   locationId: string;
@@ -47,8 +47,7 @@ const PAGE_SIZE = 25;
 export function OrdersPage() {
   const { t } = useTranslation(['admin', 'orders', 'common']);
   const tid = useTenantId();
-  const tenant = useTenant();
-  const { format } = useMoneyFormat(tenant.data?.currencyCode ?? null);
+  const { format } = useMoneyFormat();
   const { list, name } = useLocationLookup();
   const [filters, setFilters] = useState<Filters>(EMPTY);
   const [page, setPage] = useState(1);

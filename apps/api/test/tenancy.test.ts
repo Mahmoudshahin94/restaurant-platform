@@ -87,7 +87,7 @@ describe('tenants', () => {
     });
   });
 
-  it('keeps the default locale among the supported ones, and the business type to the platform', async () => {
+  it('updates the profile, and leaves the business type to the platform and languages to their page', async () => {
     const patch = (payload: object) =>
       app.inject({
         method: 'PATCH',
@@ -95,21 +95,23 @@ describe('tenants', () => {
         headers: bearer(ownerToken),
         payload,
       });
-    const narrowed = await patch({ supportedLocales: ['en'], legalName: 'Demo Kitchen LLC' });
-    expect(narrowed.statusCode).toBe(200);
-    expect(narrowed.json<Tenant>()).toMatchObject({
-      supportedLocales: ['en'],
+    const named = await patch({ legalName: 'Demo Kitchen LLC', nameEn: 'Still a kitchen' });
+    expect(named.statusCode).toBe(200);
+    expect(named.json<Tenant>()).toMatchObject({
       legalName: 'Demo Kitchen LLC',
-    });
-    const refused = await patch({ defaultLocale: 'ar' });
-    expect(refused.statusCode).toBe(400);
-    expect(refused.json<ApiErrorBody>().code).toBe('VALIDATION_FAILED');
-    expect((await patch({ defaultLocale: 'ar', supportedLocales: ['ar'] })).statusCode).toBe(200);
-    const typed = await patch({ nameEn: 'Still a kitchen', businessType: 'SUPERMARKET' });
-    expect(typed.json<Tenant>()).toMatchObject({
       nameEn: 'Still a kitchen',
       businessType: 'RESTAURANT',
     });
+    for (const payload of [
+      { businessType: 'SUPERMARKET' },
+      { supportedLocales: ['en'] },
+      { defaultLocale: 'ar' },
+      { currencyCode: 'USD' },
+    ]) {
+      const refused = await patch(payload);
+      expect(refused.statusCode, JSON.stringify(payload)).toBe(400);
+      expect(refused.json<ApiErrorBody>().code).toBe('VALIDATION_FAILED');
+    }
   });
 
   it('hides other tenants', async () => {

@@ -4,19 +4,19 @@
     "slug": "demo-kitchen",
     "nameEn": "Demo Kitchen",
     "nameAr": "مطبخ تجريبي",
-    "currencyCode": "SAR",
+    "currencyCode": "ILS",
     "defaultLocale": "en",
-    "timezone": "Asia/Riyadh"
+    "timezone": "Asia/Hebron"
   },
   "locations": [
     {
       "code": "MAIN",
       "nameEn": "Main Branch",
       "nameAr": "الفرع الرئيسي",
-      "timezone": "Asia/Riyadh",
+      "timezone": "Asia/Hebron",
       "taxInclusive": true,
-      "addressLine": "King Fahd Road, Riyadh",
-      "phone": "+966 11 000 0000",
+      "addressLine": "Al-Manara Square, Ramallah",
+      "phone": "+970 2 000 0000",
       "online": {
         "state": "OPEN",
         "acceptMinutes": 10,

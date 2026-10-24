@@ -7,9 +7,10 @@ import {
   RequirePermissions,
   TenantFilesService,
   ZodValidationPipe,
+  localesOf,
   sendTenantFile,
 } from '@pos/server';
-import type { ResolvedBranding } from '@pos/shared-types';
+import type { ResolvedBranding, ResolvedLocales } from '@pos/shared-types';
 import {
   type HubStatus,
   type HubSyncOperation,
@@ -59,6 +60,20 @@ export class HubController {
     query: z.output<typeof brandingSurfaceQuerySchema>,
   ): Promise<ResolvedBranding> {
     return this.branding.resolve(await this.pairedTenant(), query.surface ?? 'login');
+  }
+
+  /**
+   * The paired tenant's languages, for the same sign-in screens (ADR 0020): their language
+   * switcher offers only these, and they start in the default. Public, like its branding.
+   */
+  @Public()
+  @Get('locales')
+  async locales(): Promise<ResolvedLocales> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: await this.pairedTenant() },
+    });
+    if (!tenant) throw new DomainError('TENANT_NOT_FOUND', 'Tenant not found');
+    return localesOf(tenant);
   }
 
   /** A logo or favicon of that branding (nothing else the tenant uploaded). */

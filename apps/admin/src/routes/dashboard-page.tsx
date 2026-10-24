@@ -1,5 +1,11 @@
-import { FeatureGate, QueryState, useCurrentLocale, useMoneyFormat } from '@pos/app-kit';
-import { formatDateTime, pickLocalized } from '@pos/i18n';
+import {
+  FeatureGate,
+  QueryState,
+  useCurrentLocale,
+  useFormatOptions,
+  useMoneyFormat,
+} from '@pos/app-kit';
+import { formatDateTime, formatNumber, pickLocalized } from '@pos/i18n';
 import { Feature } from '@pos/shared-types';
 import type { DashboardLocation } from '@pos/validation';
 import {
@@ -48,6 +54,7 @@ function Figure({ label, value }: { label: string; value: string }) {
 function LocationCard({ row, currency }: { row: DashboardLocation; currency: string }) {
   const { t } = useTranslation(['admin', 'common']);
   const locale = useCurrentLocale();
+  const formatOptions = useFormatOptions();
   const { format } = useMoneyFormat(currency);
   const { canAt } = usePermissions();
   const setLocationId = usePreferences((s) => s.setLocationId);
@@ -66,12 +73,24 @@ function LocationCard({ row, currency }: { row: DashboardLocation; currency: str
       </CardHeader>
       <CardContent className="grid gap-5">
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <Figure label={t('admin:dashboard.orders')} value={String(row.orders.count)} />
-          <Figure label={t('admin:dashboard.open')} value={String(row.orders.open)} />
+          <Figure
+            label={t('admin:dashboard.orders')}
+            value={formatNumber(row.orders.count, locale, formatOptions)}
+          />
+          <Figure
+            label={t('admin:dashboard.open')}
+            value={formatNumber(row.orders.open, locale, formatOptions)}
+          />
           <Figure label={t('admin:dashboard.sales')} value={format(row.sales.total)} />
           <Figure label={t('admin:dashboard.collected')} value={format(row.sales.paid)} />
-          <Figure label={t('admin:dashboard.cancelled')} value={String(row.orders.cancelled)} />
-          <Figure label={t('admin:dashboard.openShifts')} value={String(row.openShifts)} />
+          <Figure
+            label={t('admin:dashboard.cancelled')}
+            value={formatNumber(row.orders.cancelled, locale, formatOptions)}
+          />
+          <Figure
+            label={t('admin:dashboard.openShifts')}
+            value={formatNumber(row.openShifts, locale, formatOptions)}
+          />
         </div>
         <FeatureGate feature={Feature.ONLINE_ORDERING}>
           <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -95,7 +114,7 @@ function LocationCard({ row, currency }: { row: DashboardLocation; currency: str
             {sync.lastSeenAt ? (
               <span className="text-xs text-muted-foreground">
                 {t('admin:dashboard.lastSeen', {
-                  time: formatDateTime(sync.lastSeenAt, row.timezone, locale),
+                  time: formatDateTime(sync.lastSeenAt, row.timezone, locale, formatOptions),
                 })}
               </span>
             ) : null}

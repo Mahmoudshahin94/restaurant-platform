@@ -43,6 +43,19 @@ export default tseslint.config(
       '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
       // NestJS modules and DI classes are legitimately empty / static-only.
       '@typescript-eslint/no-extraneous-class': ['error', { allowWithDecorator: true }],
+      // Money is integer minor units, parsed from decimal strings (ADR 0002, ADR 0020).
+      'no-restricted-globals': [
+        'error',
+        { name: 'parseFloat', message: 'Parse amounts with parseDecimalToMinor (ADR 0002).' },
+      ],
+      'no-restricted-properties': [
+        'error',
+        {
+          object: 'Number',
+          property: 'parseFloat',
+          message: 'Parse amounts with parseDecimalToMinor (ADR 0002).',
+        },
+      ],
     },
   },
   {

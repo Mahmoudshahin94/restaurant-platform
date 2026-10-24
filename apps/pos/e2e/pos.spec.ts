@@ -6,7 +6,7 @@ test.beforeEach(async ({ page }) => {
       localStorage.clear();
       localStorage.setItem(
         'pos-terminal-preferences',
-        JSON.stringify({ state: { locale: 'en', locationId: null }, version: 0 }),
+        JSON.stringify({ state: { locale: 'en', locationId: null }, version: 1 }),
       );
       sessionStorage.setItem('e2e-init', '1');
     }

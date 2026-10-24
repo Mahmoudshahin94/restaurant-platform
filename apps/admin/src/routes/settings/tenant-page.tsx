@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { QueryState, applyServerValidation, tKey } from '@pos/app-kit';
 import type { Tenant } from '@pos/validation';
-import { Alert, Button, Card, CardContent, Field, Input, NativeSelect, PageHeader } from '@pos/ui';
+import { Alert, Button, Card, CardContent, Field, Input, PageHeader } from '@pos/ui';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
@@ -17,7 +17,6 @@ const tenantForm = z.object({
   nameEn: z.string().trim().min(1, required).max(120, 'common:validation.tooLong'),
   nameAr: z.string().trim().min(1, required).max(120, 'common:validation.tooLong'),
   legalName: z.string().trim().max(200, 'common:validation.tooLong'),
-  defaultLocale: z.enum(['en', 'ar']),
   timezone: z.string().trim().min(1, required),
 });
 type FormValues = z.infer<typeof tenantForm>;
@@ -34,7 +33,6 @@ function TenantForm({ tenant }: { tenant: Tenant }) {
       nameEn: tenant.nameEn,
       nameAr: tenant.nameAr,
       legalName: tenant.legalName ?? '',
-      defaultLocale: tenant.defaultLocale,
       timezone: tenant.timezone,
     },
   });
@@ -75,12 +73,6 @@ function TenantForm({ tenant }: { tenant: Tenant }) {
               <Input autoComplete="organization" {...form.register('legalName')} />
             </Field>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label={t('admin:tenant.defaultLocale')}>
-                <NativeSelect {...form.register('defaultLocale')}>
-                  <option value="en">{t('common:language.en')}</option>
-                  <option value="ar">{t('common:language.ar')}</option>
-                </NativeSelect>
-              </Field>
               <Field
                 label={t('admin:tenant.timezone')}
                 hint={t('admin:tenant.timezoneHint')}

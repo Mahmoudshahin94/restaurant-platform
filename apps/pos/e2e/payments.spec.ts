@@ -83,7 +83,7 @@ test('cashier takes cash with change, completes the order and sees the receipt',
   await dialog.getByRole('button', { name: /20\.00/ }).click();
   await expect(dialog.getByTestId('change')).toHaveText(/2\.00/);
   await dialog.getByRole('button', { name: /^Confirm/ }).click();
-  await expect(dialog.getByText(/Change: SAR\s2\.00 · Order fully paid/)).toBeVisible();
+  await expect(dialog.getByText(/Change: ₪2\.00 · Order fully paid/)).toBeVisible();
   await page.keyboard.press('Escape');
 
   await page.keyboard.press('F4');
@@ -91,8 +91,8 @@ test('cashier takes cash with change, completes the order and sees the receipt',
   await page.getByRole('button', { name: 'Print receipt' }).click();
   const receipt = page.getByTestId('receipt');
   await expect(receipt).toContainText('Demo Kitchen');
-  await expect(receipt).toContainText(/Received\s*SAR\s20\.00/);
-  await expect(receipt).toContainText(/Change\s*SAR\s2\.00/);
+  await expect(receipt).toContainText(/Received\s*₪20\.00/);
+  await expect(receipt).toContainText(/Change\s*₪2\.00/);
   await page.keyboard.press('Escape');
 
   // Placed at the POS = confirmed and sent to the kitchen. It can only be handed over once the
@@ -144,7 +144,7 @@ test('closing the shift reports the cash difference', async ({ page }) => {
   await dialog.getByLabel(/Counted cash/).fill((Number(expected) - 1).toFixed(2));
   await expect(dialog.getByTestId('cash-difference')).toContainText('Short');
   await dialog.getByRole('button', { name: 'Close shift' }).click();
-  await expect(page.getByText(/Shift closed\. Difference: -SAR\s1\.00/)).toBeVisible();
+  await expect(page.getByText(/Shift closed\. Difference: -₪1\.00/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Open shift' })).toBeVisible();
 });
 
@@ -206,9 +206,9 @@ test('an Arabic receipt renders to a valid ESC/POS raster job', async ({ page })
       blocks: [
         { kind: 'text', text: 'مطبخ تجريبي', align: 'center', size: 'large', bold: true },
         { kind: 'divider' },
-        { kind: 'row', start: '2 × برجر كلاسيك', end: '50.00 ر.س.', bold: false, size: 'normal' },
+        { kind: 'row', start: '2 × برجر كلاسيك', end: '50.00 ₪', bold: false, size: 'normal' },
         { kind: 'text', text: '  + جبن إضافي', align: 'start', size: 'normal', bold: false },
-        { kind: 'row', start: 'الإجمالي', end: '58.50 ر.س.', bold: true, size: 'large' },
+        { kind: 'row', start: 'الإجمالي', end: '58.50 ₪', bold: true, size: 'large' },
         { kind: 'divider' },
         { kind: 'text', text: 'شكرًا لزيارتكم!', align: 'center', size: 'normal', bold: true },
       ],

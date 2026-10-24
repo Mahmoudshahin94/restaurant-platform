@@ -1,4 +1,10 @@
-import { useCurrentLocale, useErrorText, useMoneyFormat, usePermissionChecks } from '@pos/app-kit';
+import {
+  useCurrentLocale,
+  useErrorText,
+  useFormatOptions,
+  useMoneyFormat,
+  usePermissionChecks,
+} from '@pos/app-kit';
 import { formatTime, pickLocalized } from '@pos/i18n';
 import { WebRejectReason } from '@pos/shared-types';
 import type { Order } from '@pos/validation';
@@ -68,6 +74,7 @@ export function WebOrderDetails({
 }) {
   const { t } = useTranslation(['pos', 'orders']);
   const locale = useCurrentLocale();
+  const formatOptions = useFormatOptions();
   const { format } = useMoneyFormat(order.currencyCode);
   const left = order.acceptBy ? new Date(order.acceptBy).getTime() - now : null;
   const address = order.deliveryAddress
@@ -122,7 +129,9 @@ export function WebOrderDetails({
         {order.placedAt ? (
           <>
             <dt className="font-medium">{t('orders:fields.placedAt')}</dt>
-            <dd className="ltr-nums">{formatTime(order.placedAt, timeZone, locale)}</dd>
+            <dd className="ltr-nums">
+              {formatTime(order.placedAt, timeZone, locale, formatOptions)}
+            </dd>
           </>
         ) : null}
         {order.fulfillmentType === 'DELIVERY' ? (

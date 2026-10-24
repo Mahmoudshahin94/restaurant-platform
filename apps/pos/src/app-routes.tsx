@@ -23,10 +23,18 @@ function RequireLocation({ children }: { children: ReactNode }) {
 /** The tenant's modules at this terminal's location (ADR 0018), served by the hub. */
 function TenantScope({ children }: { children: ReactNode }) {
   const tenantId = useSession((s) => s.user?.tenantId);
+  const preferred = useSession((s) => s.user?.preferredLocale ?? null);
   const locationId = usePreferences((s) => s.locationId);
+  const stored = usePreferences((s) => s.locale);
   if (!tenantId) return null;
+  // The device's language if the tenant offers it, else the user's, else the tenant's (ADR 0020).
   return (
-    <TenantProvider api={api} tenantId={tenantId} locationId={locationId}>
+    <TenantProvider
+      api={api}
+      tenantId={tenantId}
+      locationId={locationId}
+      locale={{ stored, preferred }}
+    >
       {children}
     </TenantProvider>
   );

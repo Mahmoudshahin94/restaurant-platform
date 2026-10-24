@@ -1,4 +1,11 @@
-import type { PublicOrder, PublishedMenu, PublishedMenuProduct } from '@pos/validation';
+import { resolveBranding, resolveCurrency, resolveLocales } from '@pos/domain';
+import type { Locale } from '@pos/shared-types';
+import type {
+  PublicOrder,
+  PublicTenant,
+  PublishedMenu,
+  PublishedMenuProduct,
+} from '@pos/validation';
 
 export const id = (n: number) => `01890a5d-ac96-774b-bcce-b302099a80${String(n).padStart(2, '0')}`;
 
@@ -120,4 +127,19 @@ export function publicOrder(overrides: Partial<PublicOrder> = {}): PublicOrder {
     timeline: [{ status: 'PLACED', at: '2026-10-17T12:00:00.000Z' }],
     ...overrides,
   };
+}
+
+/** The store: in shekels, offering `supported` with `defaultLocale` first (ADR 0020). */
+export function publicTenant(defaultLocale: Locale = 'en', supported: Locale[] = ['en', 'ar']) {
+  const names = { nameEn: 'Demo Kitchen', nameAr: 'مطبخ تجريبي' };
+  return {
+    id: id(80),
+    slug: 'demo-kitchen',
+    ...names,
+    currency: resolveCurrency('ILS'),
+    locales: resolveLocales({ defaultLocale, supportedLocales: supported }),
+    timezone: 'Asia/Hebron',
+    locations: [],
+    branding: resolveBranding({ tenantNames: names, surface: 'website' }),
+  } satisfies PublicTenant;
 }

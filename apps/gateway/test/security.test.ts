@@ -35,7 +35,7 @@ afterAll(async () => {
 const key = (r: RouteEntry) => `${r.method} ${r.path}`;
 
 describe('hub routes', () => {
-  it('protects every route; only sign-in, health and the hub status are public', () => {
+  it('protects every route; only sign-in, health, the hub status and its sign-in look are public', () => {
     expect(routes.filter((r) => r.access === 'unprotected')).toEqual([]);
     expect(routes.filter((r) => r.access === 'guarded')).toEqual([]);
     expect(
@@ -47,6 +47,7 @@ describe('hub routes', () => {
       'GET /health',
       'GET /hub/branding',
       'GET /hub/branding/files/:fileId',
+      'GET /hub/locales',
       'GET /hub/status',
       'GET /ready',
       'POST /auth/login',

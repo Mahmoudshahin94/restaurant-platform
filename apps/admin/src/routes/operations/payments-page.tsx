@@ -26,7 +26,7 @@ import { RefundDialog } from '../../components/refund-dialog';
 import { api } from '../../lib/api';
 import { useDateTime, useLocationLookup } from '../../lib/format';
 import { usePermissions } from '../../lib/permissions';
-import { keys, useTenant, useTenantId } from '../../lib/queries';
+import { keys, useTenantId } from '../../lib/queries';
 
 const PAGE_SIZE = 25;
 
@@ -34,8 +34,7 @@ export function PaymentsPage() {
   const { t } = useTranslation(['admin', 'common']);
   const locale = useCurrentLocale();
   const tid = useTenantId();
-  const tenant = useTenant();
-  const { format } = useMoneyFormat(tenant.data?.currencyCode ?? null);
+  const { format } = useMoneyFormat();
   const formatDate = useDateTime();
   const { list, name } = useLocationLookup();
   const { canAt } = usePermissions();

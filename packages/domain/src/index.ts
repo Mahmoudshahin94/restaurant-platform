@@ -4,6 +4,7 @@ export * from './config';
 export * from './features';
 export * from './errors';
 export * from './ids';
+export * from './localization';
 export * from './money';
 export * from './menu';
 export * from './order';

@@ -1,5 +1,5 @@
 import { type FormatOptions, formatDateTime, formatMoney, pickLocalized } from '@pos/i18n';
-import type { Locale, TextDirection } from '@pos/shared-types';
+import type { CurrencyConfiguration, Locale, TextDirection } from '@pos/shared-types';
 import type { Order } from '@pos/validation';
 
 /** Device-independent receipt content. Renderers (HTML, canvas → ESC/POS raster) lay it out. */
@@ -35,6 +35,8 @@ export interface ReceiptContext {
   };
   cashierName: string | null;
   locale: Locale;
+  /** The tenant's currency display (ADR 0020); missing or null: MADAR's for the order's currency. */
+  currency?: CurrencyConfiguration | null;
   digits?: FormatOptions['digits'];
   /** When the receipt is printed (ISO UTC). */
   printedAt: string;
@@ -79,8 +81,10 @@ export function buildReceipt(
   extensions: readonly ReceiptExtension[] = [],
 ): ReceiptDocument {
   const { order, tenant, location, locale, t } = context;
+  const currency =
+    context.currency?.code === order.currencyCode ? context.currency : order.currencyCode;
   const money = (amount: number) =>
-    formatMoney(amount, order.currencyCode, locale, { digits: context.digits ?? 'latn' });
+    formatMoney(amount, currency, locale, { digits: context.digits ?? 'latn' });
   const name = (entity: { nameEn: string; nameAr: string }) =>
     pickLocalized(entity, 'name', locale);
   const blocks: ReceiptBlock[] = [];

@@ -1,4 +1,10 @@
-import { BusinessType, OnlineOrderingState, TenantStatus, enumValues } from '@pos/shared-types';
+import {
+  BusinessType,
+  DEFAULT_TENANT_CURRENCY,
+  OnlineOrderingState,
+  TenantStatus,
+  enumValues,
+} from '@pos/shared-types';
 import { z } from 'zod';
 import {
   currencyCodeSchema,
@@ -42,18 +48,17 @@ export type Tenant = z.infer<typeof tenantSchema>;
 /**
  * Currency is not updatable: every stored amount is in that currency's minor units, so a change
  * would silently rescale history. It is set when the tenant is provisioned. The business type and
- * status belong to the platform operator. The default locale must stay among the supported ones
- * (checked against the stored values, since either may be sent alone).
+ * status belong to the platform operator. Languages and the currency display have their own page
+ * (`PUT /tenants/:tid/localization`, ADR 0020).
  */
 export const updateTenantSchema = z
   .object({
     nameEn: nameEnSchema,
     nameAr: nameArSchema,
     legalName: legalNameSchema,
-    defaultLocale: localeSchema,
-    supportedLocales: supportedLocalesSchema,
     timezone: timezoneSchema,
   })
+  .strict()
   .partial()
   .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' });
 export type UpdateTenantRequest = z.infer<typeof updateTenantSchema>;
@@ -70,7 +75,8 @@ export const createTenantSchema = z
     nameAr: nameArSchema,
     legalName: legalNameSchema.default(null),
     businessType: businessTypeSchema.default(BusinessType.RESTAURANT),
-    currencyCode: currencyCodeSchema,
+    /** MADAR's home market: new tenants are in shekels unless the platform operator chooses. */
+    currencyCode: currencyCodeSchema.default(DEFAULT_TENANT_CURRENCY),
     defaultLocale: localeSchema,
     supportedLocales: supportedLocalesSchema.optional(),
     timezone: timezoneSchema,

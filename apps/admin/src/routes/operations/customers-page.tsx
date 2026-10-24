@@ -22,13 +22,12 @@ import { OrderStatusBadge, PaymentStatusBadge } from '../../components/order-bad
 import { Pagination } from '../../components/pagination';
 import { api } from '../../lib/api';
 import { useDateTime, useLocationLookup } from '../../lib/format';
-import { keys, useTenant, useTenantId } from '../../lib/queries';
+import { keys, useTenantId } from '../../lib/queries';
 
 const PAGE_SIZE = 25;
 
 function useCurrencyFormat() {
-  const tenant = useTenant();
-  return useMoneyFormat(tenant.data?.currencyCode ?? null).format;
+  return useMoneyFormat().format;
 }
 
 export function CustomersPage() {

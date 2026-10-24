@@ -1,4 +1,4 @@
-import { useCurrentLocale } from '@pos/app-kit';
+import { useCurrentLocale, useFormatOptions } from '@pos/app-kit';
 import { formatBusinessDate, pickLocalized } from '@pos/i18n';
 import type {
   CategoryReport,
@@ -157,6 +157,7 @@ function salesSummary(t: TFunction<'admin'>, totals: SalesFigures): Summary[] {
 function DailyChart({ data }: { data: DailySalesReport }) {
   const { t } = useTranslation('admin');
   const locale = useCurrentLocale();
+  const formatOptions = useFormatOptions();
   const cell = useCellFormat(data.currencyCode);
   const max = Math.max(...data.rows.map((r) => r.netSales), 0);
   if (data.rows.length < 2 || max === 0) return null;
@@ -173,7 +174,7 @@ function DailyChart({ data }: { data: DailySalesReport }) {
         >
           {data.rows.map((r) => {
             const label = t('reports.chart.bar', {
-              date: formatBusinessDate(r.businessDate, locale),
+              date: formatBusinessDate(r.businessDate, locale, formatOptions),
               amount: cell('money', r.netSales),
             });
             return (
@@ -194,8 +195,8 @@ function DailyChart({ data }: { data: DailySalesReport }) {
           })}
         </div>
         <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-          <span>{formatBusinessDate(data.from, locale)}</span>
-          <span>{formatBusinessDate(data.to, locale)}</span>
+          <span>{formatBusinessDate(data.from, locale, formatOptions)}</span>
+          <span>{formatBusinessDate(data.to, locale, formatOptions)}</span>
         </div>
       </CardContent>
     </Card>

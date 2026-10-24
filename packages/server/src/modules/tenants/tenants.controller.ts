@@ -1,10 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Put, Query } from '@nestjs/common';
 import {
   type Tenant,
   type TenantContextDto,
+  type TenantLocalizationDto,
   type UpdateTenantRequest,
   idSchema,
   tenantContextQuerySchema,
+  updateLocalizationSchema,
   updateTenantSchema,
 } from '@pos/validation';
 import type { z } from 'zod';
@@ -47,5 +49,25 @@ export class TenantsController {
     @Body(new ZodValidationPipe(updateTenantSchema)) body: UpdateTenantRequest,
   ): Promise<Tenant> {
     return this.tenants.update(tenantId, body);
+  }
+
+  /** Languages and currency display, as set and as resolved (ADR 0020). */
+  @RequirePermissions(['settings.manage'])
+  @Get('localization')
+  localization(
+    @Param('tenantId', new ZodValidationPipe(idSchema)) tenantId: string,
+  ): Promise<TenantLocalizationDto> {
+    return this.tenants.localization(tenantId);
+  }
+
+  /** Replaces them; the currency and its decimal places are refused (ADR 0002). */
+  @RequirePermissions(['settings.manage'])
+  @Put('localization')
+  updateLocalization(
+    @Param('tenantId', new ZodValidationPipe(idSchema)) tenantId: string,
+    @Body(new ZodValidationPipe(updateLocalizationSchema))
+    body: z.output<typeof updateLocalizationSchema>,
+  ): Promise<TenantLocalizationDto> {
+    return this.tenants.updateLocalization(tenantId, body);
   }
 }
