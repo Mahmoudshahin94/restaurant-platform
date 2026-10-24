@@ -218,6 +218,7 @@ operations reference them.
 | GET            | `/tenants/:tid/products?categoryId=&search=&includeArchived=`     | `products.view` (any location)        |
 | GET/POST/PATCH | `/tenants/:tid/products[/:productId]` (+ archive/restore)         | same pattern                          |
 | GET            | `/locations/:locationId/menu`                                     | `products.view` at the location       |
+| GET            | `/locations/:locationId/catalog/lookup?code=` (`BARCODE`)         | `products.view` at the location       |
 | GET            | `/locations/:locationId/product-settings`                         | `products.view` at the location       |
 | PUT            | `/locations/:locationId/products/:productId/settings`             | `products.update` at the location     |
 
@@ -232,7 +233,35 @@ maxSelect? }` with optional per-product overrides) and `stationIds`. On `PATCH`,
   the answer is `400 VALIDATION_FAILED`. The database enforces the same with CHECK constraints.
 - References (category, modifier groups, stations) must belong to the tenant and not be
   archived. Otherwise the answer is the specific `*_NOT_FOUND` code with the offending ids.
-- A duplicate `sku` (per tenant) or station `code` answers `409 CONFLICT`.
+- A station `code` taken in the tenant answers `409 CONFLICT`; an SKU another product or live
+  variant has answers `409 SKU_TAKEN` (`details.sku`).
+- **Retail catalog** ([ADR 0021](adr/0021-retail-catalog-and-barcodes.md)):
+  - `options`: `[{ id?, nameEn, nameAr, values: [{ id?, nameEn, nameAr }] }]`, at most 3 options
+    of at most 30 values, the complete list (missing ones are deleted). Sent only with
+    `variants`, whose `optionValues` is the index of the variant's value in each option of the
+    same request. With options, every variant is one combination (no two alike) and is named
+    after its values; without, variants need `nameEn`/`nameAr` (`422 INVALID_VARIANT_OPTIONS`,
+    `reason`: `WRONG_VALUE_COUNT`, `UNKNOWN_VALUE`, `DUPLICATE_COMBINATION`, `NAME_REQUIRED`,
+    `UNKNOWN_OPTION`, `NO_VARIANTS`).
+  - Variants also take `sku`, `cost` (minor units, never published), `trackInventory`,
+    `barcodes` and `imageFileIds` (absent: an existing variant keeps them).
+  - `barcodes`: `[{ code, symbology?, isPrimary? }]` on products without variants and on
+    variants; the first is primary unless another is. Without a symbology a GS1 length of digits
+    is that GS1 code, anything else `CODE128`. EAN/UPC check digits are verified
+    (`400 VALIDATION_FAILED`, message `barcode.CHECK_DIGIT` etc.). A code another item of the
+    tenant has answers `409 BARCODE_TAKEN` (`details.code`); a product-level code on a product
+    with variants `422 BARCODE_INVALID` (`reason: VARIANT_REQUIRED`). Archived variants free
+    their codes.
+  - `imageFileIds`: `PRODUCT_IMAGE` tenant files (`POST /tenants/:tid/files?kind=PRODUCT_IMAGE`).
+  - New option axes need `PRODUCT_VARIANTS` and new codes `BARCODE` (`403 FEATURE_DISABLED`);
+    stored ones can be sent back unchanged with the module off.
+  - The DTO has `options`, `barcodes` (product-level), `imageFileIds`, and on each variant
+    `sku`, `cost`, `trackInventory`, `optionValueIds` (in option order), `barcodes` and
+    `imageFileIds`. `search` also finds variant SKUs and exact barcodes.
+- **Code lookup** (`GET /locations/:id/catalog/lookup?code=`, cloud and hub, `BARCODE`):
+  `{ code, matchedBy: BARCODE | SKU, categoryId, product, variantId }`, `product` as in the
+  published menu (location price, availability). Barcodes first (a UPC-A also as its 13-digit
+  form), then SKUs. Unknown: `404 BARCODE_NOT_FOUND`.
 - **Location settings:** `{ isAvailable, priceOverride }`. Price overrides apply only to
   products without variants (`400`, `reason: PRICE_OVERRIDE_WITH_VARIANTS`).
 - **Published menu** (`GET /locations/:id/menu`) is built by `resolveLocationMenu()` in
@@ -242,7 +271,8 @@ maxSelect? }` with optional per-product overrides) and `stationIds`. On `PATCH`,
   header. Send `If-None-Match` to get `304` when nothing changed. The POS/hub will poll it
   cheaply.
   Where the location's `MODIFIERS` module is off, products have no modifier groups (none shown,
-  required or accepted in orders).
+  required or accepted in orders). Products without variants carry `barcodes`, variants `sku`
+  and `barcodes` (primary first); none where `BARCODE` is off.
 - **Audit:** `category.*`, `kitchen_station.*`, `modifier_group.*`, `product.created/updated/
 archived/restored`, `product.price_changed` (base, variant and location override, with
   from/to), `modifier.price_changed`, and `location_product.updated`.

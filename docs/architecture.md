@@ -695,7 +695,7 @@ Configuration precedence is in [configuration.md](configuration.md).
 | M2    | Feature/module system: catalog, business-type defaults, overrides, FeatureService, UI capability guards  | ✅ Done |
 | M3    | Branding and theme: platform and tenant branding, design tokens, dark/light/system, tenant files         | ✅ Done |
 | M4    | Currency and localization: currency configuration (ILS default), supported locales                       | ✅ Done |
-| M5    | Retail: SKU, barcodes, generic product options and variants, scanner abstraction                         | ⏳      |
+| M5    | Retail: SKU, barcodes, generic product options and variants, scanner abstraction                         | ✅ Done |
 | M6    | Self-service: kiosk app, terminal devices, shared order engine, self-checkout                            | ⏳      |
 | M7    | Multi-tenant website: host resolution, verified domains, configurable sections                           | ⏳      |
 | M8    | Payment configuration: per-tenant provider accounts, encrypted secrets                                   | ⏳      |
@@ -858,6 +858,32 @@ as did the POS sign-in screen (from `GET /hub/locales`), the POS itself (₪ pri
 website; and back to two languages, where the website started in the default (English, ₪28.00),
 the POS signed the Arabic-preferring cashier in in Arabic, and a choice in the switcher held.
 
+### Phase M5 decisions
+
+See [ADR 0021](adr/0021-retail-catalog-and-barcodes.md) and
+[configuration.md](configuration.md#retail-catalog-m5).
+
+- **Generic options and variants:** `ProductOption` (an axis: Size, Colour…), `ProductOptionValue`
+  and `ProductVariantOptionValue`. A product with options sells combinations of one value of each,
+  named after them; without options, variants are still named by hand. Variants gain `sku`, `cost`
+  and `trackInventory`; `ProductImage` attaches tenant files (cloud only for now). A request names
+  new values by their index in its own `options`.
+- **Barcodes** (`ProductBarcode`) are unique per tenant and code, one primary per item, on the
+  variants of a product that has variants. EAN/UPC check digits are verified in `@pos/domain`, the
+  same rule in the admin, the request schema and the server. SKUs are unique across products and
+  variants. Order lines keep `sku` and `barcode` (the scanned code, checked against the item).
+- **Lookup everywhere from one function:** `lookupCode` over the resolved menu (barcodes, then
+  SKUs) serves `GET /locations/:lid/catalog/lookup` on the cloud and the hub and the POS's own
+  copy of the menu, which now carries the codes. Without `BARCODE` the menu has none. Snapshot
+  format 5 carries options, values, combinations and codes, replaced wholesale on the hub.
+- **Scanner abstraction** in `@pos/app-kit`: `ScannerSource`, `KeyboardWedgeScanner` (HID bursts
+  ending in Enter, configurable timing, typing untouched), `ManualEntry`, a `NativeScanner`
+  placeholder, `useBarcodeScanner`. The POS adds scanned items to the cart (the options dialog
+  only for a required choice), shows a toast for unknown or sold-out codes, and has manual entry.
+- **Admin:** the product editor gained options, the generated matrix with per-variant SKU, price,
+  cost, barcode and stock flag, and barcode entry, in English and Arabic. It shows what the
+  modules allow. The stock ledger is a later phase: `INVENTORY` only adds the flag.
+
 ## Architectural decisions and open questions
 
 Recorded as ADRs in [adr/](adr/):
@@ -923,6 +949,11 @@ Recorded as ADRs in [adr/](adr/):
     configuration resolved platform → tenant; formatting uses ISO decimal places and never a
     float; the tenant's supported locales, default and digit style drive every app's language
     switcher and initial language.
+21. [0021](adr/0021-retail-catalog-and-barcodes.md): MADAR retail catalog: generic product
+    options whose value combinations are the variants, per-variant SKU, cost and stock flag,
+    barcodes unique per tenant with GS1 check digits verified in the domain, one code lookup over
+    the resolved menu on the cloud, the hub and the till (offline), and a scanner abstraction that
+    reads keyboard-wedge scanners without blocking typing.
 
 Open items to revisit:
 

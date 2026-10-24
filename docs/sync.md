@@ -57,7 +57,15 @@ order, join tables and role grants are replaced, staff missing from the snapshot
 and nothing referenced by local orders is ever deleted. A `menu.updated` event tells screens to
 refresh. Without the cloud the hub keeps serving its last snapshot.
 
-The snapshot is `format: 4` since branding ([ADR 0019](adr/0019-branding-and-theme.md)): it
+The snapshot is `format: 5` since the retail catalog
+([ADR 0021](adr/0021-retail-catalog-and-barcodes.md)): it carries `productOptions`,
+`productOptionValues`, `productVariantOptionValues` and `productBarcodes`, all replaced wholesale
+on apply. The cloud deletes these rows rather than archiving them, and a barcode moved to another
+item is a new row with the same code, which an upsert by id would collide with. Product pictures
+stay in the cloud. With the codes in its database, the hub's published menu carries them and the
+POS scans offline.
+
+Format 4 came with branding ([ADR 0019](adr/0019-branding-and-theme.md)): it
 carries the tenant's `tenantBranding` row and the `tenantFiles` its branding refers to (both
 replaced wholesale on apply), plus a top-level `files` list with each of those files' bytes
 (base64). The hub checks every copy against its row (SHA-256, size and image type) and stores it
@@ -174,7 +182,9 @@ bigserial sequence, **never by timestamps**:
 ```
 
 - **Producers.** PostgreSQL triggers on every configuration table of the location snapshot
-  (modules included: `tenant_entitlements`, `feature_overrides`; branding: `tenant_branding`)
+  (modules included: `tenant_entitlements`, `feature_overrides`; branding: `tenant_branding`;
+  the retail catalog: `product_options`, `product_option_values` (found through their option),
+  `product_variant_option_values` (through their variant) and `product_barcodes`)
   record a `CONFIG`
   change for the tenant in the writing transaction (one per transaction; writes that change
   nothing, or only `updated_at`/`last_login_at`, are ignored). No code path can forget it. The
