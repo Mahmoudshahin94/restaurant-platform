@@ -16,6 +16,19 @@ const orderAggregate = {
   payments: { include: { cash: true } },
 } as const;
 
+/** A terminal paired here, as reported to the cloud (ADR 0022). */
+const deviceReport = {
+  id: true,
+  tenantId: true,
+  name: true,
+  locationId: true,
+  type: true,
+  status: true,
+  pairedAt: true,
+  lastSeenAt: true,
+  appVersion: true,
+} as const;
+
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as object;
 
 /**
@@ -46,6 +59,11 @@ export class OutboxRecorder implements ChangeRecorder {
     for (const id of new Set(changes.auditIds)) {
       const entry = await db.auditLog.findUnique({ where: { id } });
       if (entry) await this.write(db, 'AuditLog', id, 'AUDIT_LOG_APPEND', entry);
+    }
+    for (const id of new Set(changes.deviceIds)) {
+      // What the cloud may learn of a terminal: never its credential or pairing code.
+      const device = await db.device.findUnique({ where: { id }, select: deviceReport });
+      if (device) await this.write(db, 'Device', id, 'DEVICE_UPSERT', device);
     }
     this.signal.raise();
   }

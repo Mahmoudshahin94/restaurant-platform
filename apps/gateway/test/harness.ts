@@ -185,6 +185,7 @@ export async function startHub(
     HUB_PULL_WAIT_SECONDS: '0',
     HUB_SYNC_RETRY_BASE_MS: '20',
     HUB_SYNC_RETRY_MAX_MS: '200',
+    PAYMENT_TERMINAL_PROVIDER: 'mock',
     ...env,
   });
   const app = await createHub(config);

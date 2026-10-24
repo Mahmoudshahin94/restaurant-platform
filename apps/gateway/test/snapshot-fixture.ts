@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { hashSecret } from '@pos/database';
 import { newId } from '@pos/domain';
+import { hashPairingCode } from '@pos/server';
 import { PERMISSIONS } from '@pos/shared-types';
 import type { LocationSnapshot, SnapshotTable } from '@pos/validation';
 
@@ -201,6 +202,48 @@ export async function buildSnapshot() {
   return { ids, tables };
 }
 
+/** A code the admin showed for a terminal (normalized: what `pairTerminalSchema` makes of input). */
+export const KIOSK_CODE = 'KSKABC23';
+
+/**
+ * A terminal created in the admin and waiting to pair (ADR 0022), as the snapshot carries it: its
+ * pairing code's hash and expiry, never a credential.
+ */
+export function pendingTerminal(
+  ids: { tenantId: string; locationId: string },
+  { code = KIOSK_CODE, type = 'KIOSK', name = 'Kiosk 1', expiresInMs = 60 * 60_000 } = {},
+): Record<string, unknown> {
+  return {
+    id: newId(),
+    tenantId: ids.tenantId,
+    locationId: ids.locationId,
+    name,
+    type,
+    status: 'PENDING',
+    pairingCodeHash: hashPairingCode(code),
+    pairingExpiresAt: new Date(Date.now() + expiresInMs).toISOString(),
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/** A tenant-wide module switch (ADR 0018), or one device's. */
+export function moduleOverride(
+  ids: { tenantId: string; locationId: string },
+  feature: string,
+  enabled: boolean,
+  deviceId: string | null = null,
+): Record<string, unknown> {
+  return {
+    id: newId(),
+    tenantId: ids.tenantId,
+    locationId: deviceId ? ids.locationId : null,
+    deviceId,
+    scope: deviceId ? `device:${deviceId}` : 'tenant',
+    feature,
+    enabled,
+  };
+}
+
 export function withVersion(
   ids: { tenantId: string; locationId: string },
   tables: Record<SnapshotTable, Record<string, unknown>[]>,
@@ -208,7 +251,7 @@ export function withVersion(
 ): LocationSnapshot {
   const json = JSON.parse(JSON.stringify(tables)) as LocationSnapshot['tables'];
   return {
-    format: 5,
+    format: 6,
     tenantId: ids.tenantId,
     locationId: ids.locationId,
     generatedAt: new Date().toISOString(),

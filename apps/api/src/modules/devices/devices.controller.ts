@@ -3,6 +3,7 @@ import {
   type AdminDevice,
   type Device,
   type PairedDevice,
+  type PairingCode,
   idSchema,
   pairDeviceSchema,
 } from '@pos/validation';
@@ -22,7 +23,10 @@ export class DevicesController {
     return this.devices.list(locationId);
   }
 
-  /** Pairs a location hub: returns its credential once. */
+  /**
+   * Pairs a location hub (its credential, once), or registers a terminal waiting for its hub
+   * (a one-time pairing code, ADR 0022).
+   */
   @RequirePermissions(['devices.manage'])
   @Post()
   pair(
@@ -30,6 +34,17 @@ export class DevicesController {
     @Body(new ZodValidationPipe(pairDeviceSchema)) body: z.output<typeof pairDeviceSchema>,
   ): Promise<PairedDevice> {
     return this.devices.pair(locationId, body);
+  }
+
+  /** A fresh pairing code for a terminal that has not paired yet. */
+  @RequirePermissions(['devices.manage'])
+  @Post(':deviceId/pairing-code')
+  @HttpCode(200)
+  renewPairingCode(
+    @Param('locationId', id) locationId: string,
+    @Param('deviceId', id) deviceId: string,
+  ): Promise<PairingCode> {
+    return this.devices.renewPairingCode(locationId, deviceId);
   }
 
   @RequirePermissions(['devices.manage'])

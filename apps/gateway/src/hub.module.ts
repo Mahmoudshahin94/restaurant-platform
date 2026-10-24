@@ -3,6 +3,7 @@ import { APP_GUARD } from '@nestjs/core';
 import {
   type AppConfig,
   FloorModule,
+  KioskModule,
   KitchenModule,
   LocationsModule,
   MenuModule,
@@ -13,6 +14,7 @@ import {
   TenantsModule,
   ServerCoreModule,
   ShiftsModule,
+  TerminalsModule,
 } from '@pos/server';
 import { HUB_CONFIG, type HubConfig } from './config';
 import { asServerClient, configureSqlite, createHubClient } from './database/hub-database';
@@ -34,7 +36,7 @@ class OutboxSignalModule {}
 /**
  * The location hub: the same server modules as the cloud, on SQLite, in hub mode (cloud-managed
  * settings are read-only, PIN sign-in is available, every change goes to the outbox and the sync
- * engine delivers it).
+ * engine delivers it). It also pairs and serves the location's terminals, the kiosk among them.
  */
 @Module({})
 export class HubModule {
@@ -69,6 +71,9 @@ export class HubModule {
         ShiftsModule,
         ReportsModule,
         KitchenModule,
+        // Terminals paired here, and the self-service kiosk they include (ADR 0022).
+        TerminalsModule,
+        KioskModule,
       ],
       controllers: [HubController],
       providers: [

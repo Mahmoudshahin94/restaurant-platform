@@ -50,7 +50,8 @@ export class SnapshotService {
     const tables: Record<SnapshotTable, unknown[]> = {
       tenants: await db.tenant.findMany({ where: { id: tenantId } }),
       locations: await db.location.findMany({ where: { id: locationId } }),
-      // Identity only: credentials and the last-seen time stay in the cloud.
+      // Identity only: credentials and the last-seen time stay in the cloud. A terminal waiting
+      // to pair brings its pairing code's hash and expiry, so the hub pairs it offline (ADR 0022).
       devices: await db.device.findMany({
         where: { locationId },
         select: {
@@ -60,6 +61,8 @@ export class SnapshotService {
           name: true,
           type: true,
           status: true,
+          pairingCodeHash: true,
+          pairingExpiresAt: true,
           createdAt: true,
         },
         orderBy: byId,
@@ -153,7 +156,7 @@ export class SnapshotService {
       .digest('hex')
       .slice(0, 32);
     return {
-      format: 5,
+      format: 6,
       tenantId,
       locationId,
       generatedAt: new Date().toISOString(),

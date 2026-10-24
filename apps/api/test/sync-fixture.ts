@@ -171,6 +171,7 @@ export function syncBuilders({ tenant, menu, cashMethodId, registerId }: SyncCon
           locationId: order.locationId,
           orderId: order.id,
           shiftId: shift.id,
+          deviceId: null,
           paymentMethodId: cashMethodId,
           methodType: 'CASH',
           methodNameEn: 'Cash',
@@ -255,7 +256,7 @@ export function syncBuilders({ tenant, menu, cashMethodId, registerId }: SyncCon
 export type SyncBuilders = ReturnType<typeof syncBuilders>;
 
 export const op = <P extends { id: string }>(
-  entityType: 'Order' | 'Shift' | 'KitchenTicket' | 'AuditLog',
+  entityType: 'Order' | 'Shift' | 'KitchenTicket' | 'AuditLog' | 'Device',
   payload: P,
   entityVersion: number,
   operationId = newId(),
@@ -268,6 +269,7 @@ export const op = <P extends { id: string }>(
     Shift: 'SHIFT_UPSERT',
     KitchenTicket: 'KITCHEN_TICKET_UPSERT',
     AuditLog: 'AUDIT_LOG_APPEND',
+    Device: 'DEVICE_UPSERT',
   }[entityType],
   entityVersion,
   payload,

@@ -37,11 +37,13 @@ export function dependenciesOf(entityType: string, payload: unknown): string[] {
     return [entityKey('Order', row.orderId)];
   }
   if (entityType === 'Order' && Array.isArray(row.payments)) {
-    const shifts = new Set<string>();
-    for (const p of row.payments as { shiftId?: unknown }[]) {
-      if (typeof p.shiftId === 'string') shifts.add(entityKey('Shift', p.shiftId));
+    const refs = new Set<string>();
+    for (const p of row.payments as { shiftId?: unknown; deviceId?: unknown }[]) {
+      if (typeof p.shiftId === 'string') refs.add(entityKey('Shift', p.shiftId));
+      // A kiosk's payment: its pairing reaches the cloud first (ADR 0022).
+      if (typeof p.deviceId === 'string') refs.add(entityKey('Device', p.deviceId));
     }
-    return [...shifts];
+    return [...refs];
   }
   return [];
 }
