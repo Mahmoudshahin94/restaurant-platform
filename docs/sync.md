@@ -16,25 +16,26 @@ Design decisions: [ADR 0006](adr/0006-sync-protocol.md), [ADR 0012](adr/0012-syn
   database, the operational source of truth while offline.
 - **Cloud API** (`apps/api`): owns PostgreSQL, the source of truth for synchronized data.
 
-POS terminals and KDS screens never sync with the cloud directly; they talk to the hub.
+POS terminals, KDS screens and self-service kiosks never sync with the cloud directly; they talk
+to the hub. A kiosk is a device paired with the hub (M6, [ADR 0022](adr/0022-self-service-kiosk.md)).
 
 ## Outbox (hub → cloud)
 
 Every mutation that must reach the cloud inserts a `sync_operations` row **in the same SQLite
 transaction** as the mutation itself. If either fails, both roll back.
 
-| column                         | meaning                                                                     |
-| ------------------------------ | --------------------------------------------------------------------------- |
-| `id`                           | local row id                                                                |
-| `operation_id`                 | UUIDv7, the idempotency key, unique                                         |
-| `entity_type`, `entity_id`     | e.g. `Order`, `<uuid>`                                                      |
-| `operation_type`               | `ORDER_UPSERT`, `SHIFT_UPSERT`, `KITCHEN_TICKET_UPSERT`, `AUDIT_LOG_APPEND` |
-| `payload`                      | the aggregate's full state after the change                                 |
-| `entity_version`               | per-entity sequence of the hub's changes (1, 2, 3, …)                       |
-| `status`                       | `PENDING → PROCESSING → COMPLETED` or `FAILED`                              |
-| `retry_count`, `next_retry_at` | how often the cloud answered RETRY, and when to try again                   |
-| `error_code`, `error_message`  | last failure; the POS translates the code                                   |
-| `created_at`, `processed_at`   | UTC timestamps                                                              |
+| column                         | meaning                                                                                      |
+| ------------------------------ | -------------------------------------------------------------------------------------------- |
+| `id`                           | local row id                                                                                 |
+| `operation_id`                 | UUIDv7, the idempotency key, unique                                                          |
+| `entity_type`, `entity_id`     | e.g. `Order`, `<uuid>`                                                                       |
+| `operation_type`               | `ORDER_UPSERT`, `SHIFT_UPSERT`, `KITCHEN_TICKET_UPSERT`, `AUDIT_LOG_APPEND`, `DEVICE_UPSERT` |
+| `payload`                      | the aggregate's full state after the change                                                  |
+| `entity_version`               | per-entity sequence of the hub's changes (1, 2, 3, …)                                        |
+| `status`                       | `PENDING → PROCESSING → COMPLETED` or `FAILED`                                               |
+| `retry_count`, `next_retry_at` | how often the cloud answered RETRY, and when to try again                                    |
+| `error_code`, `error_message`  | last failure; the POS translates the code                                                    |
+| `created_at`, `processed_at`   | UTC timestamps                                                                               |
 
 **Audit entries (Phase 10, ADR 0016).** Every audit entry the hub writes (PIN sign-ins and
 failures, shifts and cash movements, payments and refunds at the till, cancellations, kitchen
@@ -43,6 +44,17 @@ transaction; entries recorded outside a transaction (a failed sign-in) open one 
 cloud stores the entry once, under the hub's tenant and location, with its metadata redacted
 again; entries are append-only (a repeat answers `DUPLICATE`, a new operation for a stored entry
 changes nothing) and depend on nothing, so they never wait for another entity.
+
+**Terminals (M6, ADR 0022).** A terminal paired at the hub, a new app version it reports, and
+(at most every five minutes) its last contact each write a `DEVICE_UPSERT` operation
+(`entity_type` `Device`): `{ id, tenantId, locationId, type, status, pairedAt, lastSeenAt,
+appVersion }`, never its credential or pairing code. The cloud moves the device from `PENDING` to
+`ACTIVE` (clearing its pairing code), keeps the latest contact and the version, refuses a device
+of another location or a hub (`REJECTED`), and never brings back a device an administrator
+disabled (`APPLIED`, nothing changed). An order whose payment names a device depends on that
+device's pending report, so the pairing reaches the cloud first. Kiosk orders travel as any order:
+channel and source `KIOSK`, the device as actor in the status history, and card payments with
+`deviceId` and no shift.
 
 ## Provisioning snapshot (Phase 5)
 
@@ -57,7 +69,16 @@ order, join tables and role grants are replaced, staff missing from the snapshot
 and nothing referenced by local orders is ever deleted. A `menu.updated` event tells screens to
 refresh. Without the cloud the hub keeps serving its last snapshot.
 
-The snapshot is `format: 5` since the retail catalog
+The snapshot is `format: 6` since self-service kiosks
+([ADR 0022](adr/0022-self-service-kiosk.md)): a device row also carries `pairingCodeHash` and
+`pairingExpiresAt` while the terminal waits to pair, so the hub pairs it without the cloud. Devices
+are merged, not copied: their lifecycle only moves forward on the hub (`PENDING` < `ACTIVE` <
+`DISABLED`), so a pairing made here survives a snapshot taken before the cloud heard of it, a used
+code is never stored again, and the cloud's disabling wins and drops the hub-issued credential.
+Devices now have a change-feed trigger (adding, renaming or disabling one records a `CONFIG`
+change; their contact, version, metadata and credential do not).
+
+Format 5 came with the retail catalog
 ([ADR 0021](adr/0021-retail-catalog-and-barcodes.md)): it carries `productOptions`,
 `productOptionValues`, `productVariantOptionValues` and `productBarcodes`, all replaced wholesale
 on apply. The cloud deletes these rows rather than archiving them, and a barcode moved to another
@@ -79,10 +100,8 @@ rename ([ADR 0017](adr/0017-tenant-root-and-isolation.md)). The snapshot also ca
 tenant's module entitlements (`tenantEntitlements`) and the overrides of the tenant, this location
 and its devices (`featureOverrides`). Both are replaced wholesale on apply, so the hub resolves
 and enforces modules exactly like the cloud, also offline. It also carries the location's
-`devices`, for identity only: name, type and status, without the credential hash or last-seen
-time. Device overrides reference them. A device registration alone records no change; the device
-arrives with the next change or the periodic snapshot, and an override naming it is itself a
-change.
+`devices`, for identity: name, type and status, without the credential hash or last-seen time.
+Device overrides reference them.
 The hub holds exactly one tenant: a snapshot whose `tenantId`, or any row's `tenantId`, is not the
 tenant it was paired with is refused (`rejected`, "Snapshot for another tenant or location") and
 the last copy stays in use. The change feed's `change_log` rows, its lookup function

@@ -5,17 +5,17 @@ behind the Phase 10 additions are in [ADR 0016](adr/0016-hardening.md).
 
 ## Layers
 
-| Layer                             | Runner                        | Where                                                           | Needs                         |
-| --------------------------------- | ----------------------------- | --------------------------------------------------------------- | ----------------------------- |
-| Domain rules (pure functions)     | Vitest                        | `packages/domain/src/**/*.test.ts`                              | nothing                       |
-| Contracts, i18n, client, UI kit   | Vitest                        | `packages/{validation,i18n,api-client,app-kit,ui}`              | nothing                       |
-| Cloud API integration             | Vitest + real PostgreSQL      | `apps/api/test/*.test.ts`                                       | `TEST_DATABASE_URL` (`_test`) |
-| Location hub integration          | Vitest + real SQLite          | `apps/gateway/test/*.test.ts` (with a fake cloud)               | nothing                       |
-| Shared server units               | Vitest                        | `packages/server/src/**/*.test.ts`                              | nothing                       |
-| Components (POS, KDS, web, admin) | Vitest + Testing Library      | `apps/*/src/**/*.test.tsx`                                      | nothing                       |
-| End to end                        | Playwright (installed Chrome) | `apps/{admin,pos,kds,customer-web}/e2e/*.spec.ts`               | `*_e2e` databases, a build    |
-| Repository tools                  | `node --test`                 | `tools/**/*.test.mjs` (lint rule, printer decoder, this matrix) | nothing                       |
-| Tauri shell                       | `cargo test`, clippy, fmt     | `apps/pos/src-tauri`                                            | Rust                          |
+| Layer                                    | Runner                        | Where                                                           | Needs                         |
+| ---------------------------------------- | ----------------------------- | --------------------------------------------------------------- | ----------------------------- |
+| Domain rules (pure functions)            | Vitest                        | `packages/domain/src/**/*.test.ts`                              | nothing                       |
+| Contracts, i18n, client, UI kit          | Vitest                        | `packages/{validation,i18n,api-client,app-kit,ui}`              | nothing                       |
+| Cloud API integration                    | Vitest + real PostgreSQL      | `apps/api/test/*.test.ts`                                       | `TEST_DATABASE_URL` (`_test`) |
+| Location hub integration                 | Vitest + real SQLite          | `apps/gateway/test/*.test.ts` (with a fake cloud)               | nothing                       |
+| Shared server units                      | Vitest                        | `packages/server/src/**/*.test.ts`                              | nothing                       |
+| Components (POS, KDS, kiosk, web, admin) | Vitest + Testing Library      | `apps/*/src/**/*.test.tsx`                                      | nothing                       |
+| End to end                               | Playwright (installed Chrome) | `apps/{admin,pos,kds,kiosk,customer-web}/e2e/*.spec.ts`         | `*_e2e` databases, a build    |
+| Repository tools                         | `node --test`                 | `tools/**/*.test.mjs` (lint rule, printer decoder, this matrix) | nothing                       |
+| Tauri shell                              | `cargo test`, clippy, fmt     | `apps/pos/src-tauri`                                            | Rust                          |
 
 ## Running
 
@@ -26,7 +26,7 @@ pnpm test:tools                                          # tool tests, incl. the
 pnpm --filter @pos/pos rust:check                        # the desktop shell
 ```
 
-`pnpm e2e` runs the four suites one at a time (`turbo run test:e2e --concurrency=1`; each starts
+`pnpm e2e` runs the five suites one at a time (`turbo run test:e2e --concurrency=1`; each starts
 its own cloud, hub and web servers on its own ports and databases — see
 [dev-setup.md](dev-setup.md#end-to-end-tests-playwright)). One suite:
 `pnpm --filter @pos/pos test:e2e`; one file: `pnpm --filter @pos/pos exec playwright test e2e/sync.spec.ts`.
@@ -65,6 +65,9 @@ starts and stops it); the customer-website suite runs cloud, hub, POS, KDS and w
 | 22  | Tenant languages and currency (MADAR M4)  | [admin-portal.spec.ts](../apps/admin/e2e/admin-portal.spec.ts) “the owner offers one language and writes the currency their way”                                                                                                                                                                                                                                                                                                                                            |
 | 23  | Scan to cart (MADAR M5)                   | [pos.spec.ts](../apps/pos/e2e/pos.spec.ts) “a barcode scan adds the item to the cart, offline at the hub”                                                                                                                                                                                                                                                                                                                                                                   |
 | 24  | Variant matrix (MADAR M5)                 | [admin-portal.spec.ts](../apps/admin/e2e/admin-portal.spec.ts) “the owner builds a size and colour matrix with SKUs and barcodes”                                                                                                                                                                                                                                                                                                                                           |
+| 25  | Kiosk to hub to KDS (MADAR M6)            | [restaurant.spec.ts](../apps/kiosk/e2e/restaurant.spec.ts) “a kiosk order paid by card reaches the kitchen screen through the hub”                                                                                                                                                                                                                                                                                                                                          |
+| 26  | Kiosk pay at the counter (MADAR M6)       | [restaurant.spec.ts](../apps/kiosk/e2e/restaurant.spec.ts) “pay at the counter, in Arabic: the order waits for the cashier, who collects it”                                                                                                                                                                                                                                                                                                                                |
+| 27  | Retail self-checkout (MADAR M6)           | [self-checkout.spec.ts](../apps/kiosk/e2e/self-checkout.spec.ts) “scans items into the cart and completes a self-checkout sale”                                                                                                                                                                                                                                                                                                                                             |
 
 Other end-to-end tests cover payments (split, card numbers refused, shift close-out, an Arabic
 ESC/POS receipt), kitchen cancellations and rush, admin roles and users, branch settings, order
@@ -154,6 +157,22 @@ English and Arabic.
 | Scanner burst detection, typing left alone, field restored, timing options, manual entry, the hook                     | `packages/app-kit/src/scanner/scanner.test.tsx`                                    |
 | Admin matrix: rows kept when values change, the request by value index, a product's draft                              | `apps/admin/src/routes/menu/variant-matrix.test.ts`                                |
 | Scan to cart at the POS through the hub; the admin builds a size × colour matrix                                       | E2E scenarios 23 and 24                                                            |
+
+## Self-service kiosk (MADAR, ADR 0022)
+
+| What                                                                                                                       | Where                                                                                               |
+| -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| SYSTEM confirm and hand-over of a paid self-service order, never an unpaid one; the path with and without a kitchen        | `packages/domain/src/order/order.test.ts`                                                           |
+| The mock card terminal (approval code, idempotent, declines), refunds back through it, no terminal configured              | `packages/server/src/modules/payments/providers/providers.test.ts`                                  |
+| Terminals created with a one-time code (renewable while pending), the code in the snapshot, the change feed                | `apps/api/test/kiosk-terminals.test.ts`                                                             |
+| The hub's `DEVICE_UPSERT` (pairing, last contact, version; a disabled terminal never revived; scope); kiosk payments       | `apps/api/test/kiosk-terminals.test.ts` (and the CHECK: a shift-less card payment needs its device) |
+| Pairing at the hub offline, single use, expiry; a pairing kept through an older snapshot; disabled → locked out            | `apps/gateway/test/kiosk.test.ts`                                                                   |
+| A kiosk order reaches the KDS; pay at the counter collected at the POS; retail checkout completes a sale; declines         | `apps/gateway/test/kiosk.test.ts`                                                                   |
+| Idempotent orders and payments, another kiosk's orders unknown, SELF_CHECKOUT off (location or device) → `403`, offline    | `apps/gateway/test/kiosk.test.ts`                                                                   |
+| A kiosk refused on every staff route, walked from the route inventory; staff tokens and anonymous refused on device routes | `apps/gateway/test/security.test.ts`                                                                |
+| Attendant exit: PIN, `kiosk.attend`, no session issued                                                                     | `apps/gateway/test/kiosk.test.ts`                                                                   |
+| Kiosk visit store, idle reset, done/paying screens in EN and AR, options priced by the domain; POS kiosk banner            | `apps/kiosk/src/**/*.test.ts(x)`, `apps/pos/src/components/kiosk-orders-prompt.test.tsx`            |
+| Kiosk → hub → KDS, pay at the counter in Arabic, a supermarket's scanned self-checkout                                     | E2E scenarios 25, 26 and 27                                                                         |
 
 ## Testing requirements (specification section 32)
 

@@ -14,7 +14,13 @@ import {
   paymentTotals,
   quoteOrder,
 } from '@pos/domain';
-import { Feature, OPEN_ORDER_STATUSES, type RealtimeEvent } from '@pos/shared-types';
+import {
+  Feature,
+  OPEN_ORDER_STATUSES,
+  type OrderChannel,
+  type OrderStatus,
+  type RealtimeEvent,
+} from '@pos/shared-types';
 import type {
   Order,
   createOrderSchema,
@@ -24,7 +30,12 @@ import type {
 } from '@pos/validation';
 import type { z } from 'zod';
 import { SERVER_MODE, type ServerMode } from '../../common/auth/managed-in-cloud';
-import type { Principal } from '../../common/auth/principal';
+import {
+  type Actor,
+  type DeviceActor,
+  type Principal,
+  isDeviceActor,
+} from '../../common/auth/principal';
 import { RequestContext } from '../../common/context/request-context';
 import { ChangeRecorder, ticketIdsOf } from '../../prisma/change-recorder';
 import { SqlDialect } from '../../prisma/dialect';
@@ -46,6 +57,8 @@ import {
 } from './orders.mappers';
 
 type CreateInput = z.output<typeof createOrderSchema>;
+/** A new order: staff orders (`createOrderSchema`) and the kiosk's own (channel KIOSK, ADR 0022). */
+type NewOrder = Omit<CreateInput, 'channel'> & { channel: OrderChannel };
 type UpdateInput = z.output<typeof updateOrderSchema>;
 type TransitionInput = z.output<typeof transitionOrderSchema>;
 type ListQuery = z.output<typeof listOrdersQuerySchema>;
@@ -62,6 +75,13 @@ const toItemRequests = (items: CreateInput['items']) =>
 
 const sameSet = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && [...a].sort().every((v, i) => v === [...b].sort()[i]);
+
+/** How an actor is recorded: a staff member as the user, a kiosk as its device. */
+function recordedAs(actor: Actor) {
+  return isDeviceActor(actor)
+    ? { actorType: 'DEVICE' as const, actorId: actor.deviceId, userId: null }
+    : { actorType: 'USER' as const, actorId: actor.userId, userId: actor.userId };
+}
 
 /**
  * Order application service. The server is authoritative: prices, taxes and discounts are always
@@ -83,12 +103,13 @@ export class OrdersService {
 
   /**
    * Creates an order. The client-generated id is the idempotency key: resending the same request
-   * (retry after a timeout, double tap) returns the existing order instead of a duplicate.
+   * (retry after a timeout, double tap) returns the existing order instead of a duplicate. A
+   * self-service kiosk (ADR 0022) creates its orders here too, as its device, without discounts.
    */
   async create(
-    principal: Principal,
+    actor: Actor,
     locationId: string,
-    input: CreateInput,
+    input: NewOrder,
   ): Promise<{ order: Order; created: boolean }> {
     const existing = await this.prisma.order.findUnique({
       where: { id: input.id },
@@ -98,9 +119,16 @@ export class OrdersService {
 
     const { location, currencyCode, menu } = await this.menus.resolve(locationId);
     const discounts = await this.loadDiscounts(location.tenantId, input.discountIds);
-    if (discounts.length > 0)
-      assertPermissions(principal.assignments, locationId, ['orders.discount']);
+    if (discounts.length > 0) {
+      if (isDeviceActor(actor)) {
+        throw new DomainError('INSUFFICIENT_PERMISSION', 'Only staff apply discounts', {
+          missing: ['orders.discount'],
+        });
+      }
+      assertPermissions(actor.assignments, locationId, ['orders.discount']);
+    }
     await this.checkTable(location, input);
+    const by = recordedAs(actor);
 
     const quote = quoteOrder({
       menu,
@@ -133,22 +161,24 @@ export class OrdersService {
             currencyCode,
             taxInclusive: location.taxInclusive,
             ...totalsOf(quote),
-            createdById: principal.userId,
+            createdById: by.userId,
             placedAt: input.status === 'DRAFT' ? null : now,
           },
         });
         await this.writeLines(tx, input.id, menu, quote, input.items);
         await tx.orderTax.createMany({ data: taxRows(input.id, menu, quote) });
-        await tx.orderDiscount.createMany({
-          data: discountRows(input.id, discounts, quote, principal.userId),
-        });
+        if (by.userId !== null) {
+          await tx.orderDiscount.createMany({
+            data: discountRows(input.id, discounts, quote, by.userId),
+          });
+        }
         await tx.orderStatusHistory.create({
           data: {
             orderId: input.id,
             fromStatus: null,
             toStatus: input.status,
-            actorType: 'USER',
-            actorId: principal.userId,
+            actorType: by.actorType,
+            actorId: by.actorId,
             source,
           },
         });
@@ -157,6 +187,8 @@ export class OrdersService {
             action: 'order.created',
             entityType: 'Order',
             entityId: input.id,
+            actorType: by.actorType,
+            actorId: by.actorId,
             locationId,
             metadata: {
               channel: input.channel,
@@ -389,29 +421,75 @@ export class OrdersService {
         reason: 'DECIDED_AT_LOCATION',
       });
     }
-    if (input.to === 'CANCELLED') {
-      // Online payments of a website order not yet accepted are voided by the cloud (ADR 0013).
-      const held = current.payments.filter((p) => !isVoidedOnCancel(current, p));
-      const { paid, refunded } = paymentTotals(current.total, settledEntries(held));
-      if (paid - refunded > 0) {
-        throw new DomainError('INVALID_ORDER_STATE', 'Refund the payments before cancelling', {
-          reason: 'REFUND_FIRST',
-          held: paid - refunded,
-        });
-      }
-    }
+    if (input.to === 'CANCELLED') this.assertNothingHeld(current);
+    return this.applyTransition(principal, current, input.to, input.reason);
+  }
 
+  /**
+   * Moves an order by a SYSTEM rule of the state machine, on behalf of a terminal device: a
+   * kiosk's order once paid at its terminal (confirmed, then handed over where there is no
+   * kitchen), or cancelled by the kiosk before anything was paid (ADR 0022).
+   */
+  async transitionAsSystem(
+    device: DeviceActor,
+    locationId: string,
+    orderId: string,
+    to: OrderStatus,
+    reason: string | null = null,
+  ): Promise<Order> {
+    const current = await this.load(this.prisma, locationId, orderId);
+    await assertCloudMayChangeOrder(this.mode, this.prisma, orderId);
+    assertTransition({
+      from: current.status,
+      to,
+      trigger: 'SYSTEM',
+      paymentStatus: current.paymentStatus,
+      reason,
+    });
+    if (to === 'CANCELLED') this.assertNothingHeld(current);
+    return this.applyTransition(device, current, to, reason);
+  }
+
+  /** Whether the location's kitchen screen takes this order's tickets (the KDS module). */
+  kitchenOn(order: { tenantId: string; locationId: string }): Promise<boolean> {
+    return this.kitchen.kitchenOn(this.prisma, order);
+  }
+
+  // --- helpers ---------------------------------------------------------------------------------
+
+  /** Money still held blocks a cancellation (refund it first). */
+  private assertNothingHeld(current: OrderRow): void {
+    // Online payments of a website order not yet accepted are voided by the cloud (ADR 0013).
+    const held = current.payments.filter((p) => !isVoidedOnCancel(current, p));
+    const { paid, refunded } = paymentTotals(current.total, settledEntries(held));
+    if (paid - refunded > 0) {
+      throw new DomainError('INVALID_ORDER_STATE', 'Refund the payments before cancelling', {
+        reason: 'REFUND_FIRST',
+        held: paid - refunded,
+      });
+    }
+  }
+
+  /** Writes a checked status change with its history, audit, kitchen effects and outbox. */
+  private async applyTransition(
+    actor: Actor,
+    current: OrderRow,
+    to: OrderStatus,
+    reason: string | null,
+  ): Promise<Order> {
+    const { id: orderId, locationId } = current;
+    const by = recordedAs(actor);
     const source = RequestContext.get()?.source ?? 'POS';
     const now = new Date();
     const row = await this.prisma.$transaction(async (tx) => {
       const claimed = await tx.order.updateMany({
         where: { id: orderId, version: current.version, status: current.status },
         data: {
-          status: input.to,
+          status: to,
           version: { increment: 1 },
-          ...(input.to === 'PLACED' ? { placedAt: now } : {}),
-          ...(input.to === 'COMPLETED' ? { completedAt: now } : {}),
-          ...(input.to === 'CANCELLED' ? { cancelledAt: now, cancelReason: input.reason } : {}),
+          ...(to === 'PLACED' ? { placedAt: now } : {}),
+          ...(to === 'COMPLETED' ? { completedAt: now } : {}),
+          ...(to === 'CANCELLED' ? { cancelledAt: now, cancelReason: reason } : {}),
         },
       });
       if (claimed.count !== 1) throw this.staleVersion(current.version + 1);
@@ -419,29 +497,26 @@ export class OrdersService {
         data: {
           orderId,
           fromStatus: current.status,
-          toStatus: input.to,
-          actorType: 'USER',
-          actorId: principal.userId,
+          toStatus: to,
+          actorType: by.actorType,
+          actorId: by.actorId,
           source,
-          reason: input.reason,
+          reason,
         },
       });
       await this.audit.record(
         {
-          action: input.to === 'CANCELLED' ? 'order.cancelled' : 'order.status_changed',
+          action: to === 'CANCELLED' ? 'order.cancelled' : 'order.status_changed',
           entityType: 'Order',
           entityId: orderId,
+          actorType: by.actorType,
+          actorId: by.actorId,
           locationId,
-          metadata: {
-            from: current.status,
-            to: input.to,
-            reason: input.reason,
-            total: current.total,
-          },
+          metadata: { from: current.status, to, reason, total: current.total },
         },
         tx,
       );
-      const ticketEvents = await this.followKitchen(tx, current, input.to);
+      const ticketEvents = await this.followKitchen(tx, current, to);
       await this.changes.record(tx, { orderIds: [orderId], ticketIds: ticketIdsOf(ticketEvents) });
       const updated = await tx.order.findUniqueOrThrow({
         where: { id: orderId },
@@ -450,20 +525,18 @@ export class OrdersService {
       return { updated, ticketEvents };
     });
     this.publishOrder(
-      input.to === 'CANCELLED' ? 'order.cancelled' : 'order.updated',
+      to === 'CANCELLED' ? 'order.cancelled' : 'order.updated',
       row.updated,
       row.ticketEvents,
     );
     return toOrderDto(row.updated);
   }
 
-  // --- helpers ---------------------------------------------------------------------------------
-
   /** Kitchen side effects of a staff transition (runs inside the transition's transaction). */
   private async followKitchen(
     tx: PrismaTx,
     current: OrderRow,
-    to: TransitionInput['to'],
+    to: OrderStatus,
   ): Promise<RealtimeEvent[]> {
     const order = { ...current, status: to };
     if (to === 'CONFIRMED') return this.kitchen.syncTickets(tx, order);

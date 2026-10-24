@@ -9,6 +9,13 @@ export interface HttpClientOptions {
   source: ActionSource;
   getAccessToken: () => string | null;
   /**
+   * A whole `Authorization` value instead of the bearer token: a terminal's device credential
+   * (`Device <id>.<secret>`, ADR 0022). Wins over `getAccessToken` when it returns one.
+   */
+  getAuthorization?: () => string | null;
+  /** The app's version, sent as `x-madar-client-version` (devices report it, ADR 0022). */
+  clientVersion?: string;
+  /**
    * Called once when a request fails with TOKEN_EXPIRED. Return true after obtaining a new
    * access token to retry the request; false to give up (the caller should sign out).
    */
@@ -102,7 +109,9 @@ export class HttpClient {
       ...opts.headers,
     };
     const token = this.options.getAccessToken();
-    if (token) headers.authorization = `Bearer ${token}`;
+    const authorization = this.options.getAuthorization?.() ?? (token ? `Bearer ${token}` : null);
+    if (authorization) headers.authorization = authorization;
+    if (this.options.clientVersion) headers['x-madar-client-version'] = this.options.clientVersion;
     if (opts.raw) headers['content-type'] = opts.raw.contentType;
     else if (opts.body !== undefined) headers['content-type'] = 'application/json';
 

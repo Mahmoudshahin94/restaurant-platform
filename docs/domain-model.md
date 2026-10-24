@@ -90,6 +90,7 @@ erDiagram
   Order ||--o{ OrderDiscount : "discounted by"
   Order ||--o{ Payment : "paid by"
   PaymentMethod ||--o{ Payment : "method"
+  Device |o--o{ Payment : "kiosk card terminal"
   Order ||--o{ KitchenTicket : "routed to"
   KitchenStation ||--o{ KitchenTicket : queues
   KitchenTicket ||--o{ KitchenTicketItem : lists
@@ -185,8 +186,13 @@ Presenting a rotated token revokes the whole family.
 hub (Phase 2/5). Linked to a `User`, whose roles the employee signs in with; without one, no PIN
 sign-in. Managed in the admin portal (Phase 8).
 
-**Device**: POS, KDS, printer, kitchen display, customer display or gateway. `metadata` holds
-non-secret descriptive data only.
+**Device**: POS, KDS, printer, kitchen display, customer display, kiosk or gateway. `metadata`
+holds non-secret descriptive data only. Terminals (POS, KDS, kiosk, customer display; M6,
+[ADR 0022](adr/0022-self-service-kiosk.md)) start `PENDING` with `pairingCodeHash` and
+`pairingExpiresAt` (a CHECK keeps them together, and only while pending), pair with their hub
+(`pairedAt`), and report `lastSeenAt` and `appVersion` (`x-madar-client-version`). A terminal's
+credential hash lives on its hub only; a hub's in the cloud. The lifecycle only moves forward:
+`PENDING` → `ACTIVE` → `DISABLED`.
 
 **ProcessedOperation** (cloud): the exactly-once ledger of hub pushes (ADR 0012). Refusals keep
 the hub's state (`payload`) and, once an administrator settled them, the `resolution`
@@ -265,8 +271,10 @@ historical orders. Since M5 a line also keeps its `sku` (the variant's, else the
 - `Payment`: append-only. The id is the client's UUID (idempotency key). A row is a `CHARGE` or a
   `REFUND` (`refundOfId` points at its charge) and snapshots the method's type and names. It
   stores `amount`, cash `tendered`/`change`, `roundingAdjustment`, the card approval `reference`
-  (never a card number), `provider`/`providerRef`, `status` and the `shiftId`. Database check
-  constraints keep amounts positive and refunds linked to a charge. Payment rows are never
+  (never a card number), `provider`/`providerRef`, `status`, the `shiftId` and, for a kiosk's
+  card-terminal payment, the `deviceId` (M6). Database check constraints keep amounts positive and
+  refunds linked to a charge, and require a shift except for `ONLINE` payments and `CARD`
+  payments that name their device. Payment rows are never
   updated or deleted; the order's `paymentStatus` is derived from them.
 - `CashRegister`: a physical drawer at a location.
 - `Shift`: one drawer session, with opening float, opened/closed by and at, and on close
@@ -296,10 +304,19 @@ historical orders. Since M5 a line also keeps its `sku` (the variant's, else the
   (JSON `{ line1, line2, city, notes }`, required for delivery), `customerEmail` and `acceptBy`
   (the acceptance deadline). There is no customer account: name and phone are on the order.
 - `WebOrderCounter` (cloud only): the `W-NNN` sequence per location and business day.
-- Online card payments are `Payment` rows with method type `ONLINE` and no `shiftId` (allowed only
-  for `ONLINE` by a CHECK constraint); a void is a `REFUND` row.
+- Online card payments are `Payment` rows with method type `ONLINE` and no `shiftId`; a void is a
+  `REFUND` row.
 - Whether a branch takes orders is computed (`onlineOrderingStatus` in `@pos/domain`) from the
   switch, the opening hours and the hub's heartbeat (`Device.lastSeenAt`).
+
+**Self-service** (M6, [ADR 0022](adr/0022-self-service-kiosk.md)):
+
+- Kiosk orders are `Order` rows with channel and source `KIOSK`, `createdById` null, the kiosk as
+  actor (`DEVICE`) in the status history, and an optional `customerName` to call. They are placed
+  `PLACED`; paid at the kiosk they are confirmed by SYSTEM rules (kitchen tickets with `KDS`) and,
+  without a kitchen screen, completed at once. Paid at the counter they wait for a cashier.
+- Their card payments are `Payment` rows of method type `CARD` (the tenant's first card method),
+  provider the terminal adapter, `deviceId` the kiosk, and no `shiftId`.
 
 **Reporting** (Phase 9, [ADR 0015](adr/0015-reporting.md)): cloud-only PostgreSQL views, created
 by migration and not modelled in Prisma (so the hub schema is unaffected). `report_sales_orders`:
@@ -320,4 +337,4 @@ and per-tax amounts (split in proportion by `splitRefund` in `@pos/domain`);
   version last stored; sent as `baseVersion` with the hub's first change (the hand-over).
 
 `Employee` rows carry the PIN hash used for hub sign-in; `Device` rows in the cloud hold the hub's
-credential hash.
+credential hash, and the hub's `Device` rows its terminals' credential hashes (M6).

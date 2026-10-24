@@ -17,7 +17,7 @@ import type {
 } from '@pos/validation';
 import type { z } from 'zod';
 import { SERVER_MODE, type ServerMode } from '../../common/auth/managed-in-cloud';
-import type { Principal } from '../../common/auth/principal';
+import type { DeviceActor, Principal } from '../../common/auth/principal';
 import { RequestContext } from '../../common/context/request-context';
 import { ChangeRecorder } from '../../prisma/change-recorder';
 import { SqlDialect } from '../../prisma/dialect';
@@ -26,6 +26,7 @@ import { PrismaService, type PrismaTx } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { RealtimeBus } from '../realtime/realtime.bus';
 import {
+  type OrderRow,
   orderEventPayload,
   orderInclude,
   settledEntries,
@@ -243,7 +244,8 @@ export class PaymentsService {
         );
         if (!charge) throw new DomainError('PAYMENT_NOT_FOUND', 'Charge not found');
 
-        const provider = this.providers.for(charge.methodType);
+        // Back the way it came: a kiosk's card payment is refunded through its terminal.
+        const provider = this.providers.of(charge);
         const result = await provider.refundPayment({
           refundId: input.id,
           providerRef: charge.providerRef,
@@ -343,6 +345,135 @@ export class PaymentsService {
       if (raced) return raced;
       throw error;
     }
+  }
+
+  /**
+   * Takes what is left of an order at a kiosk's integrated card terminal (ADR 0022). The terminal
+   * is asked first, outside any transaction, so a customer tapping a card holds no lock (and the
+   * hub's single SQLite writer stays free); the outcome is then recorded under the order's lock.
+   * If the order changed meanwhile (a cashier took the money), the terminal's charge is voided and
+   * the payment refused. A decline is recorded too (FAILED), like any provider outcome. The payment
+   * has the device and no shift: it touches no cash drawer. `check` is the caller's own rule for
+   * the order (a kiosk pays only its own orders), applied before the terminal is asked.
+   */
+  async chargeAtTerminal(
+    device: DeviceActor,
+    locationId: string,
+    orderId: string,
+    input: { id: string },
+    check: (order: OrderRow) => void = () => undefined,
+  ): Promise<PaymentOutcome> {
+    const replay = await this.replay(input.id, locationId, orderId, 'CHARGE');
+    if (replay) return replay;
+    const before = await this.prisma.order.findFirst({
+      where: { id: orderId, locationId },
+      include: orderInclude,
+    });
+    if (!before) throw new DomainError('ORDER_NOT_FOUND', 'Order not found', { orderId });
+    check(before);
+    const method = await this.cardMethod(before.tenantId);
+    const due = paymentTotals(before.total, settledEntries(before.payments)).balanceDue;
+    const charge = prepareCharge({
+      orderStatus: before.status,
+      method: 'CARD',
+      balanceDue: due,
+      amount: due,
+      cashRoundingIncrement: null,
+    });
+    const terminal = this.providers.terminal;
+    const result = await terminal.chargeAtTerminal({
+      paymentId: input.id,
+      orderId,
+      amount: charge.amount,
+      currency: before.currencyCode,
+      reference: null,
+      deviceId: device.deviceId,
+    });
+    try {
+      const outcome = await this.prisma.$transaction(async (tx) => {
+        await this.dialect.lockOrderRow(tx, locationId, orderId);
+        const committed = await this.replayIn(tx, input.id, locationId, orderId, 'CHARGE');
+        if (committed) return committed;
+        await assertCloudMayChangeOrder(this.mode, tx, orderId);
+        const order = await tx.order.findUniqueOrThrow({
+          where: { id: orderId },
+          include: orderInclude,
+        });
+        const { balanceDue } = paymentTotals(order.total, settledEntries(order.payments));
+        if (result.status === 'CAPTURED' && balanceDue !== charge.amount) {
+          throw new DomainError('PAYMENT_FAILED', 'The order changed during the payment', {
+            reason: 'BALANCE_CHANGED',
+            balanceDue,
+          });
+        }
+        const payment = await tx.payment.create({
+          data: {
+            id: input.id,
+            tenantId: order.tenantId,
+            locationId,
+            orderId,
+            shiftId: null,
+            deviceId: device.deviceId,
+            paymentMethodId: method.id,
+            methodType: 'CARD',
+            methodNameEn: method.nameEn,
+            methodNameAr: method.nameAr,
+            type: 'CHARGE',
+            status: result.status,
+            provider: terminal.name,
+            providerRef: result.providerRef,
+            amount: charge.amount,
+            reference: result.reference,
+          },
+        });
+        const updated = await this.refreshPaymentStatus(tx, orderId);
+        await this.audit.record(
+          {
+            action: result.status === 'CAPTURED' ? 'payment.captured' : 'payment.failed',
+            entityType: 'Order',
+            entityId: orderId,
+            actorType: 'DEVICE',
+            actorId: device.deviceId,
+            locationId,
+            metadata: {
+              paymentId: payment.id,
+              method: 'CARD',
+              provider: terminal.name,
+              amount: charge.amount,
+              status: result.status,
+              paymentStatus: updated.paymentStatus,
+            },
+          },
+          tx,
+        );
+        await this.changes.record(tx, { orderIds: [orderId] });
+        return { payment: toPaymentDto(payment), order: toOrderDto(updated) };
+      });
+      this.publish(outcome);
+      return outcome;
+    } catch (error) {
+      const raced = await this.replayAfterRace(error, input.id, locationId, orderId, 'CHARGE');
+      if (raced) return raced;
+      // Not recorded: the customer must not pay for an order that could not take the payment.
+      if (result.status === 'CAPTURED' && result.providerRef) {
+        await terminal.cancelPayment(result.providerRef).catch(() => null);
+      }
+      throw error;
+    }
+  }
+
+  /** The tenant's card method that kiosk payments are recorded under (the first one listed). */
+  private async cardMethod(tenantId: string) {
+    const method = await this.prisma.paymentMethod.findFirst({
+      where: { tenantId, type: 'CARD', archivedAt: null },
+      orderBy: [{ sortOrder: 'asc' }, { nameEn: 'asc' }],
+    });
+    if (!method) {
+      throw new DomainError('PAYMENT_FAILED', 'The business accepts no card payments', {
+        reason: 'UNKNOWN_METHOD',
+      });
+    }
+    return method;
   }
 
   /** Tells POS screens the order's balance changed (after the transaction committed). */

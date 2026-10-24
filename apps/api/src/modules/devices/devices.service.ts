@@ -1,15 +1,27 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Device as DeviceRow } from '@pos/database';
 import { DomainError } from '@pos/domain';
-import { APP_CONFIG, type AppConfig, AuditService, PrismaService } from '@pos/server';
+import {
+  APP_CONFIG,
+  type AppConfig,
+  AuditService,
+  PAIRING_CODE_TTL_MS,
+  PrismaService,
+  formatPairingCode,
+  hashDeviceSecret,
+  hashPairingCode,
+  newDeviceSecret,
+  newPairingCode,
+} from '@pos/server';
+import { isTerminalDeviceType } from '@pos/shared-types';
 import {
   type AdminDevice,
   type Device,
   type PairDeviceRequest,
   type PairedDevice,
+  type PairingCode,
   reportedOutboxSchema,
 } from '@pos/validation';
-import { hashDeviceSecret, newDeviceSecret } from './device-credentials';
 
 const toDto = (row: DeviceRow): Device => ({
   id: row.id,
@@ -17,7 +29,9 @@ const toDto = (row: DeviceRow): Device => ({
   name: row.name,
   type: row.type,
   status: row.status,
+  pairedAt: row.pairedAt?.toISOString() ?? null,
   lastSeenAt: row.lastSeenAt?.toISOString() ?? null,
+  appVersion: row.appVersion,
   createdAt: row.createdAt.toISOString(),
 });
 
@@ -33,6 +47,7 @@ export function toAdminDevice(row: DeviceRow, staleAfterMs: number, now = new Da
   const outbox = reportedOutboxSchema.safeParse(metadata.outbox);
   return {
     ...toDto(row),
+    pairingExpiresAt: row.pairingExpiresAt?.toISOString() ?? null,
     online:
       row.status === 'ACTIVE' &&
       row.lastSeenAt !== null &&
@@ -41,7 +56,12 @@ export function toAdminDevice(row: DeviceRow, staleAfterMs: number, now = new Da
   };
 }
 
-/** Registers location hubs and issues their credentials (shown once). */
+/**
+ * Registers a location's devices. A hub gets its credential here (shown once). A terminal (POS,
+ * KDS, kiosk, customer display; ADR 0022) gets a one-time pairing code instead: its hub, which
+ * receives the code's hash with the snapshot, issues the terminal's credential when the code is
+ * typed on it, even offline, and reports the pairing back.
+ */
 @Injectable()
 export class DevicesService {
   constructor(
@@ -65,7 +85,10 @@ export class DevicesService {
 
   async pair(locationId: string, input: Required<PairDeviceRequest>): Promise<PairedDevice> {
     const location = await this.prisma.location.findUniqueOrThrow({ where: { id: locationId } });
+    const terminal = isTerminalDeviceType(input.type);
     const secret = newDeviceSecret();
+    const code = newPairingCode();
+    const expiresAt = new Date(Date.now() + PAIRING_CODE_TTL_MS);
     return this.prisma.$transaction(async (tx) => {
       const row = await tx.device.create({
         data: {
@@ -73,13 +96,18 @@ export class DevicesService {
           locationId,
           name: input.name,
           type: input.type,
-          status: 'ACTIVE',
-          credentialHash: hashDeviceSecret(secret),
+          ...(terminal
+            ? {
+                status: 'PENDING',
+                pairingCodeHash: hashPairingCode(code),
+                pairingExpiresAt: expiresAt,
+              }
+            : { status: 'ACTIVE', credentialHash: hashDeviceSecret(secret) }),
         },
       });
       await this.audit.record(
         {
-          action: 'device.paired',
+          action: terminal ? 'device.created' : 'device.paired',
           entityType: 'Device',
           entityId: row.id,
           locationId,
@@ -87,18 +115,59 @@ export class DevicesService {
         },
         tx,
       );
-      return { device: toDto(row), credential: `${row.id}.${secret}` };
+      return terminal
+        ? { device: toDto(row), credential: null, pairing: this.pairingOf(code, expiresAt) }
+        : { device: toDto(row), credential: `${row.id}.${secret}`, pairing: null };
     });
   }
 
-  /** Revokes a device's credential immediately (lost or replaced hub). */
+  /**
+   * A new pairing code for a terminal still waiting to pair (the first one expired or was lost);
+   * the previous code stops working with the next snapshot of the hub.
+   */
+  async renewPairingCode(locationId: string, deviceId: string): Promise<PairingCode> {
+    const code = newPairingCode();
+    const expiresAt = new Date(Date.now() + PAIRING_CODE_TTL_MS);
+    return this.prisma.$transaction(async (tx) => {
+      const found = await tx.device.findFirst({ where: { id: deviceId, locationId } });
+      if (!found) throw new DomainError('DEVICE_NOT_FOUND', 'Device not found', { deviceId });
+      if (found.status !== 'PENDING' || !isTerminalDeviceType(found.type)) {
+        throw new DomainError('CONFLICT', 'Only a terminal waiting to pair gets a code', {
+          reason: 'NOT_PENDING',
+          status: found.status,
+        });
+      }
+      await tx.device.update({
+        where: { id: deviceId },
+        data: { pairingCodeHash: hashPairingCode(code), pairingExpiresAt: expiresAt },
+      });
+      await this.audit.record(
+        {
+          action: 'device.pairing_code_renewed',
+          entityType: 'Device',
+          entityId: deviceId,
+          locationId,
+          metadata: { name: found.name, type: found.type },
+        },
+        tx,
+      );
+      return this.pairingOf(code, expiresAt);
+    });
+  }
+
+  /** Revokes a device's credential immediately (lost or replaced hub or terminal). */
   async disable(locationId: string, deviceId: string): Promise<Device> {
     return this.prisma.$transaction(async (tx) => {
       const found = await tx.device.findFirst({ where: { id: deviceId, locationId } });
       if (!found) throw new DomainError('DEVICE_NOT_FOUND', 'Device not found', { deviceId });
       const row = await tx.device.update({
         where: { id: deviceId },
-        data: { status: 'DISABLED', credentialHash: null },
+        data: {
+          status: 'DISABLED',
+          credentialHash: null,
+          pairingCodeHash: null,
+          pairingExpiresAt: null,
+        },
       });
       await this.audit.record(
         {
@@ -112,5 +181,9 @@ export class DevicesService {
       );
       return toDto(row);
     });
+  }
+
+  private pairingOf(code: string, expiresAt: Date): PairingCode {
+    return { code: formatPairingCode(code), expiresAt: expiresAt.toISOString() };
   }
 }

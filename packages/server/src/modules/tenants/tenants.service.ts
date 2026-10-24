@@ -58,12 +58,14 @@ export class TenantsService {
   /**
    * What an app needs to render for the tenant (ADR 0018): identity, money, languages, the
    * modules resolved for `locationId` (or the tenant as a whole) and the branding of `surface`
-   * (ADR 0019). Served by the cloud and, from its snapshot, by the location hub.
+   * (ADR 0019). Served by the cloud and, from its snapshot, by the location hub. A terminal's
+   * own context (a kiosk, ADR 0022) names its `deviceId`: the device layer of modules applies.
    */
   async context(
     tenantId: string,
     locationId: string | null,
     surface: BrandSurface | null = null,
+    deviceId: string | null = null,
   ): Promise<TenantContextDto> {
     const row = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
     if (!row) throw new DomainError('TENANT_NOT_FOUND', 'Tenant not found');
@@ -85,7 +87,7 @@ export class TenantsService {
       currency: currencyOf(row),
       locales: localesOf(row),
       locationId,
-      features: await this.features.resolve({ tenantId, locationId }),
+      features: await this.features.resolve({ tenantId, locationId, deviceId }),
     };
   }
 

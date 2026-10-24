@@ -59,6 +59,12 @@ const envSchema = z
      */
     ONLINE_PAYMENT_PROVIDER: z.enum(['none', 'mock']).default('none'),
     /**
+     * Integrated card terminals of self-service kiosks (ADR 0022): `none` (kiosk customers pay at
+     * the counter) or `mock`, the documented test adapter that approves every charge (refused in
+     * production). A vendor's terminal SDK becomes another value.
+     */
+    PAYMENT_TERMINAL_PROVIDER: z.enum(['none', 'mock']).default('none'),
+    /**
      * Where tenant files (logos, favicons, ADR 0019) are kept by the local-disk storage. Keys
      * below it are `tenants/<tenantId>/…`. An object store replaces it in production.
      */
@@ -69,6 +75,10 @@ const envSchema = z
   .refine((env) => env.NODE_ENV !== 'production' || env.ONLINE_PAYMENT_PROVIDER !== 'mock', {
     path: ['ONLINE_PAYMENT_PROVIDER'],
     message: 'The mock payment provider cannot run in production',
+  })
+  .refine((env) => env.NODE_ENV !== 'production' || env.PAYMENT_TERMINAL_PROVIDER !== 'mock', {
+    path: ['PAYMENT_TERMINAL_PROVIDER'],
+    message: 'The mock card terminal cannot run in production',
   });
 
 export type AppConfig = z.infer<typeof envSchema>;

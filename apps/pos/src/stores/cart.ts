@@ -143,7 +143,9 @@ export const useCart = create<CartData & CartActions>()(
         set({
           ...emptyCart(order.locationId),
           editing: { orderId: order.id, version: order.version, orderNumber: order.orderNumber },
-          channel: order.channel === 'WEBSITE' ? 'TAKEAWAY' : order.channel,
+          // Website and kiosk orders are edited as takeaway: staff create neither (ADR 0022).
+          channel:
+            order.channel === 'WEBSITE' || order.channel === 'KIOSK' ? 'TAKEAWAY' : order.channel,
           tableId: order.tableId,
           customerName: order.customerName ?? '',
           customerPhone: order.customerPhone ?? '',

@@ -12,12 +12,17 @@ import type { FastifyRequest } from 'fastify';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContext } from '../tenancy/tenant-context';
 import { IS_PUBLIC_KEY, PERMISSIONS_KEY, type PermissionRequirement } from './decorators';
+import { type AuthenticatedTerminal, DEVICE_ROUTE_KEY } from './device-route';
 import type { Principal, RequestScope } from './principal';
+
+type Params = Record<string, string | undefined>;
 
 /**
  * Global guard, runs after AuthGuard. Deny-by-default: a protected route without
  * @RequirePermissions is rejected. Verifies tenant ownership of `:tenantId` / `:locationId`
  * (answering 404 so other tenants' ids are not disclosed), then checks permissions in scope.
+ * Device routes (ADR 0022) have no permissions: the route is the terminal's whole authority, at
+ * its own location only.
  */
 @Injectable()
 export class PermissionsGuard implements CanActivate {
@@ -32,11 +37,17 @@ export class PermissionsGuard implements CanActivate {
     const targets = [context.getHandler(), context.getClass()];
     if (this.reflector.getAllAndOverride<boolean | undefined>(IS_PUBLIC_KEY, targets)) return true;
 
+    const request = context.switchToHttp().getRequest<FastifyRequest>();
+    if (this.reflector.getAllAndOverride<unknown>(DEVICE_ROUTE_KEY, targets)) {
+      const terminal = request.terminal;
+      if (!terminal) throw new DomainError('UNAUTHENTICATED', 'Device authentication required');
+      request.scope = this.terminalScope(terminal, (request.params ?? {}) as Params);
+      return true;
+    }
     const requirement = this.reflector.getAllAndOverride<PermissionRequirement | undefined>(
       PERMISSIONS_KEY,
       targets,
     );
-    const request = context.switchToHttp().getRequest<FastifyRequest>();
     if (!requirement) {
       this.logger.error(`Route ${request.method} ${request.url} has no @RequirePermissions`);
       throw new DomainError(
@@ -47,10 +58,21 @@ export class PermissionsGuard implements CanActivate {
     const principal = request.principal;
     if (!principal) throw new DomainError('UNAUTHENTICATED', 'Authentication required');
 
-    const params = (request.params ?? {}) as Record<string, string | undefined>;
+    const params = (request.params ?? {}) as Params;
     request.scope = await this.resolveScope(principal, params);
     this.assertGranted(principal, request.scope, requirement);
     return true;
+  }
+
+  /** A terminal works at its own location: another location (or tenant) is not found. */
+  private terminalScope(terminal: AuthenticatedTerminal, params: Params): RequestScope {
+    if (params.tenantId !== undefined && params.tenantId !== terminal.tenantId) {
+      throw new DomainError('TENANT_NOT_FOUND', 'Tenant not found');
+    }
+    if (params.locationId !== undefined && params.locationId !== terminal.locationId) {
+      throw new DomainError('LOCATION_NOT_FOUND', 'Location not found');
+    }
+    return { tenantId: terminal.tenantId, locationId: terminal.locationId, deviceId: terminal.id };
   }
 
   private async resolveScope(

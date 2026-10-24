@@ -110,6 +110,21 @@ it shows (none = all, the expo view) and whether to chime for new tickets; brows
 sound after one tap on "Turn on sound alerts". Orders placed at the POS appear on the KDS within a
 second through the realtime socket.
 
+Run the self-service kiosk (MADAR M6, [ADR 0022](adr/0022-self-service-kiosk.md)), a LAN
+client of the hub like the KDS:
+
+```bash
+pnpm --filter @pos/kiosk dev      # http://localhost:5176 (proxies /api to the hub)
+```
+
+In the admin, System → Devices → Add a device → Self-service kiosk shows a pairing code; type it
+on the kiosk's first screen (the hub needs the code from its next snapshot: within seconds while
+the API runs). The demo restaurant has `SELF_CHECKOUT` on in its seed; the supermarket gets it from
+its business type. Card payments at the kiosk need `PAYMENT_TERMINAL_PROVIDER=mock` in `.env` (the
+documented test terminal: every card is approved). Staff leave the customer screens with the
+corner button, an employee code and PIN, and the `kiosk.attend` permission (the demo cashier has
+it). To pair the browser again, unpair it from the attendant menu.
+
 Sign in to the POS as the cashier with employee code `1001` and `SEED_CASHIER_PIN` (or with
 `SEED_CASHIER_EMAIL`/`PASSWORD` on the Email tab). The desktop app keeps the session's refresh token in the
 operating system's keychain, so it stays signed in across a restart until someone signs out; in a
@@ -127,7 +142,7 @@ add its origin (`tauri://localhost` on macOS/Linux, `http://tauri.localhost` on 
 | `pnpm typecheck`                             | `tsc --noEmit` everywhere                                       |
 | `pnpm lint`                                  | ESLint (type-aware + i18n rule)                                 |
 | `pnpm test`                                  | Unit + integration tests (integration uses `TEST_DATABASE_URL`) |
-| `pnpm e2e`                                   | Every Playwright suite, one after another (19 critical flows)   |
+| `pnpm e2e`                                   | Every Playwright suite, one after another (27 critical flows)   |
 | `pnpm test:e2e`                              | Playwright end-to-end tests (suites in parallel)                |
 | `pnpm test:tools`                            | Tests for repository tools (lint rule, printer decoder)         |
 | `pnpm printer:sim`                           | Simulated ESC/POS network printer on port 9100                  |
@@ -141,8 +156,9 @@ createdb pos_kds_e2e            # once (admin suite; or set E2E_DATABASE_URL)
 createdb pos_kds_pos_e2e        # once (POS suite; or set POS_E2E_DATABASE_URL)
 createdb pos_kds_kds_e2e        # once (KDS suite; or set KDS_E2E_DATABASE_URL)
 createdb pos_kds_web_e2e        # once (customer website suite; or set WEB_E2E_DATABASE_URL)
+createdb pos_kds_kiosk_e2e      # once (kiosk suite; or set KIOSK_E2E_DATABASE_URL)
 pnpm build                      # E2E runs the built API and hub
-pnpm e2e                        # all four suites, one after another (a few minutes)
+pnpm e2e                        # all five suites, one after another (a few minutes)
 ```
 
 [testing.md](testing.md) maps the specification's 19 critical scenarios to the tests and explains
@@ -161,7 +177,13 @@ kitchen, and a resent copy of the hub's push is answered `DUPLICATE`. The custom
 everything at once: the cloud (:3130) stays up, `tools/e2e/pair-hub.mjs` pairs a hub (:4130) with
 it, and the POS (:1440) and KDS (:5196), both served by that hub, and the website (:5195) start;
 a website order then travels cloud → hub → POS and back, and `journey.spec.ts` follows one through
-every app to its hand-over. `tools/e2e/prepare-db.mjs` refuses any database whose name
+every app to its hand-over. The kiosk suite runs two locations with the cloud off:
+`tools/e2e/prepare-kiosk-hubs.mjs` starts the cloud (:3140), creates two kiosks waiting to pair at
+the demo restaurant and two at the supermarket (their codes go to a temporary file), pairs a hub
+for each (:4140, :4141), stops the cloud and serves both hubs; the kiosks (:5201 restaurant, :5202
+supermarket) and the restaurant's KDS (:5203) start. A card-paid kiosk order reaches the KDS, a
+pay-at-counter order in Arabic is collected by the cashier, and the supermarket's scanned items
+become a completed sale. `tools/e2e/prepare-db.mjs` refuses any database whose name
 does not end in `_e2e`.
 Locally it uses the installed Google Chrome (`PLAYWRIGHT_CHANNEL`, default `chrome`). In CI, run
 `pnpm exec playwright install chromium` first.

@@ -52,6 +52,7 @@ enum DeviceType {
   KITCHEN_DISPLAY
   CUSTOMER_DISPLAY
   GATEWAY
+  KIOSK
 
   @@map("device_type")
 }
@@ -70,6 +71,7 @@ enum OrderChannel {
   PHONE
   WEBSITE
   DELIVERY
+  KIOSK
 
   @@map("order_channel")
 }
@@ -187,6 +189,7 @@ enum ActionSource {
   ADMIN
   HUB
   SYSTEM
+  KIOSK
 
   @@map("action_source")
 }
@@ -435,23 +438,33 @@ model Employee {
 // ---------------------------------------------------------------------------
 
 model Device {
-  id             String       @id @default(uuid(7))
-  tenantId       String       @map("tenant_id")
-  locationId     String       @map("location_id")
-  name           String
-  type           DeviceType
-  status         DeviceStatus @default(PENDING)
-  /// Hash of the device credential issued at registration (Phase 5).
-  credentialHash String?      @map("credential_hash")
-  lastSeenAt     DateTime?    @map("last_seen_at")
-  /// Non-secret descriptive data: app version, OS, printer model, IP on the LAN.
-  metadata       Json         @default("{}")
-  createdAt      DateTime     @default(now()) @map("created_at")
-  updatedAt      DateTime     @updatedAt @map("updated_at")
+  id               String       @id @default(uuid(7))
+  tenantId         String       @map("tenant_id")
+  locationId       String       @map("location_id")
+  name             String
+  type             DeviceType
+  status           DeviceStatus @default(PENDING)
+  /// Hash of the device credential: a hub's is issued by the cloud (Phase 5); a terminal's by its
+  /// location hub at pairing (ADR 0022), and kept on that hub only.
+  credentialHash   String?      @map("credential_hash")
+  /// Terminals waiting to pair (PENDING): SHA-256 of the one-time pairing code shown in the admin,
+  /// and when it stops working. Cleared once the terminal is paired.
+  pairingCodeHash  String?      @map("pairing_code_hash")
+  pairingExpiresAt DateTime?    @map("pairing_expires_at")
+  /// When the terminal paired with its hub (reported by the hub).
+  pairedAt         DateTime?    @map("paired_at")
+  lastSeenAt       DateTime?    @map("last_seen_at")
+  /// The app version the device last reported (`x-madar-client-version`).
+  appVersion       String?      @map("app_version")
+  /// Non-secret descriptive data: OS, printer model, IP on the LAN, a hub's outbox.
+  metadata         Json         @default("{}")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
 
   tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   location         Location          @relation(fields: [locationId], references: [id], onDelete: Restrict)
   featureOverrides FeatureOverride[]
+  payments         Payment[]
 
   @@index([locationId])
   @@map("devices")
@@ -1198,8 +1211,11 @@ model Payment {
   tenantId           String                 @map("tenant_id")
   locationId         String                 @map("location_id")
   orderId            String                 @map("order_id")
-  /// The drawer's shift. Null only for ONLINE payments, which touch no drawer (database CHECK).
+  /// The drawer's shift. Null only for payments that touch no drawer (database CHECK): ONLINE
+  /// payments, and CARD payments taken by a device's integrated terminal (ADR 0022).
   shiftId            String?                @map("shift_id")
+  /// The terminal device that took the payment (a self-service kiosk); null for staff payments.
+  deviceId           String?                @map("device_id")
   paymentMethodId    String                 @map("payment_method_id")
   /// Snapshot of the method type and names at the time of payment.
   methodType         PaymentMethodType      @map("method_type")
@@ -1231,6 +1247,7 @@ model Payment {
   location Location          @relation(fields: [locationId], references: [id], onDelete: Restrict)
   order    Order             @relation(fields: [orderId], references: [id], onDelete: Restrict)
   shift    Shift?            @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+  device   Device?           @relation(fields: [deviceId], references: [id], onDelete: Restrict)
   method   PaymentMethod     @relation(fields: [paymentMethodId], references: [id], onDelete: Restrict)
   refundOf Payment?          @relation("PaymentRefunds", fields: [refundOfId], references: [id], onDelete: Restrict)
   refunds  Payment[]         @relation("PaymentRefunds")
@@ -1238,6 +1255,7 @@ model Payment {
 
   @@index([orderId])
   @@index([shiftId])
+  @@index([deviceId])
   @@index([locationId, createdAt])
   @@map("payments")
 }

@@ -1,0 +1,128 @@
+{
+  "title": "Self-service",
+  "pair": {
+    "title": "Set up this kiosk",
+    "hint": "In the admin portal, open Devices, add a self-service kiosk for this location, and type the pairing code it shows.",
+    "code": "Pairing code",
+    "submit": "Pair",
+    "hubUnreachable": "The location hub cannot be reached. Check this device's network connection.",
+    "done": "Paired as {{name}}."
+  },
+  "unavailable": {
+    "title": "Self-service is not available here right now",
+    "body": "Please order at the counter. Thank you!"
+  },
+  "welcome": {
+    "start": "Tap to order",
+    "startScan": "Tap to start, or scan an item",
+    "language": "Language"
+  },
+  "a11y": {
+    "largeText": "Larger text",
+    "normalText": "Normal text",
+    "added": "{{name}} added. {{count}} items in your order.",
+    "removed": "{{name}} removed."
+  },
+  "menu": {
+    "categories": "Categories",
+    "soldOut": "Sold out",
+    "from": "from {{price}}",
+    "empty": "Nothing to order here yet",
+    "startOver": "Start over",
+    "scanHint": "Scan an item's barcode, or",
+    "typeCode": "type the code",
+    "loading": "Loading the menu…"
+  },
+  "scan": {
+    "added": "{{name}} added",
+    "unknown": "No item has the code {{code}}",
+    "soldOut": "{{name}} is sold out",
+    "enterTitle": "Type the barcode",
+    "enterHint": "The number under the barcode lines.",
+    "field": "Barcode",
+    "submit": "Add"
+  },
+  "options": {
+    "choose": "Choose",
+    "required_one": "Choose {{count}}",
+    "required_other": "Choose {{count}}",
+    "upTo_one": "Up to {{count}}",
+    "upTo_other": "Up to {{count}}",
+    "between": "Choose {{min}} to {{max}}",
+    "any": "Optional",
+    "add": "Add to order · {{price}}",
+    "incomplete": "Make your choices",
+    "quantity": "Quantity"
+  },
+  "cart": {
+    "title": "Your order",
+    "empty": "Your order is empty. Tap an item to add it.",
+    "increase": "One more {{name}}",
+    "decrease": "One less {{name}}",
+    "remove": "Remove {{name}}",
+    "items_one": "{{count}} item",
+    "items_other": "{{count}} items",
+    "subtotal": "Subtotal",
+    "tax": "Tax",
+    "taxIncluded": "Includes tax",
+    "total": "Total",
+    "checkout": "Review and pay",
+    "unavailable": "An item in your order is no longer available. Remove it to continue."
+  },
+  "checkout": {
+    "title": "Check your order",
+    "name": "Your name (optional)",
+    "nameHint": "We call it when your order is ready.",
+    "howToPay": "How would you like to pay?",
+    "terminal": "Card",
+    "terminalHint": "Pay here with your card or phone",
+    "counter": "At the counter",
+    "counterHint": "Pay a cashier with cash or card",
+    "back": "Back to the menu",
+    "payNow": "Pay {{total}}",
+    "placeOrder": "Place order · {{total}}"
+  },
+  "paying": {
+    "title": "Pay on the card terminal",
+    "body": "Tap, insert or swipe your card. Follow the terminal's instructions.",
+    "declined": "The payment did not go through",
+    "declinedBody": "Nothing was charged. Try again, or pay at the counter.",
+    "retry": "Try again",
+    "payAtCounter": "Pay at the counter instead",
+    "cancel": "Cancel my order"
+  },
+  "done": {
+    "thanks": "Thank you!",
+    "number": "Your order number",
+    "kitchen": "We are preparing your order. Watch the screen for your number.",
+    "completed": "Payment complete. Take your items, and have a nice day.",
+    "counter": "Please pay at the counter and show this number.",
+    "newOrder": "Done",
+    "restartIn": "Starting over in {{seconds}} seconds"
+  },
+  "idle": {
+    "title": "Are you still there?",
+    "body": "Your order will be cleared in {{seconds}} seconds.",
+    "continue": "Continue my order"
+  },
+  "attendant": {
+    "open": "Staff",
+    "pinTitle": "Staff only",
+    "pinHint": "Enter your employee code and PIN to leave the customer screens.",
+    "code": "Employee code",
+    "pin": "PIN",
+    "submit": "Continue",
+    "title": "Attendant menu",
+    "signedIn": "{{name}}",
+    "resume": "Back to customers",
+    "reload": "Reload the menu",
+    "fullscreen": "Full screen",
+    "exitFullscreen": "Leave full screen",
+    "unpair": "Unpair this kiosk",
+    "unpairTitle": "Unpair this kiosk?",
+    "unpairBody": "It forgets its credential and needs a new pairing code from the admin portal.",
+    "device": "Device: {{name}}",
+    "location": "Location: {{name}}",
+    "version": "Version"
+  }
+}

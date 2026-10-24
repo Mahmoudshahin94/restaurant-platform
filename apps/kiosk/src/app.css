@@ -1,0 +1,36 @@
+@import 'tailwindcss';
+@import '@pos/ui/theme.css';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/noto-sans-arabic';
+
+@source '../../../packages/ui/src';
+@source '../../../packages/app-kit/src';
+
+/* A kiosk fills its screen; only the menu and the order scroll. */
+html,
+body,
+#root {
+  height: 100%;
+  overscroll-behavior: none;
+}
+body {
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+input {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* "Larger text" (accessibility): everything is sized in rem, so the root scales it all. */
+html[data-large-text] {
+  font-size: 125%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

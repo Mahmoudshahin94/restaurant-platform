@@ -24,11 +24,15 @@ import { asHubTx } from './database/hub-database';
 import { HubStateService } from './hub-state.service';
 import { SyncEngineService } from './sync/sync-engine.service';
 
-/** A human label for an outbox row: the order number of orders, tickets and payments. */
+/**
+ * A human label for an outbox row: the order number of orders, tickets and payments; a
+ * terminal's name.
+ */
 function labelOf(payload: unknown): string | null {
   if (typeof payload !== 'object' || payload === null) return null;
-  const row = payload as { orderNumber?: unknown };
-  return typeof row.orderNumber === 'string' ? row.orderNumber : null;
+  const row = payload as { orderNumber?: unknown; name?: unknown };
+  if (typeof row.orderNumber === 'string') return row.orderNumber;
+  return typeof row.name === 'string' ? row.name : null;
 }
 
 @Controller('hub')

@@ -659,6 +659,9 @@
     "devices": {
       "manage": "Manage devices"
     },
+    "kiosk": {
+      "attend": "Attend self-service kiosks (leave the customer screens)"
+    },
     "sync": {
       "view": "View synchronization",
       "resolve": "Resolve sync conflicts"
@@ -728,7 +731,8 @@
     "WEBSITE": "Website",
     "ADMIN": "Admin portal",
     "HUB": "Location hub",
-    "SYSTEM": "System"
+    "SYSTEM": "System",
+    "KIOSK": "Kiosk"
   },
   "actorTypes": {
     "USER": "User",
@@ -822,9 +826,8 @@
   },
   "devices": {
     "title": "Devices",
-    "description": "The location hub of this location and its connection to the cloud.",
-    "pair": "Pair a hub",
-    "pairTitle": "Pair a location hub",
+    "description": "The location's hub, and the terminals and self-service kiosks paired with it.",
+    "pair": "Add a device",
     "name": "Name",
     "type": "Type",
     "types": {
@@ -833,7 +836,8 @@
       "PRINTER": "Printer",
       "KITCHEN_DISPLAY": "Kitchen display",
       "CUSTOMER_DISPLAY": "Customer display",
-      "GATEWAY": "Location hub"
+      "GATEWAY": "Location hub",
+      "KIOSK": "Self-service kiosk"
     },
     "statuses": {
       "PENDING": "Pending",
@@ -849,7 +853,7 @@
     "disable": "Disable",
     "disableTitle": "Disable {{name}}?",
     "disableBody": "Its credential stops working at once. Pair a new hub to replace it.",
-    "empty": "No hub paired",
+    "empty": "No devices yet",
     "emptyHint": "Pair the location's hub so the POS and kitchen screens work offline.",
     "steps": {
       "title": "How pairing works",
@@ -859,13 +863,30 @@
       "four": "Point the POS terminals and kitchen screens at the hub's address on the local network.",
       "command": "Pairing command"
     },
-    "manualTitle": "Pair here instead",
-    "manualHint": "Creates the credential now; enter it on the hub. It is shown only once.",
     "credential": "Credential",
     "credentialHint": "Copy it now: it is shown only once and stored only as a hash.",
     "copy": "Copy",
     "copied": "Copied",
-    "hubName": "Hub name"
+    "addTitle": "Add a device",
+    "addHint": "A hub gets its credential now. A kiosk or screen gets a pairing code to type on it.",
+    "typeHints": {
+      "GATEWAY": "The computer that runs the location offline; POS terminals and screens connect to it.",
+      "KIOSK": "A touch screen where customers order and pay by themselves.",
+      "POS": "A till, identified at the hub (staff still sign in with their PIN).",
+      "KDS": "A kitchen screen, identified at the hub.",
+      "CUSTOMER_DISPLAY": "A screen facing the customer at a till."
+    },
+    "add": "Add",
+    "pairingCode": "Pairing code",
+    "pairingHint": "Type this code on the device. It works once, at this location's hub, until {{time}}.",
+    "kioskSteps": "On the kiosk, open the kiosk app from the hub (port 5176 in development) and type the code. The hub pairs it even without the internet.",
+    "waiting": "Waiting to pair",
+    "expires": "Code expires {{time}}",
+    "expired": "Code expired",
+    "newCode": "New code",
+    "newCodeTitle": "New pairing code for {{name}}",
+    "version": "Version",
+    "paired": "Paired {{time}}"
   },
   "sync": {
     "title": "Synchronization",

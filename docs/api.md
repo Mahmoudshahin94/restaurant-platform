@@ -66,7 +66,13 @@ Validation failures (`400 VALIDATION_FAILED`) list
 
 ## Authorization
 
-- **Deny by default.** A non-public route without `@RequirePermissions(...)` is rejected.
+- **Deny by default.** A non-public route without `@RequirePermissions(...)` (or
+  `@DeviceRoute(...)`, below) is rejected, at start-up already.
+- **Device routes** (MADAR M6, [ADR 0022](adr/0022-self-service-kiosk.md)) serve paired terminals
+  only: `Authorization: Device <deviceId>.<secret>` of an `ACTIVE` terminal of the route's types.
+  A staff token there answers `401`, as does a device credential on any staff route. The route's
+  `:locationId` must be the device's own (`404 LOCATION_NOT_FOUND`), and modules resolve with the
+  device's layer. Requests may send `x-madar-client-version`, recorded as the device's version.
 - Permissions are re-read from the database on every request, never trusted from the token, so
   revocations apply immediately.
 - `:tenantId` must be the caller's tenant, otherwise `404 TENANT_NOT_FOUND`.
@@ -320,7 +326,8 @@ guestCount, notes }`. The `id` is a client-generated UUID and the **idempotency 
   included). Channels: `DINE_IN` needs a table of the location where the `TABLES` module is on
   (`400 VALIDATION_FAILED` without one); where it is off, dine-in has no table and naming one
   answers `403 FEATURE_DISABLED`. `PHONE`/`DELIVERY` need a
-  customer name or phone; `WEBSITE` is rejected (customer API, Phase 7). `CONFIRMED` (what the
+  customer name or phone; `WEBSITE` (customer API, Phase 7) and `KIOSK` (a paired kiosk, M6) are
+  rejected. `CONFIRMED` (what the
   POS sends since Phase 4) accepts the order at once and sends it to the kitchen (only where the
   `KDS` module is on; otherwise it makes no ticket and can be completed directly); `PLACED` waits
   for acceptance.
@@ -361,7 +368,9 @@ guestCount, notes }`. The `id` is a client-generated UUID and the **idempotency 
   returns the order with the original payment. The order row is locked (`SELECT … FOR UPDATE`)
   for the whole charge, so two terminals can never over-pay the same balance.
 - **An open shift is required** (`SHIFT_NOT_FOUND` / `409 SHIFT_NOT_OPEN`); every payment and
-  refund records the shift whose drawer it touched.
+  refund records the shift whose drawer it touched. The only payments without a shift are online
+  payments (website) and a kiosk's card-terminal payments, which name their device (`deviceId`,
+  M6). Refunds go back through the provider that took the charge.
 - **Split payments** are several charges. `amount` must be `1 … balanceDue`
   (`422 PAYMENT_FAILED`, `reason: INVALID_AMOUNT | ALREADY_PAID`). Orders can be paid in
   `PLACED` … `READY` (`reason: NOT_PAYABLE` otherwise).
@@ -545,21 +554,67 @@ pendingOperations, failedOperations, syncedOperations (24 h), lastSyncAt, nextAt
 Clients use it to know they are behind a hub. Outbox rows (`HubSyncOperation`) carry the entity,
 a label (the order number), status, retry count, next retry, error code and message.
 
+## Self-service kiosk (MADAR M6, hub only)
+
+See [ADR 0022](adr/0022-self-service-kiosk.md). Served by the location hub to its terminals.
+
+| Method | Path                                             | Auth                                      |
+| ------ | ------------------------------------------------ | ----------------------------------------- |
+| POST   | `/terminals/pair`                                | public, rate-limited like sign-in         |
+| GET    | `/terminals/me`                                  | device: POS, KDS, KIOSK, CUSTOMER_DISPLAY |
+| GET    | `/kiosk/context`                                 | device: KIOSK                             |
+| GET    | `/locations/:lid/kiosk/menu`                     | device: KIOSK, `SELF_CHECKOUT`            |
+| POST   | `/locations/:lid/kiosk/orders`                   | device: KIOSK, `SELF_CHECKOUT`            |
+| POST   | `/locations/:lid/kiosk/orders/:orderId/payments` | device: KIOSK, `SELF_CHECKOUT`            |
+| POST   | `/locations/:lid/kiosk/orders/:orderId/cancel`   | device: KIOSK, `SELF_CHECKOUT`            |
+| POST   | `/kiosk/attendant`                               | device: KIOSK                             |
+
+- **Pair** `{ code }` (spaces, dashes and case ignored) → `{ device: { id, tenantId, locationId,
+name, type }, credential }`, once. An unknown, used or expired code answers
+  `404 PAIRING_CODE_INVALID`. Works without the cloud (the code came with the snapshot).
+- **Context** → `{ device, location: { id, code, nameEn, nameAr, timezone }, context }`, the
+  tenant context for the `kiosk` surface with the modules of the location and the kiosk.
+- **Menu**: the location's published menu, with `ETag`/`304` like `/locations/:lid/menu`.
+- **Order** `{ id, items[{ id, productId, variantId, modifierIds, quantity, notes, barcode }],
+payment: TERMINAL|COUNTER, customerName? }` → the order (`201`, or `200` for a resent id),
+  `PLACED` and unpaid, channel and source `KIOSK`, priced by the server. No discounts, tables or
+  phone numbers. A scanned code must belong to its item (`404 BARCODE_NOT_FOUND`).
+- **Pay** `{ id }` (the payment's idempotency key) → `{ payment, order }`: the balance due charged at
+  the kiosk's card terminal. Captured and fully paid, the order is `CONFIRMED` (kitchen tickets
+  with `KDS`), and `COMPLETED` at once where the location has no kitchen screen. A decline is a
+  `FAILED` payment with the order still `PLACED`. `PAYMENT_FAILED` reasons: `ALREADY_PAID`,
+  `UNKNOWN_METHOD` (no card method), `BALANCE_CHANGED` (a cashier took the money meanwhile; the
+  terminal's charge is voided), `PROVIDER_NOT_CONFIGURED` (`PAYMENT_TERMINAL_PROVIDER=none`).
+- **Cancel**: the kiosk's own unpaid order → `CANCELLED` (`KIOSK_CANCELLED`); paid ones are
+  refused (`INVALID_ORDER_STATE`, `REFUND_FIRST`).
+- Orders and payments of other kiosks (or of the POS) answer `404 ORDER_NOT_FOUND`.
+- **Attendant** `{ employeeCode, pin }` → `{ employeeId, displayName }` when the employee has
+  `kiosk.attend` at the kiosk's location (`403 INSUFFICIENT_PERMISSION` otherwise); wrong PINs lock
+  the code like `/auth/pin`. No session is issued.
+- **Audit:** `device.paired` (at the hub), `kiosk.attendant_opened`, and the orders' and
+  payments' own entries with the device as actor.
+
 ## Devices and hub link (Phases 5–6, cloud)
 
-| Method | Path                                        | Auth              |
-| ------ | ------------------------------------------- | ----------------- |
-| GET    | `/locations/:lid/devices`                   | `devices.manage`  |
-| GET    | `/sync/resolutions/:operationId`            | device credential |
-| POST   | `/locations/:lid/devices`                   | `devices.manage`  |
-| POST   | `/locations/:lid/devices/:deviceId/disable` | `devices.manage`  |
-| GET    | `/sync/snapshot`                            | device credential |
-| POST   | `/sync/push`                                | device credential |
-| GET    | `/sync/pull`                                | device credential |
+| Method | Path                                             | Auth              |
+| ------ | ------------------------------------------------ | ----------------- |
+| GET    | `/locations/:lid/devices`                        | `devices.manage`  |
+| GET    | `/sync/resolutions/:operationId`                 | device credential |
+| POST   | `/locations/:lid/devices`                        | `devices.manage`  |
+| POST   | `/locations/:lid/devices/:deviceId/pairing-code` | `devices.manage`  |
+| POST   | `/locations/:lid/devices/:deviceId/disable`      | `devices.manage`  |
+| GET    | `/sync/snapshot`                                 | device credential |
+| POST   | `/sync/push`                                     | device credential |
+| GET    | `/sync/pull`                                     | device credential |
 
 - **Pairing** `{ name, type: GATEWAY }` returns the device and its credential
   (`<deviceId>.<secret>`) once; only a SHA-256 of the secret is stored. Disabling a device revokes
   it immediately.
+- **Terminals** (M6) `{ name, type: POS|KDS|KIOSK|CUSTOMER_DISPLAY }` return the device, `PENDING`,
+  with `pairing: { code, expiresAt }` (24 h) instead of a credential: the code is typed on the
+  terminal and checked by the location's hub. `…/pairing-code` gives a terminal still `PENDING` a
+  new one (`409 CONFLICT`, `NOT_PENDING`, otherwise). Devices carry `pairedAt`, `appVersion` and,
+  while pending, `pairingExpiresAt`.
 - **Device authentication:** `Authorization: Device <deviceId>.<secret>` (staff tokens are refused
   on `/sync/*`). `lastSeenAt` is refreshed at most once a minute.
 - **Snapshot:** everything the hub's location needs (see `SNAPSHOT_TABLES` in
@@ -567,9 +622,10 @@ a label (the order number), status, retry count, next retry, error code and mess
   password and PIN hashes), catalog, taxes, discounts, floor, payment methods, drawers. Rows of
   other locations are excluded. `ETag` = content version; `If-None-Match` answers `304`.
 - **Push** `{ operations: [≤ 50, each optionally with baseVersion], outbox?: { pending, failed } }`
-  (operation types `ORDER_UPSERT`, `SHIFT_UPSERT`, `KITCHEN_TICKET_UPSERT` and, since Phase 10,
-  `AUDIT_LOG_APPEND`: an audit entry written at the location, stored once under the hub's
-  location) → `{ results: [{ operationId,
+  (operation types `ORDER_UPSERT`, `SHIFT_UPSERT`, `KITCHEN_TICKET_UPSERT`, since Phase 10
+  `AUDIT_LOG_APPEND` (an audit entry written at the location, stored once under the hub's
+  location) and since M6 `DEVICE_UPSERT` (a terminal paired at the hub, or its last contact and
+  version)) → `{ results: [{ operationId,
 status: APPLIED|DUPLICATE|CONFLICT|REJECTED|RETRY, code, message }] }`, one per operation, in
   order. Each operation is applied exactly once (see [sync.md](sync.md#push)); a malformed one is
   `REJECTED` without failing the others. An empty or malformed envelope is `400`.
@@ -585,7 +641,8 @@ entityId, createdAt }], cursor, hasMore }`; without `cursor`, the head of the fe
   `{ operationId, entityType, entityId, action: RESEND | ADOPT_CLOUD, order }` (ADR 0014). `404
 SYNC_ISSUE_NOT_FOUND` when nothing was decided or the operation is another location's.
 - Refused operations and their resolution: see [Synchronization issues](#synchronization-issues-phase-8).
-- **Audit:** `device.paired`, `device.disabled`.
+- **Audit:** `device.paired`, `device.created` (a terminal), `device.pairing_code_renewed`,
+  `device.disabled`.
 
 ## Admin portal (Phase 8, cloud only)
 

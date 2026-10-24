@@ -63,8 +63,14 @@ const DELEGATE: Record<SnapshotTable, string> = {
   orderCounters: 'orderCounter',
 };
 
-/** Merged rather than copied: the hub's own numbering must never go backwards. */
-const MERGED: ReadonlySet<SnapshotTable> = new Set(['orderCounters']);
+/**
+ * Merged rather than copied: the hub's own numbering must never go backwards, and a terminal's
+ * pairing, made here, must survive a snapshot taken before the cloud heard of it.
+ */
+const MERGED: ReadonlySet<SnapshotTable> = new Set(['orderCounters', 'devices']);
+
+/** A terminal's lifecycle only moves forward (ADR 0022): waiting to pair, paired, disabled. */
+const DEVICE_PROGRESS: Record<string, number> = { PENDING: 0, ACTIVE: 1, DISABLED: 2 };
 
 interface Delegate {
   upsert(args: { where: { id: unknown }; create: Row; update: Row }): Promise<unknown>;
@@ -134,7 +140,7 @@ export async function applySnapshot(tx: HubTx, snapshot: LocationSnapshot): Prom
     if (!delegate) throw new Error(`No hub model for snapshot table ${table}`);
     const rows = snapshot.tables[table] as Row[];
     if (MERGED.has(table)) {
-      await mergeOrderCounters(tx, rows);
+      await (table === 'devices' ? mergeDevices(tx, rows) : mergeOrderCounters(tx, rows));
     } else if (REPLACED.has(table)) {
       if (rows.length > 0) await delegate.createMany({ data: rows });
     } else {
@@ -154,6 +160,35 @@ export async function applySnapshot(tx: HubTx, snapshot: LocationSnapshot): Prom
     data: { isActive: false },
   });
   return written;
+}
+
+/**
+ * The location's devices, with what only the hub knows kept (ADR 0022): a terminal paired here
+ * stays paired, with its credential, even if the snapshot predates the cloud hearing of it; and
+ * a used pairing code is never stored again. The cloud's disabling always wins, and drops the
+ * credential: the terminal is locked out at once.
+ */
+async function mergeDevices(tx: HubTx, rows: Row[]): Promise<void> {
+  for (const row of rows) {
+    const id = String(row.id);
+    const local = await tx.device.findUnique({ where: { id }, select: { status: true } });
+    const cloud = String(row.status);
+    const status =
+      local && (DEVICE_PROGRESS[local.status] ?? 0) > (DEVICE_PROGRESS[cloud] ?? 0)
+        ? local.status
+        : cloud;
+    const data: Row = {
+      ...row,
+      status,
+      ...(status !== 'PENDING' ? { pairingCodeHash: null, pairingExpiresAt: null } : {}),
+      ...(status === 'DISABLED' ? { credentialHash: null } : {}),
+    };
+    await (tx as unknown as Record<string, Delegate>).device?.upsert({
+      where: { id },
+      create: data,
+      update: data,
+    });
+  }
 }
 
 /**

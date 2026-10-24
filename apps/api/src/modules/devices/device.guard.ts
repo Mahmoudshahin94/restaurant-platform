@@ -1,8 +1,7 @@
 import { type CanActivate, type ExecutionContext, Injectable } from '@nestjs/common';
 import { DomainError, isUuid } from '@pos/domain';
-import { PrismaService, TenantContext } from '@pos/server';
+import { PrismaService, TenantContext, parseDeviceCredential, secretMatches } from '@pos/server';
 import type { FastifyRequest } from 'fastify';
-import { parseDeviceCredential, secretMatches } from './device-credentials';
 
 export interface AuthenticatedDevice {
   id: string;

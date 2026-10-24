@@ -66,6 +66,7 @@
   "ROLE_NOT_FOUND": "Role not found.",
   "EMPLOYEE_NOT_FOUND": "Employee not found.",
   "DEVICE_NOT_FOUND": "Device not found.",
+  "PAIRING_CODE_INVALID": "That pairing code is not valid, was already used, or has expired. Ask for a new code in the admin portal.",
   "PAYMENT_METHOD_NOT_FOUND": "Payment method not found.",
   "SYNC_ISSUE_NOT_FOUND": "Synchronization issue not found."
 }

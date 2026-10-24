@@ -39,6 +39,8 @@ export const ORDER_TRANSITIONS: readonly TransitionRule[] = [
   rule('DRAFT', 'CANCELLED', { permission: 'orders.create' }),
 
   rule('PLACED', 'CONFIRMED'),
+  // A self-service order paid at the kiosk's terminal is confirmed by the platform (ADR 0022).
+  rule('PLACED', 'CONFIRMED', { trigger: 'SYSTEM', permission: null, requiresPaid: true }),
   rule('PLACED', 'CANCELLED', { permission: 'orders.cancel', requiresReason: true }),
   // A website order the tenant did not accept in time is cancelled by the cloud (ADR 0013).
   rule('PLACED', 'CANCELLED', { trigger: 'SYSTEM', permission: null, requiresReason: true }),
@@ -47,6 +49,8 @@ export const ORDER_TRANSITIONS: readonly TransitionRule[] = [
   rule('CONFIRMED', 'CANCELLED', { permission: 'orders.cancel', requiresReason: true }),
   // Orders with nothing to prepare (e.g. bottled drinks) can be handed over once paid.
   rule('CONFIRMED', 'COMPLETED', { requiresPaid: true }),
+  // Self-checkout: paid at the kiosk with no kitchen to wait for, the goods are in hand.
+  rule('CONFIRMED', 'COMPLETED', { trigger: 'SYSTEM', permission: null, requiresPaid: true }),
 
   rule('PREPARING', 'READY', { trigger: 'SYSTEM', permission: null }),
   rule('PREPARING', 'CANCELLED', { permission: 'orders.cancel', requiresReason: true }),
@@ -70,8 +74,8 @@ export function canModifyItems(status: OrderStatus): boolean {
 }
 
 /**
- * The rule for a status change, preferring the one for the given trigger (PLACED → CANCELLED
- * exists for staff and for the system).
+ * The rule for a status change, preferring the one for the given trigger (PLACED → CANCELLED,
+ * PLACED → CONFIRMED and CONFIRMED → COMPLETED exist for staff and for the system).
  */
 export function findTransition(
   from: OrderStatus,

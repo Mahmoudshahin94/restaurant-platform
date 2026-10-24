@@ -37,6 +37,7 @@ export function toPaymentDto(p: PaymentRow): OrderPayment {
     refundOfId: p.refundOfId,
     reason: p.reason,
     shiftId: p.shiftId,
+    deviceId: p.deviceId,
     createdAt: p.createdAt.toISOString(),
   };
 }

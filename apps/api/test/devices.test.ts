@@ -35,7 +35,7 @@ beforeEach(async () => {
 
 const devicesUrl = (locationId = tenant.locationA) => `/api/v1/locations/${locationId}/devices`;
 
-async function pair(name = 'Main hub'): Promise<PairedDevice> {
+async function pair(name = 'Main hub'): Promise<PairedDevice & { credential: string }> {
   const res = await app.inject({
     method: 'POST',
     url: devicesUrl(),
@@ -43,7 +43,7 @@ async function pair(name = 'Main hub'): Promise<PairedDevice> {
     payload: { name, type: 'GATEWAY' },
   });
   expect(res.statusCode).toBe(201);
-  return res.json<PairedDevice>();
+  return res.json<PairedDevice & { credential: string }>();
 }
 
 const snapshot = (credential: string, headers: Record<string, string> = {}) =>
@@ -57,6 +57,7 @@ describe('pairing a location hub', () => {
   it('issues a one-time credential to devices.manage and stores only its hash', async () => {
     const paired = await pair();
     expect(paired.device).toMatchObject({ type: 'GATEWAY', status: 'ACTIVE', name: 'Main hub' });
+    expect(paired.pairing).toBeNull();
     const [deviceId, secret] = paired.credential.split('.');
     expect(deviceId).toBe(paired.device.id);
     const row = await prisma.device.findUniqueOrThrow({ where: { id: paired.device.id } });
@@ -87,7 +88,7 @@ describe('location snapshot', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json<LocationSnapshot>();
     expect(body).toMatchObject({
-      format: 5,
+      format: 6,
       tenantId: tenant.tenantId,
       locationId: tenant.locationA,
     });

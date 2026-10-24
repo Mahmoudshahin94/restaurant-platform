@@ -30,6 +30,8 @@ export const PERMISSIONS = [
   'settings.manage',
   'online_ordering.manage',
   'devices.manage',
+  /** Leave a self-service kiosk's customer screens with a PIN (ADR 0022). */
+  'kiosk.attend',
   'sync.view',
   'sync.resolve',
   'audit.view',

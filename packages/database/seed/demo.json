@@ -59,6 +59,7 @@
         "locations.view",
         "online_ordering.manage",
         "devices.manage",
+        "kiosk.attend",
         "sync.view",
         "audit.view",
         "payments.create"
@@ -78,7 +79,8 @@
         "products.view",
         "customers.view",
         "locations.view",
-        "payments.create"
+        "payments.create",
+        "kiosk.attend"
       ]
     },
     {
@@ -89,7 +91,8 @@
     }
   ],
   "features": {
-    "BARCODE": true
+    "BARCODE": true,
+    "SELF_CHECKOUT": true
   },
   "users": [
     {

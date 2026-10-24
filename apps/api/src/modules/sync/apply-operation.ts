@@ -1,9 +1,10 @@
 import { Prisma } from '@pos/database';
 import { type PrismaTx, redactForAudit } from '@pos/server';
-import { WebRejectReason } from '@pos/shared-types';
+import { WebRejectReason, isTerminalDeviceType } from '@pos/shared-types';
 import type { ErrorCode } from '@pos/shared-types';
 import type {
   SyncAuditLog,
+  SyncDevice,
   SyncKitchenTicket,
   SyncOperation,
   SyncOrder,
@@ -78,7 +79,49 @@ export async function applyOperation(
       return applyShift(tx, device, op, op.payload, options);
     case 'KITCHEN_TICKET_UPSERT':
       return applyTicket(tx, device, op, op.payload, options);
+    case 'DEVICE_UPSERT':
+      return applyDevice(tx, device, op.payload);
   }
+}
+
+/**
+ * A terminal of the hub's location, as the hub reports it (ADR 0022): paired there (PENDING →
+ * ACTIVE, the pairing code cleared), its last contact (never moving back) and app version. The
+ * administrator's decisions stay the cloud's: a disabled terminal is never brought back, and
+ * nothing else of the row comes from the hub.
+ */
+async function applyDevice(
+  tx: PrismaTx,
+  hub: AuthenticatedDevice,
+  reported: SyncDevice,
+): Promise<Applied> {
+  const row = await tx.device.findUnique({ where: { id: reported.id } });
+  if (!row) throw reject('The cloud has no such terminal');
+  if (row.locationId !== hub.locationId) {
+    throw outOfScope('The terminal belongs to another location than this hub');
+  }
+  if (!isTerminalDeviceType(row.type) || row.type !== reported.type) {
+    throw reject('Only terminals are reported by their hub');
+  }
+  if (row.status === 'DISABLED') return { rowVersion: null };
+  const paired = row.status === 'PENDING' && reported.status === 'ACTIVE';
+  const seen = reported.lastSeenAt ? date(reported.lastSeenAt) : null;
+  await tx.device.update({
+    where: { id: row.id },
+    data: {
+      ...(paired
+        ? {
+            status: 'ACTIVE',
+            pairedAt: reported.pairedAt ? date(reported.pairedAt) : new Date(),
+            pairingCodeHash: null,
+            pairingExpiresAt: null,
+          }
+        : {}),
+      ...(seen && (!row.lastSeenAt || seen > row.lastSeenAt) ? { lastSeenAt: seen } : {}),
+      ...(reported.appVersion ? { appVersion: reported.appVersion } : {}),
+    },
+  });
+  return { rowVersion: null };
 }
 
 /**
@@ -339,6 +382,16 @@ async function applyOrder(
       data: o.statusHistory.map((h) => ({ ...h, createdAt: date(h.createdAt) })),
       skipDuplicates: true,
     });
+  }
+  // A kiosk's payments name their terminal (ADR 0022): one of this location's devices.
+  const terminals = [...new Set(o.payments.flatMap((p) => (p.deviceId ? [p.deviceId] : [])))];
+  if (terminals.length > 0) {
+    const known = await tx.device.count({
+      where: { id: { in: terminals }, locationId: device.locationId },
+    });
+    if (known !== terminals.length) {
+      throw outOfScope('A payment names a device of another location');
+    }
   }
   // Charges before the refunds that reference them.
   const payments = [...o.payments].sort(

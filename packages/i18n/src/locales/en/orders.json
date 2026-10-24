@@ -4,7 +4,8 @@
     "TAKEAWAY": "Takeaway",
     "PHONE": "Phone",
     "WEBSITE": "Website",
-    "DELIVERY": "Delivery"
+    "DELIVERY": "Delivery",
+    "KIOSK": "Kiosk"
   },
   "status": {
     "DRAFT": "Draft",

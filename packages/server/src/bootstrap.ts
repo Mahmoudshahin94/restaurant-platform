@@ -20,6 +20,8 @@ const AUTH_RATE_LIMITED_ROUTES = new Set([
   `/${API_PREFIX}/auth/login`,
   `/${API_PREFIX}/auth/refresh`,
   `/${API_PREFIX}/auth/pin`,
+  // A hub's terminals pair with a one-time code (ADR 0022).
+  `/${API_PREFIX}/terminals/pair`,
 ]);
 const WEB_ORDER_ROUTE = `/${API_PREFIX}/orders`;
 const TRACKING_ROUTE = `/${API_PREFIX}/orders/track`;

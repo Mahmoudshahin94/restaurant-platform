@@ -66,6 +66,7 @@
   "ROLE_NOT_FOUND": "الدور غير موجود.",
   "EMPLOYEE_NOT_FOUND": "الموظف غير موجود.",
   "DEVICE_NOT_FOUND": "الجهاز غير موجود.",
+  "PAIRING_CODE_INVALID": "رمز الإقران غير صالح أو مستخدم من قبل أو منتهي الصلاحية. اطلب رمزًا جديدًا من لوحة الإدارة.",
   "PAYMENT_METHOD_NOT_FOUND": "طريقة الدفع غير موجودة.",
   "SYNC_ISSUE_NOT_FOUND": "مشكلة المزامنة غير موجودة."
 }

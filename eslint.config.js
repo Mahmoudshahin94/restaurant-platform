@@ -82,6 +82,8 @@ export default tseslint.config(
       // Finding an account by e-mail, a device by its credential.
       'packages/server/src/modules/auth/auth.service.ts',
       'apps/api/src/modules/devices/device.guard.ts',
+      // A terminal by its credential at its hub (ADR 0022).
+      'packages/server/src/modules/auth/terminal-auth.service.ts',
       // Start-up: new permissions reach every tenant's system roles.
       'packages/server/src/modules/auth/permission-catalog.initializer.ts',
       // The customer website: finding the tenant of a slug, location or tracked order.

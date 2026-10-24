@@ -31,7 +31,8 @@ Customer Web ─┐                          ┌─ Admin
         Location Hub (apps/gateway, Node) ── SQLite (operational source of truth while offline)
          │  REST + WebSocket on the location LAN      │  PrinterService (ESC/POS network/USB adapters)
          ├── POS terminals (Tauri 2 + React) × N
-         └── KDS screens (React, any tablet browser, served by the hub) × N
+         ├── KDS screens (React, any tablet browser, served by the hub) × N
+         └── Self-service kiosks (React, paired with the hub as devices, MADAR M6) × N
 ```
 
 Principles:
@@ -63,6 +64,7 @@ apps/
   gateway/        Location hub: SQLite, sync engine, LAN WS, printers (Phase 5–6)
   pos/            Tauri 2 + React point of sale                      (Phase 2: order entry)
   kds/            React kitchen display                              (Phase 4)
+  kiosk/          React self-service kiosk, a paired device of the hub (MADAR M6)
   customer-web/   React customer ordering site (cloud API only)       (Phase 7)
 packages/
   shared-types/   Enums, permission catalog, error codes, realtime event contracts
@@ -696,7 +698,7 @@ Configuration precedence is in [configuration.md](configuration.md).
 | M3    | Branding and theme: platform and tenant branding, design tokens, dark/light/system, tenant files         | ✅ Done |
 | M4    | Currency and localization: currency configuration (ILS default), supported locales                       | ✅ Done |
 | M5    | Retail: SKU, barcodes, generic product options and variants, scanner abstraction                         | ✅ Done |
-| M6    | Self-service: kiosk app, terminal devices, shared order engine, self-checkout                            | ⏳      |
+| M6    | Self-service: kiosk app, terminal devices, shared order engine, self-checkout                            | ✅ Done |
 | M7    | Multi-tenant website: host resolution, verified domains, configurable sections                           | ⏳      |
 | M8    | Payment configuration: per-tenant provider accounts, encrypted secrets                                   | ⏳      |
 | M9    | Platform admin: separate app and identity, tenants, health, support and repair tools                     | ⏳      |
@@ -898,6 +900,52 @@ added the demo cola's sizes to the cart (a repeat scan raised the quantity), an 
 showed a toast, manual entry found the large cola by its SKU, and the placed order reached the
 cloud with each line's SKU and barcode. The check led to one change: a scan now opens the options
 dialog only when a choice is required.
+
+### Phase M6 decisions
+
+See [ADR 0022](adr/0022-self-service-kiosk.md) and
+[configuration.md](configuration.md#self-service-kiosk-m6).
+
+- **Terminals pair with their hub:** the admin creates a POS, KDS, kiosk or customer display as a
+  `PENDING` device with a one-time pairing code (24 h, renewable). The code's hash rides the
+  snapshot (format 6), so the hub pairs the terminal offline (`POST /terminals/pair`) and issues
+  its credential, whose hash stays on the hub. The hub reports pairing, contact and app version
+  through the outbox (`DEVICE_UPSERT`); the cloud never revives a disabled device, and the hub's
+  snapshot merge never moves a device's lifecycle backwards or stores a used code.
+- **A narrow principal:** `@DeviceRoute` routes (route-inventory access `device`) accept only
+  terminal credentials of their types at their own location; staff routes refuse them, device
+  routes refuse staff tokens. A kiosk reads its context and menu, places, pays and cancels its own
+  orders, and lets staff out with a PIN and `kiosk.attend`. Requests carry the device, so the
+  device layer of modules applies.
+- **One order engine:** `OrdersService` creates kiosk orders (channel and source `KIOSK`, the
+  device as actor) with the shared pricing; SYSTEM rules of the state machine confirm a paid order
+  (kitchen tickets with `KDS`) and, without a kitchen screen, complete it (self-checkout). Pay at
+  the counter waits `PLACED` until a cashier collects it at the POS.
+- **An integrated card terminal:** `PaymentTerminalProvider` with a mock adapter, charged outside
+  any transaction and recorded under the order's lock. `payments.device_id` and a relaxed CHECK
+  allow drawer-less card payments taken by a device; payments stay append-only.
+- **`apps/kiosk`:** touch-first, branded for the kiosk surface, EN/AR with RTL, scanning where
+  `BARCODE` is on, idle reset, attendant exit, larger text, live announcements and focus per step.
+
+**Phase M6 verification (2026-10-24):** `pnpm build`, `typecheck`, `lint` and `test` green (931
+unit, integration and component tests: API 296, domain 241, gateway 88, app-kit 56, i18n 45, admin
+43, validation 34, server 25, database 24, POS 22, customer-web 16, kiosk 11, api-client 11, KDS 9,
+receipts 8, ui 2), `pnpm test:tools` (13), the hub schema check, a clean `migrate status`,
+`format:check`, and all 39 Playwright E2E tests (admin 12, POS 16, KDS 4, customer-web 4, kiosk 3)
+in one `pnpm e2e` run, including the new scenarios 25–27. A manual browser check against a freshly
+seeded database: in the admin, Devices → Add a device → Self-service kiosk showed a pairing code;
+a newly paired hub of the demo restaurant paired the kiosk with it typed in lower case. A burger
+(well done, extra cheese) and fries, paid by the mock card terminal, became MAIN-001 on the KDS at
+three stations, labelled "Kiosk" with the customer's name. In Arabic (RTL), two large colas paid at
+the counter became MAIN-002, which the POS (signed in by PIN) listed under kiosk orders to collect
+and opened for payment. The hub was then paired with the supermarket: the kiosk's old credential
+was refused and it returned to its pairing screen in the market's branding, paired with the
+market's code and started in Arabic, the market's default. Scanner bursts added rice and olive oil
+(the first from the welcome screen), an unknown code showed its notice, English with larger text
+kept the cart, labneh was typed in, and the card payment completed BLD-001 at once. The cloud
+received both sales with drawer-less card payments naming their kiosks, and both kiosks ACTIVE with
+version 0.1.0. The market cashier opened the attendant menu with code and PIN. The check led to one
+change: the attendant menu's version label is no longer forced left to right in Arabic.
 
 ## Architectural decisions and open questions
 
