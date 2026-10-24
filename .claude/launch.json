@@ -32,6 +32,12 @@
       "port": 5174
     },
     {
+      "name": "kiosk",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@pos/kiosk", "dev"],
+      "port": 5176
+    },
+    {
       "name": "customer-web",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@pos/customer-web", "dev"],

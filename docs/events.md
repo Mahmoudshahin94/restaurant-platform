@@ -36,6 +36,12 @@ payloads carry `{ ticketId, orderId, orderNumber, stationId, status, version }`.
 | `tenant.status_changed`                            | Online ordering state changed (typed; not emitted yet)           | — (the website polls)                 | Phase 7 |
 | `menu.updated`                                     | The hub applied a new configuration snapshot                     | POS, KDS, customer web                | Phase 5 |
 
+Kiosk orders (M6): the hub publishes `order.created` when a kiosk places one (channel `KIOSK`,
+`PLACED`), `order.updated` and `order.payment_completed` when it is paid at the kiosk's terminal,
+and the kitchen events of its tickets when it is confirmed, exactly as for the POS (the same
+services emit them). The POS's "kiosk orders to collect" banner refreshes on any `order.*` event
+(polling every 15 s is the fallback). Kiosks have no socket: they show their own order's outcome.
+
 Website orders (Phase 7): the hub publishes `order.created` when it stores a website order from
 the cloud's change feed (status `PLACED`, channel `WEBSITE`), and `order.updated` /
 `order.cancelled` when the cloud changed it; the POS refreshes its incoming-orders prompt on any

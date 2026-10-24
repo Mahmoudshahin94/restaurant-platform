@@ -37,19 +37,20 @@ Device configuration       one terminal, screen or kiosk differing from its loca
 
 ## What exists today
 
-| Setting                                        | Layers today                                          | Phase |
-| ---------------------------------------------- | ----------------------------------------------------- | ----- |
-| Business type, status, legal name              | tenant (type and status set by the platform)          | M1 ✅ |
-| Default and supported locales, digit style     | platform → tenant (digits); tenant (locales)          | M4 ✅ |
-| Currency                                       | tenant (fixed at provisioning, ADR 0002; ILS default) | M4 ✅ |
-| Time zone, tax mode, cash rounding, KDS times  | tenant time zone; location settings                   | ✅    |
-| Modules (POS, KDS, TABLES, BARCODE, …)         | platform → business type → tenant → location → device | M2 ✅ |
-| Branding and theme                             | platform → tenant → surface → device (theme mode)     | M3 ✅ |
-| Currency display (symbol, display, format)     | platform → tenant                                     | M4 ✅ |
-| Retail catalog (options, barcodes, stock flag) | modules (above); catalog data per tenant              | M5 ✅ |
-| Website sections and domains                   | tenant                                                | M7    |
-| Payment providers                              | tenant → location                                     | M8    |
-| Release channel                                | platform → tenant                                     | M10   |
+| Setting                                        | Layers today                                                                                                     | Phase |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ----- |
+| Business type, status, legal name              | tenant (type and status set by the platform)                                                                     | M1 ✅ |
+| Default and supported locales, digit style     | platform → tenant (digits); tenant (locales)                                                                     | M4 ✅ |
+| Currency                                       | tenant (fixed at provisioning, ADR 0002; ILS default)                                                            | M4 ✅ |
+| Time zone, tax mode, cash rounding, KDS times  | tenant time zone; location settings                                                                              | ✅    |
+| Modules (POS, KDS, TABLES, BARCODE, …)         | platform → business type → tenant → location → device                                                            | M2 ✅ |
+| Branding and theme                             | platform → tenant → surface → device (theme mode)                                                                | M3 ✅ |
+| Currency display (symbol, display, format)     | platform → tenant                                                                                                | M4 ✅ |
+| Retail catalog (options, barcodes, stock flag) | modules (above); catalog data per tenant                                                                         | M5 ✅ |
+| Self-service kiosks (terminals, card terminal) | modules (device layer from paired terminals); kiosk branding surface; installation (`PAYMENT_TERMINAL_PROVIDER`) | M6 ✅ |
+| Website sections and domains                   | tenant                                                                                                           | M7    |
+| Payment providers                              | tenant → location                                                                                                | M8    |
+| Release channel                                | platform → tenant                                                                                                | M10   |
 
 Each phase's ADR records the exact settings it adds and the layers they accept.
 
@@ -59,22 +60,22 @@ See [ADR 0018](adr/0018-feature-modules.md). The catalog is `Feature` in `@pos/s
 defaults are in `packages/domain/src/features/defaults.ts`, the only file allowed to look at the
 business type (lint rule `pos-local/no-business-type-branching`).
 
-| Module             | Platform | Restaurant | Coffee shop | Supermarket, grocery | Clothing, retail | Enforced today                                             |
-| ------------------ | -------- | ---------- | ----------- | -------------------- | ---------------- | ---------------------------------------------------------- |
-| POS                | on       | on         | on          | on                   | on               | —                                                          |
-| KDS                | off      | on         | on          | off                  | off              | kitchen routes, kitchen tickets, POS kitchen progress, KDS |
-| KITCHEN_PRINTER    | off      | on         | off         | off                  | off              | admin kitchen stations (with KDS)                          |
-| ONLINE_ORDERING    | off      | on         | on          | off                  | off              | storefront, website orders, settings, admin page           |
-| BARCODE            | off      | off        | off         | on                   | on               | codes in the menu, lookup route, POS scanning, admin codes |
-| INVENTORY          | off      | off        | off         | on                   | on               | admin stock flag only (the ledger is a later phase)        |
-| TABLES             | off      | on         | off         | off                  | off              | floor routes, dine-in table rule, POS tables, admin tables |
-| MODIFIERS          | off      | on         | on          | off                  | off              | published menu, POS options dialog, admin modifier groups  |
-| PRODUCT_VARIANTS   | off      | on         | off         | off                  | on               | option axes and the variant matrix (admin and API)         |
-| DELIVERY           | off      | on         | off         | on                   | off              | —                                                          |
-| SELF_CHECKOUT      | off      | off        | on          | on                   | off              | Phase M6                                                   |
-| CUSTOMER_DISPLAY   | off      | off        | off         | on                   | on               | —                                                          |
-| LOYALTY            | off      | off        | off         | on                   | on               | —                                                          |
-| ADVANCED_REPORTING | off      | off        | off         | off                  | off              | —                                                          |
+| Module             | Platform | Restaurant | Coffee shop | Supermarket, grocery | Clothing, retail | Enforced today                                               |
+| ------------------ | -------- | ---------- | ----------- | -------------------- | ---------------- | ------------------------------------------------------------ |
+| POS                | on       | on         | on          | on                   | on               | —                                                            |
+| KDS                | off      | on         | on          | off                  | off              | kitchen routes, kitchen tickets, POS kitchen progress, KDS   |
+| KITCHEN_PRINTER    | off      | on         | off         | off                  | off              | admin kitchen stations (with KDS)                            |
+| ONLINE_ORDERING    | off      | on         | on          | off                  | off              | storefront, website orders, settings, admin page             |
+| BARCODE            | off      | off        | off         | on                   | on               | codes in the menu, lookup route, POS scanning, admin codes   |
+| INVENTORY          | off      | off        | off         | on                   | on               | admin stock flag only (the ledger is a later phase)          |
+| TABLES             | off      | on         | off         | off                  | off              | floor routes, dine-in table rule, POS tables, admin tables   |
+| MODIFIERS          | off      | on         | on          | off                  | off              | published menu, POS options dialog, admin modifier groups    |
+| PRODUCT_VARIANTS   | off      | on         | off         | off                  | on               | option axes and the variant matrix (admin and API)           |
+| DELIVERY           | off      | on         | off         | on                   | off              | —                                                            |
+| SELF_CHECKOUT      | off      | off        | on          | on                   | off              | kiosk menu, orders and payments; kiosk app; POS kiosk orders |
+| CUSTOMER_DISPLAY   | off      | off        | off         | on                   | on               | —                                                            |
+| LOYALTY            | off      | off        | off         | on                   | on               | —                                                            |
+| ADVANCED_REPORTING | off      | off        | off         | off                  | off              | —                                                            |
 
 `OTHER` gets the platform defaults. Above the layers, the platform operator's entitlement per
 tenant and module decides:
@@ -98,6 +99,8 @@ Where the layers are written:
 The cloud and every location hub resolve with the same function from the same rows (the hub's
 come with its snapshot), so a hub enforces modules offline. Apps read the result from
 `GET /tenants/:tenantId/context?locationId=` (`useFeature`, `<FeatureGate>` in `@pos/app-kit`).
+Since M6 the device layer applies to real devices: a paired terminal's requests name it, so a
+kiosk's modules (`GET /kiosk/context`, its routes) include the overrides of that kiosk.
 
 ## Branding and theme (M3)
 
@@ -120,10 +123,11 @@ See [ADR 0019](adr/0019-branding-and-theme.md). Two brands, never confused:
 | Corner radius (0–24 px)                       | 8                  | ✓      | ✓       |        |
 
 - **Surfaces** are `login` (the POS and KDS sign-in screens, served by the hub), `pos`, `kds`,
-  `kiosk` (Phase M6) and `website`. The admin has no surface: it shows the tenant's defaults.
+  `kiosk` (the self-service kiosk, M6) and `website`. The admin has no surface: it shows the
+  tenant's defaults.
 - **The device layer** is a screen's own light/dark choice (Appearance, kept in the browser or
-  the POS app), and wins over the tenant's. Staff devices have no server-side identity yet, so it
-  is not stored in the cloud.
+  the POS app), and wins over the tenant's. It is not stored in the cloud. A kiosk keeps no choice
+  of its own: its surface's theme applies.
 - **Readability is enforced:** text on every brand colour reaches WCAG AA, and primary and accent
   reach 3:1 against the page of both themes (any device may choose either). Unreadable colours
   are refused when saved (`BRANDING_UNREADABLE`) and flagged in the admin as they are typed.
@@ -194,3 +198,24 @@ business type → tenant → location → device):
 (writing codes). The scanner's timing (`maxKeyIntervalMs` 35, `minLength` 4, terminator Enter)
 is code today (`KEYBOARD_WEDGE_DEFAULTS`), not yet a device setting. The demo restaurant switches
 `BARCODE` on in its seed file (`features`), so its colas can be scanned.
+
+## Self-service kiosk (M6)
+
+See [ADR 0022](adr/0022-self-service-kiosk.md). The kiosk adds no setting of its own to the
+layers: what it offers follows the modules, resolved for its location **and the kiosk itself**
+(the device layer, now fed by paired terminals), and it looks like the tenant's `kiosk` surface.
+
+| What                                      | Decided by                                                             | Where it is written                                  |
+| ----------------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------- |
+| Whether a kiosk sells at all              | `SELF_CHECKOUT` (business type → tenant → location → device)           | admin → Settings → Modules; a device override by API |
+| Paid order to the kitchen, or handed over | `KDS` at the location: tickets where on; COMPLETED at once where off   | the same modules                                     |
+| Scanning items                            | `BARCODE` (the menu carries codes only with it)                        | the same modules                                     |
+| Modifier choices                          | `MODIFIERS`                                                            | the same modules                                     |
+| Look                                      | branding, `kiosk` surface over the tenant's                            | admin → Settings → Branding → Screens                |
+| Languages, money                          | the tenant's (M4); the customer may switch for the visit               | admin → Settings → Language and currency             |
+| Leaving the customer screens              | the `kiosk.attend` permission at the kiosk's location                  | admin → Staff → Roles                                |
+| Card terminal adapter                     | `PAYMENT_TERMINAL_PROVIDER` (`none`, `mock`; installation, not tenant) | the hub's environment (`mock` refused in production) |
+
+Code, not yet settings: the pairing code's lifetime (24 h), the idle reset (60 s, then 15 s to
+answer), the order-number screen (20 s), and how often a terminal's contact is reported to the
+cloud (every 5 min; a new app version at once).

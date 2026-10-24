@@ -31,7 +31,8 @@ Customer Web ─┐                          ┌─ Admin
         Location Hub (apps/gateway, Node) ── SQLite (operational source of truth while offline)
          │  REST + WebSocket on the location LAN      │  PrinterService (ESC/POS network/USB adapters)
          ├── POS terminals (Tauri 2 + React) × N
-         └── KDS screens (React, any tablet browser, served by the hub) × N
+         ├── KDS screens (React, any tablet browser, served by the hub) × N
+         └── Self-service kiosks (React, paired with the hub as devices, MADAR M6) × N
 ```
 
 Principles:
@@ -63,6 +64,7 @@ apps/
   gateway/        Location hub: SQLite, sync engine, LAN WS, printers (Phase 5–6)
   pos/            Tauri 2 + React point of sale                      (Phase 2: order entry)
   kds/            React kitchen display                              (Phase 4)
+  kiosk/          React self-service kiosk, a paired device of the hub (MADAR M6)
   customer-web/   React customer ordering site (cloud API only)       (Phase 7)
 packages/
   shared-types/   Enums, permission catalog, error codes, realtime event contracts
@@ -696,7 +698,7 @@ Configuration precedence is in [configuration.md](configuration.md).
 | M3    | Branding and theme: platform and tenant branding, design tokens, dark/light/system, tenant files         | ✅ Done |
 | M4    | Currency and localization: currency configuration (ILS default), supported locales                       | ✅ Done |
 | M5    | Retail: SKU, barcodes, generic product options and variants, scanner abstraction                         | ✅ Done |
-| M6    | Self-service: kiosk app, terminal devices, shared order engine, self-checkout                            | ⏳      |
+| M6    | Self-service: kiosk app, terminal devices, shared order engine, self-checkout                            | ✅ Done |
 | M7    | Multi-tenant website: host resolution, verified domains, configurable sections                           | ⏳      |
 | M8    | Payment configuration: per-tenant provider accounts, encrypted secrets                                   | ⏳      |
 | M9    | Platform admin: separate app and identity, tenants, health, support and repair tools                     | ⏳      |
@@ -898,6 +900,32 @@ added the demo cola's sizes to the cart (a repeat scan raised the quantity), an 
 showed a toast, manual entry found the large cola by its SKU, and the placed order reached the
 cloud with each line's SKU and barcode. The check led to one change: a scan now opens the options
 dialog only when a choice is required.
+
+### Phase M6 decisions
+
+See [ADR 0022](adr/0022-self-service-kiosk.md) and
+[configuration.md](configuration.md#self-service-kiosk-m6).
+
+- **Terminals pair with their hub:** the admin creates a POS, KDS, kiosk or customer display as a
+  `PENDING` device with a one-time pairing code (24 h, renewable). The code's hash rides the
+  snapshot (format 6), so the hub pairs the terminal offline (`POST /terminals/pair`) and issues
+  its credential, whose hash stays on the hub. The hub reports pairing, contact and app version
+  through the outbox (`DEVICE_UPSERT`); the cloud never revives a disabled device, and the hub's
+  snapshot merge never moves a device's lifecycle backwards or stores a used code.
+- **A narrow principal:** `@DeviceRoute` routes (route-inventory access `device`) accept only
+  terminal credentials of their types at their own location; staff routes refuse them, device
+  routes refuse staff tokens. A kiosk reads its context and menu, places, pays and cancels its own
+  orders, and lets staff out with a PIN and `kiosk.attend`. Requests carry the device, so the
+  device layer of modules applies.
+- **One order engine:** `OrdersService` creates kiosk orders (channel and source `KIOSK`, the
+  device as actor) with the shared pricing; SYSTEM rules of the state machine confirm a paid order
+  (kitchen tickets with `KDS`) and, without a kitchen screen, complete it (self-checkout). Pay at
+  the counter waits `PLACED` until a cashier collects it at the POS.
+- **An integrated card terminal:** `PaymentTerminalProvider` with a mock adapter, charged outside
+  any transaction and recorded under the order's lock. `payments.device_id` and a relaxed CHECK
+  allow drawer-less card payments taken by a device; payments stay append-only.
+- **`apps/kiosk`:** touch-first, branded for the kiosk surface, EN/AR with RTL, scanning where
+  `BARCODE` is on, idle reset, attendant exit, larger text, live announcements and focus per step.
 
 ## Architectural decisions and open questions
 

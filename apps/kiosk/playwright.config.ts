@@ -12,12 +12,12 @@ import { defineConfig } from '@playwright/test';
 const ROOT_ENV = resolve(import.meta.dirname, '../../.env');
 if (existsSync(ROOT_ENV)) process.loadEnvFile(ROOT_ENV);
 
-const CLOUD_PORT = 3130;
-const RESTAURANT_HUB = 4130;
-const MARKET_HUB = 4131;
-const RESTAURANT_KIOSK = 5191;
-const MARKET_KIOSK = 5192;
-const KITCHEN = 5193;
+const CLOUD_PORT = 3140;
+const RESTAURANT_HUB = 4140;
+const MARKET_HUB = 4141;
+const RESTAURANT_KIOSK = 5201;
+const MARKET_KIOSK = 5202;
+const KITCHEN = 5203;
 
 const e2eDatabaseUrl =
   process.env.KIOSK_E2E_DATABASE_URL ??
