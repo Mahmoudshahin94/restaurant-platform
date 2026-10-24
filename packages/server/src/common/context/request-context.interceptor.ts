@@ -4,12 +4,15 @@ import {
   Injectable,
   type NestInterceptor,
 } from '@nestjs/common';
-import { ActionSource } from '@pos/shared-types';
+import { ActionSource, type TerminalDeviceType } from '@pos/shared-types';
 import type { FastifyRequest } from 'fastify';
 import { Observable } from 'rxjs';
 import { RequestContext, type RequestContextStore, requestMemo } from './request-context';
 
-/** Sources a client may claim; `HUB` only a paired hub (device credential), `SYSTEM` nobody. */
+/**
+ * Sources a client may claim; `HUB` only a paired hub (device credential), `KIOSK` only a paired
+ * kiosk (its device credential, ADR 0022), `SYSTEM` nobody.
+ */
 const CLIENT_SOURCES = new Set<string>([
   ActionSource.POS,
   ActionSource.KDS,
@@ -18,16 +21,28 @@ const CLIENT_SOURCES = new Set<string>([
 ]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Set by the cloud's device guard on hub-authenticated routes (`/sync/*`). */
+/**
+ * Set by the cloud's device guard on hub-authenticated routes (`/sync/*`), or by the auth guard
+ * for a terminal on the hub's device routes (`request.terminal`).
+ */
 interface DeviceScope {
   id: string;
   tenantId: string;
   locationId: string;
 }
 const deviceOf = (request: FastifyRequest): DeviceScope | undefined =>
-  (request as FastifyRequest & { device?: DeviceScope }).device;
+  (request as FastifyRequest & { device?: DeviceScope }).device ?? request.terminal;
+
+/** What a terminal's actions are recorded as: its own kind (a customer display, its till's). */
+const TERMINAL_SOURCES: Record<TerminalDeviceType, ActionSource> = {
+  KIOSK: ActionSource.KIOSK,
+  POS: ActionSource.POS,
+  KDS: ActionSource.KDS,
+  CUSTOMER_DISPLAY: ActionSource.POS,
+};
 
 function sourceOf(request: FastifyRequest): ActionSource {
+  if (request.terminal) return TERMINAL_SOURCES[request.terminal.type];
   const header = request.headers['x-client-source'];
   if (header === ActionSource.HUB && deviceOf(request)) return ActionSource.HUB;
   return typeof header === 'string' && CLIENT_SOURCES.has(header)

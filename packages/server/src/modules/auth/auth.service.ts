@@ -83,6 +83,33 @@ export class AuthService {
    * exists.
    */
   async pinLogin(employeeCode: string, pin: string): Promise<IssuedSession> {
+    const employee = await this.verifyPin(employeeCode, pin);
+    const session = await this.issueSession(employee.user.id, employee.tenantId, newId());
+    await this.audit.record({
+      action: 'auth.pin_login',
+      entityType: 'User',
+      entityId: employee.user.id,
+      actorType: 'EMPLOYEE',
+      actorId: employee.id,
+      tenantId: employee.tenantId,
+    });
+    return session;
+  }
+
+  /**
+   * Checks an employee code and PIN (location hub only), with the same lock after repeated
+   * failures: the POS sign-in, and a staff member leaving a kiosk's customer screens (ADR 0022).
+   * Returns the active employee and the user it acts as.
+   */
+  async verifyPin(
+    employeeCode: string,
+    pin: string,
+  ): Promise<{
+    id: string;
+    tenantId: string;
+    displayName: string;
+    user: { id: string; tenantId: string };
+  }> {
     const key = employeeCode.toUpperCase();
     const attempts = this.pinFailures.get(key);
     if (attempts && attempts.lockedUntil > Date.now()) {
@@ -123,17 +150,12 @@ export class AuthService {
     }
     this.pinFailures.delete(key);
     if (!employee.user.isActive) throw new DomainError('ACCOUNT_DISABLED', 'Account is disabled');
-
-    const session = await this.issueSession(employee.user.id, employee.tenantId, newId());
-    await this.audit.record({
-      action: 'auth.pin_login',
-      entityType: 'User',
-      entityId: employee.user.id,
-      actorType: 'EMPLOYEE',
-      actorId: employee.id,
+    return {
+      id: employee.id,
       tenantId: employee.tenantId,
-    });
-    return session;
+      displayName: employee.displayName,
+      user: employee.user,
+    };
   }
 
   /**

@@ -8,6 +8,8 @@ export interface ChangeSet {
   ticketIds?: Iterable<string>;
   /** Audit-trail entries; the hub uploads its own so the cloud's audit log is complete. */
   auditIds?: Iterable<string>;
+  /** Terminals paired at the hub, or what they reported (last contact, version; ADR 0022). */
+  deviceIds?: Iterable<string>;
 }
 
 /**

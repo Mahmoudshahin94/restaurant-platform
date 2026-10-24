@@ -7,6 +7,8 @@ export * from './prisma/change-recorder';
 export * from './prisma/errors';
 export type { DatabaseOptions } from './prisma/prisma.module';
 export * from './common/auth/decorators';
+export * from './common/auth/device-credentials';
+export * from './common/auth/device-route';
 export * from './common/auth/managed-in-cloud';
 export * from './common/auth/principal';
 export * from './common/auth/require-feature';
@@ -20,6 +22,7 @@ export * from './modules/audit/audit.service';
 export { redactForAudit } from './modules/audit/redact';
 export * from './modules/auth/access.service';
 export * from './modules/auth/token.service';
+export { TerminalAuthService } from './modules/auth/terminal-auth.service';
 export { FeatureService, type FeatureScope } from './modules/features/feature.service';
 export * from './modules/realtime/realtime.bus';
 export { BrandingService } from './modules/branding/branding.service';
@@ -33,6 +36,14 @@ export { LocationsModule } from './modules/locations/locations.module';
 export { MenuModule } from './modules/menu/menu.module';
 export { OrdersModule } from './modules/orders/orders.module';
 export { PaymentsModule } from './modules/payments/payments.module';
+export {
+  PAYMENT_TERMINAL,
+  type PaymentTerminalProvider,
+} from './modules/payments/providers/payment-terminal';
+export { MockPaymentTerminal } from './modules/payments/providers/mock-terminal.provider';
+export { TerminalsModule } from './modules/terminals/terminals.module';
+export { KioskModule } from './modules/kiosk/kiosk.module';
+export { KIOSK_CANCEL_REASON } from './modules/kiosk/kiosk.service';
 export { PricingConfigModule } from './modules/pricing-config/pricing-config.module';
 export { ReportsModule } from './modules/reports/reports.module';
 export { TenantsModule } from './modules/tenants/tenants.module';
