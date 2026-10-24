@@ -97,6 +97,8 @@ export const syncOrderItemSchema = z.object({
   nameAr: text,
   variantNameEn: text.nullable(),
   variantNameAr: text.nullable(),
+  sku: text.nullable(),
+  barcode: text.nullable(),
   quantity: int,
   basePrice: int,
   unitPrice: int,

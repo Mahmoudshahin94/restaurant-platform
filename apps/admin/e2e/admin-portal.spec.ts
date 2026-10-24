@@ -485,3 +485,81 @@ async function offerArabicOnly(page: Page): Promise<void> {
   await page.getByRole('link', { name: 'لوحة التحكم' }).click();
   await expect(page.getByText(/^\u200f?[٠-٩٬]+٫[٠-٩]{2}\s₪$/).first()).toBeVisible();
 }
+
+/** A valid EAN-13 that no earlier run used: the E2E database keeps its products. */
+function freshEan13(): string {
+  const body = `29${Date.now().toString().slice(-10)}`;
+  let sum = 0;
+  for (let i = 0; i < body.length; i += 1) {
+    sum += Number(body[body.length - 1 - i]) * (i % 2 === 0 ? 3 : 1);
+  }
+  return `${body}${String((10 - (sum % 10)) % 10)}`;
+}
+
+test('the owner builds a size and colour matrix with SKUs and barcodes', async ({
+  page,
+  request,
+}) => {
+  const suffix = Date.now().toString(36);
+  const code = freshEan13();
+  await signIn(page);
+  await page.goto('/menu/products');
+  await page.getByRole('button', { name: 'New product' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Name (English)').fill(`Tee ${suffix}`);
+  await dialog.getByLabel('Name (Arabic)').fill(`قميص ${suffix}`);
+  await dialog.getByLabel('Price (ILS)', { exact: true }).fill('60.00');
+
+  // Size: S, M.
+  await dialog.getByRole('button', { name: 'Add option' }).click();
+  await dialog.getByLabel('Option 1 (English)').fill('Size');
+  await dialog.getByLabel('Option 1 (Arabic)').fill('المقاس');
+  await dialog.getByLabel('Size value 1 (English)').fill('S');
+  await dialog.getByLabel('Size value 1 (Arabic)').fill('صغير');
+  await dialog.getByRole('button', { name: 'Add value' }).click();
+  await dialog.getByLabel('Size value 2 (English)').fill('M');
+  await dialog.getByLabel('Size value 2 (Arabic)').fill('وسط');
+  // Colour: Red, Blue. The matrix now has four rows.
+  await dialog.getByRole('button', { name: 'Add option' }).click();
+  await dialog.getByLabel('Option 2 (English)').fill('Colour');
+  await dialog.getByLabel('Option 2 (Arabic)').fill('اللون');
+  await dialog.getByLabel('Colour value 1 (English)').fill('Red');
+  await dialog.getByLabel('Colour value 1 (Arabic)').fill('أحمر');
+  await dialog.getByRole('button', { name: 'Add value' }).nth(1).click();
+  await dialog.getByLabel('Colour value 2 (English)').fill('Blue');
+  await dialog.getByLabel('Colour value 2 (Arabic)').fill('أزرق');
+  await expect(dialog.getByRole('checkbox', { name: /^Sell / })).toHaveCount(4);
+
+  // M / Blue is not made; S / Red gets its SKU, barcode and a higher price.
+  await dialog.getByRole('checkbox', { name: 'Sell M / Blue' }).click();
+  await dialog.getByLabel('SKU of S / Red').fill(`TEE-${suffix}-S-R`);
+  await dialog.getByLabel('Price of S / Red').fill('65.00');
+  await dialog.getByLabel('Barcode of S / Red').fill('1234567890123');
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  // A mistyped EAN is caught before it is saved.
+  await expect(dialog.getByText('The last digit does not match: check the code.')).toBeVisible();
+  await dialog.getByLabel('Barcode of S / Red').fill(code);
+  await dialog.getByRole('button', { name: 'Save' }).click();
+  await expect(dialog).toBeHidden();
+
+  const row = page.getByRole('row', { name: new RegExp(`Tee ${suffix}`) });
+  await expect(row.getByText('3 variants')).toBeVisible();
+
+  // The location's menu sells S / Red by its code.
+  const { headers, locationId } = await ownerContext(request);
+  const lookup = await request.get(`${API}/locations/${locationId}/catalog/lookup`, {
+    headers,
+    params: { code },
+  });
+  expect(lookup.ok()).toBe(true);
+  const found = (await lookup.json()) as {
+    product: { variants: { id: string; nameEn: string; price: number; sku: string | null }[] };
+    variantId: string;
+  };
+  expect(found.product.variants.map((v) => v.nameEn)).toEqual(['S / Red', 'S / Blue', 'M / Red']);
+  expect(found.product.variants.find((v) => v.id === found.variantId)).toMatchObject({
+    nameEn: 'S / Red',
+    price: 6500,
+    sku: `TEE-${suffix}-S-R`,
+  });
+});

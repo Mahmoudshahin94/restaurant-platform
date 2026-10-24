@@ -37,18 +37,19 @@ Device configuration       one terminal, screen or kiosk differing from its loca
 
 ## What exists today
 
-| Setting                                       | Layers today                                          | Phase |
-| --------------------------------------------- | ----------------------------------------------------- | ----- |
-| Business type, status, legal name             | tenant (type and status set by the platform)          | M1 ✅ |
-| Default and supported locales, digit style    | platform → tenant (digits); tenant (locales)          | M4 ✅ |
-| Currency                                      | tenant (fixed at provisioning, ADR 0002; ILS default) | M4 ✅ |
-| Time zone, tax mode, cash rounding, KDS times | tenant time zone; location settings                   | ✅    |
-| Modules (POS, KDS, TABLES, BARCODE, …)        | platform → business type → tenant → location → device | M2 ✅ |
-| Branding and theme                            | platform → tenant → surface → device (theme mode)     | M3 ✅ |
-| Currency display (symbol, display, format)    | platform → tenant                                     | M4 ✅ |
-| Website sections and domains                  | tenant                                                | M7    |
-| Payment providers                             | tenant → location                                     | M8    |
-| Release channel                               | platform → tenant                                     | M10   |
+| Setting                                        | Layers today                                          | Phase |
+| ---------------------------------------------- | ----------------------------------------------------- | ----- |
+| Business type, status, legal name              | tenant (type and status set by the platform)          | M1 ✅ |
+| Default and supported locales, digit style     | platform → tenant (digits); tenant (locales)          | M4 ✅ |
+| Currency                                       | tenant (fixed at provisioning, ADR 0002; ILS default) | M4 ✅ |
+| Time zone, tax mode, cash rounding, KDS times  | tenant time zone; location settings                   | ✅    |
+| Modules (POS, KDS, TABLES, BARCODE, …)         | platform → business type → tenant → location → device | M2 ✅ |
+| Branding and theme                             | platform → tenant → surface → device (theme mode)     | M3 ✅ |
+| Currency display (symbol, display, format)     | platform → tenant                                     | M4 ✅ |
+| Retail catalog (options, barcodes, stock flag) | modules (above); catalog data per tenant              | M5 ✅ |
+| Website sections and domains                   | tenant                                                | M7    |
+| Payment providers                              | tenant → location                                     | M8    |
+| Release channel                                | platform → tenant                                     | M10   |
 
 Each phase's ADR records the exact settings it adds and the layers they accept.
 
@@ -64,11 +65,11 @@ business type (lint rule `pos-local/no-business-type-branching`).
 | KDS                | off      | on         | on          | off                  | off              | kitchen routes, kitchen tickets, POS kitchen progress, KDS |
 | KITCHEN_PRINTER    | off      | on         | off         | off                  | off              | admin kitchen stations (with KDS)                          |
 | ONLINE_ORDERING    | off      | on         | on          | off                  | off              | storefront, website orders, settings, admin page           |
-| BARCODE            | off      | off        | off         | on                   | on               | Phase M5                                                   |
-| INVENTORY          | off      | off        | off         | on                   | on               | Phase M5                                                   |
+| BARCODE            | off      | off        | off         | on                   | on               | codes in the menu, lookup route, POS scanning, admin codes |
+| INVENTORY          | off      | off        | off         | on                   | on               | admin stock flag only (the ledger is a later phase)        |
 | TABLES             | off      | on         | off         | off                  | off              | floor routes, dine-in table rule, POS tables, admin tables |
 | MODIFIERS          | off      | on         | on          | off                  | off              | published menu, POS options dialog, admin modifier groups  |
-| PRODUCT_VARIANTS   | off      | on         | off         | off                  | on               | Phase M5                                                   |
+| PRODUCT_VARIANTS   | off      | on         | off         | off                  | on               | option axes and the variant matrix (admin and API)         |
 | DELIVERY           | off      | on         | off         | on                   | off              | —                                                          |
 | SELF_CHECKOUT      | off      | off        | on          | on                   | off              | Phase M6                                                   |
 | CUSTOMER_DISPLAY   | off      | off        | off         | on                   | on               | —                                                          |
@@ -176,3 +177,20 @@ They ride the tenant row, so the change feed and the snapshot bring them to ever
 them from `GET /tenants/:tenantId/context` (`useMoneyFormat`, `useFormatOptions`,
 `LanguageSwitcher` in `@pos/app-kit`); the website from `GET /public/tenants/:slug`; the hub's
 sign-in screens from `GET /hub/locales`.
+
+## Retail catalog (M5)
+
+See [ADR 0021](adr/0021-retail-catalog-and-barcodes.md). The catalog itself is tenant data, not
+configuration; the modules decide what of it a tenant uses, resolved like any module (platform →
+business type → tenant → location → device):
+
+| Module             | What it turns on                                                                              | Without it                                                                                           |
+| ------------------ | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `PRODUCT_VARIANTS` | option axes on products and the generated variant matrix                                      | sizes named by hand still work; stored options stay editable                                         |
+| `BARCODE`          | product and variant codes, the lookup route, codes in the menu, POS scanning and manual entry | `403 FEATURE_DISABLED` on new codes and the lookup; the menu has no codes, so nothing can be scanned |
+| `INVENTORY`        | the per-variant "count stock" flag (`trackInventory`)                                         | the flag is hidden in the admin; nothing counts stock yet                                            |
+
+`BARCODE` is resolved for the location (the lookup route, the menu, the POS) and for the tenant
+(writing codes). The scanner's timing (`maxKeyIntervalMs` 35, `minLength` 4, terminator Enter)
+is code today (`KEYBOARD_WEDGE_DEFAULTS`), not yet a device setting. The demo restaurant switches
+`BARCODE` on in its seed file (`features`), so its colas can be scanned.

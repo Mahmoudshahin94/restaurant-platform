@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DomainError } from '../errors';
 import { sampleCatalog } from './fixtures.test-helpers';
+import { lookupCode } from './lookup';
 import { findMenuProduct, resolveLocationMenu } from './resolve-location-menu';
 import type { ItemSelection, LocationMenu } from './types';
 import { isValidSelectionRange, validateSelection } from './validate-selection';
@@ -61,7 +62,7 @@ describe('resolveLocationMenu', () => {
   });
 
   it('sells products without modifier groups where the MODIFIERS module is off', () => {
-    const plain = resolveLocationMenu(sampleCatalog(), [], { modifiers: false });
+    const plain = resolveLocationMenu(sampleCatalog(), [], { modifiers: false, barcodes: true });
     const burger = findMenuProduct(plain, 'prod-burger')!;
     expect(burger.modifierGroups).toEqual([]);
     // Nothing is required any more, and a modifier is no longer part of the menu.
@@ -171,6 +172,104 @@ describe('validateSelection', () => {
         }),
       'INVALID_MODIFIER_SELECTION',
       { reason: 'DUPLICATE_MODIFIER' },
+    );
+  });
+});
+
+describe('barcodes and SKUs on the menu (ADR 0021)', () => {
+  const menu = resolveLocationMenu(sampleCatalog(), []);
+
+  it('publishes each variant’s codes and the codes of products without variants, primary first', () => {
+    const fries = findMenuProduct(menu, 'prod-fries')!;
+    expect(fries.barcodes).toEqual(['6291000000013', 'FRIES-BAG']);
+    const cola = findMenuProduct(menu, 'prod-cola')!;
+    expect(cola.barcodes).toEqual([]);
+    expect(cola.variants.map((v) => [v.id, v.sku, v.barcodes])).toEqual([
+      ['var-small', 'COLA-S', ['6291000000020']],
+      ['var-large', 'COLA-L', ['012345678905']],
+    ]);
+  });
+
+  it('publishes no barcodes where the BARCODE module is off', () => {
+    const plain = resolveLocationMenu(sampleCatalog(), [], { modifiers: true, barcodes: false });
+    expect(findMenuProduct(plain, 'prod-fries')!.barcodes).toEqual([]);
+    expect(
+      findMenuProduct(plain, 'prod-cola')!.variants.every((v) => v.barcodes.length === 0),
+    ).toBe(true);
+    expect(lookupCode(plain, '6291000000013')).toBeNull();
+  });
+
+  it('looks a code up by product and by variant', () => {
+    expect(lookupCode(menu, '6291000000013')).toMatchObject({
+      categoryId: 'cat-mains',
+      product: { id: 'prod-fries' },
+      variant: null,
+      matchedBy: 'BARCODE',
+    });
+    expect(lookupCode(menu, ' FRIES-BAG ')).toMatchObject({ product: { id: 'prod-fries' } });
+    expect(lookupCode(menu, '6291000000020')).toMatchObject({
+      product: { id: 'prod-cola' },
+      variant: { id: 'var-small', price: 600 },
+    });
+  });
+
+  it('finds a UPC-A scanned as an EAN-13', () => {
+    expect(lookupCode(menu, '0012345678905')).toMatchObject({
+      variant: { id: 'var-large' },
+      code: '012345678905',
+    });
+  });
+
+  it('falls back to SKUs, and never finds archived variants or unknown codes', () => {
+    expect(lookupCode(menu, 'COLA-L')).toMatchObject({
+      variant: { id: 'var-large' },
+      matchedBy: 'SKU',
+    });
+    expect(lookupCode(menu, 'BRG')).toMatchObject({
+      product: { id: 'prod-burger' },
+      variant: null,
+    });
+    expect(lookupCode(menu, '6291000000037')).toBeNull();
+    expect(lookupCode(menu, '0000000000000')).toBeNull();
+    expect(lookupCode(menu, '  ')).toBeNull();
+  });
+
+  it('prices a looked-up variant like a chosen one, and keeps its SKU and barcode', () => {
+    const match = lookupCode(menu, '012345678905')!;
+    const priced = validateSelection(match.product, {
+      productId: match.product.id,
+      variantId: match.variant?.id ?? null,
+      modifierIds: [],
+      barcode: match.code,
+    });
+    expect(priced).toMatchObject({
+      variantId: 'var-large',
+      basePrice: 800,
+      unitPrice: 800,
+      sku: 'COLA-L',
+      barcode: '012345678905',
+    });
+  });
+
+  it('keeps the primary barcode on lines that were not scanned', () => {
+    const fries = findMenuProduct(menu, 'prod-fries')!;
+    expect(
+      validateSelection(fries, { productId: 'prod-fries', variantId: null, modifierIds: [] }),
+    ).toMatchObject({ sku: null, barcode: '6291000000013' });
+  });
+
+  it('refuses a scanned code that is not the item’s', () => {
+    const cola = findMenuProduct(menu, 'prod-cola')!;
+    expectDomainError(
+      () =>
+        validateSelection(cola, {
+          productId: 'prod-cola',
+          variantId: 'var-large',
+          modifierIds: [],
+          barcode: '6291000000020',
+        }),
+      'BARCODE_NOT_FOUND',
+      { reason: 'NOT_ON_ITEM' },
     );
   });
 });

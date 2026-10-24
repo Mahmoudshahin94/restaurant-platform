@@ -1,5 +1,6 @@
 import {
   ActionSource,
+  BARCODE_MAX_LENGTH,
   FulfillmentType,
   OrderChannel,
   OrderStatus,
@@ -30,6 +31,8 @@ export const orderItemInputSchema = z.object({
   modifierIds: z.array(idSchema).max(50).default([]),
   quantity: z.int().min(1).max(999),
   notes: notesSchema.default(null),
+  /** The code scanned for this line (ADR 0021): kept on the line, checked against the item. */
+  barcode: z.string().trim().min(1).max(BARCODE_MAX_LENGTH).nullable().default(null),
 });
 export type OrderItemInput = z.input<typeof orderItemInputSchema>;
 
@@ -154,6 +157,8 @@ export const orderItemSchema = z.object({
   nameAr: z.string(),
   variantNameEn: z.string().nullable(),
   variantNameAr: z.string().nullable(),
+  sku: z.string().nullable(),
+  barcode: z.string().nullable(),
   quantity: z.int(),
   basePrice: z.int(),
   unitPrice: z.int(),

@@ -16,6 +16,7 @@ mirrors the operational subset.
 | Audit     | AuditLog                                                                                                                          | ✅ 0001                            |
 | Catalog   | Category, Product, ProductVariant, ModifierGroup, Modifier, ProductModifierGroup, KitchenStation, ProductStation, LocationProduct | ✅ 0002                            |
 | Catalog   | Tax, ProductTax, Discount                                                                                                         | ✅ 0004 (+ 0005 CHECK constraints) |
+| Retail    | ProductOption, ProductOptionValue, ProductVariantOptionValue, ProductBarcode, ProductImage                                        | ✅ Phase M5                        |
 | Floor     | TableSection, Table (`DiningTable` in Prisma)                                                                                     | ✅ 0004                            |
 | Orders    | Order, OrderItem, OrderItemModifier, OrderTax, OrderDiscount, OrderStatusHistory, OrderCounter                                    | ✅ 0004 (+ 0005)                   |
 | Payments  | PaymentMethod, Payment                                                                                                            | ✅ Phase 3                         |
@@ -63,7 +64,15 @@ erDiagram
   TableSection ||--o{ Table : contains
 
   Category ||--o{ Product : groups
-  Product ||--o{ ProductVariant : "sizes"
+  Product ||--o{ ProductVariant : "sizes / combinations"
+  Product ||--o{ ProductOption : "axes (Size, Colour)"
+  ProductOption ||--o{ ProductOptionValue : values
+  ProductVariant ||--o{ ProductVariantOptionValue : "is"
+  ProductOptionValue ||--o{ ProductVariantOptionValue : "used by"
+  Product ||--o{ ProductBarcode : "scanned by"
+  ProductVariant ||--o{ ProductBarcode : "scanned by"
+  Product ||--o{ ProductImage : pictures
+  TenantFile ||--o{ ProductImage : shows
   Product ||--o{ ProductModifierGroup : offers
   ModifierGroup ||--o{ ProductModifierGroup : "attached to"
   ModifierGroup ||--o{ Modifier : contains
@@ -208,8 +217,26 @@ insert. It records `actorType/actorId`, `source` (POS/KDS/WEBSITE/ADMIN/HUB/SYST
 - `LocationProduct`: per-location `isAvailable` (the "86" switch) and an optional
   `priceOverride`. A missing row means available at the base price.
 
+**Retail catalog** ([ADR 0021](adr/0021-retail-catalog-and-barcodes.md), Phase M5):
+
+- `ProductOption` (an axis of one product: Size, Colour, Material…, localized, sortable) and
+  `ProductOptionValue` (S, M, L). Deleted, not archived, when removed: order lines keep names.
+- `ProductVariantOptionValue` (key: variant + value): which value of each option a variant is.
+  A product with options sells combinations, one value of each option, none twice, named after
+  the values; a product without options keeps hand-named variants.
+- `ProductVariant` also has `sku` (unique in the tenant across products and live variants,
+  checked by the service), `cost` (minor units, never published, `≥ 0` check) and
+  `trackInventory` (the `INVENTORY` flag; the stock ledger is a later phase).
+- `ProductBarcode`: tenant, product, optional variant, `code` (printable ASCII, ≤ 64, unique per
+  tenant), `symbology` (`EAN13`, `EAN8`, `UPC_A`, `CODE128`, `OTHER`; check constraint) and
+  `isPrimary` (one per product or variant, a partial unique index). A product with variants has
+  its codes on the variants. EAN/UPC check digits are verified by `@pos/domain`.
+- `ProductImage`: a `PRODUCT_IMAGE` tenant file shown for a product or one variant, ordered.
+  Cloud only for now (not in the hub snapshot).
+
 Orders store **snapshots** (name, prices, modifiers) so that later menu edits never change
-historical orders.
+historical orders. Since M5 a line also keeps its `sku` (the variant's, else the product's) and
+`barcode` (the code scanned, else the item's primary code).
 
 **Orders** (Phase 2):
 

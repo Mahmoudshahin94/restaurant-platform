@@ -46,19 +46,86 @@
             "groups": [],
             "variants": [
               {
-                "nameEn": "Small",
-                "nameAr": "صغير",
-                "price": 6000
+                "optionValues": [0, 0],
+                "sku": "TEE-S-WHT",
+                "price": 6000,
+                "cost": 2200,
+                "trackInventory": true,
+                "barcodes": ["7291000001019"]
               },
               {
-                "nameEn": "Medium",
-                "nameAr": "وسط",
-                "price": 6000
+                "optionValues": [0, 1],
+                "sku": "TEE-S-BLK",
+                "price": 6000,
+                "cost": 2200,
+                "trackInventory": true,
+                "barcodes": ["7291000001026"]
               },
               {
-                "nameEn": "Large",
-                "nameAr": "كبير",
-                "price": 6500
+                "optionValues": [1, 0],
+                "sku": "TEE-M-WHT",
+                "price": 6000,
+                "cost": 2200,
+                "trackInventory": true,
+                "barcodes": ["7291000001033"]
+              },
+              {
+                "optionValues": [1, 1],
+                "sku": "TEE-M-BLK",
+                "price": 6000,
+                "cost": 2200,
+                "trackInventory": true,
+                "barcodes": ["7291000001040"]
+              },
+              {
+                "optionValues": [2, 0],
+                "sku": "TEE-L-WHT",
+                "price": 6500,
+                "cost": 2200,
+                "trackInventory": true,
+                "barcodes": ["7291000001057"]
+              },
+              {
+                "optionValues": [2, 1],
+                "sku": "TEE-L-BLK",
+                "price": 6500,
+                "cost": 2200,
+                "trackInventory": true,
+                "barcodes": ["7291000001064"]
+              }
+            ],
+            "options": [
+              {
+                "nameEn": "Size",
+                "nameAr": "المقاس",
+                "values": [
+                  {
+                    "nameEn": "S",
+                    "nameAr": "صغير"
+                  },
+                  {
+                    "nameEn": "M",
+                    "nameAr": "وسط"
+                  },
+                  {
+                    "nameEn": "L",
+                    "nameAr": "كبير"
+                  }
+                ]
+              },
+              {
+                "nameEn": "Colour",
+                "nameAr": "اللون",
+                "values": [
+                  {
+                    "nameEn": "White",
+                    "nameAr": "أبيض"
+                  },
+                  {
+                    "nameEn": "Black",
+                    "nameAr": "أسود"
+                  }
+                ]
               }
             ]
           }

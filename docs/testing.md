@@ -63,6 +63,8 @@ starts and stops it); the customer-website suite runs cloud, hub, POS, KDS and w
 | 20  | Tenant switches a module (MADAR M2)       | [admin-portal.spec.ts](../apps/admin/e2e/admin-portal.spec.ts) “the owner switches a module off for one location and its pages follow”                                                                                                                                                                                                                                                                                                                                      |
 | 21  | Tenant brands its screens (MADAR M3)      | [admin-portal.spec.ts](../apps/admin/e2e/admin-portal.spec.ts) “the owner brands the business and its screens follow”                                                                                                                                                                                                                                                                                                                                                       |
 | 22  | Tenant languages and currency (MADAR M4)  | [admin-portal.spec.ts](../apps/admin/e2e/admin-portal.spec.ts) “the owner offers one language and writes the currency their way”                                                                                                                                                                                                                                                                                                                                            |
+| 23  | Scan to cart (MADAR M5)                   | [pos.spec.ts](../apps/pos/e2e/pos.spec.ts) “a barcode scan adds the item to the cart, offline at the hub”                                                                                                                                                                                                                                                                                                                                                                   |
+| 24  | Variant matrix (MADAR M5)                 | [admin-portal.spec.ts](../apps/admin/e2e/admin-portal.spec.ts) “the owner builds a size and colour matrix with SKUs and barcodes”                                                                                                                                                                                                                                                                                                                                           |
 
 Other end-to-end tests cover payments (split, card numbers refused, shift close-out, an Arabic
 ESC/POS receipt), kitchen cancellations and rush, admin roles and users, branch settings, order
@@ -137,6 +139,21 @@ Component tests that render a shell or a logo get a `ThemeProvider` from the app
 `tenantContextFixture(features, locationId, branding, surface, localization)` takes a currency
 (`currencyCode`, `currency` display settings) and languages (`locales`); it defaults to ILS with
 English and Arabic.
+
+## Retail catalog (MADAR, ADR 0021)
+
+| What                                                                                                                   | Where                                                                              |
+| ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| GS1 check digits (EAN-13, EAN-8, UPC-A), symbology detection, UPC-A/EAN-13 equivalence, variant combinations           | `packages/domain/src/catalog/catalog.test.ts`                                      |
+| Codes and SKUs in the published menu (none without BARCODE), lookup by product, variant and SKU, variant pricing       | `packages/domain/src/menu/menu.test.ts`                                            |
+| Request rules: detected symbologies, check digits, matrix shape, codes and SKUs unique within a request                | `packages/validation/src/menu.test.ts`                                             |
+| Matrix and variant API, duplicate barcodes refused within a tenant and allowed across tenants, SKUs, modules, pictures | `apps/api/test/retail-catalog.test.ts`                                             |
+| Lookup at a location (product, variant, SKU, UPC as EAN-13, location price), `404`, BARCODE off → `403`, order codes   | `apps/api/test/retail-catalog.test.ts`; the gated-route walk in `security.test.ts` |
+| Change feed for every new catalog table                                                                                | `apps/api/test/retail-catalog.test.ts`                                             |
+| Offline lookup and scanned orders on the hub, `403` without BARCODE, a code moved between variants                     | `apps/gateway/test/hub.test.ts` (“barcodes offline”)                               |
+| Scanner burst detection, typing left alone, field restored, timing options, manual entry, the hook                     | `packages/app-kit/src/scanner/scanner.test.tsx`                                    |
+| Admin matrix: rows kept when values change, the request by value index, a product's draft                              | `apps/admin/src/routes/menu/variant-matrix.test.ts`                                |
+| Scan to cart at the POS through the hub; the admin builds a size × colour matrix                                       | E2E scenarios 23 and 24                                                            |
 
 ## Testing requirements (specification section 32)
 

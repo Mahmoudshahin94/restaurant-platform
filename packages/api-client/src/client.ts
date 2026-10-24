@@ -51,6 +51,7 @@ import {
   locationProductSettingSchema,
   modifierGroupSchema,
   productSchema,
+  catalogLookupSchema,
   publishedMenuSchema,
   type LoginRequest,
   type UpdateLocationRequest,
@@ -271,6 +272,12 @@ export function createApiClient(options: HttpClientOptions) {
         http.request('GET', `${API}/locations/${locationId}/menu`, {
           schema: publishedMenuSchema,
           ...(previousVersion ? { headers: { 'if-none-match': `"${previousVersion}"` } } : {}),
+        }),
+      /** What a scanned or typed code names on the location's menu (BARCODE, ADR 0021). */
+      lookupCode: (locationId: string, code: string) =>
+        http.request('GET', `${API}/locations/${locationId}/catalog/lookup`, {
+          query: { code },
+          schema: catalogLookupSchema,
         }),
       productSettings: (locationId: string) =>
         http.request('GET', `${API}/locations/${locationId}/product-settings`, {

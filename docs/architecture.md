@@ -695,7 +695,7 @@ Configuration precedence is in [configuration.md](configuration.md).
 | M2    | Feature/module system: catalog, business-type defaults, overrides, FeatureService, UI capability guards  | ✅ Done |
 | M3    | Branding and theme: platform and tenant branding, design tokens, dark/light/system, tenant files         | ✅ Done |
 | M4    | Currency and localization: currency configuration (ILS default), supported locales                       | ✅ Done |
-| M5    | Retail: SKU, barcodes, generic product options and variants, scanner abstraction                         | ⏳      |
+| M5    | Retail: SKU, barcodes, generic product options and variants, scanner abstraction                         | ✅ Done |
 | M6    | Self-service: kiosk app, terminal devices, shared order engine, self-checkout                            | ⏳      |
 | M7    | Multi-tenant website: host resolution, verified domains, configurable sections                           | ⏳      |
 | M8    | Payment configuration: per-tenant provider accounts, encrypted secrets                                   | ⏳      |
@@ -858,6 +858,47 @@ as did the POS sign-in screen (from `GET /hub/locales`), the POS itself (₪ pri
 website; and back to two languages, where the website started in the default (English, ₪28.00),
 the POS signed the Arabic-preferring cashier in in Arabic, and a choice in the switcher held.
 
+### Phase M5 decisions
+
+See [ADR 0021](adr/0021-retail-catalog-and-barcodes.md) and
+[configuration.md](configuration.md#retail-catalog-m5).
+
+- **Generic options and variants:** `ProductOption` (an axis: Size, Colour…), `ProductOptionValue`
+  and `ProductVariantOptionValue`. A product with options sells combinations of one value of each,
+  named after them; without options, variants are still named by hand. Variants gain `sku`, `cost`
+  and `trackInventory`; `ProductImage` attaches tenant files (cloud only for now). A request names
+  new values by their index in its own `options`.
+- **Barcodes** (`ProductBarcode`) are unique per tenant and code, one primary per item, on the
+  variants of a product that has variants. EAN/UPC check digits are verified in `@pos/domain`, the
+  same rule in the admin, the request schema and the server. SKUs are unique across products and
+  variants. Order lines keep `sku` and `barcode` (the scanned code, checked against the item).
+- **Lookup everywhere from one function:** `lookupCode` over the resolved menu (barcodes, then
+  SKUs) serves `GET /locations/:lid/catalog/lookup` on the cloud and the hub and the POS's own
+  copy of the menu, which now carries the codes. Without `BARCODE` the menu has none. Snapshot
+  format 5 carries options, values, combinations and codes, replaced wholesale on the hub.
+- **Scanner abstraction** in `@pos/app-kit`: `ScannerSource`, `KeyboardWedgeScanner` (HID bursts
+  ending in Enter, configurable timing, typing untouched), `ManualEntry`, a `NativeScanner`
+  placeholder, `useBarcodeScanner`. The POS adds scanned items to the cart (the options dialog
+  only for a required choice), shows a toast for unknown or sold-out codes, and has manual entry.
+- **Admin:** the product editor gained options, the generated matrix with per-variant SKU, price,
+  cost, barcode and stock flag, and barcode entry, in English and Arabic. It shows what the
+  modules allow. The stock ledger is a later phase: `INVENTORY` only adds the flag.
+
+**Phase M5 verification (2026-10-24):** `pnpm build`, `typecheck`, `lint` and `test` green (878
+unit, integration and component tests: API 284, domain 239, gateway 69, app-kit 56, i18n 44, admin
+43, validation 34, database 24, server 23, POS 20, customer-web 16, api-client 11, KDS 9, receipts
+8, ui 2), `pnpm test:tools` (13), the hub schema check, a clean `migrate status`, `format:check`,
+and all 36 Playwright E2E tests (admin 12, POS 16, KDS 4, customer-web 4) in one `pnpm e2e` run,
+including the new scenarios 23 and 24. A manual browser check against a freshly seeded database:
+the clothing store's T-shirt in the admin in Arabic (RTL) showed its Size × Colour matrix with
+SKUs, costs, barcodes and stock flags; adding the value XL grew the matrix to eight rows, a
+mistyped EAN-13 was refused as typed, and saving created XL / White with its code and left
+XL / Black unsold. At the POS, signed in through a newly paired hub, a simulated scanner burst
+added the demo cola's sizes to the cart (a repeat scan raised the quantity), an unknown code
+showed a toast, manual entry found the large cola by its SKU, and the placed order reached the
+cloud with each line's SKU and barcode. The check led to one change: a scan now opens the options
+dialog only when a choice is required.
+
 ## Architectural decisions and open questions
 
 Recorded as ADRs in [adr/](adr/):
@@ -923,6 +964,11 @@ Recorded as ADRs in [adr/](adr/):
     configuration resolved platform → tenant; formatting uses ISO decimal places and never a
     float; the tenant's supported locales, default and digit style drive every app's language
     switcher and initial language.
+21. [0021](adr/0021-retail-catalog-and-barcodes.md): MADAR retail catalog: generic product
+    options whose value combinations are the variants, per-variant SKU, cost and stock flag,
+    barcodes unique per tenant with GS1 check digits verified in the domain, one code lookup over
+    the resolved menu on the cloud, the hub and the till (offline), and a scanner abstraction that
+    reads keyboard-wedge scanners without blocking typing.
 
 Open items to revisit:
 

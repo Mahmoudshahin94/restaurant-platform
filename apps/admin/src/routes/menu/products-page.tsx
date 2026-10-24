@@ -22,7 +22,8 @@ import { Pencil, Plus, Search } from 'lucide-react';
 import { useDeferredValue, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArchiveAction } from '../../components/archive-action';
-import { QueryState } from '@pos/app-kit';
+import { QueryState, useFeature } from '@pos/app-kit';
+import { Feature } from '@pos/shared-types';
 import { ArchivedBadge } from '../../components/status-badge';
 import { api } from '../../lib/api';
 import { useCurrentLocale } from '@pos/app-kit';
@@ -49,6 +50,7 @@ export function ProductsPage() {
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [editing, setEditing] = useState<Product | 'new' | null>(null);
+  const kitchenOn = useFeature(Feature.KDS);
   const deferredSearch = useDeferredValue(search.trim());
 
   const categories = useCategories();
@@ -157,7 +159,7 @@ export function ProductsPage() {
                   <TableHead>{t('menu:fields.name')}</TableHead>
                   <TableHead>{t('menu:products.category')}</TableHead>
                   <TableHead className="w-36">{t('menu:products.price')}</TableHead>
-                  <TableHead>{t('menu:products.stations')}</TableHead>
+                  {kitchenOn ? <TableHead>{t('menu:products.stations')}</TableHead> : null}
                   <TableHead className="w-28">{t('menu:fields.status')}</TableHead>
                   <TableHead className="w-56 text-end">{t('menu:fields.actions')}</TableHead>
                 </TableRow>
@@ -175,6 +177,11 @@ export function ProductsPage() {
                             {row.sku}
                           </div>
                         ) : null}
+                        {row.variants.length > 0 ? (
+                          <div className="text-xs text-muted-foreground">
+                            {t('menu:products.variantCount', { count: row.variants.length })}
+                          </div>
+                        ) : null}
                       </TableCell>
                       <TableCell>{categoryName(row.categoryId)}</TableCell>
                       <TableCell className="whitespace-nowrap">
@@ -182,18 +189,20 @@ export function ProductsPage() {
                           ? t('menu:products.fromPrice', { price: format(minVariant) })
                           : format(row.price)}
                       </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {row.stationIds.map((id) => {
-                            const name = stationName(id);
-                            return name ? (
-                              <Badge key={id} variant="outline">
-                                {name}
-                              </Badge>
-                            ) : null;
-                          })}
-                        </div>
-                      </TableCell>
+                      {kitchenOn ? (
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {row.stationIds.map((id) => {
+                              const name = stationName(id);
+                              return name ? (
+                                <Badge key={id} variant="outline">
+                                  {name}
+                                </Badge>
+                              ) : null;
+                            })}
+                          </div>
+                        </TableCell>
+                      ) : null}
                       <TableCell>
                         <ArchivedBadge archivedAt={row.archivedAt} />
                       </TableCell>

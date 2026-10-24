@@ -39,6 +39,8 @@ export function itemSnapshot(
       nameAr: product.nameAr,
       variantNameEn: variant?.nameEn ?? null,
       variantNameAr: variant?.nameAr ?? null,
+      sku: line.sku,
+      barcode: line.barcode,
       quantity: line.quantity,
       basePrice: line.basePrice,
       unitPrice: line.unitPrice,

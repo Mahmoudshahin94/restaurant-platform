@@ -1,5 +1,6 @@
 import type {
   Catalog,
+  CatalogBarcode,
   CatalogModifierGroup,
   CatalogProduct,
   LocationMenu,
@@ -13,6 +14,14 @@ function bySortOrder<T extends { sortOrder: number; id: string }>(a: T, b: T): n
 }
 
 const isLive = (row: { archivedAt: Date | null }): boolean => row.archivedAt === null;
+
+/** The codes of one product or variant, primary first, then in code order (stable versions). */
+function codesOf(barcodes: readonly CatalogBarcode[], variantId: string | null): string[] {
+  return barcodes
+    .filter((b) => b.variantId === variantId)
+    .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || a.code.localeCompare(b.code))
+    .map((b) => b.code);
+}
 
 function resolveGroup(
   group: CatalogModifierGroup,
@@ -44,12 +53,13 @@ function resolveGroup(
  * them as sold out. Categories with no live products are omitted.
  *
  * `capabilities` are the location's modules (ADR 0018): without MODIFIERS, products are sold
- * without their modifier groups (none shown, none required, none accepted).
+ * without their modifier groups (none shown, none required, none accepted); without BARCODE the
+ * menu carries no barcodes, so nothing can be scanned (ADR 0021).
  */
 export function resolveLocationMenu(
   catalog: Catalog,
   settings: readonly LocationProductSetting[],
-  capabilities: { modifiers: boolean } = { modifiers: true },
+  capabilities: { modifiers: boolean; barcodes: boolean } = { modifiers: true, barcodes: true },
 ): LocationMenu {
   const settingByProduct = new Map(settings.map((s) => [s.productId, s]));
   const groupsById = new Map(
@@ -63,6 +73,7 @@ export function resolveLocationMenu(
   for (const product of [...catalog.products].filter(isLive).sort(bySortOrder)) {
     const setting = settingByProduct.get(product.id);
     const variants = product.variants.filter(isLive).sort(bySortOrder);
+    const barcodes = capabilities.barcodes ? product.barcodes : [];
     const resolved: MenuProduct = {
       id: product.id,
       sku: product.sku,
@@ -79,8 +90,11 @@ export function resolveLocationMenu(
         id: v.id,
         nameEn: v.nameEn,
         nameAr: v.nameAr,
+        sku: v.sku,
         price: v.price,
+        barcodes: codesOf(barcodes, v.id),
       })),
+      barcodes: variants.length === 0 ? codesOf(barcodes, null) : [],
       modifierGroups: [...product.modifierGroups]
         .sort(
           (a, b) => a.sortOrder - b.sortOrder || a.modifierGroupId.localeCompare(b.modifierGroupId),

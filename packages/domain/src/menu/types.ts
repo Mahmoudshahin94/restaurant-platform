@@ -32,9 +32,17 @@ export interface CatalogModifierGroup extends LocalizedName {
 
 export interface CatalogVariant extends LocalizedName {
   id: string;
+  sku: string | null;
   price: number;
   sortOrder: number;
   archivedAt: Date | null;
+}
+
+/** A barcode of the product, or of one of its variants (`variantId`). */
+export interface CatalogBarcode {
+  code: string;
+  variantId: string | null;
+  isPrimary: boolean;
 }
 
 export interface CatalogProductGroupLink {
@@ -56,6 +64,7 @@ export interface CatalogProduct extends LocalizedName, LocalizedDescription {
   modifierGroups: CatalogProductGroupLink[];
   stationIds: string[];
   taxIds: string[];
+  barcodes: CatalogBarcode[];
 }
 
 export interface CatalogTax extends LocalizedName {
@@ -108,7 +117,10 @@ export interface MenuModifierGroup extends LocalizedName {
 
 export interface MenuVariant extends LocalizedName {
   id: string;
+  sku: string | null;
   price: number;
+  /** The variant's barcodes, primary first (none without the BARCODE module). */
+  barcodes: string[];
 }
 
 export interface MenuProduct extends LocalizedName, LocalizedDescription {
@@ -122,6 +134,11 @@ export interface MenuProduct extends LocalizedName, LocalizedDescription {
   taxIds: string[];
   variants: MenuVariant[];
   modifierGroups: MenuModifierGroup[];
+  /**
+   * Barcodes of a product without variants, primary first (a product with variants is scanned
+   * by its variants' codes). None without the BARCODE module (ADR 0021).
+   */
+  barcodes: string[];
 }
 
 export interface MenuCategory extends LocalizedName, LocalizedDescription {
@@ -145,6 +162,8 @@ export interface ItemSelection {
   productId: string;
   variantId: string | null;
   modifierIds: readonly string[];
+  /** The code scanned for this line, when it was scanned. It must be one of the item's codes. */
+  barcode?: string | null;
 }
 
 export interface PricedModifier {
@@ -161,4 +180,8 @@ export interface PricedSelection {
   modifiers: PricedModifier[];
   unitPrice: number;
   stationIds: string[];
+  /** The variant's SKU, else the product's (ADR 0021). */
+  sku: string | null;
+  /** The scanned code, else the item's primary barcode. */
+  barcode: string | null;
 }

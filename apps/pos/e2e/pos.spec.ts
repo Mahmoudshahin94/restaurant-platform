@@ -195,3 +195,36 @@ test('the POS shows that it runs on the hub without the cloud', async ({ page })
     page.getByRole('status').filter({ hasText: /^Offline · \d+ pending$/ }),
   ).toBeVisible();
 });
+
+test('a barcode scan adds the item to the cart, offline at the hub', async ({ page }) => {
+  await signIn(page);
+  /** A scanner in keyboard mode: the code typed at machine speed, then Enter. */
+  const scan = async (code: string) => {
+    await page.keyboard.type(code, { delay: 0 });
+    await page.keyboard.press('Enter');
+  };
+  const cart = page.getByRole('region', { name: 'Current order' });
+
+  // The demo restaurant sells its colas by barcode (seed: BARCODE on, a code per size).
+  await scan('6291000001010');
+  await expect(page.getByTestId('scan-toast')).toHaveText('Added Cola · Regular');
+  await scan('6291000001010');
+  // Scanned again: the same line, two of them.
+  await expect(cart.getByText('Cola · Regular')).toHaveCount(1);
+  await expect(page.getByTestId('cart-total')).toHaveText(/12\.00/);
+
+  await scan('4006381333931');
+  await expect(page.getByTestId('scan-toast')).toHaveText('No item has the code 4006381333931');
+
+  // A label that will not scan: typed by hand, here by its SKU.
+  await page.getByRole('button', { name: 'Enter barcode' }).click();
+  await page.getByLabel('Barcode or SKU').fill('DR-COLA-L');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('scan-toast')).toHaveText('Added Cola · Large');
+  await expect(cart.getByText('Cola · Large')).toBeVisible();
+
+  // Seed prices: two regular colas at 6.00 and a large at 8.00.
+  await expect(page.getByTestId('cart-total')).toHaveText(/20\.00/);
+  await page.getByRole('button', { name: 'Place order' }).click();
+  await expect(page.getByText(/Order MAIN-\d+ placed/)).toBeVisible();
+});

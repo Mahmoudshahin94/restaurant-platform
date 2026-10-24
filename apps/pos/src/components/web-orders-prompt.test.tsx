@@ -58,6 +58,8 @@ function webOrder(overrides: Partial<Order> = {}): Order {
         nameAr: 'برجر',
         variantNameEn: null,
         variantNameAr: null,
+        sku: null,
+        barcode: null,
         quantity: 2,
         basePrice: 2500,
         unitPrice: 2500,

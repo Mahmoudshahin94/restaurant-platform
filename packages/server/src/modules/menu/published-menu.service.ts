@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import type { Location } from '@pos/database';
-import { DomainError, type LocationMenu, resolveLocationMenu } from '@pos/domain';
+import { DomainError, type LocationMenu, lookupCode, resolveLocationMenu } from '@pos/domain';
 import { Feature } from '@pos/shared-types';
 import type {
+  CatalogLookup,
   LocationProductSetting,
   PublishedMenu,
   setLocationProductSchema,
@@ -13,7 +14,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { FeatureService } from '../features/feature.service';
 import {
-  productInclude,
+  catalogProductInclude,
   toCatalogModifierGroup,
   toCatalogProduct,
   toLocationProductDto,
@@ -34,7 +35,8 @@ export class PublishedMenuService {
   /**
    * The location and the domain menu it sells right now. Used for the published menu and, by
    * the orders module, to validate and price orders on the server. Without the MODIFIERS module
-   * the menu has no modifier groups (ADR 0018), so orders cannot carry modifiers either.
+   * the menu has no modifier groups (ADR 0018), so orders cannot carry modifiers either; without
+   * BARCODE it has no barcodes (ADR 0021), so nothing can be scanned.
    */
   async resolve(
     locationId: string,
@@ -45,15 +47,14 @@ export class PublishedMenuService {
     });
     if (!location) throw new DomainError('LOCATION_NOT_FOUND', 'Location not found');
     const live = { tenantId: location.tenantId, archivedAt: null };
-    const modifiers = await this.features.isEnabled(Feature.MODIFIERS, {
-      tenantId: location.tenantId,
-      locationId,
-    });
+    const scope = { tenantId: location.tenantId, locationId };
+    const modifiers = await this.features.isEnabled(Feature.MODIFIERS, scope);
+    const barcodes = await this.features.isEnabled(Feature.BARCODE, scope);
 
     const [categories, products, modifierGroups, kitchenStations, taxes, settings] =
       await Promise.all([
         this.prisma.category.findMany({ where: live }),
-        this.prisma.product.findMany({ where: live, include: productInclude }),
+        this.prisma.product.findMany({ where: live, include: catalogProductInclude }),
         this.prisma.modifierGroup.findMany({ where: live, include: { modifiers: true } }),
         this.prisma.kitchenStation.findMany({ where: live }),
         this.prisma.tax.findMany({ where: live }),
@@ -69,7 +70,7 @@ export class PublishedMenuService {
         taxes,
       },
       settings,
-      { modifiers },
+      { modifiers, barcodes },
     );
     return { location, currencyCode: location.tenant.currencyCode, menu };
   }
@@ -89,6 +90,23 @@ export class PublishedMenuService {
       .digest('base64url')
       .slice(0, 32);
     return { ...body, version };
+  }
+
+  /**
+   * What a scanned or typed code names on the location's menu (ADR 0021): the same `lookupCode`
+   * the POS runs on its copy of the menu. Products that are sold out are found too.
+   */
+  async lookup(locationId: string, code: string): Promise<CatalogLookup> {
+    const { menu } = await this.resolve(locationId);
+    const match = lookupCode(menu, code);
+    if (!match) throw new DomainError('BARCODE_NOT_FOUND', 'No item has this code', { code });
+    return {
+      code: match.code,
+      matchedBy: match.matchedBy,
+      categoryId: match.categoryId,
+      product: match.product,
+      variantId: match.variant?.id ?? null,
+    };
   }
 
   async listSettings(locationId: string): Promise<LocationProductSetting[]> {

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { newId } from '@pos/domain';
 import type { ApiErrorBody, ResolvedBranding, ResolvedLocales } from '@pos/shared-types';
 import type {
+  CatalogLookup,
   HubStatus,
   KitchenTicket,
   Order,
@@ -578,6 +579,196 @@ describe('modules at the hub (ADR 0018)', () => {
       headers: owner,
     });
     expect(tickets.statusCode).toBe(200);
+  });
+});
+
+describe('barcodes offline (ADR 0021)', () => {
+  const tee = newId();
+  const size = newId();
+  const small = newId();
+  const medium = newId();
+  const teeS = newId();
+  const teeM = newId();
+
+  /** A T-shirt in two sizes (an option axis), each with its barcode, and fries by their own. */
+  function withRetailCatalog(barcodeModule: boolean) {
+    const { tenantId, category, fries } = fixture.ids;
+    fixture.tables.products.push({
+      id: tee,
+      tenantId,
+      categoryId: category,
+      sku: 'TEE',
+      nameEn: 'T-shirt',
+      nameAr: 'قميص',
+      price: 6000,
+    });
+    fixture.tables.productVariants = [
+      {
+        id: teeS,
+        productId: tee,
+        nameEn: 'S',
+        nameAr: 'ص',
+        sku: 'TEE-S',
+        price: 6000,
+        sortOrder: 0,
+      },
+      {
+        id: teeM,
+        productId: tee,
+        nameEn: 'M',
+        nameAr: 'م',
+        sku: 'TEE-M',
+        price: 6500,
+        sortOrder: 1,
+      },
+    ];
+    fixture.tables.productOptions = [
+      { id: size, productId: tee, nameEn: 'Size', nameAr: 'المقاس' },
+    ];
+    fixture.tables.productOptionValues = [
+      { id: small, optionId: size, nameEn: 'S', nameAr: 'ص', sortOrder: 0 },
+      { id: medium, optionId: size, nameEn: 'M', nameAr: 'م', sortOrder: 1 },
+    ];
+    fixture.tables.productVariantOptionValues = [
+      { variantId: teeS, optionValueId: small },
+      { variantId: teeM, optionValueId: medium },
+    ];
+    const code = (productId: string, variantId: string | null, value: string) => ({
+      id: newId(),
+      tenantId,
+      productId,
+      variantId,
+      code: value,
+      symbology: value.length === 13 ? 'EAN13' : 'CODE128',
+      isPrimary: true,
+    });
+    fixture.tables.productBarcodes = [
+      code(fries, null, '6291000000013'),
+      code(tee, teeS, '6291234000018'),
+      code(tee, teeM, '6291234000025'),
+    ];
+    fixture.tables.featureOverrides = barcodeModule
+      ? [
+          {
+            id: newId(),
+            tenantId,
+            locationId: null,
+            deviceId: null,
+            scope: 'tenant',
+            feature: 'BARCODE',
+            enabled: true,
+          },
+        ]
+      : [];
+    cloud.snapshot = withVersion(fixture.ids, fixture.tables);
+  }
+
+  const lookup = (headers: Record<string, string>, code: string) =>
+    hub.app.inject({
+      method: 'GET',
+      url: `${loc()}/catalog/lookup?code=${encodeURIComponent(code)}`,
+      headers,
+    });
+
+  it('looks codes up by product and by variant, and sells them, with the cloud unreachable', async () => {
+    withRetailCatalog(true);
+    await provision();
+    await cloud.stop();
+    expect(await hub.snapshots.syncNow()).toBe('offline');
+    const owner = await signIn('owner@hub.test');
+
+    const menu = (
+      await hub.app.inject({ method: 'GET', url: `${loc()}/menu`, headers: owner })
+    ).json<PublishedMenu>();
+    const shirt = menu.categories.flatMap((c) => c.products).find((p) => p.id === tee);
+    expect(shirt?.variants.map((v) => [v.sku, v.barcodes])).toEqual([
+      ['TEE-S', ['6291234000018']],
+      ['TEE-M', ['6291234000025']],
+    ]);
+
+    const byProduct = await lookup(owner, '6291000000013');
+    expect(byProduct.statusCode).toBe(200);
+    expect(byProduct.json<CatalogLookup>()).toMatchObject({
+      product: { id: fixture.ids.fries, price: 900 },
+      variantId: null,
+      matchedBy: 'BARCODE',
+    });
+    const byVariant = (await lookup(owner, '6291234000025')).json<CatalogLookup>();
+    expect(byVariant).toMatchObject({ product: { id: tee }, variantId: teeM });
+    expect((await lookup(owner, 'TEE-S')).json<CatalogLookup>()).toMatchObject({
+      variantId: teeS,
+      matchedBy: 'SKU',
+    });
+    const unknown = await lookup(owner, '0000000000000');
+    expect(unknown.statusCode).toBe(404);
+    expect(unknown.json<ApiErrorBody>().code).toBe('BARCODE_NOT_FOUND');
+
+    // The scanned line keeps its code and SKU, here and in what the hub sends the cloud.
+    const res = await hub.app.inject({
+      method: 'POST',
+      url: `${loc()}/orders`,
+      headers: owner,
+      payload: {
+        id: newId(),
+        channel: 'TAKEAWAY',
+        status: 'CONFIRMED',
+        items: [
+          { id: newId(), productId: tee, variantId: teeM, quantity: 1, barcode: '6291234000025' },
+          { id: newId(), productId: fixture.ids.fries, quantity: 1 },
+        ],
+      },
+    });
+    expect(res.statusCode, res.body).toBe(201);
+    const order = res.json<Order>();
+    expect(order.items.map((i) => [i.sku, i.barcode, i.unitPrice])).toEqual([
+      ['TEE-M', '6291234000025', 6500],
+      [null, '6291000000013', 900],
+    ]);
+    const pushed = (await businessOutbox()).find((o) => o.entityType === 'Order');
+    expect(JSON.stringify(pushed?.payload)).toContain('"barcode":"6291234000025"');
+    await cloud.start();
+  });
+
+  it('answers 403 without the BARCODE module and publishes no codes', async () => {
+    withRetailCatalog(false);
+    await provision();
+    const owner = await signIn('owner@hub.test');
+    const refused = await lookup(owner, '6291000000013');
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json<ApiErrorBody>()).toMatchObject({
+      code: 'FEATURE_DISABLED',
+      details: { feature: 'BARCODE' },
+    });
+    const menu = (
+      await hub.app.inject({ method: 'GET', url: `${loc()}/menu`, headers: owner })
+    ).json<PublishedMenu>();
+    expect(menu.categories.flatMap((c) => c.products).every((p) => p.barcodes.length === 0)).toBe(
+      true,
+    );
+  });
+
+  it('follows a code moved to another variant in the cloud', async () => {
+    withRetailCatalog(true);
+    await provision();
+    // The cloud deleted the code of S and gave it to M (a new row with the same code).
+    fixture.tables.productBarcodes = fixture.tables.productBarcodes
+      .filter((b) => b.variantId !== teeS && b.variantId !== teeM)
+      .concat({
+        id: newId(),
+        tenantId: fixture.ids.tenantId,
+        productId: tee,
+        variantId: teeM,
+        code: '6291234000018',
+        symbology: 'EAN13',
+        isPrimary: true,
+      });
+    cloud.snapshot = withVersion(fixture.ids, fixture.tables);
+    expect(await hub.snapshots.syncNow()).toBe('applied');
+    const owner = await signIn('owner@hub.test');
+    expect((await lookup(owner, '6291234000018')).json<CatalogLookup>()).toMatchObject({
+      variantId: teeM,
+    });
+    expect((await lookup(owner, '6291234000025')).statusCode).toBe(404);
   });
 });
 

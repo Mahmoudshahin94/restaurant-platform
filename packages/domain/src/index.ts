@@ -1,5 +1,6 @@
 export * from './auth/permissions';
 export * from './branding';
+export * from './catalog';
 export * from './config';
 export * from './features';
 export * from './errors';

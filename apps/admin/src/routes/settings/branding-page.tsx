@@ -40,6 +40,7 @@ import { useQuery } from '@tanstack/react-query';
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAdminErrorText } from '../../lib/admin-errors';
+import { ACCEPT } from '../../lib/file-types';
 import { api } from '../../lib/api';
 import { keys, useAdminMutation, useTenant, useTenantId } from '../../lib/queries';
 
@@ -47,11 +48,6 @@ type Values = Omit<UpdateBrandingRequest, 'surfaces'>;
 type Draft = Values & { surfaces: Partial<Record<BrandSurface, BrandingLayer>> };
 /** What a screen may set differently from the business on this page. */
 type SurfaceKey = 'themeMode' | 'primaryColor' | 'accentColor' | 'surfaceStyle' | 'logoFileId';
-
-const ACCEPT: Record<TenantFileKind, string> = {
-  LOGO: 'image/png,image/jpeg,image/webp',
-  FAVICON: 'image/png,image/jpeg,image/webp,image/x-icon,image/vnd.microsoft.icon,.ico',
-};
 
 function draftOf(data: TenantBrandingDto): Draft {
   return { ...data.tenant, surfaces: data.surfaces };

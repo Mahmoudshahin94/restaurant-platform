@@ -11,13 +11,16 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
+import { Feature } from '@pos/shared-types';
 import {
+  type CatalogLookup,
   type Category,
   type KitchenStation,
   type LocationProductSetting,
   type ModifierGroup,
   type Product,
   type PublishedMenu,
+  catalogLookupQuerySchema,
   createCategorySchema,
   createKitchenStationSchema,
   createModifierGroupSchema,
@@ -41,6 +44,7 @@ import { ModifierGroupsService } from './modifier-groups.service';
 import { ProductsService } from './products.service';
 import { PublishedMenuService } from './published-menu.service';
 import { ManagedInCloud } from '../../common/auth/managed-in-cloud';
+import { RequireFeature } from '../../common/auth/require-feature';
 
 const id = new ZodValidationPipe(idSchema);
 const listQuery = new ZodValidationPipe(listQuerySchema);
@@ -309,6 +313,21 @@ export class LocationMenuController {
       return undefined;
     }
     return menu;
+  }
+
+  /**
+   * What a scanned or typed code names on this location's menu (ADR 0021): a barcode, else a
+   * SKU. Served by the cloud and the hub; the POS looks codes up in its own copy of the menu.
+   */
+  @RequireFeature(Feature.BARCODE)
+  @RequirePermissions(['products.view'])
+  @Get('catalog/lookup')
+  lookup(
+    @Param('locationId', id) locationId: string,
+    @Query(new ZodValidationPipe(catalogLookupQuerySchema))
+    query: z.output<typeof catalogLookupQuerySchema>,
+  ): Promise<CatalogLookup> {
+    return this.menus.lookup(locationId, query.code);
   }
 
   @RequirePermissions(['products.view'])

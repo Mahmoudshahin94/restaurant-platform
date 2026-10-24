@@ -20,6 +20,7 @@ const burger: PublishedMenuProduct = {
   stationIds: [],
   taxIds: [],
   variants: [],
+  barcodes: [],
   modifierGroups: [
     {
       id: id(10),

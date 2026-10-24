@@ -158,7 +158,11 @@ export async function buildSnapshot() {
         price: 600,
       },
     ],
-    productVariants: [],
+    productVariants: [] as Record<string, unknown>[],
+    productOptions: [] as Record<string, unknown>[],
+    productOptionValues: [] as Record<string, unknown>[],
+    productVariantOptionValues: [] as Record<string, unknown>[],
+    productBarcodes: [] as Record<string, unknown>[],
     productModifierGroups: [{ productId: ids.burger, modifierGroupId: ids.doneness, sortOrder: 0 }],
     productStations: [
       { productId: ids.burger, kitchenStationId: ids.grill },
@@ -204,7 +208,7 @@ export function withVersion(
 ): LocationSnapshot {
   const json = JSON.parse(JSON.stringify(tables)) as LocationSnapshot['tables'];
   return {
-    format: 4,
+    format: 5,
     tenantId: ids.tenantId,
     locationId: ids.locationId,
     generatedAt: new Date().toISOString(),
