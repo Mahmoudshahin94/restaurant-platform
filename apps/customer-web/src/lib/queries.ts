@@ -1,15 +1,18 @@
 import type { PublicOrder } from '@pos/validation';
 import { useQuery } from '@tanstack/react-query';
-import { TENANT_SLUG, storefront } from './api';
+import { storefront } from './api';
 
 /** Statuses after which an order no longer changes for the customer. */
 const FINAL: ReadonlySet<PublicOrder['status']> = new Set(['COMPLETED', 'CANCELLED', 'REFUNDED']);
 
-export function useTenant() {
+/** The tenant this host serves: its names, branding, locations and website (ADR 0023). */
+export function useSite() {
   return useQuery({
-    queryKey: ['tenant', TENANT_SLUG],
-    queryFn: () => storefront.tenant(TENANT_SLUG),
+    queryKey: ['site'],
+    queryFn: () => storefront.site(),
     refetchInterval: 60_000,
+    retry: (failures, error) =>
+      failures < 2 && !(error instanceof Error && 'status' in error && error.status === 404),
   });
 }
 
@@ -22,9 +25,10 @@ export function useLocation(locationId: string) {
   });
 }
 
-export function useMenu(locationId: string) {
+export function useMenu(locationId: string, enabled = true) {
   return useQuery({
     queryKey: ['menu', locationId],
+    enabled,
     queryFn: () => storefront.menu(locationId),
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,

@@ -177,5 +177,27 @@
     "pickupAt": "Pickup at {{location}}",
     "deliverTo": "Delivery to {{address}}",
     "call": "Questions? Call {{phone}}"
+  },
+  "site": {
+    "navigation": "Site navigation",
+    "footerNavigation": "More on this site",
+    "preview": "Preview of unpublished changes. Visitors do not see this version yet.",
+    "endPreview": "Leave preview",
+    "notFound": "This website was not found.",
+    "notFoundHint": "Check the address, or ask the store for its website.",
+    "contact": {
+      "phone": "Phone",
+      "email": "E-mail",
+      "address": "Address"
+    },
+    "social": {
+      "title": "Follow us",
+      "FACEBOOK": "Facebook",
+      "INSTAGRAM": "Instagram",
+      "X": "X",
+      "TIKTOK": "TikTok",
+      "WHATSAPP": "WhatsApp",
+      "YOUTUBE": "YouTube"
+    }
   }
 }

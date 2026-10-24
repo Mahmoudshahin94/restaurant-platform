@@ -1,10 +1,11 @@
 import { resolveBranding, resolveCurrency, resolveLocales } from '@pos/domain';
 import type { Locale } from '@pos/shared-types';
-import type {
-  PublicOrder,
-  PublicTenant,
-  PublishedMenu,
-  PublishedMenuProduct,
+import {
+  type PublicOrder,
+  type PublicSite,
+  type PublishedMenu,
+  type PublishedMenuProduct,
+  defaultWebsiteConfig,
 } from '@pos/validation';
 
 export const id = (n: number) => `01890a5d-ac96-774b-bcce-b302099a80${String(n).padStart(2, '0')}`;
@@ -132,16 +133,23 @@ export function publicOrder(overrides: Partial<PublicOrder> = {}): PublicOrder {
 }
 
 /** The store: in shekels, offering `supported` with `defaultLocale` first (ADR 0020). */
-export function publicTenant(defaultLocale: Locale = 'en', supported: Locale[] = ['en', 'ar']) {
+export function publicSite(
+  defaultLocale: Locale = 'en',
+  supported: Locale[] = ['en', 'ar'],
+  overrides: Partial<PublicSite> = {},
+) {
   const names = { nameEn: 'Demo Kitchen', nameAr: 'مطبخ تجريبي' };
   return {
     id: id(80),
-    slug: 'demo-kitchen',
     ...names,
     currency: resolveCurrency('ILS'),
     locales: resolveLocales({ defaultLocale, supportedLocales: supported }),
     timezone: 'Asia/Hebron',
     locations: [],
     branding: resolveBranding({ tenantNames: names, surface: 'website' }),
-  } satisfies PublicTenant;
+    website: defaultWebsiteConfig('RESTAURANT'),
+    preview: false,
+    primaryDomain: 'demo-kitchen.localhost',
+    ...overrides,
+  } satisfies PublicSite;
 }
