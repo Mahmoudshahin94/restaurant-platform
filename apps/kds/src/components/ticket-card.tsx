@@ -14,6 +14,7 @@ import {
   Globe,
   type LucideIcon,
   MessageSquareText,
+  MonitorSmartphone,
   OctagonX,
   Pencil,
   Phone,
@@ -33,6 +34,7 @@ const CHANNEL_ICON: Record<OrderChannel, LucideIcon> = {
   DELIVERY: Bike,
   PHONE: Phone,
   WEBSITE: Globe,
+  KIOSK: MonitorSmartphone,
 };
 
 /** Each status has its own icon and words; colour only reinforces them. */

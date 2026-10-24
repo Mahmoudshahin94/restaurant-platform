@@ -1,4 +1,4 @@
-import { TenantLogo, useBrandName } from '@pos/app-kit';
+import { useBrandName, useBrandingFileUrl, useTheme } from '@pos/app-kit';
 import { useTranslation } from 'react-i18next';
 import { useFocusOnMount } from '../lib/focus';
 import { LanguageButtons } from './language-buttons';
@@ -7,11 +7,13 @@ import { LanguageButtons } from './language-buttons';
 export function WelcomeScreen({ onStart, scanning }: { onStart: () => void; scanning: boolean }) {
   const { t } = useTranslation('kiosk');
   const name = useBrandName();
+  const { branding } = useTheme();
+  const logo = useBrandingFileUrl(branding?.logoFileId ?? null);
   const heading = useFocusOnMount<HTMLHeadingElement>();
   return (
     <main className="grid min-h-full place-items-center p-8">
       <div className="grid w-full max-w-3xl justify-items-center gap-10 text-center">
-        <TenantLogo className="scale-150" />
+        {logo ? <img src={logo} alt="" className="h-28 w-auto max-w-md object-contain" /> : null}
         <h1 ref={heading} tabIndex={-1} className="text-5xl font-bold outline-none">
           {name}
         </h1>
