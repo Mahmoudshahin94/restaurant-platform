@@ -195,25 +195,33 @@ enum ActionSource {
 /// The root business entity (ADR 0017): a restaurant, café, supermarket, shop... Every business
 /// row belongs to exactly one tenant.
 model Tenant {
-  id               String       @id @default(uuid(7)) @db.Uuid
-  slug             String       @unique
-  nameEn           String       @map("name_en")
-  nameAr           String       @map("name_ar")
+  id                   String       @id @default(uuid(7)) @db.Uuid
+  slug                 String       @unique
+  nameEn               String       @map("name_en")
+  nameAr               String       @map("name_ar")
   /// Registered company name for invoices and contracts, when it differs from the display name.
-  legalName        String?      @map("legal_name")
+  legalName            String?      @map("legal_name")
   /// @pos/shared-types BusinessType, stored as text so new types need no migration. It only picks
   /// default configuration; code asks for capabilities, never for the type.
-  businessType     String       @default("RESTAURANT") @map("business_type")
-  status           TenantStatus @default(ACTIVE)
+  businessType         String       @default("RESTAURANT") @map("business_type")
+  status               TenantStatus @default(ACTIVE)
   /// ISO 4217. Immutable after provisioning: all amounts are stored in its minor units.
-  currencyCode     String       @map("currency_code") @db.Char(3)
-  defaultLocale    Locale       @default(en) @map("default_locale")
+  currencyCode         String       @default("ILS") @map("currency_code") @db.Char(3)
+  /// Currency display (ADR 0020); null inherits MADAR's. Written instead of Intl's symbol.
+  currencySymbol       String?      @map("currency_symbol")
+  /// @pos/shared-types CurrencyDisplay: narrowSymbol, symbol or code.
+  currencyDisplay      String?      @map("currency_display")
+  /// @pos/shared-types FORMAT_LOCALES: amounts use it on every screen instead of the UI language.
+  currencyFormatLocale String?      @map("currency_format_locale")
+  defaultLocale        Locale       @default(en) @map("default_locale")
   /// Locales the tenant offers (JSON array of Locale, includes `defaultLocale`).
-  supportedLocales Json         @default("[\"en\",\"ar\"]") @map("supported_locales")
+  supportedLocales     Json         @default("[\"en\",\"ar\"]") @map("supported_locales")
+  /// @pos/shared-types DigitStyle for Arabic (latn, arab); null inherits MADAR's Latin digits.
+  digits               String?
   /// IANA timezone used for tenant-level reporting.
-  timezone         String
-  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  timezone             String
+  createdAt            DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   locations        Location[]
   users            User[]

@@ -22,4 +22,9 @@ execSync('pnpm exec prisma db execute --stdin --schema prisma/schema.prisma', {
           order_taxes, order_discounts, order_status_history, orders, order_counters,
           processed_operations, change_log CASCADE;`,
 });
-execSync('pnpm seed', { cwd, stdio: 'inherit' });
+execSync('pnpm seed', {
+  cwd,
+  stdio: 'inherit',
+  // A disposable database: demo tenants follow the seed files even if seeded before they changed.
+  env: { ...process.env, SEED_ALIGN_TENANTS: '1' },
+});
