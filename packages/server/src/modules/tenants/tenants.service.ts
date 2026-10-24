@@ -1,13 +1,28 @@
 import { Injectable } from '@nestjs/common';
 import type { Tenant as TenantRow } from '@pos/database';
-import { DomainError, currencyExponent } from '@pos/domain';
-import type { BrandSurface, BusinessType, Locale } from '@pos/shared-types';
+import { DomainError, resolveCurrency, resolveLocales } from '@pos/domain';
+import type {
+  BrandSurface,
+  BusinessType,
+  CurrencyDisplay,
+  DigitStyle,
+  FormatLocale,
+  Locale,
+  ResolvedCurrency,
+  ResolvedLocales,
+} from '@pos/shared-types';
 import {
   type Tenant,
   type TenantContextDto,
+  type TenantLocalizationDto,
   type UpdateTenantRequest,
+  currencyDisplaySchema,
+  digitStyleSchema,
+  formatLocaleSchema,
   supportedLocalesSchema,
+  type updateLocalizationSchema,
 } from '@pos/validation';
+import type { z } from 'zod';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { BrandingService } from '../branding/branding.service';
@@ -67,8 +82,8 @@ export class TenantsService {
         timezone: row.timezone,
       },
       branding: await this.branding.resolve(tenantId, surface),
-      currency: { code: row.currencyCode, exponent: currencyExponent(row.currencyCode) },
-      locales: { default: row.defaultLocale, supported: supportedLocalesOf(row) },
+      currency: currencyOf(row),
+      locales: localesOf(row),
       locationId,
       features: await this.features.resolve({ tenantId, locationId }),
     };
@@ -84,12 +99,6 @@ export class TenantsService {
     return this.prisma.$transaction(async (tx) => {
       const before = await tx.tenant.findUnique({ where: { id: tenantId } });
       if (!before) throw new DomainError('TENANT_NOT_FOUND', 'Tenant not found');
-      const defaultLocale = changes.defaultLocale ?? before.defaultLocale;
-      if (!(changes.supportedLocales ?? supportedLocalesOf(before)).includes(defaultLocale)) {
-        throw new DomainError('VALIDATION_FAILED', 'The default locale must be supported', {
-          issues: [{ path: ['supportedLocales'], message: 'The default locale must be supported' }],
-        });
-      }
       const after = await tx.tenant.update({ where: { id: tenantId }, data: changes });
       await this.audit.record(
         {
@@ -104,6 +113,40 @@ export class TenantsService {
       return toTenantDto(after);
     });
   }
+
+  /** The admin's Language and currency page (ADR 0020). */
+  async localization(tenantId: string): Promise<TenantLocalizationDto> {
+    const row = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!row) throw new DomainError('TENANT_NOT_FOUND', 'Tenant not found');
+    return toLocalizationDto(row);
+  }
+
+  /**
+   * Replaces the tenant's languages and currency display. The currency itself never changes
+   * here (ADR 0002). Audited with the values before and after; reaches every hub through the
+   * tenant row's change feed.
+   */
+  async updateLocalization(
+    tenantId: string,
+    changes: z.output<typeof updateLocalizationSchema>,
+  ): Promise<TenantLocalizationDto> {
+    return this.prisma.$transaction(async (tx) => {
+      const before = await tx.tenant.findUnique({ where: { id: tenantId } });
+      if (!before) throw new DomainError('TENANT_NOT_FOUND', 'Tenant not found');
+      const after = await tx.tenant.update({ where: { id: tenantId }, data: changes });
+      await this.audit.record(
+        {
+          action: 'localization.updated',
+          entityType: 'Tenant',
+          entityId: tenantId,
+          tenantId,
+          metadata: { changes, before: toLocalizationDto(before).settings },
+        },
+        tx,
+      );
+      return toLocalizationDto(after);
+    });
+  }
 }
 
 /** The stored JSON, falling back to the default locale alone if it was ever written badly. */
@@ -112,6 +155,53 @@ export function supportedLocalesOf(
 ): Locale[] {
   const parsed = supportedLocalesSchema.safeParse(row.supportedLocales);
   return parsed.success ? parsed.data : [row.defaultLocale];
+}
+
+/** A stored text column checked against its list: anything else inherits (null). */
+function stored<T>(schema: z.ZodType<T>, value: string | null): T | null {
+  const parsed = schema.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+
+/** How the tenant shows amounts (ADR 0020): MADAR's defaults, then the tenant's columns. */
+export function currencyOf(
+  row: Pick<
+    TenantRow,
+    'currencyCode' | 'currencySymbol' | 'currencyDisplay' | 'currencyFormatLocale'
+  >,
+): ResolvedCurrency {
+  return resolveCurrency(row.currencyCode, {
+    symbol: row.currencySymbol,
+    display: stored<CurrencyDisplay>(currencyDisplaySchema, row.currencyDisplay),
+    formatLocale: stored<FormatLocale>(formatLocaleSchema, row.currencyFormatLocale),
+  });
+}
+
+/** The languages the tenant offers and its digit style (ADR 0020). */
+export function localesOf(
+  row: Pick<TenantRow, 'defaultLocale' | 'supportedLocales' | 'digits'>,
+): ResolvedLocales {
+  return resolveLocales({
+    defaultLocale: row.defaultLocale,
+    supportedLocales: supportedLocalesOf(row),
+    digits: stored<DigitStyle>(digitStyleSchema, row.digits),
+  });
+}
+
+function toLocalizationDto(row: TenantRow): TenantLocalizationDto {
+  return {
+    settings: {
+      defaultLocale: row.defaultLocale,
+      supportedLocales: supportedLocalesOf(row),
+      digits: stored<DigitStyle>(digitStyleSchema, row.digits),
+      currencySymbol: row.currencySymbol,
+      currencyDisplay: stored<CurrencyDisplay>(currencyDisplaySchema, row.currencyDisplay),
+      currencyFormatLocale: stored<FormatLocale>(formatLocaleSchema, row.currencyFormatLocale),
+    },
+    currency: currencyOf(row),
+    locales: localesOf(row),
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
 
 function pick(row: object, keys: string[]): Record<string, unknown> {

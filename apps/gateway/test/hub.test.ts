@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { newId } from '@pos/domain';
-import type { ApiErrorBody, ResolvedBranding } from '@pos/shared-types';
+import type { ApiErrorBody, ResolvedBranding, ResolvedLocales } from '@pos/shared-types';
 import type {
   HubStatus,
   KitchenTicket,
@@ -675,6 +675,76 @@ describe('branding offline (ADR 0019)', () => {
 
   it('has no branding to show before its first snapshot', async () => {
     const res = await hub.app.inject({ method: 'GET', url: `${api}/hub/branding` });
+    expect(res.statusCode).toBe(503);
+  });
+});
+
+describe('currency and languages offline (ADR 0020)', () => {
+  /** The tenant row of the snapshot carries its currency display and languages. */
+  function withLocalization() {
+    Object.assign(fixture.tables.tenants[0]!, {
+      currencyCode: 'JOD',
+      currencySymbol: 'JD',
+      currencyDisplay: 'symbol',
+      currencyFormatLocale: 'ar-JO',
+      defaultLocale: 'ar',
+      supportedLocales: ['ar'],
+      digits: 'arab',
+    });
+    cloud.snapshot = withVersion(fixture.ids, fixture.tables);
+  }
+
+  it("serves the tenant's currency display and languages from its snapshot, without the cloud", async () => {
+    withLocalization();
+    await provision();
+    await cloud.stop();
+    expect(await hub.snapshots.syncNow()).toBe('offline');
+    const owner = await signIn('owner@hub.test');
+    const context = (
+      await hub.app.inject({
+        method: 'GET',
+        url: `${api}/tenants/${fixture.ids.tenantId}/context?surface=pos`,
+        headers: owner,
+      })
+    ).json<TenantContextDto>();
+    expect(context.currency).toEqual({
+      code: 'JOD',
+      decimalPlaces: 3,
+      symbol: 'JD',
+      display: 'symbol',
+      formatLocale: 'ar-JO',
+      sources: { symbol: 'TENANT', display: 'TENANT', formatLocale: 'TENANT' },
+    });
+    expect(context.locales).toEqual({
+      default: 'ar',
+      supported: ['ar'],
+      digits: 'arab',
+      sources: { digits: 'TENANT' },
+    });
+
+    // The sign-in screens, before anybody signs in: one language, so no switcher.
+    const locales = await hub.app.inject({ method: 'GET', url: `${api}/hub/locales` });
+    expect(locales.statusCode).toBe(200);
+    expect(locales.json<ResolvedLocales>()).toMatchObject({ default: 'ar', supported: ['ar'] });
+    await cloud.start();
+  });
+
+  it('follows the cloud when the tenant changes its languages', async () => {
+    await provision();
+    const before = await hub.app.inject({ method: 'GET', url: `${api}/hub/locales` });
+    expect(before.json<ResolvedLocales>()).toMatchObject({
+      default: 'en',
+      supported: ['en', 'ar'],
+      digits: 'latn',
+    });
+    withLocalization();
+    expect(await hub.snapshots.syncNow()).toBe('applied');
+    const after = await hub.app.inject({ method: 'GET', url: `${api}/hub/locales` });
+    expect(after.json<ResolvedLocales>()).toMatchObject({ supported: ['ar'], digits: 'arab' });
+  });
+
+  it('has no languages to show before its first snapshot', async () => {
+    const res = await hub.app.inject({ method: 'GET', url: `${api}/hub/locales` });
     expect(res.statusCode).toBe(503);
   });
 });

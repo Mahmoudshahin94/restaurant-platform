@@ -36,6 +36,7 @@ export { PaymentsModule } from './modules/payments/payments.module';
 export { PricingConfigModule } from './modules/pricing-config/pricing-config.module';
 export { ReportsModule } from './modules/reports/reports.module';
 export { TenantsModule } from './modules/tenants/tenants.module';
+export { currencyOf, localesOf } from './modules/tenants/tenants.service';
 export { ShiftsModule } from './modules/shifts/shifts.module';
 export { OnlineOrderingModule } from './modules/online-ordering/online-ordering.module';
 export { OnlinePaymentsService } from './modules/online-ordering/online-payments.service';

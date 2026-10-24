@@ -14,6 +14,7 @@ import { AuditService } from '../audit/audit.service';
 import { BrandingService } from '../branding/branding.service';
 import { TenantFilesService } from '../files/tenant-files.service';
 import { PublishedMenuService } from '../menu/published-menu.service';
+import { currencyOf, localesOf } from '../tenants/tenants.service';
 import { OnlinePaymentsService } from './online-payments.service';
 import { OnlineStatusService } from './online-status.service';
 import { toPublicLocation } from './web-order.mappers';
@@ -48,8 +49,8 @@ export class StorefrontService {
       slug: tenant.slug,
       nameEn: tenant.nameEn,
       nameAr: tenant.nameAr,
-      currencyCode: tenant.currencyCode,
-      defaultLocale: tenant.defaultLocale,
+      currency: currencyOf(tenant),
+      locales: localesOf(tenant),
       timezone: tenant.timezone,
       locations,
       branding: await this.branding.resolve(tenant.id, 'website'),
