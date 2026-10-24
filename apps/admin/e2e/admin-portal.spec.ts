@@ -437,9 +437,32 @@ test('the owner offers one language and writes the currency their way', async ({
   const reset = () =>
     request.put(`${API}/tenants/${tenantId}/localization`, { headers, data: defaults });
   expect((await reset()).ok()).toBe(true);
+  // Later tests need both languages back, whatever happens here.
+  try {
+    await offerArabicOnly(page);
+  } finally {
+    expect((await reset()).ok()).toBe(true);
+  }
+  // Context and currency through the API, and both languages again.
+  const context = (await (
+    await request.get(`${API}/tenants/${tenantId}/context`, { headers })
+  ).json()) as { currency: { code: string; symbol: string }; locales: { supported: string[] } };
+  expect(context.currency).toMatchObject({ code: 'ILS', symbol: '₪' });
+  expect(context.locales.supported).toEqual(['en', 'ar']);
+  const refused = await request.put(`${API}/tenants/${tenantId}/localization`, {
+    headers,
+    data: { ...defaults, currencyCode: 'USD' },
+  });
+  expect(refused.status()).toBe(400);
+  await page.reload();
+  await expect(page.getByRole('combobox', { name: /^(Language|اللغة)$/ })).toBeVisible();
+});
+
+/** Scenario 22 in the admin: Arabic only, in Arabic-Indic digits; the screens follow at once. */
+async function offerArabicOnly(page: Page): Promise<void> {
   await signIn(page);
   // The demo restaurant is in shekels: ₪ by default, two decimals, both languages offered.
-  await expect(page.getByRole('combobox', { name: 'Language' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Language', exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'Language and currency' }).click();
   await expect(page.getByRole('heading', { name: 'Language and currency' })).toBeVisible();
   await expect(page.getByLabel('Currency', { exact: true })).toHaveValue('ILS');
@@ -455,24 +478,10 @@ test('the owner offers one language and writes the currency their way', async ({
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
   await expect(page.getByRole('heading', { name: 'اللغة والعملة' })).toBeVisible();
-  await expect(page.getByRole('combobox', { name: 'اللغة' })).toHaveCount(0);
+  await expect(page.getByRole('combobox', { name: 'اللغة', exact: true })).toHaveCount(0);
   await expect(page.getByTestId('preview-ar')).toContainText('١٬٢٣٤٫٥٦');
   await expect(page.getByTestId('preview-ar')).toContainText('₪');
-
-  // Every screen reads it from the context; the currency itself cannot be changed.
-  const context = (await (
-    await request.get(`${API}/tenants/${tenantId}/context`, { headers })
-  ).json()) as { currency: { code: string; symbol: string }; locales: { supported: string[] } };
-  expect(context.currency).toMatchObject({ code: 'ILS', symbol: '₪' });
-  expect(context.locales.supported).toEqual(['ar']);
-  const refused = await request.put(`${API}/tenants/${tenantId}/localization`, {
-    headers,
-    data: { ...defaults, currencyCode: 'USD' },
-  });
-  expect(refused.status()).toBe(400);
-
-  // Two languages again: the switcher returns.
-  expect((await reset()).ok()).toBe(true);
-  await page.reload();
-  await expect(page.getByRole('combobox', { name: /Language|اللغة/ })).toBeVisible();
-});
+  // Amounts elsewhere follow too: the dashboard's sales in Arabic-Indic digits and ₪.
+  await page.getByRole('link', { name: 'لوحة التحكم' }).click();
+  await expect(page.getByText(/^\u200f?[٠-٩٬]+٫[٠-٩]{2}\s₪$/).first()).toBeVisible();
+}
