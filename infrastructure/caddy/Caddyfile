@@ -1,0 +1,55 @@
+# Example reverse proxy for tenant websites (docs/adr/0023). Not used in development.
+#
+# Every tenant website, on MADAR's address (<slug>.madar.app) or on a domain the tenant verified,
+# is served here: the website's static build and its /api on the same origin, so browsers make no
+# cross-origin calls and no per-domain CORS is configured.
+#
+# Certificates are issued on demand, the first time a name is visited, and only for names the API
+# says are verified (`ask`). A name nobody verified gets no certificate and no site.
+#
+# Run the API with TRUST_PROXY=1 (this proxy is the one trusted hop), PLATFORM_WEB_DOMAIN=madar.app,
+# WEBSITE_URL=https://{domain} and DOMAIN_VERIFIER=dns.
+
+{
+	email ops@madar.app
+	on_demand_tls {
+		# 200 only for a VERIFIED domain (MADAR's sub-domains included); anything else is refused.
+		ask http://api:3000/internal/domains/check
+	}
+}
+
+# The admin and the other staff apps have their own fixed origins (CORS_ORIGINS on the API).
+admin.madar.app {
+	root * /srv/admin
+	try_files {path} /index.html
+	file_server
+}
+
+# Every tenant website: any host name, TLS on demand.
+https:// {
+	tls {
+		on_demand
+	}
+
+	# Internal endpoints never leave the private network.
+	respond /internal/* 404
+
+	# The API, same origin as the site. Caddy passes the original Host on and sets
+	# X-Forwarded-Host/-For/-Proto; the API resolves the tenant from the host name.
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	# The customer website build (apps/customer-web/dist): one build for every tenant.
+	handle {
+		root * /srv/customer-web
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Content-Type-Options "nosniff"
+	}
+}
