@@ -131,8 +131,8 @@ export function AttendantMenu({
         <dd>
           {t('kiosk:attendant.location', { name: pickLocalized(kiosk.location, 'name', locale) })}
         </dd>
-        <dd dir="ltr" className="text-start">
-          {t('kiosk:attendant.version', { version })}
+        <dd>
+          {t('kiosk:attendant.version')} <bdi dir="ltr">{version}</bdi>
         </dd>
       </dl>
       {confirming ? (

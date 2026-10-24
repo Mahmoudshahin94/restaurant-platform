@@ -123,6 +123,6 @@
     "unpairBody": "It forgets its credential and needs a new pairing code from the admin portal.",
     "device": "Device: {{name}}",
     "location": "Location: {{name}}",
-    "version": "Version {{version}}"
+    "version": "Version"
   }
 }
