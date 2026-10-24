@@ -196,7 +196,7 @@ function LocalizationForm({
             {draft.supportedLocales.length === 1 ? (
               <Alert>{t('admin:localization.singleLocale')}</Alert>
             ) : null}
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid items-start gap-4 xl:grid-cols-2">
               <Field
                 label={t('admin:localization.defaultLocale')}
                 hint={t('admin:localization.defaultLocaleHint')}
@@ -241,7 +241,7 @@ function LocalizationForm({
             <CardTitle>{t('admin:localization.currency')}</CardTitle>
             <CardDescription>{t('admin:localization.currencyHint')}</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
+          <CardContent className="grid items-start gap-4 xl:grid-cols-2">
             <Field label={t('admin:localization.currencyCode')}>
               <Input dir="ltr" value={code} readOnly />
             </Field>
@@ -298,7 +298,7 @@ function LocalizationForm({
               </NativeSelect>
             </Field>
             <Field
-              className="sm:col-span-2"
+              className="xl:col-span-2"
               label={t('admin:localization.formatLocale')}
               hint={t('admin:localization.formatLocaleHint')}
             >
