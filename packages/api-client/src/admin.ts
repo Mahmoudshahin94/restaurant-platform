@@ -40,6 +40,7 @@ import {
   locationSyncStatusSchema,
   orderSummaryPageSchema,
   pairedDeviceSchema,
+  pairingCodeSchema,
   paymentListItemSchema,
   paymentMethodAdminSchema,
   paymentPageSchema,
@@ -234,8 +235,13 @@ export function adminApi(http: HttpClient) {
     devices: {
       list: (lid: string) =>
         http.request('GET', `${location(lid)}/devices`, { schema: z.array(adminDeviceSchema) }),
+      /** A hub's credential, or a terminal's one-time pairing code (ADR 0022); shown once. */
       pair: (lid: string, body: PairDeviceRequest) =>
         http.request('POST', `${location(lid)}/devices`, { body, schema: pairedDeviceSchema }),
+      renewPairingCode: (lid: string, deviceId: string) =>
+        http.request('POST', `${location(lid)}/devices/${deviceId}/pairing-code`, {
+          schema: pairingCodeSchema,
+        }),
       disable: (lid: string, deviceId: string) =>
         http.request('POST', `${location(lid)}/devices/${deviceId}/disable`, {
           schema: deviceSchema,

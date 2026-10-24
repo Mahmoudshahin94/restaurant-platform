@@ -1,6 +1,7 @@
 import arCustomer from './locales/ar/customer.json';
 import arFloor from './locales/ar/floor.json';
 import arKds from './locales/ar/kds.json';
+import arKiosk from './locales/ar/kiosk.json';
 import arOrders from './locales/ar/orders.json';
 import arPos from './locales/ar/pos.json';
 import arPayments from './locales/ar/payments.json';
@@ -14,6 +15,7 @@ import arMenu from './locales/ar/menu.json';
 import enCustomer from './locales/en/customer.json';
 import enFloor from './locales/en/floor.json';
 import enKds from './locales/en/kds.json';
+import enKiosk from './locales/en/kiosk.json';
 import enOrders from './locales/en/orders.json';
 import enPos from './locales/en/pos.json';
 import enPayments from './locales/en/payments.json';
@@ -61,6 +63,7 @@ export const resources = {
     payments: enPayments,
     receipt: enReceipt,
     kds: enKds,
+    kiosk: enKiosk,
     customer: enCustomer,
   },
   ar: {
@@ -76,6 +79,7 @@ export const resources = {
     payments: arPayments,
     receipt: arReceipt,
     kds: arKds,
+    kiosk: arKiosk,
     customer: arCustomer,
   },
 } as const;

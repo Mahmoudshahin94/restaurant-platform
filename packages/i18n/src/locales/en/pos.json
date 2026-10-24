@@ -175,5 +175,12 @@
     "otherNote": "Describe the reason (for staff; the customer sees a general message)",
     "confirmReject": "Reject order",
     "noCancelPermission": "Rejecting needs the orders.cancel permission (a manager)."
+  },
+  "kiosk": {
+    "banner_one": "{{count}} kiosk order to collect at the counter",
+    "banner_other": "{{count}} kiosk orders to collect at the counter",
+    "collect": "Collect",
+    "listLabel": "Kiosk orders to collect",
+    "noName": "No name"
   }
 }
