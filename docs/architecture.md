@@ -842,6 +842,22 @@ See [ADR 0020](adr/0020-currency-and-localization.md) and
   `GET`/`PUT /tenants/:tid/localization` (strict: the currency and decimal places are refused,
   audited as `localization.updated`). The Business page keeps names, legal name and time zone.
 
+**Phase M4 verification (2026-10-24):** `pnpm build`, `typecheck`, `lint` and `test` green (805
+unit, integration and component tests: API 267, domain 204, gateway 66, app-kit 44, i18n 44, admin
+38, validation 29, database 24, server 23, POS 20, customer-web 16, api-client 11, KDS 9, receipts
+8, ui 2), `pnpm test:tools` (13), the hub schema check, a clean `migrate status`, `format:check`,
+and all 34 Playwright E2E tests (admin 11, POS 15, KDS 4, customer-web 4) in one `pnpm e2e` run,
+including the new scenario 22. Earlier runs caught a stale expectation (amounts in SAR), two POS
+init scripts writing a preferences version the store discards (so the Arabic-preferring cashier
+now, correctly, got Arabic), and a timing flake in the Branding page's saved notice (TanStack Query
+drops `mutate` callbacks when the form remounts on refetch), fixed in both settings pages. A manual
+browser check against a freshly seeded database and a newly paired hub covered: the admin
+dashboard and the new page showing ₪ in English and Arabic; switching the business to Arabic only
+with Arabic-Indic digits, after which the admin turned RTL at once and lost its language switcher,
+as did the POS sign-in screen (from `GET /hub/locales`), the POS itself (₪ prices in ٠–٩) and the
+website; and back to two languages, where the website started in the default (English, ₪28.00),
+the POS signed the Arabic-preferring cashier in in Arabic, and a choice in the switcher held.
+
 ## Architectural decisions and open questions
 
 Recorded as ADRs in [adr/](adr/):
