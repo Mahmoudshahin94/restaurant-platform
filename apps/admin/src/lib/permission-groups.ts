@@ -9,7 +9,15 @@ export const PERMISSION_GROUPS = [
   { key: 'people', prefixes: ['customers.', 'reports.', 'users.', 'roles.'] },
   {
     key: 'settings',
-    prefixes: ['locations.', 'settings.', 'online_ordering.', 'website.', 'devices.', 'sync.', 'audit.'],
+    prefixes: [
+      'locations.',
+      'settings.',
+      'online_ordering.',
+      'website.',
+      'devices.',
+      'sync.',
+      'audit.',
+    ],
   },
 ] as const;
 

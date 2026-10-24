@@ -37,6 +37,8 @@ import { AuditLogPage } from './routes/system/audit-log-page';
 import { DevicesPage } from './routes/system/devices-page';
 import { SyncIssuePage, SyncPage } from './routes/system/sync-page';
 import { NotFoundPage } from './routes/not-found-page';
+import { DomainsPage } from './routes/website/domains-page';
+import { WebsiteEditorPage } from './routes/website/website-editor-page';
 import { ReportsIndex, ReportsPage } from './routes/reports/reports-page';
 
 /** A page behind a permission (checked again by the API). */
@@ -126,7 +128,12 @@ export function AppRoutes() {
           {guarded('settings/locations', 'locations.view', <LocationsPage />)}
           {moduleGuarded(
             [Feature.ONLINE_ORDERING],
-            guarded('settings/online-ordering', 'locations.view', <OnlineOrderingPage />),
+            <>
+              {guarded('settings/online-ordering', 'locations.view', <OnlineOrderingPage />)}
+              {/* The tenant's website and its domains (ADR 0023). */}
+              {guarded('website/editor', 'website.manage', <WebsiteEditorPage />, true)}
+              {guarded('website/domains', 'website.manage', <DomainsPage />, true)}
+            </>,
           )}
           {guarded('settings/taxes', 'products.view', <TaxesPage />)}
           {guarded('settings/discounts', 'settings.manage', <DiscountsPage />)}

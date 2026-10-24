@@ -552,8 +552,11 @@ function ColourField({
   );
 }
 
-/** A logo or favicon: its preview, upload (checked here and by the API) and removal. */
-function FilePicker({
+/**
+ * A logo, favicon or website picture: its preview, upload (checked here and by the API) and
+ * removal.
+ */
+export function FilePicker({
   kind,
   label,
   hint,
