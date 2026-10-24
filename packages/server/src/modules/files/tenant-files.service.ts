@@ -19,6 +19,7 @@ const ACCEPTED: Record<TenantFileKind, readonly BrandingImageType[]> = {
   LOGO: ['image/png', 'image/jpeg', 'image/webp'],
   FAVICON: BRANDING_IMAGE_TYPES,
   PRODUCT_IMAGE: ['image/png', 'image/jpeg', 'image/webp'],
+  WEBSITE_IMAGE: ['image/png', 'image/jpeg', 'image/webp'],
 };
 
 export function toTenantFileDto(row: TenantFileRow): TenantFileDto {

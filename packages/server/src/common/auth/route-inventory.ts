@@ -4,6 +4,7 @@ import { ModulesContainer, Reflector } from '@nestjs/core';
 import type { Feature, Permission, TerminalDeviceType } from '@pos/shared-types';
 import { IS_PUBLIC_KEY, PERMISSIONS_KEY, type PermissionRequirement } from './decorators';
 import { DEVICE_ROUTE_KEY } from './device-route';
+import { HOST_ROUTE_KEY } from './host-route';
 import { requiredFeaturesOf } from './require-feature';
 
 /**
@@ -12,10 +13,12 @@ import { requiredFeaturesOf } from './require-feature';
  * - `guarded`: `@Public()` for staff but behind its own guard (the hubs' device credential);
  * - `permissions`: a staff access token and `@RequirePermissions`;
  * - `device`: a terminal's device credential and `@DeviceRoute` (a kiosk at its hub, ADR 0022);
+ * - `host`: the tenant website, `@HostRoute`: no credential, the tenant is the one whose verified
+ *   domain the request's host names (`HostTenantGuard`, ADR 0023);
  * - `unprotected`: none of these — refused at runtime by the permissions guard, and at start-up by
  *   `assertEveryRouteProtected`.
  */
-export type RouteAccess = 'public' | 'guarded' | 'permissions' | 'device' | 'unprotected';
+export type RouteAccess = 'public' | 'guarded' | 'permissions' | 'device' | 'host' | 'unprotected';
 
 export interface RouteEntry {
   method: string;
@@ -73,16 +76,21 @@ export function listRoutes(app: INestApplication): RouteEntry[] {
           Reflect.getMetadata(PERMISSIONS_KEY, controller)) as PermissionRequirement | undefined;
         const devices = (Reflect.getMetadata(DEVICE_ROUTE_KEY, handler) ??
           Reflect.getMetadata(DEVICE_ROUTE_KEY, controller)) as TerminalDeviceType[] | undefined;
+        const isHost =
+          (Reflect.getMetadata(HOST_ROUTE_KEY, handler) ??
+            Reflect.getMetadata(HOST_ROUTE_KEY, controller)) === true;
         const guards = guardNames(controller, handler);
-        const access: RouteAccess = isPublic
-          ? guards.length > 0
-            ? 'guarded'
-            : 'public'
-          : devices
-            ? 'device'
-            : requirement
-              ? 'permissions'
-              : 'unprotected';
+        const access: RouteAccess = isHost
+          ? 'host'
+          : isPublic
+            ? guards.length > 0
+              ? 'guarded'
+              : 'public'
+            : devices
+              ? 'device'
+              : requirement
+                ? 'permissions'
+                : 'unprotected';
         routes.push({
           method: RequestMethod[method],
           path: joinPath(base, firstPath(Reflect.getMetadata(PATH_METADATA, handler))),
@@ -101,12 +109,26 @@ export function listRoutes(app: INestApplication): RouteEntry[] {
 
 /**
  * Refuses to start a server with a route that is neither public nor declares its permissions (or
- * the devices it serves), and with a route that declares both a staff and a device audience.
+ * the devices it serves, or its website), and with a route that declares two audiences.
  * The permissions guard already denies such a route at runtime; failing at start-up makes the
  * mistake impossible to ship (ADR 0016).
  */
 export function assertEveryRouteProtected(app: INestApplication): void {
   const routes = listRoutes(app);
+  const hostMixed = routes.filter(
+    (r) => r.access === 'host' && (r.permissions.length > 0 || r.devices.length > 0),
+  );
+  if (hostMixed.length > 0) {
+    const list = hostMixed.map((r) => `${r.method} ${r.path} (${r.handler})`).join(', ');
+    throw new Error(`Website routes cannot also require staff permissions or devices: ${list}`);
+  }
+  const hostless = routes.filter(
+    (r) => r.access === 'host' && !r.guards.includes('HostTenantGuard'),
+  );
+  if (hostless.length > 0) {
+    const list = hostless.map((r) => `${r.method} ${r.path} (${r.handler})`).join(', ');
+    throw new Error(`Website routes must resolve their tenant with HostTenantGuard: ${list}`);
+  }
   const mixed = routes.filter((r) => r.access === 'device' && r.permissions.length > 0);
   if (mixed.length > 0) {
     const list = mixed.map((r) => `${r.method} ${r.path} (${r.handler})`).join(', ');
@@ -115,6 +137,8 @@ export function assertEveryRouteProtected(app: INestApplication): void {
   const unprotected = routes.filter((route) => route.access === 'unprotected');
   if (unprotected.length > 0) {
     const list = unprotected.map((r) => `${r.method} ${r.path} (${r.handler})`).join(', ');
-    throw new Error(`Routes without @Public(), @RequirePermissions or @DeviceRoute: ${list}`);
+    throw new Error(
+      `Routes without @Public(), @RequirePermissions, @DeviceRoute or @HostRoute: ${list}`,
+    );
   }
 }

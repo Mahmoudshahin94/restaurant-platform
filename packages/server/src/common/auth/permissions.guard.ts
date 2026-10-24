@@ -13,6 +13,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContext } from '../tenancy/tenant-context';
 import { IS_PUBLIC_KEY, PERMISSIONS_KEY, type PermissionRequirement } from './decorators';
 import { type AuthenticatedTerminal, DEVICE_ROUTE_KEY } from './device-route';
+import { HOST_ROUTE_KEY } from './host-route';
 import type { Principal, RequestScope } from './principal';
 
 type Params = Record<string, string | undefined>;
@@ -36,6 +37,8 @@ export class PermissionsGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const targets = [context.getHandler(), context.getClass()];
     if (this.reflector.getAllAndOverride<boolean | undefined>(IS_PUBLIC_KEY, targets)) return true;
+    // Website routes are scoped by HostTenantGuard, which runs after the global guards.
+    if (this.reflector.getAllAndOverride<boolean | undefined>(HOST_ROUTE_KEY, targets)) return true;
 
     const request = context.switchToHttp().getRequest<FastifyRequest>();
     if (this.reflector.getAllAndOverride<unknown>(DEVICE_ROUTE_KEY, targets)) {

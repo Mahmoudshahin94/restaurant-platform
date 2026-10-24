@@ -33,6 +33,8 @@ export async function resetDatabase(prisma: PrismaClient): Promise<void> {
 
 export interface TenantFixture {
   tenantId: string;
+  /** The tenant's website address (`<slug>.localhost`, verified and primary, ADR 0023). */
+  host: string;
   locationA: string;
   locationB: string;
   owner: { id: string; email: string };
@@ -64,6 +66,18 @@ export async function createTenant(
       nameAr: 'مطعم تجريبي',
       currencyCode: 'SAR',
       timezone: 'Asia/Riyadh',
+    },
+  });
+  const host = `${tenant.slug}.localhost`;
+  await prisma.tenantDomain.create({
+    data: {
+      tenantId: tenant.id,
+      domain: host,
+      kind: 'SUBDOMAIN',
+      status: 'VERIFIED',
+      isPrimary: true,
+      verifiedAt: new Date(),
+      verificationToken: `token-${suffix}`,
     },
   });
   const [locationA, locationB] = await Promise.all(
@@ -116,6 +130,7 @@ export async function createTenant(
   });
   return {
     tenantId: tenant.id,
+    host,
     locationA: locationA!.id,
     locationB: locationB!.id,
     owner: { id: owner.id, email: owner.email },

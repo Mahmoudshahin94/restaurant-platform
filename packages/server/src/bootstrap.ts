@@ -75,7 +75,8 @@ export async function createServerApp(
   });
 
   assertEveryRouteProtected(app);
-  app.setGlobalPrefix(API_PREFIX, { exclude: ['health', 'ready'] });
+  // The reverse proxy's TLS check (ADR 0023) sits beside the health checks, outside the API.
+  app.setGlobalPrefix(API_PREFIX, { exclude: ['health', 'ready', 'internal/domains/check'] });
   app.enableCors({
     origin: config.CORS_ORIGINS,
     credentials: true,

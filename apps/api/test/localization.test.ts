@@ -2,7 +2,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { PrismaClient } from '@pos/database';
 import type { ApiErrorBody } from '@pos/shared-types';
 import type {
-  PublicTenant,
+  PublicSite,
   TenantContextDto,
   TenantLocalizationDto,
   UpdateLocalizationRequest,
@@ -192,10 +192,13 @@ describe('localization settings (ADR 0020)', () => {
         })
       ).statusCode,
     ).toBe(200);
-    const { slug } = await prisma.tenant.findUniqueOrThrow({ where: { id: tenant.tenantId } });
-    const res = await app.inject({ method: 'GET', url: `/api/v1/public/tenants/${slug}` });
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/public/site',
+      headers: { host: tenant.host },
+    });
     expect(res.statusCode, res.body).toBe(200);
-    expect(res.json<PublicTenant>()).toMatchObject({
+    expect(res.json<PublicSite>()).toMatchObject({
       currency: { code: 'SAR', decimalPlaces: 2, display: 'code' },
       locales: { default: 'ar', supported: ['ar'], digits: 'latn' },
     });

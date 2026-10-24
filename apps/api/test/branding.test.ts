@@ -3,7 +3,7 @@ import type { PrismaClient } from '@pos/database';
 import { TenantContext } from '@pos/server';
 import type { ApiErrorBody } from '@pos/shared-types';
 import type {
-  PublicTenant,
+  PublicSite,
   TenantBrandingDto,
   TenantContextDto,
   TenantFileDto,
@@ -280,18 +280,18 @@ describe('the customer website', () => {
     const logo = await uploaded('LOGO');
     const unused = await uploaded('LOGO');
     await putBranding({ logoFileId: logo.id, surfaces: { website: { themeMode: 'LIGHT' } } });
-    const { slug } = await prisma.tenant.findUniqueOrThrow({ where: { id: tenant.tenantId } });
+    const headers = { host: tenant.host };
 
-    const res = await app.inject({ method: 'GET', url: `/api/v1/public/tenants/${slug}` });
+    const res = await app.inject({ method: 'GET', url: '/api/v1/public/site', headers });
     expect(res.statusCode).toBe(200);
-    expect(res.json<PublicTenant>().branding).toMatchObject({
+    expect(res.json<PublicSite>().branding).toMatchObject({
       surface: 'website',
       themeMode: 'LIGHT',
       logoFileId: logo.id,
     });
 
     const file = (id: string) =>
-      app.inject({ method: 'GET', url: `/api/v1/public/tenants/${slug}/files/${id}` });
+      app.inject({ method: 'GET', url: `/api/v1/public/site/files/${id}`, headers });
     const shown = await file(logo.id);
     expect(shown.statusCode).toBe(200);
     expect(shown.headers['cross-origin-resource-policy']).toBe('cross-origin');

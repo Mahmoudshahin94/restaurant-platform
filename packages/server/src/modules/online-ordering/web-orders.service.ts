@@ -32,7 +32,6 @@ import { orderEventPayload } from '../orders/orders.mappers';
 import { RealtimeBus } from '../realtime/realtime.bus';
 import { OnlinePaymentsService } from './online-payments.service';
 import { OnlineStatusService } from './online-status.service';
-import { PublicTenantResolver } from './public-tenant.resolver';
 import { TrackingTokens, trackingSecret } from './tracking-token';
 import { type PublicOrderRow, publicOrderInclude, toPublicOrder } from './web-order.mappers';
 
@@ -68,7 +67,6 @@ export class WebOrdersService implements OnApplicationBootstrap, OnModuleDestroy
     private readonly audit: AuditService,
     private readonly bus: RealtimeBus,
     private readonly changes: ChangeRecorder,
-    private readonly tenants: PublicTenantResolver,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {
     this.tokens = new TrackingTokens(trackingSecret(config));
@@ -288,19 +286,20 @@ export class WebOrdersService implements OnApplicationBootstrap, OnModuleDestroy
 
   // --- Track -------------------------------------------------------------------------------------
 
-  /** The order a tracking token opens; an invalid token looks exactly like an unknown order. */
-  async track(token: string | undefined) {
+  /**
+   * The order a tracking token opens, on its tenant's website (ADR 0023): the request is scoped to
+   * the host's tenant, so another tenant's order, like an invalid token, is not found. Its
+   * location's modules are checked with `assertModules`.
+   */
+  async track(token: string | undefined, assertModules: (locationId: string) => Promise<void>) {
     const orderId = token ? this.tokens.verify(token.trim()) : null;
-    const tenantId = orderId ? await this.tenants.byOrder(orderId) : null;
-    const row =
-      orderId && tenantId
-        ? await TenantContext.runInTenant(tenantId, () =>
-            this.prisma.order.findUnique({ where: { id: orderId }, include: publicOrderInclude }),
-          )
-        : null;
+    const row = orderId
+      ? await this.prisma.order.findUnique({ where: { id: orderId }, include: publicOrderInclude })
+      : null;
     if (!row || row.channel !== 'WEBSITE') {
       throw new DomainError('ORDER_NOT_FOUND', 'Order not found');
     }
+    await assertModules(row.locationId);
     return toPublicOrder(row);
   }
 

@@ -45,16 +45,24 @@ afterAll(async () => {
 /** The routes that need no credential at all; adding one must be a deliberate change here. */
 const PUBLIC_ROUTES = [
   'GET /health',
-  'GET /orders/track',
-  'GET /public/locations/:locationId',
-  'GET /public/locations/:locationId/menu',
-  'GET /public/tenants/:slug',
-  'GET /public/tenants/:slug/files/:fileId',
+  'GET /internal/domains/check',
   'GET /ready',
   'POST /auth/login',
   'POST /auth/logout',
   'POST /auth/pin',
   'POST /auth/refresh',
+];
+
+/**
+ * The tenant website's routes (ADR 0023): no credential, the tenant comes from the verified host
+ * name. Adding one must be a deliberate change here.
+ */
+const HOST_ROUTES = [
+  'GET /orders/track',
+  'GET /public/site',
+  'GET /public/site/files/:fileId',
+  'GET /public/site/locations/:locationId',
+  'GET /public/site/locations/:locationId/menu',
   'POST /orders',
 ];
 
@@ -72,10 +80,12 @@ const FEATURE_ROUTES: Record<string, Feature> = {
   'GET /locations/:locationId/kitchen/tickets/:ticketId': 'KDS',
   'GET /locations/:locationId/online-ordering': 'ONLINE_ORDERING',
   'GET /orders/track': 'ONLINE_ORDERING',
-  'GET /public/locations/:locationId': 'ONLINE_ORDERING',
-  'GET /public/locations/:locationId/menu': 'ONLINE_ORDERING',
-  'GET /public/tenants/:slug': 'ONLINE_ORDERING',
-  'GET /public/tenants/:slug/files/:fileId': 'ONLINE_ORDERING',
+  'GET /public/site': 'ONLINE_ORDERING',
+  'GET /public/site/files/:fileId': 'ONLINE_ORDERING',
+  'GET /public/site/locations/:locationId': 'ONLINE_ORDERING',
+  'GET /public/site/locations/:locationId/menu': 'ONLINE_ORDERING',
+  'GET /tenants/:tenantId/domains': 'ONLINE_ORDERING',
+  'GET /tenants/:tenantId/website': 'ONLINE_ORDERING',
   'PATCH /locations/:locationId/floor/sections/:sectionId': 'TABLES',
   'PATCH /locations/:locationId/floor/tables/:tableId': 'TABLES',
   'POST /locations/:locationId/floor/sections': 'TABLES',
@@ -89,7 +99,14 @@ const FEATURE_ROUTES: Record<string, Feature> = {
   'POST /locations/:locationId/kitchen/tickets/:ticketId/transitions': 'KDS',
   'POST /locations/:locationId/orders/:orderId/kitchen-priority': 'KDS',
   'POST /orders': 'ONLINE_ORDERING',
+  'POST /tenants/:tenantId/domains': 'ONLINE_ORDERING',
+  'POST /tenants/:tenantId/domains/:domainId/disable': 'ONLINE_ORDERING',
+  'POST /tenants/:tenantId/domains/:domainId/primary': 'ONLINE_ORDERING',
+  'POST /tenants/:tenantId/domains/:domainId/verify': 'ONLINE_ORDERING',
+  'POST /tenants/:tenantId/website/preview': 'ONLINE_ORDERING',
+  'POST /tenants/:tenantId/website/publish': 'ONLINE_ORDERING',
   'PUT /locations/:locationId/online-ordering': 'ONLINE_ORDERING',
+  'PUT /tenants/:tenantId/website/draft': 'ONLINE_ORDERING',
 };
 
 /** A concrete URL for a route: the given tenant's ids, a fresh id for any other parameter. */
@@ -97,10 +114,9 @@ function urlOf(route: RouteEntry, ids: { tenantId: string; locationId: string })
   const path = route.path.replace(/:(\w+)/g, (_match, name: string) => {
     if (name === 'tenantId') return ids.tenantId;
     if (name === 'locationId') return ids.locationId;
-    if (name === 'slug') return 'no-such-tenant';
     return newId();
   });
-  return path === '/health' || path === '/ready' ? path : `/api/v1${path}`;
+  return ['/health', '/ready', '/internal/domains/check'].includes(path) ? path : `/api/v1${path}`;
 }
 
 const methodOf = (route: RouteEntry) => route.method as 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -125,6 +141,101 @@ describe('route inventory', () => {
       expect(route.path.startsWith('/sync/'), key(route)).toBe(true);
       expect(route.guards, key(route)).toEqual(['DeviceGuard']);
     }
+  });
+
+  it('serves the website on host routes only, each resolved by HostTenantGuard', () => {
+    const host = routes.filter((r) => r.access === 'host');
+    expect(host.map(key).sort()).toEqual(HOST_ROUTES);
+    for (const route of host) {
+      expect(route.guards, key(route)).toEqual(['HostTenantGuard']);
+      expect(route.permissions, key(route)).toEqual([]);
+    }
+  });
+});
+
+describe('the website on every host route (ADR 0023)', () => {
+  let tenant: TenantFixture;
+  let other: TenantFixture;
+
+  beforeAll(async () => {
+    await resetDatabase(prisma);
+    tenant = await createTenant(prisma);
+    other = await createTenant(prisma);
+    // A domain each of the other states: none of them serves anything.
+    for (const status of ['PENDING', 'FAILED', 'DISABLED'] as const) {
+      await prisma.tenantDomain.create({
+        data: {
+          tenantId: tenant.tenantId,
+          domain: `${status.toLowerCase()}.example`,
+          kind: 'CUSTOM',
+          status,
+          verificationToken: `token-${status}`,
+        },
+      });
+    }
+  });
+
+  /** A body that would pass validation, so the refusal is the host's. */
+  const requestOf = (route: RouteEntry, locationId: string) => ({
+    method: methodOf(route),
+    url: urlOf(route, { tenantId: tenant.tenantId, locationId }),
+    ...(key(route) === 'POST /orders'
+      ? {
+          payload: {
+            id: newId(),
+            locationId,
+            fulfillment: 'PICKUP',
+            customer: { name: 'Guest', phone: '+970 59 000 0000' },
+            items: [{ id: newId(), productId: newId(), quantity: 1 }],
+            payment: { option: 'PAY_AT_PICKUP' },
+          },
+        }
+      : {}),
+  });
+
+  it('answers 404 SITE_NOT_FOUND for an unknown, pending, failed or disabled host', async () => {
+    const failures: string[] = [];
+    const hosts = [
+      'localhost',
+      'unknown.localhost',
+      'nobody.example',
+      'pending.example',
+      'failed.example',
+      'disabled.example',
+    ];
+    for (const route of routes.filter((r) => r.access === 'host')) {
+      for (const host of hosts) {
+        const res = await app.inject({
+          ...requestOf(route, tenant.locationA),
+          headers: {
+            host,
+            // Names the tenant every other way a browser could: all ignored.
+            'x-tenant-id': tenant.tenantId,
+            'x-forwarded-host': tenant.host,
+          },
+        });
+        if (res.statusCode !== 404 || res.json<ApiErrorBody>().code !== 'SITE_NOT_FOUND') {
+          failures.push(`${key(route)} @ ${host} → ${String(res.statusCode)}`);
+        }
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
+  it('hides another tenant’s locations behind a tenant’s own host', async () => {
+    const failures: string[] = [];
+    for (const route of routes.filter((r) => r.access === 'host')) {
+      if (!/:locationId/.test(route.path) && key(route) !== 'POST /orders') continue;
+      const res = await app.inject({
+        ...requestOf(route, other.locationA),
+        headers: { host: tenant.host },
+      });
+      const { code } = res.json<ApiErrorBody>();
+      if (res.statusCode !== 404 || code !== 'LOCATION_NOT_FOUND') {
+        failures.push(`${key(route)} → ${String(res.statusCode)} ${code}`);
+      }
+    }
+    expect(failures).toEqual([]);
   });
 });
 
@@ -206,14 +317,12 @@ describe('refusals on every protected route', () => {
 describe('modules on every gated route (ADR 0018)', () => {
   let tenant: TenantFixture;
   let ownerToken: string;
-  let slug: string;
   let trackingToken: string;
 
   beforeAll(async () => {
     await resetDatabase(prisma);
     tenant = await createTenant(prisma);
     ownerToken = await login(app, tenant.owner.email);
-    slug = (await prisma.tenant.findUniqueOrThrow({ where: { id: tenant.tenantId } })).slug;
     // A tracked website order, so tracking reaches its module check with a valid token.
     const orderId = newId();
     await prisma.order.create({
@@ -257,13 +366,14 @@ describe('modules on every gated route (ADR 0018)', () => {
   /** A request that reaches the route's module check: valid ids, body and token. */
   function requestFor(route: RouteEntry) {
     const ids = { tenantId: tenant.tenantId, locationId: tenant.locationA };
-    const url = urlOf(route, ids).replace('no-such-tenant', slug);
+    const url = urlOf(route, ids);
     switch (key(route)) {
       case 'GET /orders/track':
-        return { url, headers: { 'x-tracking-token': trackingToken } };
+        return { url, headers: { host: tenant.host, 'x-tracking-token': trackingToken } };
       case 'POST /orders':
         return {
           url,
+          headers: { host: tenant.host },
           payload: {
             id: newId(),
             locationId: tenant.locationA,
@@ -274,6 +384,7 @@ describe('modules on every gated route (ADR 0018)', () => {
           },
         };
       default:
+        if (route.access === 'host') return { url, headers: { host: tenant.host } };
         return route.access === 'public' ? { url } : { url, headers: bearer(ownerToken) };
     }
   }
@@ -382,9 +493,10 @@ describe('transport defences', () => {
       const third = await refresh();
       expect(third.statusCode).toBe(429);
       expect(third.json<ApiErrorBody>().code).toBe('RATE_LIMITED');
-      // Each budget is separate: website orders still have theirs.
-      expect((await order()).statusCode).toBe(400);
-      expect((await order()).statusCode).toBe(400);
+      // Each budget is separate: website orders still have theirs (no website answers on the
+      // test host, so they are not found until the budget runs out).
+      expect((await order()).statusCode).toBe(404);
+      expect((await order()).statusCode).toBe(404);
       expect((await order()).statusCode).toBe(429);
     } finally {
       await limited.app.close();

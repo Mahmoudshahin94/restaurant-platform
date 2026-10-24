@@ -6,6 +6,7 @@ import type { FastifyRequest } from 'fastify';
 import { FeatureService } from '../../modules/features/feature.service';
 import { requestMemo } from '../context/request-context';
 import { IS_PUBLIC_KEY } from './decorators';
+import { HOST_ROUTE_KEY } from './host-route';
 
 export const REQUIRED_FEATURES_KEY = 'features:required';
 
@@ -28,9 +29,9 @@ export function requiredFeaturesOf(
 
 /**
  * Global guard, runs after PermissionsGuard (which has checked the tenant and location the route
- * names). Staff routes are checked here, against the request's scope. A public route has no tenant
- * yet: its required modules travel with the request context, and the storefront's tenant resolver
- * checks them once it knows the tenant.
+ * names). Staff routes are checked here, against the request's scope. A public or website route has
+ * no tenant yet: its required modules travel with the request, and `HostTenantGuard` checks them
+ * once the host name has given the tenant (ADR 0023).
  */
 @Injectable()
 export class FeatureGuard implements CanActivate {
@@ -44,7 +45,10 @@ export class FeatureGuard implements CanActivate {
     const required = requiredFeaturesOf(this.reflector, targets);
     if (required.length === 0) return true;
     const request = context.switchToHttp().getRequest<FastifyRequest>();
-    if (this.reflector.getAllAndOverride<boolean | undefined>(IS_PUBLIC_KEY, targets)) {
+    if (
+      this.reflector.getAllAndOverride<boolean | undefined>(IS_PUBLIC_KEY, targets) ||
+      this.reflector.getAllAndOverride<boolean | undefined>(HOST_ROUTE_KEY, targets)
+    ) {
       request.requiredFeatures = required;
       return true;
     }

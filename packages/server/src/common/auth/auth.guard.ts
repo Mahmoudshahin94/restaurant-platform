@@ -8,9 +8,11 @@ import { TerminalAuthService } from '../../modules/auth/terminal-auth.service';
 import { TokenService } from '../../modules/auth/token.service';
 import { IS_PUBLIC_KEY } from './decorators';
 import { DEVICE_ROUTE_KEY } from './device-route';
+import { HOST_ROUTE_KEY } from './host-route';
 
 /**
- * Global guard: every route requires a valid access token unless marked @Public(). A device
+ * Global guard: every route requires a valid access token unless marked @Public() or
+ * @HostRoute() (the tenant website, whose tenant comes from the host name). A device
  * route (`@DeviceRoute`, ADR 0022) requires the device credential of a terminal of its types
  * instead, and refuses staff tokens; every other route refuses device credentials, since they
  * carry no bearer token.
@@ -28,6 +30,8 @@ export class AuthGuard implements CanActivate {
     const targets = [context.getHandler(), context.getClass()];
     const isPublic = this.reflector.getAllAndOverride<boolean | undefined>(IS_PUBLIC_KEY, targets);
     if (isPublic) return true;
+    // The website: no account; HostTenantGuard finds the tenant from the host name (ADR 0023).
+    if (this.reflector.getAllAndOverride<boolean | undefined>(HOST_ROUTE_KEY, targets)) return true;
 
     const request = context.switchToHttp().getRequest<FastifyRequest>();
     const header = request.headers.authorization;

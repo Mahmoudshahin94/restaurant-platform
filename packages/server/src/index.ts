@@ -9,6 +9,7 @@ export type { DatabaseOptions } from './prisma/prisma.module';
 export * from './common/auth/decorators';
 export * from './common/auth/device-credentials';
 export * from './common/auth/device-route';
+export * from './common/auth/host-route';
 export * from './common/auth/managed-in-cloud';
 export * from './common/auth/principal';
 export * from './common/auth/require-feature';
@@ -53,4 +54,18 @@ export { OnlineOrderingModule } from './modules/online-ordering/online-ordering.
 export { OnlinePaymentsService } from './modules/online-ordering/online-payments.service';
 export { WebOrdersService, ACCEPT_GRACE_MS } from './modules/online-ordering/web-orders.service';
 export { TrackingTokens, trackingSecret } from './modules/online-ordering/tracking-token';
+export { WebsiteModule } from './modules/website/website.module';
+export {
+  DOMAIN_VERIFIER,
+  DnsDomainVerifier,
+  type DomainVerifier,
+  MockDomainVerifier,
+  type TxtLookup,
+} from './modules/website/domain-verifier';
+export { HostTenantResolver } from './modules/website/host-tenant.resolver';
+export {
+  PREVIEW_TTL_SECONDS,
+  WebsitePreviewTokens,
+  previewSecret,
+} from './modules/website/preview-token';
 export { KitchenDispatchService } from './modules/kitchen/kitchen-dispatch.service';

@@ -19,6 +19,11 @@ export function testConfig(overrides: Partial<Record<string, string>> = {}): App
     AUTH_RATE_LIMIT_PER_MINUTE: '100000',
     // Tenant files of the tests (ADR 0019) stay out of the repository.
     FILE_STORAGE_DIR: join(tmpdir(), 'pos-kds-test-files'),
+    // Websites (ADR 0023): `<slug>.localhost`, custom domains verified by the mock, and no
+    // development fallback whatever the developer's .env says.
+    PLATFORM_WEB_DOMAIN: 'localhost',
+    DOMAIN_VERIFIER: 'mock',
+    DEV_DEFAULT_TENANT_SLUG: undefined,
     ...overrides,
   });
 }
