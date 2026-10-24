@@ -145,16 +145,18 @@ function LocalizationForm({
   const localeName = useMemo(() => new Intl.DisplayNames([locale], { type: 'language' }), [locale]);
   const inherit = (value: string) => t('admin:localization.inherit', { value });
 
+  // The save refetches the settings, which re-keys (remounts) this form; `mutate`'s own
+  // callbacks are dropped once it unmounts, so the outcome is read from the promise.
   const submit = () => {
     setError(null);
-    save.mutate(requestOf(draft), {
-      onSuccess: () => {
+    save.mutateAsync(requestOf(draft)).then(
+      () => {
         onSaved(true);
       },
-      onError: (e) => {
+      (e: unknown) => {
         setError(errorText(e));
       },
-    });
+    );
   };
 
   return (

@@ -157,16 +157,18 @@ function BrandingForm({
   const issueFor = (path: string[]) =>
     issues.find((i) => i.path.join('.') === path.join('.')) ?? null;
 
+  // The save refetches the branding, which re-keys (remounts) this form; `mutate`'s own
+  // callbacks are dropped once it unmounts, so the outcome is read from the promise.
   const submit = () => {
     setError(null);
-    save.mutate(requestOf(draft), {
-      onSuccess: () => {
+    save.mutateAsync(requestOf(draft)).then(
+      () => {
         setSaved(true);
       },
-      onError: (e) => {
+      (e: unknown) => {
         setError(errorText(e));
       },
-    });
+    );
   };
 
   const onScreen = draft.surfaces[screen] ?? {};
