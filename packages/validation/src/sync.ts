@@ -3,6 +3,8 @@ import {
   ActorType,
   CashTransactionType,
   ChangeTopic,
+  DeviceStatus,
+  DeviceType,
   DiscountType,
   FulfillmentType,
   KitchenTicketStatus,
@@ -51,8 +53,10 @@ export const syncPaymentSchema = z.object({
   tenantId: idSchema,
   locationId: idSchema,
   orderId: idSchema,
-  /** Null only for ONLINE payments (no drawer). */
+  /** Null only for drawer-less payments: ONLINE, and CARD at a kiosk's terminal (ADR 0022). */
   shiftId: idSchema.nullable(),
+  /** The terminal device that took it (a kiosk); absent in operations of an older hub. */
+  deviceId: idSchema.nullable().default(null),
   paymentMethodId: idSchema,
   methodType: z.enum(enumValues(PaymentMethodType)),
   methodNameEn: text,
@@ -270,6 +274,23 @@ export const syncAuditLogSchema = z.object({
 });
 export type SyncAuditLog = z.infer<typeof syncAuditLogSchema>;
 
+/**
+ * A terminal as its hub knows it (ADR 0022): paired there, and what it last reported. Never its
+ * credential or pairing code. The cloud takes the pairing (PENDING → ACTIVE), the last contact and
+ * the app version; it never brings back a device it disabled.
+ */
+export const syncDeviceSchema = z.object({
+  id: idSchema,
+  tenantId: idSchema,
+  locationId: idSchema,
+  type: z.enum(enumValues(DeviceType)),
+  status: z.enum(enumValues(DeviceStatus)),
+  pairedAt: at.nullable(),
+  lastSeenAt: at.nullable(),
+  appVersion: z.string().min(1).max(40).nullable(),
+});
+export type SyncDevice = z.infer<typeof syncDeviceSchema>;
+
 // --- Push (hub → cloud) -------------------------------------------------------------------------
 
 const operationBase = {
@@ -308,6 +329,12 @@ export const syncOperationSchema = z.discriminatedUnion('operationType', [
     entityType: z.literal(SyncEntityType.AuditLog),
     operationType: z.literal(SyncOperationType.AUDIT_LOG_APPEND),
     payload: syncAuditLogSchema,
+  }),
+  z.object({
+    ...operationBase,
+    entityType: z.literal(SyncEntityType.Device),
+    operationType: z.literal(SyncOperationType.DEVICE_UPSERT),
+    payload: syncDeviceSchema,
   }),
 ]);
 export type SyncOperation = z.infer<typeof syncOperationSchema>;

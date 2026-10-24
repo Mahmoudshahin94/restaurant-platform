@@ -4,6 +4,7 @@ import { sampleCatalog } from '../menu/fixtures.test-helpers';
 import { resolveLocationMenu } from '../menu/resolve-location-menu';
 import { businessDateFor, formatOrderNumber } from './numbering';
 import { quoteOrder } from './quote';
+import { selfServicePath } from './self-service';
 import {
   ORDER_TRANSITIONS,
   allowedTransitions,
@@ -84,6 +85,29 @@ describe('order state machine', () => {
         reason: 'UNPAID',
       },
     );
+  });
+
+  it('lets the platform confirm and hand over a paid self-service order, never an unpaid one', () => {
+    const system = (from: string, to: string, paymentStatus: string) =>
+      assertTransition({ from, to, trigger: 'SYSTEM', paymentStatus } as Parameters<
+        typeof assertTransition
+      >[0]);
+    expect(system('PLACED', 'CONFIRMED', 'PAID')).toMatchObject({ permission: null });
+    expect(system('CONFIRMED', 'COMPLETED', 'PAID')).toMatchObject({ permission: null });
+    expectError(() => system('PLACED', 'CONFIRMED', 'UNPAID'), 'INVALID_ORDER_STATE', {
+      reason: 'UNPAID',
+    });
+    // Staff keep their own rules: confirming needs a permission, not a payment.
+    expect(staff('PLACED', 'CONFIRMED')).toMatchObject({
+      trigger: 'STAFF',
+      permission: 'orders.update',
+    });
+    expect(allowedTransitions('PLACED', 'SYSTEM')).toEqual(['CONFIRMED', 'CANCELLED']);
+  });
+
+  it('sends a paid kiosk order to the kitchen, or hands it over without one', () => {
+    expect(selfServicePath(true)).toEqual(['CONFIRMED']);
+    expect(selfServicePath(false)).toEqual(['CONFIRMED', 'COMPLETED']);
   });
 
   it('never leaves terminal states and only allows edits before the kitchen starts', () => {

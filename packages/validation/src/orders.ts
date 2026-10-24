@@ -56,8 +56,11 @@ const orderContentFields = {
   notes: notesSchema.default(null),
 };
 
-/** Channels staff can create at the POS. WEBSITE orders come only from the customer API. */
-export const staffOrderChannelSchema = orderChannelSchema.exclude(['WEBSITE']);
+/**
+ * Channels staff can create at the POS. WEBSITE orders come only from the customer API, KIOSK
+ * orders only from a paired kiosk (ADR 0022).
+ */
+export const staffOrderChannelSchema = orderChannelSchema.exclude(['WEBSITE', 'KIOSK']);
 
 function channelRules(
   order: {

@@ -1,5 +1,5 @@
 {
-  "$comment": "Development/demo data only: a supermarket tenant (ADR 0017). Its owner account is created only when SEED_MARKET_OWNER_EMAIL/_PASSWORD are set.",
+  "$comment": "Development/demo data only: a supermarket tenant (ADR 0017). Its owner and cashier accounts are created only when SEED_MARKET_OWNER_EMAIL/_PASSWORD (and SEED_MARKET_CASHIER_EMAIL/_PASSWORD/_PIN) are set.",
   "tenant": {
     "slug": "al-balad-market",
     "nameEn": "Al-Balad Market",
@@ -28,6 +28,23 @@
       "description": "Full access",
       "isSystem": true,
       "permissions": "*"
+    },
+    {
+      "name": "Cashier",
+      "description": "Tills and self-checkout attendance",
+      "isSystem": false,
+      "permissions": [
+        "orders.view",
+        "orders.create",
+        "orders.update",
+        "payments.view",
+        "payments.create",
+        "shifts.manage",
+        "products.view",
+        "customers.view",
+        "locations.view",
+        "kiosk.attend"
+      ]
     }
   ],
   "menu": {
@@ -114,6 +131,15 @@
       "preferredLocale": "ar",
       "role": "Owner",
       "location": null,
+      "optional": true
+    },
+    {
+      "envPrefix": "SEED_MARKET_CASHIER",
+      "displayName": "Cashier",
+      "preferredLocale": "ar",
+      "role": "Cashier",
+      "location": "BLD",
+      "employeeCode": "1001",
       "optional": true
     }
   ]

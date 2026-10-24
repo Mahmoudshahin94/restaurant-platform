@@ -15,3 +15,4 @@ export * from './reports';
 export * from './features';
 export * from './branding';
 export * from './localization';
+export * from './kiosk';

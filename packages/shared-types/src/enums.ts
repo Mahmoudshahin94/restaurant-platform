@@ -43,6 +43,8 @@ export const OrderChannel = {
   PHONE: 'PHONE',
   WEBSITE: 'WEBSITE',
   DELIVERY: 'DELIVERY',
+  /** Placed by a customer at a self-service kiosk (ADR 0022). */
+  KIOSK: 'KIOSK',
 } as const;
 export type OrderChannel = ValueOf<typeof OrderChannel>;
 
@@ -134,6 +136,8 @@ export const ActionSource = {
   ADMIN: 'ADMIN',
   HUB: 'HUB',
   SYSTEM: 'SYSTEM',
+  /** A self-service kiosk, authenticated by its device credential (ADR 0022). */
+  KIOSK: 'KIOSK',
 } as const;
 export type ActionSource = ValueOf<typeof ActionSource>;
 
@@ -178,8 +182,36 @@ export const DeviceType = {
   CUSTOMER_DISPLAY: 'CUSTOMER_DISPLAY',
   /** The location hub (apps/gateway) registers itself as a device too. */
   GATEWAY: 'GATEWAY',
+  /** A self-service kiosk (apps/kiosk), paired with its location hub (ADR 0022). */
+  KIOSK: 'KIOSK',
 } as const;
 export type DeviceType = ValueOf<typeof DeviceType>;
+
+/**
+ * Screens a location hub pairs and authenticates by a device credential (ADR 0022). The hub
+ * itself (GATEWAY) is paired with the cloud instead; printers are reached by the hub.
+ */
+export const TERMINAL_DEVICE_TYPES = [
+  DeviceType.POS,
+  DeviceType.KDS,
+  DeviceType.KIOSK,
+  DeviceType.CUSTOMER_DISPLAY,
+] as const satisfies readonly DeviceType[];
+export type TerminalDeviceType = (typeof TERMINAL_DEVICE_TYPES)[number];
+
+export function isTerminalDeviceType(type: string): type is TerminalDeviceType {
+  return (TERMINAL_DEVICE_TYPES as readonly string[]).includes(type);
+}
+
+/**
+ * How a kiosk customer pays (ADR 0022): at the kiosk's integrated card terminal, or at the counter
+ * (the order waits, PLACED, until a cashier takes the money).
+ */
+export const KioskPaymentOption = {
+  TERMINAL: 'TERMINAL',
+  COUNTER: 'COUNTER',
+} as const;
+export type KioskPaymentOption = ValueOf<typeof KioskPaymentOption>;
 
 export const DeviceStatus = {
   PENDING: 'PENDING',
@@ -244,6 +276,8 @@ export const SyncOperationType = {
   KITCHEN_TICKET_UPSERT: 'KITCHEN_TICKET_UPSERT',
   /** An audit-trail entry recorded at the location; append-only (ADR 0016). */
   AUDIT_LOG_APPEND: 'AUDIT_LOG_APPEND',
+  /** A terminal paired at the hub, or what it last reported: seen, app version (ADR 0022). */
+  DEVICE_UPSERT: 'DEVICE_UPSERT',
 } as const;
 export type SyncOperationType = ValueOf<typeof SyncOperationType>;
 
@@ -252,6 +286,7 @@ export const SyncEntityType = {
   Shift: 'Shift',
   KitchenTicket: 'KitchenTicket',
   AuditLog: 'AuditLog',
+  Device: 'Device',
 } as const;
 export type SyncEntityType = ValueOf<typeof SyncEntityType>;
 

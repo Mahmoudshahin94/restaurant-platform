@@ -1,4 +1,10 @@
-import { DeviceStatus, DeviceType, SyncConnectionState, enumValues } from '@pos/shared-types';
+import {
+  DeviceStatus,
+  DeviceType,
+  SyncConnectionState,
+  TERMINAL_DEVICE_TYPES,
+  enumValues,
+} from '@pos/shared-types';
 import { z } from 'zod';
 import { idSchema, isoDateTimeSchema } from './common';
 
@@ -10,24 +16,86 @@ export const deviceSchema = z.object({
   name: z.string(),
   type: z.enum(enumValues(DeviceType)),
   status: z.enum(enumValues(DeviceStatus)),
+  /** Terminals: when the device paired with its location hub (ADR 0022). */
+  pairedAt: isoDateTimeSchema.nullable(),
   lastSeenAt: isoDateTimeSchema.nullable(),
+  /** The app version the device last reported. */
+  appVersion: z.string().nullable(),
   createdAt: isoDateTimeSchema,
 });
 export type Device = z.infer<typeof deviceSchema>;
 
-/** Registers a location hub. Only GATEWAY devices authenticate with a credential today. */
+export const terminalDeviceTypeSchema = z.enum(TERMINAL_DEVICE_TYPES);
+
+/**
+ * Registers a device of a location. A hub (`GATEWAY`) gets its credential at once; a terminal
+ * (POS, KDS, kiosk, customer display) waits with a one-time pairing code for its hub (ADR 0022).
+ */
 export const pairDeviceSchema = z.object({
   name: z.string().trim().min(1).max(80),
-  type: z.literal('GATEWAY'),
+  type: z.enum(['GATEWAY', ...TERMINAL_DEVICE_TYPES]),
 });
 export type PairDeviceRequest = z.input<typeof pairDeviceSchema>;
 
+/** How a terminal pairs: typed on the terminal, checked by the location hub (shown once). */
+export const pairingCodeSchema = z.object({
+  /** Eight characters, shown as `ABCD-EFGH`. */
+  code: z.string(),
+  expiresAt: isoDateTimeSchema,
+});
+export type PairingCode = z.infer<typeof pairingCodeSchema>;
+
 export const pairedDeviceSchema = z.object({
   device: deviceSchema,
-  /** `<deviceId>.<secret>`: shown once, stored only by the hub. Sent as `Authorization: Device …`. */
-  credential: z.string(),
+  /**
+   * Hubs: `<deviceId>.<secret>`, shown once, stored only by the hub. Sent as
+   * `Authorization: Device …`. Null for terminals, whose hub issues their credential.
+   */
+  credential: z.string().nullable(),
+  /** Terminals: the code to type on the device. Null for hubs. */
+  pairing: pairingCodeSchema.nullable(),
 });
 export type PairedDevice = z.infer<typeof pairedDeviceSchema>;
+
+// --- Terminals (hub) ---------------------------------------------------------------------------
+
+/** Letters and digits of pairing codes: no 0/O, 1/I/L, so a code read aloud is typed right. */
+export const PAIRING_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+export const PAIRING_CODE_LENGTH = 8;
+
+/** What a terminal sends its hub to pair: the admin's code (spaces, dashes and case ignored). */
+export const pairTerminalSchema = z.object({
+  code: z
+    .string()
+    .transform((value) => value.replace(/[\s-]/g, '').toUpperCase())
+    .pipe(
+      z
+        .string()
+        .length(PAIRING_CODE_LENGTH)
+        .regex(/^[A-Z0-9]+$/),
+    ),
+});
+export type PairTerminalRequest = z.input<typeof pairTerminalSchema>;
+
+/** The terminal's identity at its hub (no secrets). */
+export const terminalSchema = z.object({
+  id: idSchema,
+  tenantId: idSchema,
+  locationId: idSchema,
+  name: z.string(),
+  type: terminalDeviceTypeSchema,
+});
+export type Terminal = z.infer<typeof terminalSchema>;
+
+export const pairedTerminalSchema = z.object({
+  device: terminalSchema,
+  /**
+   * `<deviceId>.<secret>`: returned once, kept by the terminal (its hub keeps only a hash). Sent as
+   * `Authorization: Device …` to the hub.
+   */
+  credential: z.string(),
+});
+export type PairedTerminal = z.infer<typeof pairedTerminalSchema>;
 
 // --- Location snapshot (cloud → hub) ---------------------------------------------------------
 
@@ -42,7 +110,10 @@ const rows = z.array(z.record(z.string(), z.unknown()));
 export const SNAPSHOT_TABLES = [
   'tenants',
   'locations',
-  /** The location's devices, without credentials: device-level module overrides name them. */
+  /**
+   * The location's devices, without credentials: device-level module overrides name them, and a
+   * terminal waiting to pair brings the hash of its pairing code (ADR 0022).
+   */
   'devices',
   'roles',
   'rolePermissions',
@@ -85,9 +156,9 @@ export const locationSnapshotSchema = z.object({
   /**
    * Bumped when the snapshot format changes incompatibly (2: the tenant rename, ADR 0017; 3: the
    * modules a hub must enforce, ADR 0018; 4: branding and its files, ADR 0019; 5: options and
-   * barcodes, ADR 0021).
+   * barcodes, ADR 0021; 6: terminals waiting to pair, ADR 0022).
    */
-  format: z.literal(5),
+  format: z.literal(6),
   tenantId: idSchema,
   locationId: idSchema,
   generatedAt: isoDateTimeSchema,

@@ -40,6 +40,8 @@ export const ERROR_CODES = [
   'ROLE_NOT_FOUND',
   'EMPLOYEE_NOT_FOUND',
   'DEVICE_NOT_FOUND',
+  /** No terminal waits for this pairing code at this hub, or it expired (ADR 0022). */
+  'PAIRING_CODE_INVALID',
   // menu
   'CATEGORY_NOT_FOUND',
   'PRODUCT_NOT_FOUND',

@@ -260,7 +260,11 @@ export const adminDeviceSchema = z.object({
   name: z.string(),
   type: z.enum(enumValues(DeviceType)),
   status: z.enum(enumValues(DeviceStatus)),
+  pairedAt: isoDateTimeSchema.nullable(),
+  /** A terminal waiting to pair: when its pairing code stops working (ADR 0022). */
+  pairingExpiresAt: isoDateTimeSchema.nullable(),
   lastSeenAt: isoDateTimeSchema.nullable(),
+  appVersion: z.string().nullable(),
   /** Seen within the heartbeat window (3 minutes). */
   online: z.boolean(),
   outbox: reportedOutboxSchema.nullable(),
