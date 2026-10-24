@@ -246,6 +246,8 @@ model Tenant {
   files            TenantFile[]
   productBarcodes  ProductBarcode[]
   productImages    ProductImage[]
+  domains          TenantDomain[]
+  website          WebsiteConfig?
 
   @@map("tenants")
 }
@@ -579,6 +581,56 @@ model TenantFile {
 
   @@index([tenantId, createdAt])
   @@map("tenant_files")
+}
+
+/// @cloud-only
+/// A host name the tenant's website answers on (ADR 0023). `<slug>.<PLATFORM_WEB_DOMAIN>` is
+/// created verified with the tenant; a custom domain is verified by a DNS TXT record
+/// (`_madar-verify.<domain>` = `madar-verify=<verificationToken>`). Only VERIFIED domains resolve
+/// to the tenant, and one domain is VERIFIED for one tenant at most (a partial unique index), so a
+/// pending claim can neither impersonate the owner nor block it.
+model TenantDomain {
+  id                String    @id @default(uuid(7)) @db.Uuid
+  tenantId          String    @map("tenant_id") @db.Uuid
+  /// Normalized (@pos/domain `normalizeHostname`): lower case, punycode, no port or trailing dot.
+  domain            String
+  /// @pos/shared-types DomainKind (SUBDOMAIN, CUSTOM), checked by the database.
+  kind              String
+  /// @pos/shared-types DomainStatus (PENDING, VERIFIED, FAILED, DISABLED), checked by the database.
+  status            String    @default("PENDING")
+  /// The site's canonical address; one per tenant (a partial unique index).
+  isPrimary         Boolean   @default(false) @map("is_primary")
+  verificationToken String    @map("verification_token")
+  verifiedAt        DateTime? @map("verified_at") @db.Timestamptz(3)
+  lastCheckedAt     DateTime? @map("last_checked_at") @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, domain])
+  @@index([domain])
+  @@map("tenant_domains")
+}
+
+/// @cloud-only
+/// The tenant's website (ADR 0023): the draft its editor saves and the version visitors see,
+/// both validated by @pos/validation `websiteConfigSchema`. No row = MADAR's template for the
+/// business type, never published.
+model WebsiteConfig {
+  tenantId    String    @id @map("tenant_id") @db.Uuid
+  draft       Json
+  /// Null until the first publication.
+  published   Json?
+  /// Increases with each publication.
+  version     Int       @default(0)
+  publishedAt DateTime? @map("published_at") @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("website_configs")
 }
 
 // ---------------------------------------------------------------------------

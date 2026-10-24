@@ -35,7 +35,13 @@ export function toHubSchema(schema, extra) {
     ),
   );
   // Cloud-only models and enums: a `/// @cloud-only` line directly above `model X {`/`enum X {`.
-  out = out.replace(/\/\/\/ @cloud-only\n(?:\/\/\/.*\n)*(?:model|enum) \w+ \{[\s\S]*?\n\}\n?/g, '');
+  const cloudOnly = /\/\/\/ @cloud-only\n(?:\/\/\/.*\n)*(?:model|enum) (\w+) \{[\s\S]*?\n\}\n?/g;
+  const removed = [...out.matchAll(cloudOnly)].map((match) => match[1]);
+  out = out.replace(cloudOnly, '').replace(/\n{3,}/g, '\n\n');
+  // Relation fields of hub models that point at a removed model (`domains TenantDomain[]`).
+  for (const name of removed) {
+    out = out.replace(new RegExp(`\\n {2}\\w+ +${name}(\\[\\]|\\?)?(?= *\\n)`, 'g'), '');
+  }
   // PostgreSQL native column types have no SQLite equivalent; Prisma's defaults apply.
   out = out.replace(/\s@db\.\w+(\([^)]*\))?/g, '');
   const header = [

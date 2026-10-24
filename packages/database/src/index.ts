@@ -4,6 +4,7 @@ export { hashSecret, verifySecret } from './credentials';
 export { syncPermissionCatalog } from './permissions';
 export {
   OWNER_ROLE,
+  newDomainVerificationToken,
   provisionTenant,
   type LocationSpec,
   type ProvisionedTenant,

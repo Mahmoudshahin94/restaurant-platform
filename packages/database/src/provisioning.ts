@@ -1,5 +1,8 @@
+import { randomBytes } from 'node:crypto';
 import {
   DEFAULT_TENANT_CURRENCY,
+  DomainKind,
+  DomainStatus,
   PERMISSIONS,
   type Permission,
   isPermission,
@@ -62,6 +65,11 @@ export const OWNER_ROLE: RoleSpec = {
   permissions: '*',
 };
 
+/** A domain's verification token: 128 random bits, URL- and DNS-safe. */
+export function newDomainVerificationToken(): string {
+  return randomBytes(16).toString('hex');
+}
+
 /**
  * Creates a tenant with its locations and roles (ADR 0017), or brings an existing one (same
  * slug) up to the given locations and roles without touching anything else. The tenant's own
@@ -71,7 +79,17 @@ export const OWNER_ROLE: RoleSpec = {
  */
 export async function provisionTenant(
   prisma: PrismaClient | Prisma.TransactionClient,
-  input: { tenant: TenantSpec; locations: LocationSpec[]; roles?: RoleSpec[] },
+  input: {
+    tenant: TenantSpec;
+    locations: LocationSpec[];
+    roles?: RoleSpec[];
+    /**
+     * MADAR's web domain (`PLATFORM_WEB_DOMAIN`): the tenant's website answers on
+     * `<slug>.<webDomain>`, verified at once and primary unless the tenant has a primary already
+     * (ADR 0023).
+     */
+    webDomain?: string;
+  },
 ): Promise<ProvisionedTenant> {
   const {
     supportedLocales,
@@ -84,6 +102,8 @@ export async function provisionTenant(
     // Without a choice the tenant offers every locale (the column default).
     create: { ...tenantFields, currencyCode, ...(supportedLocales ? { supportedLocales } : {}) },
   });
+
+  if (input.webDomain) await provisionSubdomain(prisma, tenant, input.webDomain);
 
   const locationIds = new Map<string, string>();
   for (const { online, ...loc } of input.locations) {
@@ -129,6 +149,29 @@ export async function provisionTenant(
     roleIds.set(spec.name, role.id);
   }
   return { tenantId: tenant.id, locationIds, roleIds };
+}
+
+async function provisionSubdomain(
+  prisma: PrismaClient | Prisma.TransactionClient,
+  tenant: { id: string; slug: string },
+  webDomain: string,
+): Promise<void> {
+  const domain = `${tenant.slug}.${webDomain.toLowerCase()}`;
+  const hasPrimary =
+    (await prisma.tenantDomain.count({ where: { tenantId: tenant.id, isPrimary: true } })) > 0;
+  await prisma.tenantDomain.upsert({
+    where: { tenantId_domain: { tenantId: tenant.id, domain } },
+    update: {},
+    create: {
+      tenantId: tenant.id,
+      domain,
+      kind: DomainKind.SUBDOMAIN,
+      status: DomainStatus.VERIFIED,
+      verifiedAt: new Date(),
+      isPrimary: !hasPrimary,
+      verificationToken: newDomainVerificationToken(),
+    },
+  });
 }
 
 function resolveRolePermissions(spec: '*' | string[]): Permission[] {
