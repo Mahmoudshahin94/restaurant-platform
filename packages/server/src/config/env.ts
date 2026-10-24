@@ -127,7 +127,7 @@ const envSchema = z
   })
   .refine((env) => env.NODE_ENV !== 'production' || env.PLATFORM_WEB_DOMAIN !== 'localhost', {
     path: ['PLATFORM_WEB_DOMAIN'],
-    message: "Set PLATFORM_WEB_DOMAIN to MADAR's web domain in production",
+    message: 'Set PLATFORM_WEB_DOMAIN to the platform web domain in production',
   })
   .refine((env) => env.NODE_ENV !== 'production' || env.WEBSITE_URL.startsWith('https://'), {
     path: ['WEBSITE_URL'],

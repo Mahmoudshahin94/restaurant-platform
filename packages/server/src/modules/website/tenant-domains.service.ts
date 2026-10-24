@@ -220,7 +220,7 @@ export class TenantDomainsService {
   async disable(tenantId: string, domainId: string): Promise<TenantDomainDto> {
     const row = await this.find(tenantId, domainId);
     if (row.kind === DomainKind.SUBDOMAIN) {
-      throw new DomainError('DOMAIN_LOCKED', 'MADAR’s address of the site stays', {
+      throw new DomainError('DOMAIN_LOCKED', 'The platform address of the site stays', {
         reason: 'PLATFORM_ADDRESS',
       });
     }

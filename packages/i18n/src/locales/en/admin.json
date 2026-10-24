@@ -1017,12 +1017,12 @@
     "HUB_DISABLED": "The hub that sent it is disabled.",
     "ALREADY_ADDED": "This domain is already on the list.",
     "OTHER_TENANT": "Another business already uses this domain.",
-    "PLATFORM_DOMAIN": "MADAR addresses cannot be added as your own domain.",
+    "PLATFORM_DOMAIN": "$t(common:platform.name) addresses cannot be added as your own domain.",
     "SINGLE_LABEL": "Enter a full domain, such as www.example.com.",
     "IP_ADDRESS": "Enter a domain name, not an IP address.",
     "TOO_MANY": "You have the most custom domains allowed.",
     "NOT_VERIFIED": "Verify the domain first.",
-    "PLATFORM_ADDRESS": "Your MADAR address always stays.",
+    "PLATFORM_ADDRESS": "Your $t(common:platform.name) address always stays.",
     "PRIMARY": "Make another domain primary first."
   },
   "website": {
@@ -1030,7 +1030,7 @@
     "description": "What visitors see on your website. Changes stay in the draft until you publish them.",
     "status": {
       "published": "Version {{version}} published {{date}}",
-      "never": "Not published yet: visitors see MADAR's starting website for your business.",
+      "never": "Not published yet: visitors see $t(common:platform.name)'s starting website for your business.",
       "unpublished": "Unpublished changes",
       "hint": "Save keeps your draft; Preview opens your site with the draft for 30 minutes; Publish shows it to everyone."
     },
@@ -1158,7 +1158,7 @@
     "domain": "Domain",
     "add": "Add domain",
     "kinds": {
-      "SUBDOMAIN": "Your MADAR address",
+      "SUBDOMAIN": "Your $t(common:platform.name) address",
       "CUSTOM": "Your own domain"
     },
     "statuses": {
@@ -1172,7 +1172,7 @@
     "recordType": "Type",
     "recordName": "Name",
     "recordValue": "Value",
-    "pointHint": "To serve the site, also point the domain (CNAME or A record) at MADAR, as your onboarding guide says.",
+    "pointHint": "To serve the site, also point the domain (CNAME or A record) at $t(common:platform.name), as your onboarding guide says.",
     "verify": "Verify",
     "verifying": "Checking…",
     "makePrimary": "Make primary",

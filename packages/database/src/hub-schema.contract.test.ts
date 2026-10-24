@@ -12,8 +12,17 @@ import { Prisma as HubPrisma } from '../generated/hub-client';
  */
 const HUB_ONLY_MODELS = new Set(['SyncOperation', 'HubState', 'InboundOrder']);
 const HUB_ONLY_ENUMS = new Set(['SyncOperationStatus']);
-/** Sync ledger, change feed and website order numbers exist only in the cloud (`/// @cloud-only`). */
-const CLOUD_ONLY_MODELS = new Set(['ProcessedOperation', 'ChangeLog', 'WebOrderCounter']);
+/**
+ * Sync ledger, change feed, website order numbers, and the tenant website and its domains (ADR
+ * 0023) exist only in the cloud (`/// @cloud-only`).
+ */
+const CLOUD_ONLY_MODELS = new Set([
+  'ProcessedOperation',
+  'ChangeLog',
+  'WebOrderCounter',
+  'TenantDomain',
+  'WebsiteConfig',
+]);
 const CLOUD_ONLY_ENUMS = new Set([
   'ProcessedOperationStatus',
   'ChangeTopic',
@@ -35,21 +44,24 @@ function shape(
         dbName: m.dbName,
         primaryKey: m.primaryKey,
         uniqueFields: m.uniqueFields,
-        fields: m.fields.map((f) => ({
-          name: f.name,
-          dbName: f.dbName,
-          kind: f.kind,
-          type: f.type,
-          isList: f.isList,
-          isRequired: f.isRequired,
-          isId: f.isId,
-          isUnique: f.isUnique,
-          isUpdatedAt: f.isUpdatedAt,
-          hasDefaultValue: f.hasDefaultValue,
-          relationName: f.relationName,
-          relationFromFields: f.relationFromFields,
-          relationToFields: f.relationToFields,
-        })),
+        // A relation to a model the other side does not have is left out with that model.
+        fields: m.fields
+          .filter((f) => !skipModels.has(f.type))
+          .map((f) => ({
+            name: f.name,
+            dbName: f.dbName,
+            kind: f.kind,
+            type: f.type,
+            isList: f.isList,
+            isRequired: f.isRequired,
+            isId: f.isId,
+            isUnique: f.isUnique,
+            isUpdatedAt: f.isUpdatedAt,
+            hasDefaultValue: f.hasDefaultValue,
+            relationName: f.relationName,
+            relationFromFields: f.relationFromFields,
+            relationToFields: f.relationToFields,
+          })),
       }))
       .sort((a, b) => a.name.localeCompare(b.name)),
     enums: datamodel.enums
