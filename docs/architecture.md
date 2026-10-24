@@ -884,6 +884,21 @@ See [ADR 0021](adr/0021-retail-catalog-and-barcodes.md) and
   cost, barcode and stock flag, and barcode entry, in English and Arabic. It shows what the
   modules allow. The stock ledger is a later phase: `INVENTORY` only adds the flag.
 
+**Phase M5 verification (2026-10-24):** `pnpm build`, `typecheck`, `lint` and `test` green (878
+unit, integration and component tests: API 284, domain 239, gateway 69, app-kit 56, i18n 44, admin
+43, validation 34, database 24, server 23, POS 20, customer-web 16, api-client 11, KDS 9, receipts
+8, ui 2), `pnpm test:tools` (13), the hub schema check, a clean `migrate status`, `format:check`,
+and all 36 Playwright E2E tests (admin 12, POS 16, KDS 4, customer-web 4) in one `pnpm e2e` run,
+including the new scenarios 23 and 24. A manual browser check against a freshly seeded database:
+the clothing store's T-shirt in the admin in Arabic (RTL) showed its Size × Colour matrix with
+SKUs, costs, barcodes and stock flags; adding the value XL grew the matrix to eight rows, a
+mistyped EAN-13 was refused as typed, and saving created XL / White with its code and left
+XL / Black unsold. At the POS, signed in through a newly paired hub, a simulated scanner burst
+added the demo cola's sizes to the cart (a repeat scan raised the quantity), an unknown code
+showed a toast, manual entry found the large cola by its SKU, and the placed order reached the
+cloud with each line's SKU and barcode. The check led to one change: a scan now opens the options
+dialog only when a choice is required.
+
 ## Architectural decisions and open questions
 
 Recorded as ADRs in [adr/](adr/):
