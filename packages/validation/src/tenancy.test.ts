@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { loginRequestSchema } from './auth';
 import { minorUnitsSchema } from './common';
-import { createLocationSchema, createTenantSchema, updateTenantSchema } from './tenancy';
+import {
+  createLocationSchema,
+  createTenantSchema,
+  supportedLocalesSchema,
+  updateTenantSchema,
+} from './tenancy';
 
 describe('tenancy schemas', () => {
   it('accepts a valid tenant and normalizes the slug', () => {
@@ -52,10 +57,28 @@ describe('tenancy schemas', () => {
     expect(createTenantSchema.safeParse({ ...base, supportedLocales: ['ar'] }).success).toBe(true);
   });
 
+  it('provisions new tenants in shekels unless told otherwise (ADR 0020)', () => {
+    const base = {
+      slug: 'new-shop',
+      nameEn: 'New Shop',
+      nameAr: 'متجر جديد',
+      defaultLocale: 'ar',
+      timezone: 'Asia/Hebron',
+    } as const;
+    expect(createTenantSchema.parse(base).currencyCode).toBe('ILS');
+    expect(createTenantSchema.parse({ ...base, currencyCode: 'JOD' }).currencyCode).toBe('JOD');
+  });
+
   it('refuses empty or repeated supported locales', () => {
-    expect(updateTenantSchema.safeParse({ supportedLocales: [] }).success).toBe(false);
-    expect(updateTenantSchema.safeParse({ supportedLocales: ['en', 'en'] }).success).toBe(false);
-    expect(updateTenantSchema.safeParse({ supportedLocales: ['ar', 'en'] }).success).toBe(true);
+    expect(supportedLocalesSchema.safeParse([]).success).toBe(false);
+    expect(supportedLocalesSchema.safeParse(['en', 'en']).success).toBe(false);
+    expect(supportedLocalesSchema.safeParse(['ar', 'en']).success).toBe(true);
+  });
+
+  it('leaves languages to the localization settings', () => {
+    expect(updateTenantSchema.safeParse({ supportedLocales: ['ar'] }).success).toBe(false);
+    expect(updateTenantSchema.safeParse({ defaultLocale: 'ar' }).success).toBe(false);
+    expect(updateTenantSchema.safeParse({ timezone: 'Asia/Hebron' }).success).toBe(true);
   });
 
   it('rejects empty updates', () => {

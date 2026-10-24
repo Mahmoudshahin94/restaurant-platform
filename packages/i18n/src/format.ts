@@ -1,10 +1,10 @@
-import { formatMinorAsDecimal } from '@pos/domain';
-import type { Locale } from '@pos/shared-types';
+import { formatMinorAsDecimal, resolveCurrency } from '@pos/domain';
+import type { CurrencyConfiguration, DigitStyle, Locale } from '@pos/shared-types';
 
-/** Arabic UIs may show Latin (0-9) or Arabic-Indic (٠-٩) digits; tenants choose. */
-export type DigitStyle = 'latn' | 'arab';
+export type { DigitStyle };
 
 export interface FormatOptions {
+  /** Arabic may be written in Latin (0-9) or Arabic-Indic (٠-٩) digits; tenants choose (ADR 0020). */
   digits?: DigitStyle;
 }
 
@@ -13,28 +13,58 @@ export interface MoneyFormatOptions extends FormatOptions {
   sign?: 'auto' | 'exceptZero';
 }
 
-function localeTag(locale: Locale, { digits = 'latn' }: FormatOptions = {}): string {
-  return `${locale}-u-nu-${digits}`;
+/**
+ * The `Intl` locale for a language (or a tenant's format locale such as `ar-JO`) with its
+ * numbering system. Arabic-Indic digits apply to Arabic only: English stays in Latin digits.
+ */
+function localeTag(locale: string, { digits = 'latn' }: FormatOptions = {}): string {
+  const arabic = locale === 'ar' || locale.startsWith('ar-');
+  return `${locale}-u-nu-${arabic ? digits : 'latn'}`;
 }
 
+/** A letter at the edge of a symbol needs a space between it and the digits ("JD 5.000"). */
+const LETTER = /\p{L}/u;
+
 /**
- * Formats integer minor units as localized currency without converting to a float: the exact
+ * Formats integer minor units as localized money without converting to a float: the exact
  * decimal string is passed to Intl.NumberFormat, which formats strings losslessly.
+ *
+ * `currency` is the tenant's configuration (ADR 0020): its symbol (₪ by default for ILS), its
+ * display (narrow symbol, symbol or code) and its format locale, which, when set, wins over the
+ * screen's language. A bare currency code means MADAR's defaults for it. Amounts always show the
+ * currency's ISO decimal places (three for JOD), never `Intl`'s own guess.
  */
 export function formatMoney(
   minorUnits: number,
-  currency: string,
+  currency: CurrencyConfiguration | string,
   locale: Locale,
   options?: MoneyFormatOptions,
 ): string {
-  const decimal = formatMinorAsDecimal(minorUnits, currency);
-  const formatter = new Intl.NumberFormat(localeTag(locale, options), {
+  const config = typeof currency === 'string' ? resolveCurrency(currency) : currency;
+  const decimal = formatMinorAsDecimal(minorUnits, config.code);
+  const formatter = new Intl.NumberFormat(localeTag(config.formatLocale ?? locale, options), {
     style: 'currency',
-    currency,
+    currency: config.code,
+    currencyDisplay: config.display,
+    minimumFractionDigits: config.decimalPlaces,
+    maximumFractionDigits: config.decimalPlaces,
     signDisplay: options?.sign ?? 'auto',
   });
-  // Intl.NumberFormat.format accepts decimal strings (ES2023); the cast satisfies older lib typings.
-  return formatter.format(decimal as unknown as number);
+  // Intl.NumberFormat accepts decimal strings (ES2023); the casts satisfy older lib typings.
+  const value = decimal as unknown as number;
+  const symbol = config.symbol;
+  if (symbol === null || config.display === 'code') return formatter.format(value);
+  const parts = formatter.formatToParts(value);
+  return parts
+    .map((part, i) => {
+      if (part.type !== 'currency') return part.value;
+      const before = parts[i - 1];
+      const after = parts[i + 1];
+      const spaceBefore = before && before.type !== 'literal' && LETTER.test(symbol.at(0) ?? '');
+      const spaceAfter = after && after.type !== 'literal' && LETTER.test(symbol.at(-1) ?? '');
+      return `${spaceBefore ? '\u00a0' : ''}${symbol}${spaceAfter ? '\u00a0' : ''}`;
+    })
+    .join('');
 }
 
 export function formatNumber(value: number, locale: Locale, options?: FormatOptions): string {
