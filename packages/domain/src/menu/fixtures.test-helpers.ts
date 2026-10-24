@@ -105,6 +105,7 @@ export function sampleCatalog(): Catalog {
         ],
         stationIds: ['st-kitchen', 'st-grill', 'st-closed'],
         taxIds: ['tax-vat', 'tax-old'],
+        barcodes: [],
       },
       {
         id: 'prod-fries',
@@ -119,6 +120,10 @@ export function sampleCatalog(): Catalog {
         modifierGroups: [],
         stationIds: ['st-fryer'],
         taxIds: ['tax-vat'],
+        barcodes: [
+          { code: 'FRIES-BAG', variantId: null, isPrimary: false },
+          { code: '6291000000013', variantId: null, isPrimary: true },
+        ],
       },
       {
         id: 'prod-cola',
@@ -130,13 +135,25 @@ export function sampleCatalog(): Catalog {
         sortOrder: 1,
         ...live,
         variants: [
-          { id: 'var-large', ...n('Large'), price: 800, sortOrder: 2, ...live },
-          { id: 'var-small', ...n('Small'), price: 600, sortOrder: 1, ...live },
-          { id: 'var-old', ...n('Jumbo'), price: 1000, sortOrder: 3, archivedAt: new Date() },
+          { id: 'var-large', ...n('Large'), sku: 'COLA-L', price: 800, sortOrder: 2, ...live },
+          { id: 'var-small', ...n('Small'), sku: 'COLA-S', price: 600, sortOrder: 1, ...live },
+          {
+            id: 'var-old',
+            ...n('Jumbo'),
+            sku: null,
+            price: 1000,
+            sortOrder: 3,
+            archivedAt: new Date(),
+          },
         ],
         modifierGroups: [],
         stationIds: ['st-bar'],
         taxIds: ['tax-vat', 'tax-sugar'],
+        barcodes: [
+          { code: '6291000000020', variantId: 'var-small', isPrimary: true },
+          { code: '012345678905', variantId: 'var-large', isPrimary: true },
+          { code: '6291000000037', variantId: 'var-old', isPrimary: true },
+        ],
       },
       {
         id: 'prod-retired',
@@ -151,6 +168,7 @@ export function sampleCatalog(): Catalog {
         modifierGroups: [],
         stationIds: [],
         taxIds: [],
+        barcodes: [],
       },
       {
         id: 'prod-in-archived-cat',
@@ -165,6 +183,7 @@ export function sampleCatalog(): Catalog {
         modifierGroups: [],
         stationIds: [],
         taxIds: [],
+        barcodes: [],
       },
     ],
   };

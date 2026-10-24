@@ -40,8 +40,12 @@ export const BrandSurface = {
 export type BrandSurface = ValueOf<typeof BrandSurface>;
 export const BRAND_SURFACES = Object.values(BrandSurface) as readonly BrandSurface[];
 
-/** Files a tenant uploads for its branding. */
-export const TenantFileKind = { LOGO: 'LOGO', FAVICON: 'FAVICON' } as const;
+/** Files a tenant uploads: for its branding, and pictures of its products (ADR 0021). */
+export const TenantFileKind = {
+  LOGO: 'LOGO',
+  FAVICON: 'FAVICON',
+  PRODUCT_IMAGE: 'PRODUCT_IMAGE',
+} as const;
 export type TenantFileKind = ValueOf<typeof TenantFileKind>;
 export const TENANT_FILE_KINDS = Object.values(TenantFileKind) as readonly TenantFileKind[];
 
@@ -61,6 +65,7 @@ export type BrandingImageType = (typeof BRANDING_IMAGE_TYPES)[number];
 export const TENANT_FILE_MAX_BYTES: Record<TenantFileKind, number> = {
   LOGO: 512 * 1024,
   FAVICON: 128 * 1024,
+  PRODUCT_IMAGE: 2 * 1024 * 1024,
 };
 
 /** Corner radius limits, in pixels (the medium radius; small and large scale from it). */

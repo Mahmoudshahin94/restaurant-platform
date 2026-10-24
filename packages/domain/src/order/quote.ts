@@ -13,6 +13,8 @@ export interface OrderItemRequest {
   variantId: string | null;
   modifierIds: readonly string[];
   quantity: number;
+  /** The code scanned for this line (ADR 0021); checked against the item's barcodes. */
+  barcode?: string | null;
 }
 
 export interface DiscountDefinition {

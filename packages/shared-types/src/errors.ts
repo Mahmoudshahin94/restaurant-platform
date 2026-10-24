@@ -49,6 +49,17 @@ export const ERROR_CODES = [
   'MODIFIER_NOT_FOUND',
   'INVALID_MODIFIER_SELECTION',
   'KITCHEN_STATION_NOT_FOUND',
+  // retail catalog (ADR 0021)
+  /** No product or variant of this location's menu has this barcode (or SKU). */
+  'BARCODE_NOT_FOUND',
+  /** Not a valid code of its symbology: wrong length, characters or check digit (details.reason). */
+  'BARCODE_INVALID',
+  /** Another product or variant of the tenant already has this barcode (details.code). */
+  'BARCODE_TAKEN',
+  /** Another product or variant of the tenant already has this SKU (details.sku). */
+  'SKU_TAKEN',
+  /** The variants do not match the product's options (details.reason). */
+  'INVALID_VARIANT_OPTIONS',
   // money
   'INVALID_MONEY_AMOUNT',
   'UNSUPPORTED_CURRENCY',

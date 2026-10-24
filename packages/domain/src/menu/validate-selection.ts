@@ -13,6 +13,8 @@ import type { ItemSelection, MenuProduct, PricedModifier, PricedSelection } from
  *  - every modifier must belong to one of the product's modifier groups, at most once;
  *  - each group's selection count must be within [minSelect, maxSelect].
  *
+ *  - a scanned code must be one of the chosen variant's (or the product's) barcodes.
+ *
  * Unit price = (variant price or product price) + Σ modifier price deltas.
  */
 export function validateSelection(
@@ -31,6 +33,7 @@ export function validateSelection(
   }
 
   let basePrice = product.price;
+  let variant: MenuProduct['variants'][number] | undefined;
   if (product.variants.length > 0) {
     if (selection.variantId === null) {
       throw new DomainError('VARIANT_NOT_FOUND', 'A variant must be chosen', {
@@ -38,7 +41,7 @@ export function validateSelection(
         reason: 'VARIANT_REQUIRED',
       });
     }
-    const variant = product.variants.find((v) => v.id === selection.variantId);
+    variant = product.variants.find((v) => v.id === selection.variantId);
     if (!variant) {
       throw new DomainError('VARIANT_NOT_FOUND', 'Variant does not belong to product', {
         productId: product.id,
@@ -50,6 +53,17 @@ export function validateSelection(
     throw new DomainError('VARIANT_NOT_FOUND', 'Product has no variants', {
       productId: product.id,
       variantId: selection.variantId,
+    });
+  }
+
+  const codes = variant ? variant.barcodes : product.barcodes;
+  const scanned = selection.barcode ?? null;
+  if (scanned !== null && !codes.includes(scanned)) {
+    throw new DomainError('BARCODE_NOT_FOUND', 'Barcode is not one of this item’s', {
+      productId: product.id,
+      variantId: selection.variantId,
+      barcode: scanned,
+      reason: 'NOT_ON_ITEM',
     });
   }
 
@@ -109,6 +123,8 @@ export function validateSelection(
     modifiers,
     unitPrice: sumMinor([basePrice, ...modifiers.map((m) => m.priceDelta)]),
     stationIds: product.stationIds,
+    sku: variant?.sku ?? product.sku,
+    barcode: scanned ?? codes[0] ?? null,
   };
 }
 

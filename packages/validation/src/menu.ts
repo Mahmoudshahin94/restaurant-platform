@@ -1,4 +1,11 @@
-import { isValidSelectionRange } from '@pos/domain';
+import {
+  MAX_VARIANTS,
+  barcodeIssue,
+  detectSymbology,
+  isValidSelectionRange,
+  variantOptionsIssue,
+} from '@pos/domain';
+import { BARCODE_MAX_LENGTH, BarcodeSymbology, enumValues } from '@pos/shared-types';
 import { z } from 'zod';
 import {
   descriptionSchema,
@@ -187,14 +194,43 @@ export type UpdateModifierGroupRequest = z.input<typeof updateModifierGroupSchem
 
 // --- Products -----------------------------------------------------------------------------------
 
+export const barcodeSymbologySchema = z.enum(enumValues(BarcodeSymbology));
+
+export const productBarcodeSchema = z.object({
+  id: idSchema,
+  code: z.string(),
+  symbology: barcodeSymbologySchema,
+  isPrimary: z.boolean(),
+});
+export type ProductBarcode = z.infer<typeof productBarcodeSchema>;
+
 export const productVariantSchema = z.object({
   id: idSchema,
   nameEn: z.string(),
   nameAr: z.string(),
+  sku: z.string().nullable(),
   price: z.int(),
+  /** What one unit costs the business (admin only, never published). */
+  cost: z.int().nullable(),
+  trackInventory: z.boolean(),
   sortOrder: z.int(),
+  /** One value of each of the product's options, in option order; empty for named variants. */
+  optionValueIds: z.array(idSchema),
+  barcodes: z.array(productBarcodeSchema),
+  imageFileIds: z.array(idSchema),
 });
 export type ProductVariant = z.infer<typeof productVariantSchema>;
+
+export const productOptionSchema = z.object({
+  id: idSchema,
+  nameEn: z.string(),
+  nameAr: z.string(),
+  sortOrder: z.int(),
+  values: z.array(
+    z.object({ id: idSchema, nameEn: z.string(), nameAr: z.string(), sortOrder: z.int() }),
+  ),
+});
+export type ProductOption = z.infer<typeof productOptionSchema>;
 
 export const productModifierGroupLinkSchema = z.object({
   modifierGroupId: idSchema,
@@ -216,8 +252,13 @@ export const productSchema = z.object({
   price: z.int(),
   sortOrder: z.int(),
   archivedAt: isoDateTimeSchema.nullable(),
+  /** Option axes (Size, Colour...) whose values the variants combine (ADR 0021). */
+  options: z.array(productOptionSchema),
   /** Live (non-archived) variants only. */
   variants: z.array(productVariantSchema),
+  /** Barcodes of the product itself (a product with variants has them on its variants). */
+  barcodes: z.array(productBarcodeSchema),
+  imageFileIds: z.array(idSchema),
   modifierGroups: z.array(productModifierGroupLinkSchema),
   stationIds: z.array(idSchema),
   taxIds: z.array(idSchema),
@@ -226,11 +267,62 @@ export const productSchema = z.object({
 });
 export type Product = z.infer<typeof productSchema>;
 
-export const variantInputSchema = z.object({
+/**
+ * A barcode as typed or scanned. Without a symbology, a GS1 length of digits is that GS1 code and
+ * anything else CODE128 (`detectSymbology`). EAN/UPC check digits are verified here and again by
+ * the server.
+ */
+export const barcodeInputSchema = z
+  .object({
+    code: z.string().trim().min(1).max(BARCODE_MAX_LENGTH),
+    symbology: barcodeSymbologySchema.optional(),
+    isPrimary: z.boolean().default(false),
+  })
+  .transform((b) => ({ ...b, symbology: b.symbology ?? detectSymbology(b.code) }))
+  .superRefine((b, ctx) => {
+    const issue = barcodeIssue(b.code, b.symbology);
+    if (issue) ctx.addIssue({ code: 'custom', path: ['code'], message: `barcode.${issue}` });
+  });
+export type BarcodeInput = z.input<typeof barcodeInputSchema>;
+
+const barcodeListSchema = z
+  .array(barcodeInputSchema)
+  .max(10)
+  .refine((list) => list.filter((b) => b.isPrimary).length <= 1, {
+    message: 'Only one primary barcode',
+  });
+
+export const optionInputSchema = z.object({
   id: idSchema.optional(),
   ...localizedFields,
+  values: z
+    .array(z.object({ id: idSchema.optional(), ...localizedFields }))
+    .min(1)
+    .max(30)
+    .refine((list) => unique(list.flatMap((v) => (v.id ? [v.id] : []))), {
+      message: 'Duplicate value id',
+    }),
+});
+export type OptionInput = z.input<typeof optionInputSchema>;
+
+const skuSchema = z.string().trim().min(1).max(40).nullable();
+
+export const variantInputSchema = z.object({
+  id: idSchema.optional(),
+  /** Required for a product without options; a combination is named after its values. */
+  nameEn: nameEnSchema.optional(),
+  nameAr: nameArSchema.optional(),
+  sku: skuSchema.default(null),
   price: minorUnitsSchema,
+  cost: minorUnitsSchema.nullable().default(null),
+  trackInventory: z.boolean().default(false),
   sortOrder: sortOrderSchema.default(0),
+  /** For a product with options: the index of this variant's value of each option, in order. */
+  optionValues: z.array(z.int().min(0).max(29)).max(3).default([]),
+  /** Absent: an existing variant keeps its barcodes (a new one has none). */
+  barcodes: barcodeListSchema.optional(),
+  /** Absent: an existing variant keeps its pictures. */
+  imageFileIds: z.array(idSchema).max(10).refine(unique, { message: 'Duplicate image' }).optional(),
 });
 export type VariantInput = z.input<typeof variantInputSchema>;
 
@@ -247,15 +339,16 @@ export const productModifierGroupInputSchema = z
   });
 export type ProductModifierGroupInput = z.input<typeof productModifierGroupInputSchema>;
 
-const skuSchema = z.string().trim().min(1).max(40).nullable();
-
 const productRelations = {
+  options: z.array(optionInputSchema).max(3),
   variants: z
     .array(variantInputSchema)
-    .max(20)
+    .max(MAX_VARIANTS)
     .refine((list) => unique(list.flatMap((v) => (v.id ? [v.id] : []))), {
       message: 'Duplicate variant id',
     }),
+  barcodes: barcodeListSchema,
+  imageFileIds: z.array(idSchema).max(10).refine(unique, { message: 'Duplicate image' }),
   modifierGroups: z
     .array(productModifierGroupInputSchema)
     .max(20)
@@ -266,23 +359,110 @@ const productRelations = {
   taxIds: z.array(idSchema).max(5).refine(unique, { message: 'Duplicate tax' }),
 };
 
-export const createProductSchema = z.object({
-  categoryId: idSchema,
-  sku: skuSchema.default(null),
-  ...localizedFields,
-  ...localizedDescriptions,
-  price: minorUnitsSchema,
-  sortOrder: sortOrderSchema.default(0),
-  variants: productRelations.variants.default([]),
-  modifierGroups: productRelations.modifierGroups.default([]),
-  stationIds: productRelations.stationIds.default([]),
-  taxIds: productRelations.taxIds.default([]),
-});
+type CatalogShape = {
+  sku?: string | null;
+  options?: z.output<typeof optionInputSchema>[];
+  variants?: z.output<typeof variantInputSchema>[];
+  barcodes?: z.output<typeof barcodeListSchema>;
+};
+
+/**
+ * The rules between options, variants, SKUs and barcodes that one request can be checked for
+ * (ADR 0021). The server checks them again against what is stored (an update may send variants
+ * without options, or codes another product has).
+ */
+function catalogShape(product: CatalogShape, ctx: z.RefinementCtx): void {
+  const { options, variants } = product;
+  if (options && variants) {
+    if (options.length === 0) {
+      variants.forEach((v, i) => {
+        if (v.optionValues.length > 0) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['variants', i, 'optionValues'],
+            message: 'No options',
+          });
+        }
+        if (!v.nameEn)
+          ctx.addIssue({ code: 'custom', path: ['variants', i, 'nameEn'], message: 'Required' });
+        if (!v.nameAr)
+          ctx.addIssue({ code: 'custom', path: ['variants', i, 'nameAr'], message: 'Required' });
+      });
+    } else {
+      if (variants.length === 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['variants'],
+          message: 'A product with options needs variants',
+        });
+      }
+      const issue = variantOptionsIssue(
+        options.map((o) => o.values.length),
+        variants.map((v) => v.optionValues),
+      );
+      if (issue) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['variants', issue.index, 'optionValues'],
+          message: issue.reason,
+        });
+      }
+    }
+  }
+  if (variants && variants.length > 0 && product.barcodes && product.barcodes.length > 0) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['barcodes'],
+      message: 'Barcodes belong to the variants',
+    });
+  }
+  const codes = [
+    ...(product.barcodes ?? []).map((b, i) => ({ code: b.code, path: ['barcodes', i, 'code'] })),
+    ...(variants ?? []).flatMap((v, i) =>
+      (v.barcodes ?? []).map((b, j) => ({
+        code: b.code,
+        path: ['variants', i, 'barcodes', j, 'code'],
+      })),
+    ),
+  ];
+  const seenCodes = new Set<string>();
+  for (const { code, path } of codes) {
+    if (seenCodes.has(code)) ctx.addIssue({ code: 'custom', path, message: 'Duplicate barcode' });
+    seenCodes.add(code);
+  }
+  const seenSkus = new Set(product.sku ? [product.sku] : []);
+  (variants ?? []).forEach((v, i) => {
+    if (v.sku === null) return;
+    if (seenSkus.has(v.sku))
+      ctx.addIssue({ code: 'custom', path: ['variants', i, 'sku'], message: 'Duplicate SKU' });
+    seenSkus.add(v.sku);
+  });
+}
+
+export const createProductSchema = z
+  .object({
+    categoryId: idSchema,
+    sku: skuSchema.default(null),
+    ...localizedFields,
+    ...localizedDescriptions,
+    price: minorUnitsSchema,
+    sortOrder: sortOrderSchema.default(0),
+    options: productRelations.options.default([]),
+    variants: productRelations.variants.default([]),
+    barcodes: productRelations.barcodes.default([]),
+    imageFileIds: productRelations.imageFileIds.default([]),
+    modifierGroups: productRelations.modifierGroups.default([]),
+    stationIds: productRelations.stationIds.default([]),
+    taxIds: productRelations.taxIds.default([]),
+  })
+  .superRefine(catalogShape);
 export type CreateProductRequest = z.input<typeof createProductSchema>;
 
 /**
  * Partial update. `variants`, when present, is the complete desired list (missing variants are
- * archived). `modifierGroups` and `stationIds`, when present, replace the current links.
+ * archived); `options` (which needs `variants` too, since they name its values) the complete
+ * list of options. `barcodes`, `imageFileIds`, `modifierGroups` and `stationIds`, when present,
+ * replace the current ones.
  */
 export const updateProductSchema = z
   .object({
@@ -296,7 +476,12 @@ export const updateProductSchema = z
     ...productRelations,
   })
   .partial()
-  .refine(nonEmpty, noEmptyUpdate);
+  .refine(nonEmpty, noEmptyUpdate)
+  .refine((u) => u.options === undefined || u.variants !== undefined, {
+    message: 'Options are saved with their variants',
+    path: ['variants'],
+  })
+  .superRefine(catalogShape);
 export type UpdateProductRequest = z.input<typeof updateProductSchema>;
 
 export const listProductsQuerySchema = z.object({
@@ -345,8 +530,17 @@ const publishedProductSchema = z.object({
   stationIds: z.array(idSchema),
   taxIds: z.array(idSchema),
   variants: z.array(
-    z.object({ id: idSchema, nameEn: z.string(), nameAr: z.string(), price: z.int() }),
+    z.object({
+      id: idSchema,
+      nameEn: z.string(),
+      nameAr: z.string(),
+      sku: z.string().nullable(),
+      price: z.int(),
+      barcodes: z.array(z.string()),
+    }),
   ),
+  /** Codes of a product without variants (ADR 0021); none without the BARCODE module. */
+  barcodes: z.array(z.string()),
   modifierGroups: z.array(
     z.object({
       id: idSchema,
@@ -382,3 +576,24 @@ export const publishedMenuSchema = z.object({
 });
 export type PublishedMenu = z.infer<typeof publishedMenuSchema>;
 export type PublishedMenuProduct = z.infer<typeof publishedProductSchema>;
+export type PublishedMenuVariant = PublishedMenuProduct['variants'][number];
+
+// --- Code lookup (ADR 0021) --------------------------------------------------------------------
+
+export const catalogLookupQuerySchema = z.object({
+  code: z.string().trim().min(1).max(BARCODE_MAX_LENGTH),
+});
+export type CatalogLookupQuery = z.input<typeof catalogLookupQuerySchema>;
+
+/** What a scanned or typed code names on a location's menu (`lookupCode`). */
+export const catalogLookupSchema = z.object({
+  /** The stored code that matched. */
+  code: z.string(),
+  matchedBy: z.enum(['BARCODE', 'SKU']),
+  categoryId: idSchema,
+  /** The product as the location's menu sells it (price, availability). */
+  product: publishedProductSchema,
+  /** The variant the code names; null for a product without variants. */
+  variantId: idSchema.nullable(),
+});
+export type CatalogLookup = z.infer<typeof catalogLookupSchema>;
