@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client';
 import { I18nextProvider } from 'react-i18next';
 import { AppRoutes } from './app-routes';
 import { setupI18n } from './i18n';
+import { capturePreviewToken } from './lib/preview';
 import { usePreferences } from './stores/preferences';
 
 const queryClient = new QueryClient({
@@ -15,6 +16,8 @@ const queryClient = new QueryClient({
 async function bootstrap(): Promise<void> {
   // Light or dark before the first paint (the device's choice, else MADAR's default).
   applyStoredThemeMode();
+  // An admin's preview link (ADR 0023): keep its token for this tab, out of the address bar.
+  capturePreviewToken();
   const i18n = await setupI18n(initialLocale(usePreferences.getState().locale));
   const root = document.getElementById('root');
   if (!root) throw new Error('Missing #root');

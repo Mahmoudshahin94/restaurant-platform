@@ -184,6 +184,9 @@ The cloud is never in this path. Event names and payloads are typed in
 See [ADR 0013](adr/0013-online-ordering.md), [api.md](api.md#online-ordering-phase-7-cloud-only)
 and [sync.md](sync.md#website-orders-phase-7).
 
+0. The website is served on the tenant's own host (MADAR M7, [ADR 0023](adr/0023-multi-tenant-website.md)):
+   the API resolves the tenant from the verified host name, and every website route (site,
+   locations, menus, orders, tracking) works inside that tenant only.
 1. Customer web → `POST /api/v1/orders` (choices only: products, options, quantities, contact,
    pickup or delivery, payment option; idempotent by the browser-generated order id).
 2. The cloud checks the location's online-ordering state (`onlineOrderingStatus` in
@@ -442,7 +445,7 @@ See [ADR 0013](adr/0013-online-ordering.md).
   creation and tracking have their own rate limits; the status page polls every 5 s.
 - **Customer website** (`apps/customer-web`): guest checkout only; cart and language in
   localStorage, the placed order's token in sessionStorage; EN/AR with RTL; one tenant per
-  deployment (`VITE_TENANT_SLUG`).
+  deployment (`VITE_TENANT_SLUG`; replaced in MADAR M7 by the host name, ADR 0023).
 - **POS:** a banner and an auto-opening dialog for each new website order (items, fulfillment,
   address, payment, countdown), accept or reject with a reason preset; online tenders are no
   longer offered at the till.
@@ -699,7 +702,7 @@ Configuration precedence is in [configuration.md](configuration.md).
 | M4    | Currency and localization: currency configuration (ILS default), supported locales                       | ✅ Done |
 | M5    | Retail: SKU, barcodes, generic product options and variants, scanner abstraction                         | ✅ Done |
 | M6    | Self-service: kiosk app, terminal devices, shared order engine, self-checkout                            | ✅ Done |
-| M7    | Multi-tenant website: host resolution, verified domains, configurable sections                           | ⏳      |
+| M7    | Multi-tenant website: host resolution, verified domains, configurable sections                           | ✅ Done |
 | M8    | Payment configuration: per-tenant provider accounts, encrypted secrets                                   | ⏳      |
 | M9    | Platform admin: separate app and identity, tenants, health, support and repair tools                     | ⏳      |
 | M10   | Versioning: one MADAR version, device versions, release tracking                                         | ⏳      |
@@ -946,6 +949,51 @@ kept the cart, labneh was typed in, and the card payment completed BLD-001 at on
 received both sales with drawer-less card payments naming their kiosks, and both kiosks ACTIVE with
 version 0.1.0. The market cashier opened the attendant menu with code and PIN. The check led to one
 change: the attendant menu's version label is no longer forced left to right in Arabic.
+
+### Phase M7 decisions
+
+See [ADR 0023](adr/0023-multi-tenant-website.md) and
+[configuration.md](configuration.md#tenant-websites-m7).
+
+- **The host is the tenant:** `@HostRoute` routes (route-inventory access `host`) take no token;
+  `HostTenantGuard` resolves the request's host name (`X-Forwarded-Host` only behind
+  `TRUST_PROXY`) among **verified** domains and scopes the request to that tenant. A location,
+  order or tracking token of another tenant is not found; ids, slugs and headers from the browser
+  are ignored. The slug routes and `VITE_TENANT_SLUG` are gone; `DEV_DEFAULT_TENANT_SLUG` serves
+  bare `localhost` in development only.
+- **Verified domains:** every tenant gets `<slug>.<PLATFORM_WEB_DOMAIN>` at provisioning; custom
+  domains are normalized (lower case, punycode, no port or trailing dot) and proven with a
+  `_madar-verify` TXT record through a mockable `DomainVerifier`. A name is VERIFIED for one
+  tenant at most; pending claims neither serve nor block; MADAR's own names cannot be claimed.
+- **Same origin behind a proxy:** the website and its `/api` share the tenant's host behind Caddy
+  (`infrastructure/caddy/`), whose on-demand TLS asks `/internal/domains/check` before issuing a
+  certificate, so only verified names get one. No per-domain CORS.
+- **Pages as configuration:** `WebsiteConfig` holds a draft and the published version, validated
+  by a zod discriminated union of eleven section types plus navigation, social links and SEO, with
+  MADAR's template per business type until the first publication. Pictures are tenant files of
+  the new kind `WEBSITE_IMAGE`; every product, category, location and file named is checked to be
+  the tenant's. A 30-minute preview token shows the draft on the tenant's own site.
+- **One website build:** customer-web renders the published sections through a typed renderer
+  registry, after the site (branding, currency, languages) is known; the ordering flow is
+  unchanged. The admin gains the website editor and the domains page (`website.manage`, EN/AR).
+
+**Phase M7 verification (2026-10-24):** `pnpm build`, `typecheck`, `lint` and `test` green
+(1,023 unit, integration and component tests: API 318, domain 267, gateway 88, app-kit 56,
+admin 53, validation 53, i18n 45, server 31, customer-web 25, database 24, POS 22, kiosk 11,
+api-client 11, KDS 9, receipts 8, ui 2), `pnpm test:tools` (13), the hub schema check, a clean
+`migrate status`, `format:check`, and all 41 Playwright E2E tests (admin 12, POS 16, KDS 4,
+customer-web 6, kiosk 3) in one `pnpm e2e` run, including the new scenarios 28–29. A manual
+browser check against a freshly seeded database: the demo restaurant on
+`demo-kitchen.localhost:5175` and the coffee shop on `ramallah-roasters.localhost:5175` (in
+Arabic, RTL, its default) each showed their own sections and menus; `nobody.localhost` showed "This
+website was not found" and bare `localhost` the development tenant. In the admin's website editor
+the owner changed the hero title in English and Arabic and hid About, then published version 1,
+which the site showed in both languages. On the Domains page `Shop.Demo-Kitchen.TEST` was added as
+`shop.demo-kitchen.test` with its TXT record; while pending the API answered `404` for that host
+and the TLS check refused it; after Verify (mock verifier) the host served the demo restaurant and
+the TLS check answered `200`. The check led to two changes: the featured-products section waits
+for its menu instead of showing an empty heading, and the editor puts its two columns side by
+side only on wide screens.
 
 ## Architectural decisions and open questions
 

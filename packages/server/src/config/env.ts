@@ -71,6 +71,43 @@ const envSchema = z
     FILE_STORAGE_DIR: z.string().min(1).default('.data/files'),
     /** Key of the order tracking tokens; derived from JWT_ACCESS_SECRET when unset. */
     TRACKING_TOKEN_SECRET: z.string().min(32).optional(),
+    // --- Tenant websites (cloud only, ADR 0023) ---
+    /**
+     * MADAR's web domain: every tenant's website answers on `<slug>.<PLATFORM_WEB_DOMAIN>`
+     * (`madar.app` in production, `localhost` in development, where browsers resolve
+     * `*.localhost` to this machine).
+     */
+    PLATFORM_WEB_DOMAIN: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .regex(/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/, 'PLATFORM_WEB_DOMAIN must be a bare domain')
+      .default('localhost'),
+    /**
+     * Development only: the tenant (by slug) a website request gets when its host is bare
+     * `localhost`/`127.0.0.1`, which names no tenant. Refused in production. Never applies to a
+     * domain someone added: an unknown or unverified domain stays not found.
+     */
+    DEV_DEFAULT_TENANT_SLUG: z
+      .string()
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+      .optional(),
+    /**
+     * How custom domains are verified: `dns` looks the TXT record up; `mock`, the documented
+     * test adapter, finds every record published (refused in production).
+     */
+    DOMAIN_VERIFIER: z.enum(['dns', 'mock']).default('dns'),
+    /**
+     * How a tenant's website is reached from a browser, `{domain}` standing for its domain: the
+     * admin opens previews and links domains with it (`https://{domain}` behind the proxy; the
+     * Vite server's port in development).
+     */
+    WEBSITE_URL: z
+      .string()
+      .regex(/^https?:\/\/\{domain\}(:\d{1,5})?$/, 'WEBSITE_URL must be http(s)://{domain}[:port]')
+      .default('http://{domain}:5175'),
+    /** Key of the website preview tokens; derived from JWT_ACCESS_SECRET when unset. */
+    WEBSITE_PREVIEW_SECRET: z.string().min(32).optional(),
   })
   .refine((env) => env.NODE_ENV !== 'production' || env.ONLINE_PAYMENT_PROVIDER !== 'mock', {
     path: ['ONLINE_PAYMENT_PROVIDER'],
@@ -79,6 +116,22 @@ const envSchema = z
   .refine((env) => env.NODE_ENV !== 'production' || env.PAYMENT_TERMINAL_PROVIDER !== 'mock', {
     path: ['PAYMENT_TERMINAL_PROVIDER'],
     message: 'The mock card terminal cannot run in production',
+  })
+  .refine((env) => env.NODE_ENV !== 'production' || env.DOMAIN_VERIFIER !== 'mock', {
+    path: ['DOMAIN_VERIFIER'],
+    message: 'The mock domain verifier cannot run in production',
+  })
+  .refine((env) => env.NODE_ENV !== 'production' || env.DEV_DEFAULT_TENANT_SLUG === undefined, {
+    path: ['DEV_DEFAULT_TENANT_SLUG'],
+    message: 'A default website tenant is for development only',
+  })
+  .refine((env) => env.NODE_ENV !== 'production' || env.PLATFORM_WEB_DOMAIN !== 'localhost', {
+    path: ['PLATFORM_WEB_DOMAIN'],
+    message: 'Set PLATFORM_WEB_DOMAIN to the platform web domain in production',
+  })
+  .refine((env) => env.NODE_ENV !== 'production' || env.WEBSITE_URL.startsWith('https://'), {
+    path: ['WEBSITE_URL'],
+    message: 'Websites are served over HTTPS in production',
   });
 
 export type AppConfig = z.infer<typeof envSchema>;

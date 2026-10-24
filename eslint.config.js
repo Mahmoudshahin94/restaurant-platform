@@ -86,8 +86,8 @@ export default tseslint.config(
       'packages/server/src/modules/auth/terminal-auth.service.ts',
       // Start-up: new permissions reach every tenant's system roles.
       'packages/server/src/modules/auth/permission-catalog.initializer.ts',
-      // The customer website: finding the tenant of a slug, location or tracked order.
-      'packages/server/src/modules/online-ordering/public-tenant.resolver.ts',
+      // The tenant website: finding the tenant of a verified domain (ADR 0023).
+      'packages/server/src/modules/website/host-tenant.resolver.ts',
       // The acceptance-timeout sweep finds due orders across tenants.
       'packages/server/src/modules/online-ordering/web-orders.service.ts',
       // The definition itself.

@@ -35,6 +35,18 @@ export const ERROR_CODES = [
   'FILE_TOO_LARGE',
   /** A brand colour would make text or controls unreadable (details.issues). */
   'BRANDING_UNREADABLE',
+  // the tenant's website and domains (ADR 0023)
+  /** No verified domain of any tenant answers to this host name. */
+  'SITE_NOT_FOUND',
+  'DOMAIN_NOT_FOUND',
+  /** Not a domain name a website can be served on (details.reason). */
+  'DOMAIN_INVALID',
+  /** Another tenant already serves its website on this domain. */
+  'DOMAIN_TAKEN',
+  /** The `_madar-verify` TXT record was not found or does not hold the domain's token. */
+  'DOMAIN_NOT_VERIFIED',
+  /** The platform address, or the primary domain, cannot be disabled (details.reason). */
+  'DOMAIN_LOCKED',
   // staff and devices (Phase 8)
   'USER_NOT_FOUND',
   'ROLE_NOT_FOUND',

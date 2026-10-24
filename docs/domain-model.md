@@ -24,6 +24,7 @@ mirrors the operational subset.
 | Kitchen   | KitchenTicket, KitchenTicketItem                                                                                                  | ✅ Phase 4                         |
 | Sync      | SyncOperation, HubState, InboundOrder (hub); ProcessedOperation, ChangeLog (cloud)                                                | ✅ Phases 5–8                      |
 | Online    | WebOrderCounter (cloud); website fields on Order and Location                                                                     | ✅ Phase 7                         |
+| Website   | TenantDomain, WebsiteConfig (cloud)                                                                                               | ✅ Phase M7                        |
 | Reporting | Views `report_sales_orders`, `report_payments`, `report_refunds`, `report_kitchen_tickets` (cloud, not Prisma models)             | ✅ Phase 9                         |
 | Customers | Customer, Address (accounts)                                                                                                      | ⏳ deferred (guest checkout only)  |
 | Inventory | InventoryItem, Recipe, StockMovement                                                                                              | ⏳ module boundary only            |
@@ -48,6 +49,8 @@ erDiagram
   Tenant ||--o| TenantBranding : "is branded by"
   Tenant ||--o{ TenantFile : uploads
   TenantFile |o--o{ TenantBranding : "logo / favicon"
+  Tenant ||--o{ TenantDomain : "answers on"
+  Tenant ||--o| WebsiteConfig : "publishes"
 
   Role ||--o{ RolePermission : grants
   Permission ||--o{ RolePermission : "granted by"
@@ -147,13 +150,27 @@ tenant → surface (`login`, `pos`, `kds`, `kiosk`, `website`) → the device's 
   ids, `#rrggbb` primary/secondary/accent colours, typeface, logo size, theme mode, surface style
   and corner radius, each null to inherit. `surfaces` (JSON) holds the per-surface overrides,
   validated by `surfaceOverridesSchema`. Colours are checked for contrast on save.
-- `TenantFile`: a logo or favicon the tenant uploaded. Immutable; `storageKey`
+- `TenantFile`: a logo, favicon, product picture (M5) or website picture (M7) the tenant uploaded. Immutable; `storageKey`
   (`tenants/<tenantId>/<kind>/<id>.<ext>`, unique, kept inside the tenant's folder by a check
   constraint) names the bytes in the tenant file storage, `contentType` is the type the bytes
   were verified to be (PNG, JPEG, WebP, ICO), `sha256` lets a hub check its copy.
 
 The platform's own brand (MADAR · Powered by JudyTech) is not data: it is `PLATFORM_BRAND` in
 `@pos/shared-types`.
+
+**Website** ([ADR 0023](adr/0023-multi-tenant-website.md), cloud only, not in the hub schema):
+
+- `TenantDomain`: a host name the tenant's website answers on. `domain` is stored normalized
+  (lower case, punycode, no port or trailing dot; a check constraint), `kind` `SUBDOMAIN`
+  (`<slug>.<PLATFORM_WEB_DOMAIN>`, created verified at provisioning) or `CUSTOM`, `status`
+  `PENDING`/`VERIFIED`/`FAILED`/`DISABLED`, `isPrimary` (the site's canonical address; one per
+  tenant, verified only), a random `verificationToken` for the `_madar-verify` TXT record,
+  `verifiedAt`, `lastCheckedAt`. Unique per tenant and name; a partial unique index keeps a name
+  VERIFIED for one tenant at most, so pending claims of several tenants may coexist.
+- `WebsiteConfig` (key: tenant; absent = MADAR's template for the business type): `draft` and
+  `published` JSON, both `@pos/validation` `websiteConfigSchema`, `version` (0 until published, a
+  check ties it to `published`), `publishedAt`. Pictures are `TenantFile`s of kind
+  `WEBSITE_IMAGE`.
 
 **Currency and languages** ([ADR 0020](adr/0020-currency-and-localization.md)) are tenant
 columns, resolved MADAR's defaults → tenant:

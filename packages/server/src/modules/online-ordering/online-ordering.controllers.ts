@@ -3,7 +3,7 @@ import {
   type OnlineOrderingOverview,
   type PublicLocation,
   type PublicOrder,
-  type PublicTenant,
+  type PublicSite,
   type PublishedMenu,
   type WebOrderCreated,
   createWebOrderSchema,
@@ -12,60 +12,57 @@ import {
 } from '@pos/validation';
 import { Feature } from '@pos/shared-types';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { z } from 'zod';
-import { Public, RequirePermissions } from '../../common/auth/decorators';
+import type { z } from 'zod';
+import { RequirePermissions } from '../../common/auth/decorators';
+import { CurrentSite, HostRoute, type SiteHost } from '../../common/auth/host-route';
 import { RequireFeature } from '../../common/auth/require-feature';
-import { TenantContext } from '../../common/tenancy/tenant-context';
 import { ZodValidationPipe } from '../../common/validation/zod-validation.pipe';
 import { sendTenantFile } from '../files/file-response';
-import { PublicTenantResolver } from './public-tenant.resolver';
+import { SiteLocations } from './site-locations';
 import { StorefrontService } from './storefront.service';
 import { WebOrdersService } from './web-orders.service';
 
 const id = new ZodValidationPipe(idSchema);
-const slug = new ZodValidationPipe(
-  z
-    .string()
-    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
-    .max(60),
-);
 
 /**
- * The customer website's read API: no account, no token, rate limited like every route. Its
- * tenant is known only once the route resolves it, so `PublicTenantResolver` checks the module.
+ * The tenant website's read API (ADR 0023): no account, no token, rate limited like every route.
+ * The tenant is the one whose verified domain the request's host names (`@HostRoute`); nothing
+ * the browser sends names it. A location must be that tenant's.
  */
 @RequireFeature(Feature.ONLINE_ORDERING)
-@Public()
-@Controller('public')
-export class StorefrontController {
-  constructor(
-    private readonly storefront: StorefrontService,
-    private readonly tenants: PublicTenantResolver,
-  ) {}
+@HostRoute()
+@Controller('public/site')
+export class SiteController {
+  constructor(private readonly storefront: StorefrontService) {}
 
-  @Get('tenants/:slug')
-  async tenant(@Param('slug', slug) tenantSlug: string): Promise<PublicTenant> {
-    const tenantId = await this.tenants.bySlug(tenantSlug);
-    return TenantContext.runInTenant(tenantId, () => this.storefront.tenant(tenantSlug));
+  /**
+   * The tenant, its locations and its published website. With a valid preview token of the same
+   * tenant (`x-website-preview`, from the admin) the draft instead, never cached.
+   */
+  @Get()
+  site(
+    @CurrentSite() site: SiteHost,
+    @Headers('x-website-preview') preview: string | undefined,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<PublicSite> {
+    void reply.header('cache-control', preview ? 'no-store' : 'public, no-cache');
+    return this.storefront.site(site.tenantId, site.domain, preview);
   }
 
-  /** A logo or favicon of the tenant's branding (nothing else it uploaded). */
-  @Get('tenants/:slug/files/:fileId')
-  async brandingFile(
-    @Param('slug', slug) tenantSlug: string,
+  /** A logo or favicon of the tenant's branding, or a picture of its website's sections. */
+  @Get('files/:fileId')
+  async file(
+    @CurrentSite() site: SiteHost,
     @Param('fileId', id) fileId: string,
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<Buffer> {
-    const tenantId = await this.tenants.bySlug(tenantSlug);
-    const { file, bytes } = await TenantContext.runInTenant(tenantId, () =>
-      this.storefront.brandingFile(tenantId, fileId),
-    );
+    const { file, bytes } = await this.storefront.siteFile(site.tenantId, fileId);
     return sendTenantFile(reply, file, bytes, 'public');
   }
 
   @Get('locations/:locationId')
   location(@Param('locationId', id) locationId: string): Promise<PublicLocation> {
-    return this.tenants.inLocationTenant(locationId, () => this.storefront.location(locationId));
+    return this.storefront.location(locationId);
   }
 
   /** The published menu; `If-None-Match` answers `304` when it did not change. */
@@ -75,9 +72,7 @@ export class StorefrontController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<PublishedMenu | undefined> {
-    const menu = await this.tenants.inLocationTenant(locationId, () =>
-      this.storefront.menu(locationId),
-    );
+    const menu = await this.storefront.menu(locationId);
     const etag = `"${menu.version}"`;
     void reply.header('etag', etag).header('cache-control', 'public, no-cache');
     if (request.headers['if-none-match'] === etag) {
@@ -88,25 +83,29 @@ export class StorefrontController {
   }
 }
 
-/** Website orders: placed by guests, followed with the tracking token (ADR 0013). */
+/**
+ * Website orders: placed by guests, followed with the tracking token (ADR 0013), on the tenant's
+ * own website only (ADR 0023): the order's location, or the tracked order, must be the host's
+ * tenant's, otherwise it is not found.
+ */
 @RequireFeature(Feature.ONLINE_ORDERING)
-@Public()
+@HostRoute()
 @Controller('orders')
 export class WebOrdersController {
   constructor(
     private readonly orders: WebOrdersService,
-    private readonly tenants: PublicTenantResolver,
+    private readonly locations: SiteLocations,
   ) {}
 
   /** 201 when created, 200 for a resend of the same order id (idempotent). */
   @Post()
   async create(
+    @CurrentSite() site: SiteHost,
     @Body(new ZodValidationPipe(createWebOrderSchema)) body: z.output<typeof createWebOrderSchema>,
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<WebOrderCreated> {
-    const { result, created } = await this.tenants.inLocationTenant(body.locationId, () =>
-      this.orders.create(body),
-    );
+    await this.locations.assert(site.tenantId, body.locationId);
+    const { result, created } = await this.orders.create(body);
     void reply.status(created ? 201 : 200).header('cache-control', 'no-store');
     return result;
   }
@@ -114,11 +113,14 @@ export class WebOrdersController {
   /** The token travels in a header (`x-tracking-token`), never in the URL, so it stays out of logs. */
   @Get('track')
   track(
+    @CurrentSite() site: SiteHost,
     @Headers('x-tracking-token') token: string | undefined,
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<PublicOrder> {
     void reply.header('cache-control', 'no-store');
-    return this.orders.track(token);
+    return this.orders.track(token, (locationId) =>
+      this.locations.assert(site.tenantId, locationId),
+    );
   }
 }
 

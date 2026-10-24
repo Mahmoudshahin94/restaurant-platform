@@ -8,7 +8,7 @@ import type {
   PairedDevice,
   PublicLocation,
   PublicOrder,
-  PublicTenant,
+  PublicSite,
   PublishedMenu,
   SyncOperationResult,
   SyncOrder,
@@ -34,7 +34,7 @@ let menu: Awaited<ReturnType<typeof createMenuFixture>>;
 let owner: Record<string, string>;
 let hub: Record<string, string>;
 let deviceId: string;
-let slug: string;
+let host: Record<string, string>;
 
 beforeAll(async () => {
   ({ app, prisma } = await startApp({
@@ -52,7 +52,8 @@ beforeEach(async () => {
   await resetDatabase(prisma);
   tenant = await createTenant(prisma);
   menu = await createMenuFixture(prisma, tenant);
-  slug = (await prisma.tenant.findUniqueOrThrow({ where: { id: tenant.tenantId } })).slug;
+  // The website is reached on the tenant's own host (ADR 0023).
+  host = { host: tenant.host };
   await prisma.paymentMethod.create({
     data: {
       tenantId: tenant.tenantId,
@@ -119,7 +120,7 @@ async function placeRaw(payload: unknown) {
   return app.inject({
     method: 'POST',
     url: '/api/v1/orders',
-    headers: { 'x-client-source': 'WEBSITE' },
+    headers: { ...host, 'x-client-source': 'WEBSITE' },
     payload: payload as Record<string, unknown>,
   });
 }
@@ -134,7 +135,7 @@ async function track(token: string) {
   return app.inject({
     method: 'GET',
     url: '/api/v1/orders/track',
-    headers: { 'x-tracking-token': token },
+    headers: { ...host, 'x-tracking-token': token },
   });
 }
 
@@ -210,11 +211,13 @@ const minutes = (n: number) => n * 60_000;
 
 describe('public storefront', () => {
   it('lists the tenant’s active locations with what customers can do there', async () => {
-    const res = await app.inject({ method: 'GET', url: `/api/v1/public/tenants/${slug}` });
+    const res = await app.inject({ method: 'GET', url: '/api/v1/public/site', headers: host });
     expect(res.statusCode).toBe(200);
-    const storefront = res.json<PublicTenant>();
+    const storefront = res.json<PublicSite>();
+    expect(storefront).not.toHaveProperty('slug');
     expect(storefront).toMatchObject({
-      slug,
+      id: tenant.tenantId,
+      primaryDomain: tenant.host,
       currency: { code: 'SAR', decimalPlaces: 2 },
       locales: { default: 'en', supported: ['en', 'ar'] },
     });
@@ -232,14 +235,21 @@ describe('public storefront', () => {
       reason: 'SETTING_CLOSED',
     });
     expect(
-      (await app.inject({ method: 'GET', url: '/api/v1/public/tenants/nope' })).statusCode,
+      (
+        await app.inject({
+          method: 'GET',
+          url: '/api/v1/public/site',
+          headers: { host: 'nope.localhost' },
+        })
+      ).statusCode,
     ).toBe(404);
   });
 
   it('serves the published menu with an ETag, without signing in', async () => {
     const res = await app.inject({
       method: 'GET',
-      url: `/api/v1/public/locations/${tenant.locationA}/menu`,
+      url: `/api/v1/public/site/locations/${tenant.locationA}/menu`,
+      headers: host,
     });
     expect(res.statusCode).toBe(200);
     const body = res.json<PublishedMenu>();
@@ -248,8 +258,8 @@ describe('public storefront', () => {
     );
     const again = await app.inject({
       method: 'GET',
-      url: `/api/v1/public/locations/${tenant.locationA}/menu`,
-      headers: { 'if-none-match': res.headers.etag as string },
+      url: `/api/v1/public/site/locations/${tenant.locationA}/menu`,
+      headers: { ...host, 'if-none-match': res.headers.etag as string },
     });
     expect(again.statusCode).toBe(304);
   });
@@ -326,7 +336,11 @@ describe('online-ordering state', () => {
     expect(res.statusCode).toBe(503);
     expect(res.json()).toMatchObject({ code: 'LOCATION_OFFLINE' });
     const location = (
-      await app.inject({ method: 'GET', url: `/api/v1/public/locations/${tenant.locationA}` })
+      await app.inject({
+        method: 'GET',
+        url: `/api/v1/public/site/locations/${tenant.locationA}`,
+        headers: host,
+      })
     ).json<PublicLocation>();
     expect(location.status).toEqual({ state: 'OFFLINE', reason: 'HUB_OFFLINE' });
 
@@ -375,7 +389,11 @@ describe('POST /orders', () => {
     const { order } = res.json<WebOrderCreated>();
 
     const published = (
-      await app.inject({ method: 'GET', url: `/api/v1/public/locations/${tenant.locationA}/menu` })
+      await app.inject({
+        method: 'GET',
+        url: `/api/v1/public/site/locations/${tenant.locationA}/menu`,
+        headers: host,
+      })
     ).json<PublishedMenu>();
     const expected = quoteOrder({
       menu: { taxes: published.taxes, categories: published.categories },
@@ -493,6 +511,7 @@ describe('POST /orders', () => {
       const res = await plain.app.inject({
         method: 'POST',
         url: '/api/v1/orders',
+        headers: host,
         payload: webOrder({ payment: { option: 'ONLINE_CARD', cardToken: 'tok_mock_visa' } }),
       });
       expect(res.json()).toMatchObject({
@@ -502,7 +521,8 @@ describe('POST /orders', () => {
       const location = (
         await plain.app.inject({
           method: 'GET',
-          url: `/api/v1/public/locations/${tenant.locationA}`,
+          url: `/api/v1/public/site/locations/${tenant.locationA}`,
+          headers: host,
         })
       ).json<PublicLocation>();
       expect(location.onlineCardEnabled).toBe(false);
@@ -536,7 +556,9 @@ describe('GET /orders/track', () => {
     for (const token of [forged, `${trackingToken}x`, 'garbage']) {
       expect((await track(token)).statusCode).toBe(404);
     }
-    expect((await app.inject({ method: 'GET', url: '/api/v1/orders/track' })).statusCode).toBe(404);
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/v1/orders/track', headers: host })).statusCode,
+    ).toBe(404);
   });
 
   it('is rate limited per client', async () => {
@@ -549,7 +571,7 @@ describe('GET /orders/track', () => {
             await limited.app.inject({
               method: 'GET',
               url: '/api/v1/orders/track',
-              headers: { 'x-tracking-token': 'garbage' },
+              headers: { ...host, 'x-tracking-token': 'garbage' },
             })
           ).statusCode,
         );
@@ -557,7 +579,7 @@ describe('GET /orders/track', () => {
       expect(codes).toEqual([404, 404, 404, 429, 429]);
       // Other endpoints keep their own budget.
       expect(
-        (await limited.app.inject({ method: 'GET', url: `/api/v1/public/tenants/${slug}` }))
+        (await limited.app.inject({ method: 'GET', url: '/api/v1/public/site', headers: host }))
           .statusCode,
       ).toBe(200);
     } finally {

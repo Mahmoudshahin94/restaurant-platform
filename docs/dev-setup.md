@@ -77,11 +77,38 @@ start the API again and press "Sync now" on the synchronization screen (or wait 
 Run the customer website (online ordering; it talks to the cloud API):
 
 ```bash
-pnpm --filter @pos/customer-web dev        # http://localhost:5175 (proxies /api to :3000)
+pnpm --filter @pos/customer-web dev        # http://demo-kitchen.localhost:5175 (proxies /api to :3000)
 ```
 
-It sells for the tenant in `VITE_TENANT_SLUG` (default `demo-kitchen`, the seed). A
-branch takes orders only when online ordering is OPEN (the seed opens `MAIN` when it creates it;
+One website build serves every tenant: the API finds the tenant from the **host name**
+([ADR 0023](adr/0023-multi-tenant-website.md)). The seed gives each demo tenant a verified address
+`<slug>.<PLATFORM_WEB_DOMAIN>` (default `localhost`), and browsers resolve every `*.localhost` name
+to this machine, so open:
+
+| Tenant               | Website                                 |
+| -------------------- | --------------------------------------- |
+| Demo restaurant      | http://demo-kitchen.localhost:5175      |
+| Coffee shop (Arabic) | http://ramallah-roasters.localhost:5175 |
+| Supermarket          | http://al-balad-market.localhost:5175   |
+| Clothing store       | http://nablus-style.localhost:5175      |
+
+(The supermarket and clothing store have no online ordering by default: switch the module on in
+their admin to see their sites.) A database seeded before M7 needs `pnpm db:seed` once to get
+these addresses. Bare `http://localhost:5175` shows the tenant in `DEV_DEFAULT_TENANT_SLUG`
+(the `.env` example: `demo-kitchen`), development only; any other host that no tenant verified
+shows "This website was not found". The Vite proxy keeps the host (`changeOrigin: false`), so the
+API sees `demo-kitchen.localhost:5175`.
+
+To try a custom domain: in the admin, Website → Domains → add e.g. `shop.test`, then Verify. With
+`DOMAIN_VERIFIER=mock` (the `.env` example) every TXT record is "found"; with `dns` the
+`_madar-verify` record must really exist. Browsers do not resolve `shop.test` by themselves: add
+`127.0.0.1 shop.test` to `/etc/hosts`, or use a name under `.localhost` that is not under
+`PLATFORM_WEB_DOMAIN` (with the default `localhost` that is every `.localhost` name, so set
+`PLATFORM_WEB_DOMAIN=madar.localhost` and re-seed to try `a.localhost`, as the E2E suite does). The
+website editor (Website → Website editor) saves a draft, opens a preview on the tenant's own site
+and publishes.
+
+A branch takes orders only when online ordering is OPEN (the seed opens `MAIN` when it creates it;
 otherwise `PUT /api/v1/locations/:lid/online-ordering { "state": "OPEN" }` as the owner), it is
 within its opening hours, and **its hub is running** (a hub silent for 3 minutes makes the
 branch "Offline"). With `ONLINE_PAYMENT_PROVIDER=mock` (the `.env` example) the checkout offers a

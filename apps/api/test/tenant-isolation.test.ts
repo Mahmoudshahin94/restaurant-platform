@@ -232,10 +232,11 @@ describe('tenant A cannot read or overwrite tenant B’s files (ADR 0019)', () =
     }
     const list = await asA('GET', `/tenants/${a.tenantId}/files`);
     expect(list.body).not.toContain(logoB.id);
-    const { slug } = await prisma.tenant.findUniqueOrThrow({ where: { id: a.tenantId } });
+    // B's logo is public on B's website, never on A's (ADR 0023).
     const pub = await app.inject({
       method: 'GET',
-      url: `/api/v1/public/tenants/${slug}/files/${logoB.id}`,
+      url: `/api/v1/public/site/files/${logoB.id}`,
+      headers: { host: a.host },
     });
     expect(pub.statusCode).toBe(404);
   });

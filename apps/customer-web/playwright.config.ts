@@ -9,6 +9,10 @@ import { defineConfig } from '@playwright/test';
  * change feed, the POS (served from the hub) accepts or rejects it, and the customer sees the new
  * status. Everything runs: cloud, hub, POS, kitchen display and website; journey.spec.ts follows
  * one order through all of them.
+ *
+ * The website is reached on its tenant's own host (ADR 0023): MADAR's web domain is
+ * `madar.localhost` here, so the demo restaurant answers on `demo-kitchen.madar.localhost`, and
+ * tenant-websites.spec.ts adds `a.localhost` and `b.localhost` as two businesses' own domains.
  */
 const ROOT_ENV = resolve(import.meta.dirname, '../../.env');
 if (existsSync(ROOT_ENV)) process.loadEnvFile(ROOT_ENV);
@@ -22,6 +26,11 @@ process.env.WEB_E2E_KDS_URL = `http://localhost:${String(KDS_PORT)}`;
 process.env.WEB_E2E_CLOUD_PORT = String(CLOUD_PORT);
 process.env.WEB_E2E_HUB_PORT = String(HUB_PORT);
 process.env.WEB_E2E_POS_URL = `http://localhost:${String(POS_PORT)}`;
+process.env.WEB_E2E_WEB_PORT = String(WEB_PORT);
+// The coffee shop's owner (an optional demo account) runs the second business.
+process.env.SEED_CAFE_OWNER_EMAIL ??= 'cafe-owner@demo.local';
+process.env.SEED_CAFE_OWNER_PASSWORD ??= 'Dev-Only-Cafe-Pass-1';
+const WEB_DOMAIN = 'madar.localhost';
 const e2eDatabaseUrl =
   process.env.WEB_E2E_DATABASE_URL ??
   (process.env.DATABASE_URL ?? '').replace(/\/[^/?]+(\?|$)/, '/pos_kds_web_e2e$1');
@@ -35,7 +44,7 @@ export default defineConfig({
   reporter: [['list']],
   timeout: 90_000,
   use: {
-    baseURL: `http://localhost:${String(WEB_PORT)}`,
+    baseURL: `http://demo-kitchen.${WEB_DOMAIN}:${String(WEB_PORT)}`,
     viewport: { width: 1280, height: 900 },
     ...(process.env.CI ? {} : { channel: process.env.PLAYWRIGHT_CHANNEL ?? 'chrome' }),
     trace: 'retain-on-failure',
@@ -56,6 +65,10 @@ export default defineConfig({
         TRACKING_RATE_LIMIT_PER_MINUTE: '10000',
         ONLINE_PAYMENT_PROVIDER: 'mock',
         WEB_ORDER_TIMEOUT_SWEEP_SECONDS: '5',
+        // Websites by host (ADR 0023); the seed gives each tenant `<slug>.madar.localhost`.
+        PLATFORM_WEB_DOMAIN: WEB_DOMAIN,
+        DOMAIN_VERIFIER: 'mock',
+        WEBSITE_URL: `http://{domain}:${String(WEB_PORT)}`,
       },
     },
     {

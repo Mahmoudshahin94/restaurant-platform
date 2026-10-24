@@ -34,7 +34,10 @@
     "devices": "الأجهزة",
     "sync": "المزامنة",
     "auditLog": "سجل التدقيق",
-    "reports": "التقارير"
+    "reports": "التقارير",
+    "website": "الموقع الإلكتروني",
+    "websiteEditor": "محرّر الموقع",
+    "domains": "النطاقات"
   },
   "header": {
     "location": "الفرع",
@@ -656,6 +659,9 @@
     "online_ordering": {
       "manage": "إدارة الطلب عبر الإنترنت"
     },
+    "website": {
+      "manage": "تعديل الموقع الإلكتروني ونطاقاته"
+    },
     "devices": {
       "manage": "إدارة الأجهزة"
     },
@@ -1008,6 +1014,170 @@
     "ORDERS_ONLY": "يمكن اعتماد نسخة الخدمة السحابية للطلبات فقط.",
     "NOT_IN_CLOUD": "لا توجد نسخة في الخدمة السحابية: ستضيع عملية البيع.",
     "HUB_HAS_PAYMENTS": "تحتوي نسخة الفرع على مدفوعات لم تسجلها الخدمة السحابية.",
-    "HUB_DISABLED": "الخادم الذي أرسلها معطّل."
+    "HUB_DISABLED": "الخادم الذي أرسلها معطّل.",
+    "ALREADY_ADDED": "هذا النطاق موجود في القائمة بالفعل.",
+    "OTHER_TENANT": "نشاط تجاري آخر يستخدم هذا النطاق بالفعل.",
+    "PLATFORM_DOMAIN": "لا يمكن إضافة عناوين $t(common:platform.name) كنطاق خاص بك.",
+    "SINGLE_LABEL": "أدخل نطاقًا كاملًا مثل www.example.com.",
+    "IP_ADDRESS": "أدخل اسم نطاق وليس عنوان IP.",
+    "TOO_MANY": "وصلت إلى الحد الأقصى من النطاقات الخاصة.",
+    "NOT_VERIFIED": "وثّق النطاق أولًا.",
+    "PLATFORM_ADDRESS": "عنوانك في $t(common:platform.name) يبقى دائمًا.",
+    "PRIMARY": "اجعل نطاقًا آخر أساسيًا أولًا."
+  },
+  "website": {
+    "title": "الموقع الإلكتروني",
+    "description": "ما يراه الزوار على موقعك. تبقى التغييرات في المسودة حتى تنشرها.",
+    "status": {
+      "published": "نُشر الإصدار {{version}} في {{date}}",
+      "never": "لم يُنشر بعد: يرى الزوار موقع البداية من $t(common:platform.name) لنشاطك.",
+      "unpublished": "تغييرات غير منشورة",
+      "hint": "الحفظ يحفظ المسودة؛ المعاينة تفتح موقعك بالمسودة لمدة 30 دقيقة؛ النشر يعرضها للجميع."
+    },
+    "actions": {
+      "save": "حفظ المسودة",
+      "preview": "معاينة",
+      "publish": "نشر",
+      "add": "إضافة",
+      "remove": "إزالة القسم",
+      "show": "إظهار {{section}}",
+      "moveUp": "نقل {{section}} للأعلى",
+      "moveDown": "نقل {{section}} للأسفل"
+    },
+    "saved": "تم حفظ المسودة. لا يراها الزوار حتى تنشرها.",
+    "publishedNotice": "تم النشر. يرى الزوار الآن الإصدار {{version}}.",
+    "invalid": "بعض الحقول غير صالحة بعد. راجع القسم المحدد.",
+    "invalidAt": "غير صالح بعد: {{path}}",
+    "sections": "الأقسام",
+    "sectionsHint": "شغّل الأقسام أو أوقفها ورتّبها.",
+    "newSection": "قسم جديد",
+    "noSelection": "اختر قسمًا لتعديله.",
+    "types": {
+      "HERO": "الواجهة الرئيسية",
+      "FEATURED_PRODUCTS": "منتجات مميزة",
+      "CATEGORIES": "الفئات",
+      "ABOUT": "من نحن",
+      "GALLERY": "معرض الصور",
+      "TESTIMONIALS": "آراء العملاء",
+      "LOCATIONS": "الفروع",
+      "CONTACT": "التواصل",
+      "OPENING_HOURS": "ساعات العمل",
+      "PROMO_BANNER": "شريط عرض ترويجي",
+      "FOOTER": "التذييل"
+    },
+    "typeHints": {
+      "HERO": "أول ما يراه الزوار: عنوان وسطر تحته وزر وصورة.",
+      "FEATURED_PRODUCTS": "منتجات من قائمة أحد الفروع مع أسعارها. إن لم تختر شيئًا تظهر أول المنتجات المتاحة.",
+      "CATEGORIES": "فئات قائمتك، كل منها يفتح القائمة عندها. إن لم تختر شيئًا تظهر كلها.",
+      "ABOUT": "كلمات قليلة عن النشاط مع صورة.",
+      "GALLERY": "صور للمكان أو الطعام أو المنتجات.",
+      "TESTIMONIALS": "ما يقوله العملاء عنك.",
+      "LOCATIONS": "فروعك، وهل تستقبل الطلبات الآن، والطريق إلى قوائمها.",
+      "CONTACT": "كيف يصل إليك العملاء.",
+      "OPENING_HOURS": "ساعات عمل فرع واحد أو كل الفروع.",
+      "PROMO_BANNER": "رسالة قصيرة بارزة مع زر اختياري.",
+      "FOOTER": "آخر جزء في الصفحة: نصك والتنقل وروابط التواصل الاجتماعي."
+    },
+    "backgrounds": {
+      "DEFAULT": "الصفحة",
+      "MUTED": "هادئة",
+      "PRIMARY": "لون العلامة"
+    },
+    "alignments": {
+      "START": "محاذاة للبداية",
+      "CENTER": "في الوسط"
+    },
+    "networks": {
+      "FACEBOOK": "فيسبوك",
+      "INSTAGRAM": "إنستغرام",
+      "X": "إكس",
+      "TIKTOK": "تيك توك",
+      "WHATSAPP": "واتساب",
+      "YOUTUBE": "يوتيوب"
+    },
+    "fields": {
+      "title": "العنوان",
+      "subtitle": "العنوان الفرعي",
+      "body": "النص",
+      "cta": "زر",
+      "linkLabel": "نص الزر",
+      "href": "يفتح",
+      "hrefHint": "قسمًا (#locations) أو صفحة (/track) أو عنوان https://.",
+      "addButton": "إضافة {{label}}",
+      "removeButton": "إزالة",
+      "image": "صورة",
+      "imageHint": "PNG أو JPEG أو WebP حتى 2 ميغابايت.",
+      "menuOf": "قائمة",
+      "firstOpenLocation": "أول فرع مفتوح",
+      "products": "المنتجات",
+      "productsHint": "حتى {{max}}. إن لم تختر شيئًا: أول المنتجات المتاحة.",
+      "categories": "الفئات",
+      "categoriesHint": "إن لم تختر شيئًا: كل فئة فيها منتجات.",
+      "picture": "الصورة {{n}}",
+      "addPicture": "إضافة صورة",
+      "caption": "تعليق الصورة",
+      "testimonial": "الرأي {{n}}",
+      "quote": "ما قالوه",
+      "author": "الاسم",
+      "addTestimonial": "إضافة رأي",
+      "removeTestimonial": "إزالة هذا الرأي",
+      "phone": "الهاتف",
+      "email": "البريد الإلكتروني",
+      "address": "العنوان",
+      "hoursOf": "ساعات",
+      "everyLocation": "كل الفروع",
+      "text": "النص",
+      "footerText": "نص التذييل",
+      "background": "الخلفية",
+      "alignment": "المحاذاة"
+    },
+    "site": {
+      "navigation": "التنقل",
+      "navigationHint": "الروابط في الترويسة والتذييل.",
+      "link": "الرابط {{n}}",
+      "addLink": "إضافة رابط",
+      "social": "روابط التواصل الاجتماعي",
+      "socialHint": "تظهر في التذييل.",
+      "network": "الشبكة",
+      "url": "العنوان",
+      "addSocial": "إضافة رابط تواصل",
+      "removeSocial": "إزالة رابط التواصل هذا",
+      "seo": "محركات البحث والمشاركة",
+      "seoHint": "عنوان الصفحة ووصفها كما يظهران في نتائج البحث ومعاينات الروابط.",
+      "seoTitle": "عنوان الصفحة",
+      "seoDescription": "الوصف",
+      "seoImage": "صورة المشاركة",
+      "urlPlaceholder": "https://"
+    }
+  },
+  "domains": {
+    "title": "النطاقات",
+    "description": "العناوين التي يعمل عليها موقعك. النطاقات الموثّقة فقط تعرض موقعك.",
+    "addTitle": "إضافة نطاقك الخاص",
+    "addHint": "حتى {{max}} نطاقات تملكها. ستضيف سجل DNS لإثبات ملكيتك.",
+    "domain": "النطاق",
+    "add": "إضافة النطاق",
+    "kinds": {
+      "SUBDOMAIN": "عنوانك في $t(common:platform.name)",
+      "CUSTOM": "نطاقك الخاص"
+    },
+    "statuses": {
+      "PENDING": "بانتظار التوثيق",
+      "VERIFIED": "موثّق",
+      "FAILED": "لم يُعثر على السجل",
+      "DISABLED": "معطّل"
+    },
+    "primary": "أساسي",
+    "instructions": "أضف سجل TXT هذا لدى مزوّد DNS لنطاقك، ثم وثّقه. قد تستغرق تغييرات DNS بعض الوقت.",
+    "recordType": "النوع",
+    "recordName": "الاسم",
+    "recordValue": "القيمة",
+    "pointHint": "لعرض الموقع، وجّه النطاق أيضًا (سجل CNAME أو A) إلى $t(common:platform.name) كما يوضح دليل الإعداد.",
+    "verify": "توثيق",
+    "verifying": "جارٍ التحقق…",
+    "makePrimary": "جعله أساسيًا",
+    "disable": "تعطيل",
+    "open": "فتح الموقع",
+    "placeholder": "www.example.com"
   }
 }

@@ -126,7 +126,7 @@ test('a website order reaches the store, is accepted, and the customer sees it',
   await customer(page, 'en');
   // 14. The customer orders on the website.
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Order from Demo Kitchen' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Our branches' })).toBeVisible();
   await expect(page.getByText('Open for orders')).toBeVisible();
   await page.getByRole('link', { name: 'View menu · Main Branch' }).click();
   await page.getByRole('button', { name: 'Add Classic Burger' }).click();
@@ -187,7 +187,7 @@ test('in Arabic, right to left: a paid delivery order is rejected and the paymen
   await customer(page, 'ar');
   await page.goto('/');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
-  await expect(page.getByRole('heading', { name: 'اطلب من مطبخ تجريبي' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'فروعنا' })).toBeVisible();
   await page.getByRole('link', { name: 'عرض القائمة · الفرع الرئيسي' }).click();
   await page.getByRole('button', { name: 'أضف بطاطس' }).click();
   await page

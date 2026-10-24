@@ -380,7 +380,9 @@ export async function seed(prisma: PrismaClient, file: SeedFile): Promise<void> 
 
   await syncPermissionCatalog(prisma);
 
-  const provisioned = await provisionTenant(prisma, file);
+  // Development websites answer on `<slug>.localhost` (ADR 0023).
+  const webDomain = process.env.PLATFORM_WEB_DOMAIN ?? 'localhost';
+  const provisioned = await provisionTenant(prisma, { ...file, webDomain });
   const tenant = { id: provisioned.tenantId };
   const { locationIds, roleIds } = provisioned;
 

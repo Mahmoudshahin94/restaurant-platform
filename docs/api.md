@@ -67,7 +67,12 @@ Validation failures (`400 VALIDATION_FAILED`) list
 ## Authorization
 
 - **Deny by default.** A non-public route without `@RequirePermissions(...)` (or
-  `@DeviceRoute(...)`, below) is rejected, at start-up already.
+  `@DeviceRoute(...)` or `@HostRoute()`, below) is rejected, at start-up already.
+- **Website routes** (MADAR M7, [ADR 0023](adr/0023-multi-tenant-website.md)) take no credential:
+  their tenant is the one whose **verified** domain the request's host names (`HostTenantGuard`;
+  `X-Forwarded-Host` only behind `TRUST_PROXY`). An unknown, pending, failed or disabled host
+  answers `404 SITE_NOT_FOUND`; a `:locationId` (or a body's `locationId`) of another tenant
+  `404 LOCATION_NOT_FOUND`. Tenant ids, slugs and headers sent by the browser are ignored.
 - **Device routes** (MADAR M6, [ADR 0022](adr/0022-self-service-kiosk.md)) serve paired terminals
   only: `Authorization: Device <deviceId>.<secret>` of an `ACTIVE` terminal of the route's types.
   A staff token there answers `401`, as does a device credential on any staff route. The route's
@@ -151,7 +156,7 @@ A location of another tenant answers `404 LOCATION_NOT_FOUND`.
 - **`/hub/locales`** gives the POS and KDS sign-in screens their business's languages
   (`{ default, supported, digits, sources }`) from the hub's snapshot; `503 HUB_NOT_PROVISIONED`
   before the first one.
-- `GET /public/tenants/:slug` carries the same `currency` and `locales` for the website.
+- `GET /public/site` carries the same `currency` and `locales` for the website.
 
 ## Modules (Phase M2)
 
@@ -173,16 +178,16 @@ A location of another tenant answers `404 LOCATION_NOT_FOUND`.
 
 [ADR 0019](adr/0019-branding-and-theme.md).
 
-| Method | Path                                                        | Permission                      |
-| ------ | ----------------------------------------------------------- | ------------------------------- |
-| GET    | `/tenants/:tid/branding`                                    | `settings.manage` (tenant-wide) |
-| PUT    | `/tenants/:tid/branding` (cloud; hub `403`)                 | `settings.manage` (tenant-wide) |
-| POST   | `/tenants/:tid/files?kind=LOGO\|FAVICON` (cloud; hub `403`) | `settings.manage` (tenant-wide) |
-| GET    | `/tenants/:tid/files`                                       | `settings.manage` (tenant-wide) |
-| GET    | `/tenants/:tid/files/:fileId/content`                       | any member (cloud and hub)      |
-| GET    | `/public/tenants/:slug/files/:fileId`                       | public (`ONLINE_ORDERING`)      |
-| GET    | `/hub/branding?surface=` (hub only, default `login`)        | public                          |
-| GET    | `/hub/branding/files/:fileId` (hub only)                    | public                          |
+| Method | Path                                                                                      | Permission                      |
+| ------ | ----------------------------------------------------------------------------------------- | ------------------------------- |
+| GET    | `/tenants/:tid/branding`                                                                  | `settings.manage` (tenant-wide) |
+| PUT    | `/tenants/:tid/branding` (cloud; hub `403`)                                               | `settings.manage` (tenant-wide) |
+| POST   | `/tenants/:tid/files?kind=LOGO\|FAVICON\|PRODUCT_IMAGE\|WEBSITE_IMAGE` (cloud; hub `403`) | `settings.manage` (tenant-wide) |
+| GET    | `/tenants/:tid/files`                                                                     | `settings.manage` (tenant-wide) |
+| GET    | `/tenants/:tid/files/:fileId/content`                                                     | any member (cloud and hub)      |
+| GET    | `/public/site/files/:fileId` (the host's tenant, M7)                                      | website (`ONLINE_ORDERING`)     |
+| GET    | `/hub/branding?surface=` (hub only, default `login`)                                      | public                          |
+| GET    | `/hub/branding/files/:fileId` (hub only)                                                  | public                          |
 
 - **Branding** `GET` answers `{ tenant, surfaces, resolved, files, updatedAt }`: the tenant's own
   values (null: inherited), the per-surface overrides, the tenant's defaults resolved, and the
@@ -202,9 +207,10 @@ LIGHT, ratio, required }]`. A file that is not the tenant's answers `404 FILE_NO
   `Content-Security-Policy: default-src 'none'; sandbox` and an `ETag` (the SHA-256). Another
   tenant's file is not found.
 - **Public files**: only the files the tenant's branding refers to (logo, favicon, on any
-  surface), for the website (`/public/tenants/:slug/files/:id`, `Cross-Origin-Resource-Policy:
-cross-origin`) and the hub's sign-in screens (`/hub/branding/files/:id`). Other uploads answer
-  `404`. `GET /public/tenants/:slug` carries the `website` branding; `GET /hub/branding` the
+  surface) and its website pictures (`WEBSITE_IMAGE`, M7), for its website
+  (`/public/site/files/:id` on its own host, `Cross-Origin-Resource-Policy: cross-origin`), and
+  the branding files for the hub's sign-in screens (`/hub/branding/files/:id`). Other uploads
+  answer `404`. `GET /public/site` carries the `website` branding; `GET /hub/branding` the
   paired tenant's (`503 HUB_NOT_PROVISIONED` before its first snapshot).
 
 ## Menu endpoints (Phase 1)
@@ -472,23 +478,23 @@ event list.
 
 ## Online ordering (Phase 7, cloud only)
 
-See [ADR 0013](adr/0013-online-ordering.md). Public endpoints need no token; they are rate limited.
-Each first finds the tenant of what it names (the slug, the location, the tracked order) and then
-works inside that tenant only ([ADR 0017](adr/0017-tenant-root-and-isolation.md)); an order for a
-location is priced from that location's tenant only. Every route below needs the
-`ONLINE_ORDERING` module. A public route checks it as soon as it has found its tenant and location
-(`403 FEATURE_DISABLED`, [ADR 0018](adr/0018-feature-modules.md)).
+See [ADR 0013](adr/0013-online-ordering.md). Website endpoints need no token; they are rate
+limited. Their tenant is the one whose verified domain the request's host names
+([ADR 0023](adr/0023-multi-tenant-website.md)), and they work inside that tenant only
+([ADR 0017](adr/0017-tenant-root-and-isolation.md)): another tenant's location, order or tracking
+token is not found. Every route below needs the `ONLINE_ORDERING` module, checked for the host's
+tenant and the location named (`403 FEATURE_DISABLED`, [ADR 0018](adr/0018-feature-modules.md)).
 
-| Method | Path                              | Auth                           | Notes                                                                                           |
-| ------ | --------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------- |
-| GET    | `/public/tenants/:slug`           | public                         | Tenant and its active locations with ordering status                                            |
-| GET    | `/public/locations/:lid`          | public                         | One location (`PublicLocation`)                                                                 |
-| GET    | `/public/locations/:lid/menu`     | public                         | Published menu, `ETag` / `304` like the staff endpoint                                          |
-| POST   | `/orders`                         | public, own budget             | Place a website order (`CreateWebOrderRequest`)                                                 |
-| GET    | `/orders/track`                   | `x-tracking-token`, own budget | The customer's view of the order (`PublicOrder`)                                                |
-| GET    | `/locations/:lid/online-ordering` | `locations.view`               | Settings plus the live status and hub heartbeat                                                 |
-| PUT    | `/locations/:lid/online-ordering` | `online_ordering.manage`       | `{ state, openingHours, acceptMinutes, pickupEnabled, deliveryEnabled, deliveryFee }` (partial) |
-| GET    | `/sync/orders/:orderId`           | device credential              | A website order announced on the feed (outbox shape)                                            |
+| Method | Path                               | Auth                                           | Notes                                                                                           |
+| ------ | ---------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| GET    | `/public/site`                     | website (host)                                 | `PublicSite`: tenant, active locations with ordering status, branding, website (below)          |
+| GET    | `/public/site/locations/:lid`      | website (host)                                 | One location (`PublicLocation`)                                                                 |
+| GET    | `/public/site/locations/:lid/menu` | website (host)                                 | Published menu, `ETag` / `304` like the staff endpoint                                          |
+| POST   | `/orders`                          | website (host), own budget                     | Place a website order (`CreateWebOrderRequest`); the location must be the host's tenant's       |
+| GET    | `/orders/track`                    | website (host), `x-tracking-token`, own budget | The customer's view of the order (`PublicOrder`), on its tenant's site only                     |
+| GET    | `/locations/:lid/online-ordering`  | `locations.view`                               | Settings plus the live status and hub heartbeat                                                 |
+| PUT    | `/locations/:lid/online-ordering`  | `online_ordering.manage`                       | `{ state, openingHours, acceptMinutes, pickupEnabled, deliveryEnabled, deliveryFee }` (partial) |
+| GET    | `/sync/orders/:orderId`            | device credential                              | A website order announced on the feed (outbox shape)                                            |
 
 - **Status** (`PublicLocation.status`): `{ state: OPEN|PAUSED|CLOSED|OFFLINE, reason }`, reason
   one of `LOCATION_INACTIVE`, `SETTING_CLOSED`, `SETTING_PAUSED`, `OUTSIDE_HOURS`, `HUB_OFFLINE`,
@@ -527,6 +533,48 @@ trackingToken }`. Prices and totals sent by the browser are stripped and never r
   payment.
 - **Audit:** `order.created` (actor `CUSTOMER`), `order.cancelled` (actor `SYSTEM` for the
   timeout), `online_ordering.updated`.
+
+## Tenant website and domains (MADAR M7, cloud only)
+
+[ADR 0023](adr/0023-multi-tenant-website.md). Admin routes need `ONLINE_ORDERING` and the
+tenant-wide `website.manage` permission.
+
+| Method | Path                                | Access                    | Notes                                                                          |
+| ------ | ----------------------------------- | ------------------------- | ------------------------------------------------------------------------------ |
+| GET    | `/public/site`                      | website (host)            | Published website; the draft with a valid `x-website-preview` token            |
+| GET    | `/tenants/:tid/website`             | `website.manage`          | `{ draft, published, version, publishedAt, updatedAt, hasUnpublishedChanges }` |
+| PUT    | `/tenants/:tid/website/draft`       | `website.manage`          | The whole `WebsiteConfig`; audit `website.draft_saved`                         |
+| POST   | `/tenants/:tid/website/publish`     | `website.manage`          | Draft → published, `version + 1`; audit `website.published`                    |
+| POST   | `/tenants/:tid/website/preview`     | `website.manage`          | `{ token, expiresAt, url }`: the primary site with `?preview=` (30 min)        |
+| GET    | `/tenants/:tid/domains`             | `website.manage`          | The tenant's domains, primary first                                            |
+| POST   | `/tenants/:tid/domains`             | `website.manage`          | `{ domain }` → `201`, PENDING, with the TXT record                             |
+| POST   | `/tenants/:tid/domains/:id/verify`  | `website.manage`          | Looks the TXT record up: VERIFIED, or FAILED and `422`                         |
+| POST   | `/tenants/:tid/domains/:id/primary` | `website.manage`          | Makes a VERIFIED domain the site's address                                     |
+| POST   | `/tenants/:tid/domains/:id/disable` | `website.manage`          | Stops serving a custom domain                                                  |
+| GET    | `/internal/domains/check?domain=`   | public, outside `/api/v1` | The proxy's TLS `ask`: `200` for a VERIFIED domain, else `404`                 |
+
+- **`PublicSite`**: `{ id, nameEn, nameAr, currency, locales, timezone, locations, branding,
+website, preview, primaryDomain }`. No slug, nothing of another tenant. `website` is the
+  published `WebsiteConfig`, MADAR's template for the business type until the first publication,
+  or the draft when the request sends a preview token of the same tenant (`preview: true`,
+  `Cache-Control: no-store`); a token of another tenant or an expired one is ignored.
+- **`WebsiteConfig`**: `{ schemaVersion: 1, navigation: [{ label, href }], social: [{ network,
+url }], seo: { title, description, imageFileId }, sections: [...] }`. A section is `{ id, type,
+enabled, order, content, appearance: { background: DEFAULT|MUTED|PRIMARY, alignment:
+START|CENTER } }`, `type` one of `HERO`, `FEATURED_PRODUCTS`, `CATEGORIES`, `ABOUT`, `GALLERY`,
+  `TESTIMONIALS`, `LOCATIONS`, `CONTACT`, `OPENING_HOURS`, `PROMO_BANNER`, `FOOTER`, each with its
+  own `content` (`@pos/validation` `websiteSectionSchema`). Texts are `{ en?, ar? }`; links are
+  `#section`, `/page` or `https://…`; social URLs `https://` only. Unknown keys answer `400`.
+  Pictures must be the tenant's `WEBSITE_IMAGE` files (`404 FILE_NOT_FOUND`,
+  `415 FILE_TYPE_NOT_ALLOWED`), products, categories and locations its own (`404 …_NOT_FOUND`).
+- **Domains** (`TenantDomainDto`): `{ id, domain, url, kind: SUBDOMAIN|CUSTOM, status:
+PENDING|VERIFIED|FAILED|DISABLED, isPrimary, verification: { type: TXT, name, value } | null,
+verifiedAt, lastCheckedAt, createdAt }`. Names are normalized (lower case, punycode, no port or
+  trailing dot). Errors: `422 DOMAIN_INVALID` (`reason: INVALID|TOO_LONG|IP_ADDRESS|SINGLE_LABEL|
+PLATFORM_DOMAIN|TOO_MANY`), `409 DOMAIN_TAKEN` (`ALREADY_ADDED`, `OTHER_TENANT`: verified by
+  another tenant), `422 DOMAIN_NOT_VERIFIED` (`details.record`), `409 DOMAIN_LOCKED`
+  (`NOT_VERIFIED`, `PLATFORM_ADDRESS`, `PRIMARY`), `404 DOMAIN_NOT_FOUND`. Audit: `domain.added`,
+  `domain.verified`, `domain.verification_failed`, `domain.primary_set`, `domain.disabled`.
 
 ## Location hub (Phases 5–6)
 

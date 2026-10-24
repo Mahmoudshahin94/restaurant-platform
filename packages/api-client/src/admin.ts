@@ -19,7 +19,11 @@ import {
   type UpdatePaymentMethodRequest,
   type UpdateRoleRequest,
   type UpdateUserRequest,
+  type WebsiteConfig,
   adminDeviceSchema,
+  tenantDomainSchema,
+  websitePreviewSchema,
+  websiteStateSchema,
   categoryReportSchema,
   channelReportSchema,
   dailySalesReportSchema,
@@ -80,6 +84,46 @@ export function adminApi(http: HttpClient) {
   return {
     dashboard: (tid: string) =>
       http.request('GET', `${tenant(tid)}/dashboard`, { schema: dashboardSchema }),
+
+    /** The website editor (`website.manage`, ADR 0023). */
+    website: {
+      get: (tid: string) =>
+        http.request('GET', `${tenant(tid)}/website`, { schema: websiteStateSchema }),
+      saveDraft: (tid: string, draft: WebsiteConfig) =>
+        http.request('PUT', `${tenant(tid)}/website/draft`, {
+          body: draft,
+          schema: websiteStateSchema,
+        }),
+      publish: (tid: string) =>
+        http.request('POST', `${tenant(tid)}/website/publish`, { schema: websiteStateSchema }),
+      /** A link showing the draft on the tenant's own site for half an hour. */
+      preview: (tid: string) =>
+        http.request('POST', `${tenant(tid)}/website/preview`, { schema: websitePreviewSchema }),
+    },
+
+    /** The website's domains (`website.manage`, ADR 0023). */
+    domains: {
+      list: (tid: string) =>
+        http.request('GET', `${tenant(tid)}/domains`, { schema: z.array(tenantDomainSchema) }),
+      add: (tid: string, domain: string) =>
+        http.request('POST', `${tenant(tid)}/domains`, {
+          body: { domain },
+          schema: tenantDomainSchema,
+        }),
+      /** Looks the TXT record up; not found: DOMAIN_NOT_VERIFIED. */
+      verify: (tid: string, domainId: string) =>
+        http.request('POST', `${tenant(tid)}/domains/${domainId}/verify`, {
+          schema: tenantDomainSchema,
+        }),
+      setPrimary: (tid: string, domainId: string) =>
+        http.request('POST', `${tenant(tid)}/domains/${domainId}/primary`, {
+          schema: tenantDomainSchema,
+        }),
+      disable: (tid: string, domainId: string) =>
+        http.request('POST', `${tenant(tid)}/domains/${domainId}/disable`, {
+          schema: tenantDomainSchema,
+        }),
+    },
 
     users: {
       list: (tid: string) =>

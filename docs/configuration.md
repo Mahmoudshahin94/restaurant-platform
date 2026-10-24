@@ -48,7 +48,7 @@ Device configuration       one terminal, screen or kiosk differing from its loca
 | Currency display (symbol, display, format)     | platform → tenant                                                                                                | M4 ✅ |
 | Retail catalog (options, barcodes, stock flag) | modules (above); catalog data per tenant                                                                         | M5 ✅ |
 | Self-service kiosks (terminals, card terminal) | modules (device layer from paired terminals); kiosk branding surface; installation (`PAYMENT_TERMINAL_PROVIDER`) | M6 ✅ |
-| Website sections and domains                   | tenant                                                                                                           | M7    |
+| Website sections and domains                   | platform → business type (template) → tenant; installation (`PLATFORM_WEB_DOMAIN`, `DOMAIN_VERIFIER`)            | M7 ✅ |
 | Payment providers                              | tenant → location                                                                                                | M8    |
 | Release channel                                | platform → tenant                                                                                                | M10   |
 
@@ -179,7 +179,7 @@ Where the layers are written:
 
 They ride the tenant row, so the change feed and the snapshot bring them to every hub. Apps read
 them from `GET /tenants/:tenantId/context` (`useMoneyFormat`, `useFormatOptions`,
-`LanguageSwitcher` in `@pos/app-kit`); the website from `GET /public/tenants/:slug`; the hub's
+`LanguageSwitcher` in `@pos/app-kit`); the website from `GET /public/site` (its host's tenant, M7); the hub's
 sign-in screens from `GET /hub/locales`.
 
 ## Retail catalog (M5)
@@ -219,3 +219,27 @@ layers: what it offers follows the modules, resolved for its location **and the 
 Code, not yet settings: the pairing code's lifetime (24 h), the idle reset (60 s, then 15 s to
 answer), the order-number screen (20 s), and how often a terminal's contact is reported to the
 cloud (every 5 min; a new app version at once).
+
+## Tenant websites (M7)
+
+See [ADR 0023](adr/0023-multi-tenant-website.md). A tenant's website is one configuration (its
+sections, navigation, social links and SEO) plus the domains it answers on. The page's colours,
+logo and names stay the branding's `website` surface (M3); its languages and money stay M4's.
+
+| What                                         | Decided by                                                                              | Where it is written                                 |
+| -------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| Whether the tenant has a website at all      | `ONLINE_ORDERING` (business type → tenant → location)                                   | admin → Settings → Modules                          |
+| The pages before the tenant publishes        | MADAR's template for the business type (`defaultWebsiteConfig`: food or shop wording)   | code (`@pos/validation`, looked up, never compared) |
+| Sections, order, texts, pictures, appearance | the tenant: a draft, then published versions                                            | admin → Website → Website editor (`website.manage`) |
+| Navigation, social links, SEO                | the tenant, with the sections                                                           | the same editor                                     |
+| Texts in each language                       | the tenant's supported locales (M4); a missing text falls back to the default language  | the same editor                                     |
+| MADAR's address of the site                  | `<slug>.<PLATFORM_WEB_DOMAIN>`, created at provisioning                                 | installation (`PLATFORM_WEB_DOMAIN`)                |
+| Custom domains, primary domain               | the tenant, after DNS verification (`_madar-verify.<domain>` TXT record)                | admin → Website → Domains (`website.manage`)        |
+| How domains are verified                     | `DOMAIN_VERIFIER` (`dns`; `mock` for development and tests, refused in production)      | the API's environment                               |
+| The development tenant on bare `localhost`   | `DEV_DEFAULT_TENANT_SLUG` (refused in production; never applies to a domain)            | the API's environment                               |
+| Where a browser opens a site                 | `WEBSITE_URL` (`http://{domain}:5175` in development, `https://{domain}` in production) | the API's environment                               |
+| `X-Forwarded-Host`                           | read only behind a trusted proxy (`TRUST_PROXY`, ADR 0016)                              | the API's environment                               |
+
+Code, not yet settings: the preview link's lifetime (30 min), at most 5 custom domains, 30
+sections, 12 pictures in a gallery, 12 testimonials and 12 featured products, and text lengths
+(120 characters, 2,000 for long texts).

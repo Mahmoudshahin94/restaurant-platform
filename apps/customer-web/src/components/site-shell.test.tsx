@@ -5,11 +5,11 @@ import { cleanup, screen, waitFor } from '@testing-library/react';
 import { Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { usePreferences } from '../stores/preferences';
-import { publicTenant } from '../test/fixtures';
+import { publicSite } from '../test/fixtures';
 import { renderWithProviders } from '../test/render';
 import { SiteShell } from './site-shell';
 
-function serve(tenant: ReturnType<typeof publicTenant>) {
+function serve(tenant: ReturnType<typeof publicSite>) {
   vi.stubGlobal(
     'fetch',
     vi.fn<typeof fetch>(() =>
@@ -24,7 +24,7 @@ function serve(tenant: ReturnType<typeof publicTenant>) {
 }
 
 function Price() {
-  return <output>{useMoneyFormat('ILS').format(4000)}</output>;
+  return <output data-testid="price">{useMoneyFormat('ILS').format(4000)}</output>;
 }
 
 afterEach(() => {
@@ -45,9 +45,42 @@ const render = (stored: Locale | null = null) => {
   );
 };
 
+describe('the site of the host (ADR 0023)', () => {
+  it('waits for the site before rendering its pages, and says when there is none', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>(() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ code: 'SITE_NOT_FOUND', message: 'x', details: {} }), {
+            status: 404,
+            headers: { 'content-type': 'application/json' },
+          }),
+        ),
+      ),
+    );
+    await render();
+    expect(await screen.findByText('This website was not found.')).toBeInTheDocument();
+    expect(screen.queryByTestId('price')).not.toBeInTheDocument();
+  });
+
+  it('marks a preview of the draft', async () => {
+    serve(publicSite('en', ['en'], { preview: true }));
+    await render();
+    expect(await screen.findByText(/Preview of unpublished changes/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Leave preview' })).toBeInTheDocument();
+  });
+
+  it('shows the website’s navigation in the header', async () => {
+    serve(publicSite('en', ['en']));
+    await render();
+    const nav = await screen.findByRole('navigation', { name: 'Site navigation' });
+    expect(nav).toHaveTextContent('Branches');
+  });
+});
+
 describe("the website follows the store's languages (ADR 0020)", () => {
   it("starts in the store's default language when the visitor chose none", async () => {
-    serve(publicTenant('ar', ['en', 'ar']));
+    serve(publicSite('ar', ['en', 'ar']));
     const { i18n } = await render();
     await waitFor(() => {
       expect(i18n.language).toBe('ar');
@@ -58,7 +91,7 @@ describe("the website follows the store's languages (ADR 0020)", () => {
   });
 
   it("keeps the visitor's own choice when the store offers it", async () => {
-    serve(publicTenant('ar', ['en', 'ar']));
+    serve(publicSite('ar', ['en', 'ar']));
     const { i18n } = await render('en');
     expect(await screen.findByRole('combobox', { name: 'Language' })).toBeInTheDocument();
     expect(i18n.language).toBe('en');
@@ -66,7 +99,7 @@ describe("the website follows the store's languages (ADR 0020)", () => {
   });
 
   it('hides the switcher for a single-language store, whatever the visitor chose', async () => {
-    serve(publicTenant('ar', ['ar']));
+    serve(publicSite('ar', ['ar']));
     const { i18n } = await render('en');
     await waitFor(() => {
       expect(i18n.language).toBe('ar');
@@ -75,14 +108,14 @@ describe("the website follows the store's languages (ADR 0020)", () => {
   });
 
   it("shows prices in shekels with ₪, in the store's currency display", async () => {
-    serve(publicTenant('en', ['en']));
+    serve(publicSite('en', ['en']));
     await render();
-    expect(await screen.findByRole('status')).toHaveTextContent('₪40.00');
+    expect(await screen.findByTestId('price')).toHaveTextContent('₪40.00');
     cleanup();
-    serve({ ...publicTenant('en', ['en']), currency: resolveCurrency('ILS', { display: 'code' }) });
+    serve({ ...publicSite('en', ['en']), currency: resolveCurrency('ILS', { display: 'code' }) });
     await render();
     await waitFor(() => {
-      expect(screen.getByRole('status')).toHaveTextContent('ILS 40.00');
+      expect(screen.getByTestId('price')).toHaveTextContent('ILS 40.00');
     });
   });
 });
