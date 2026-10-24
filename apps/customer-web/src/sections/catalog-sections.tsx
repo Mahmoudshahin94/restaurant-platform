@@ -30,22 +30,14 @@ const fromPrice = (p: PublishedMenuProduct) =>
 
 function FeaturedProducts({
   location,
-  productIds,
+  products,
 }: {
   location: PublicLocation;
-  productIds: readonly string[];
+  products: readonly PublishedMenuProduct[];
 }) {
   const { t } = useTranslation('customer');
   const locale = useCurrentLocale();
-  const menu = useMenu(location.id);
   const { format } = useMoneyFormat(location.currencyCode);
-  if (!menu.data) return null;
-  const all = menu.data.categories.flatMap((c) => c.products);
-  const products =
-    productIds.length > 0
-      ? productIds.flatMap((id) => all.filter((p) => p.id === id))
-      : all.filter((p) => p.isAvailable).slice(0, DEFAULT_FEATURED);
-  if (products.length === 0) return null;
   return (
     <ul className="grid gap-3 text-start sm:grid-cols-2 lg:grid-cols-3">
       {products.map((product) => {
@@ -80,13 +72,22 @@ function FeaturedProducts({
   );
 }
 
+/** Shown once the branch's menu is known, and only with products to show. */
 export function FeaturedProductsSection({ section }: Props<'FEATURED_PRODUCTS'>) {
   const text = useLocalizedText();
   const location = useSectionLocation(section.content.locationId);
-  if (!location) return null;
+  const menu = useMenu(location?.id ?? '', location !== null);
+  if (!location || !menu.data) return null;
+  const all = menu.data.categories.flatMap((c) => c.products);
+  const { productIds } = section.content;
+  const products =
+    productIds.length > 0
+      ? productIds.flatMap((id) => all.filter((p) => p.id === id))
+      : all.filter((p) => p.isAvailable).slice(0, DEFAULT_FEATURED);
+  if (products.length === 0) return null;
   return (
     <SectionFrame section={section} title={text(section.content.title)}>
-      <FeaturedProducts location={location} productIds={section.content.productIds} />
+      <FeaturedProducts location={location} products={products} />
     </SectionFrame>
   );
 }

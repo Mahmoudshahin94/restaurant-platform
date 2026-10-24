@@ -977,6 +977,24 @@ See [ADR 0023](adr/0023-multi-tenant-website.md) and
   registry, after the site (branding, currency, languages) is known; the ordering flow is
   unchanged. The admin gains the website editor and the domains page (`website.manage`, EN/AR).
 
+**Phase M7 verification (2026-10-24):** `pnpm build`, `typecheck`, `lint` and `test` green
+(1,023 unit, integration and component tests: API 318, domain 267, gateway 88, app-kit 56,
+admin 53, validation 53, i18n 45, server 31, customer-web 25, database 24, POS 22, kiosk 11,
+api-client 11, KDS 9, receipts 8, ui 2), `pnpm test:tools` (13), the hub schema check, a clean
+`migrate status`, `format:check`, and all 41 Playwright E2E tests (admin 12, POS 16, KDS 4,
+customer-web 6, kiosk 3) in one `pnpm e2e` run, including the new scenarios 28–29. A manual
+browser check against a freshly seeded database: the demo restaurant on
+`demo-kitchen.localhost:5175` and the coffee shop on `ramallah-roasters.localhost:5175` (in
+Arabic, RTL, its default) each showed their own sections and menus; `nobody.localhost` showed "This
+website was not found" and bare `localhost` the development tenant. In the admin's website editor
+the owner changed the hero title in English and Arabic and hid About, then published version 1,
+which the site showed in both languages. On the Domains page `Shop.Demo-Kitchen.TEST` was added as
+`shop.demo-kitchen.test` with its TXT record; while pending the API answered `404` for that host
+and the TLS check refused it; after Verify (mock verifier) the host served the demo restaurant and
+the TLS check answered `200`. The check led to two changes: the featured-products section waits
+for its menu instead of showing an empty heading, and the editor puts its two columns side by
+side only on wide screens.
+
 ## Architectural decisions and open questions
 
 Recorded as ADRs in [adr/](adr/):

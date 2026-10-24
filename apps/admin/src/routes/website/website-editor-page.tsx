@@ -219,7 +219,7 @@ function Editor({
         </Alert>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[20rem_1fr]">
+      <div className="grid gap-6 xl:grid-cols-[20rem_1fr]">
         <Card>
           <CardHeader>
             <CardTitle>{t('admin:website.sections')}</CardTitle>
