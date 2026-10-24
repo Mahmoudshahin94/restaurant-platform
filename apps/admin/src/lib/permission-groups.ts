@@ -4,7 +4,7 @@ import { PERMISSIONS, type Permission } from '@pos/shared-types';
 export const PERMISSION_GROUPS = [
   { key: 'orders', prefixes: ['orders.'] },
   { key: 'products', prefixes: ['products.'] },
-  { key: 'payments', prefixes: ['payments.', 'shifts.', 'cash.'] },
+  { key: 'payments', prefixes: ['payments.', 'shifts.', 'cash.', 'kiosk.'] },
   { key: 'kitchen', prefixes: ['kitchen.', 'tables.'] },
   { key: 'people', prefixes: ['customers.', 'reports.', 'users.', 'roles.'] },
   {

@@ -30,6 +30,7 @@ import { usePreferences } from '../stores/preferences';
 import { FOCUS_SEARCH_EVENT } from './product-grid';
 import { PLACE_ORDER_EVENT } from './cart-panel';
 import { SyncIndicator } from './sync-indicator';
+import { KioskOrdersPrompt } from './kiosk-orders-prompt';
 import { WebOrdersPrompt } from './web-orders-prompt';
 
 const NAV = [
@@ -206,6 +207,7 @@ export function PosShell() {
           </div>
         ) : null}
         <WebOrdersPrompt />
+        <KioskOrdersPrompt />
         <div className="min-h-0 flex-1">
           <Outlet />
         </div>

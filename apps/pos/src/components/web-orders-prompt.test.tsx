@@ -123,6 +123,7 @@ describe('WebOrderDetails', () => {
           status: 'CAPTURED',
           paymentMethodId: id(21),
           methodType: 'ONLINE',
+          deviceId: null,
           methodNameEn: 'Online card',
           methodNameAr: 'بطاقة',
           amount: 6000,
