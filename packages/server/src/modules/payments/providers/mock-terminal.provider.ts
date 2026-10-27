@@ -10,21 +10,26 @@ import type {
  * The documented TEST adapter for kiosk card terminals (ADR 0022): it stands in for a vendor's
  * terminal SDK so the whole self-service flow can be built and tested without hardware. Every
  * charge is approved at once with a made-up approval code, unless a test asked for declines
- * (`declineNext`). Refused in production (`PAYMENT_TERMINAL_PROVIDER=mock` fails configuration
- * there); it moves no money.
+ * (`MockPaymentTerminal.declineNext`). A development adapter of the provider catalog (ADR 0024):
+ * refused in production, TEST mode only; it moves no money.
  *
- * State lives in memory, keyed by our payment id, so a retried charge is idempotent within one
- * process; a real terminal keeps it on its side.
+ * State lives in this process's memory, keyed by our payment id and shared by every configured
+ * instance, so a retried charge is idempotent; a real terminal keeps it on its side.
  */
+const payments = new Map<string, ProviderResult['status']>();
+let declines = 0;
+
 export class MockPaymentTerminal implements PaymentTerminalProvider {
   readonly name = 'mock-terminal';
   readonly method = 'CARD' as const;
-  private readonly payments = new Map<string, ProviderResult['status']>();
-  private declines = 0;
+  private readonly payments = payments;
+
+  /** The reader's label (public configuration). */
+  constructor(readonly label: string | null = null) {}
 
   /** Test helper: the next `count` charges are declined, as if the card were refused. */
-  declineNext(count = 1): void {
-    this.declines += count;
+  static declineNext(count = 1): void {
+    declines += count;
   }
 
   private ref(paymentId: string): string {
@@ -36,8 +41,8 @@ export class MockPaymentTerminal implements PaymentTerminalProvider {
     const known = this.payments.get(providerRef);
     let status = known;
     if (!status) {
-      status = this.declines > 0 ? 'FAILED' : 'CAPTURED';
-      if (this.declines > 0) this.declines -= 1;
+      status = declines > 0 ? 'FAILED' : 'CAPTURED';
+      if (declines > 0) declines -= 1;
       this.payments.set(providerRef, status);
     }
     const reference =

@@ -294,6 +294,7 @@ describe("a kiosk's orders in the cloud", () => {
           tenantId: order.tenantId,
           locationId: order.locationId,
           orderId: order.id,
+          providerAccountId: null,
           shiftId: null,
           deviceId,
           paymentMethodId: cardMethodId,

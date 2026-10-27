@@ -54,16 +54,28 @@ const envSchema = z
     /** How often unaccepted website orders past their deadline are cancelled; 0 = never. */
     WEB_ORDER_TIMEOUT_SWEEP_SECONDS: z.coerce.number().int().min(0).default(15),
     /**
-     * Online card payments: `none` (no gateway: customers pay at pickup or on delivery) or `mock`,
-     * the documented test adapter (refused in production).
+     * Payment configuration (ADR 0024). Providers are chosen per tenant and location by provider
+     * accounts; this lists development adapters (`mock-online`, `mock-terminal`, comma-separated)
+     * that take their method for every tenant without an account of its own. Development and
+     * tests only: refused in production, where a tenant without an account has no such method.
      */
-    ONLINE_PAYMENT_PROVIDER: z.enum(['none', 'mock']).default('none'),
+    DEV_PAYMENT_PROVIDERS: z
+      .string()
+      .default('')
+      .transform((value) =>
+        value
+          .split(',')
+          .map((key) => key.trim())
+          .filter((key) => key.length > 0),
+      )
+      .pipe(z.array(z.enum(['mock-online', 'mock-terminal']))),
     /**
-     * Integrated card terminals of self-service kiosks (ADR 0022): `none` (kiosk customers pay at
-     * the counter) or `mock`, the documented test adapter that approves every charge (refused in
-     * production). A vendor's terminal SDK becomes another value.
+     * The master keys that seal payment provider secrets (AES-256-GCM envelope, ADR 0024):
+     * comma-separated `<version>:<base64 32-byte key>`, the highest version current; older
+     * versions stay until `payment-secrets:rotate` re-encrypted everything. Required by the cloud
+     * in production; elsewhere a development key is derived from JWT_ACCESS_SECRET when unset.
      */
-    PAYMENT_TERMINAL_PROVIDER: z.enum(['none', 'mock']).default('none'),
+    PAYMENT_SECRETS_KEY: z.string().trim().min(1).optional(),
     /**
      * Where tenant files (logos, favicons, ADR 0019) are kept by the local-disk storage. Keys
      * below it are `tenants/<tenantId>/…`. An object store replaces it in production.
@@ -109,13 +121,9 @@ const envSchema = z
     /** Key of the website preview tokens; derived from JWT_ACCESS_SECRET when unset. */
     WEBSITE_PREVIEW_SECRET: z.string().min(32).optional(),
   })
-  .refine((env) => env.NODE_ENV !== 'production' || env.ONLINE_PAYMENT_PROVIDER !== 'mock', {
-    path: ['ONLINE_PAYMENT_PROVIDER'],
-    message: 'The mock payment provider cannot run in production',
-  })
-  .refine((env) => env.NODE_ENV !== 'production' || env.PAYMENT_TERMINAL_PROVIDER !== 'mock', {
-    path: ['PAYMENT_TERMINAL_PROVIDER'],
-    message: 'The mock card terminal cannot run in production',
+  .refine((env) => env.NODE_ENV !== 'production' || env.DEV_PAYMENT_PROVIDERS.length === 0, {
+    path: ['DEV_PAYMENT_PROVIDERS'],
+    message: 'Development payment providers cannot run in production',
   })
   .refine((env) => env.NODE_ENV !== 'production' || env.DOMAIN_VERIFIER !== 'mock', {
     path: ['DOMAIN_VERIFIER'],

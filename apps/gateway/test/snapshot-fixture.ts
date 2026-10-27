@@ -187,6 +187,7 @@ export async function buildSnapshot() {
     ],
     tableSections: [{ id: ids.section, locationId, nameEn: 'Indoor', nameAr: 'داخلي' }],
     diningTables: [{ id: ids.t1, locationId, sectionId: ids.section, label: 'T1' }],
+    paymentProviderAccounts: [] as Record<string, unknown>[],
     paymentMethods: [
       { id: ids.cash, tenantId, type: 'CASH', nameEn: 'Cash', nameAr: 'نقدًا' },
       { id: ids.card, tenantId, type: 'CARD', nameEn: 'Mada', nameAr: 'مدى' },
@@ -251,7 +252,7 @@ export function withVersion(
 ): LocationSnapshot {
   const json = JSON.parse(JSON.stringify(tables)) as LocationSnapshot['tables'];
   return {
-    format: 6,
+    format: 7,
     tenantId: ids.tenantId,
     locationId: ids.locationId,
     generatedAt: new Date().toISOString(),

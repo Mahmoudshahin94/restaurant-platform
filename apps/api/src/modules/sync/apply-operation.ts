@@ -393,6 +393,18 @@ async function applyOrder(
       throw outOfScope('A payment names a device of another location');
     }
   }
+  // The provider account that took a payment (ADR 0024) is one of the hub's tenant's.
+  const accounts = [
+    ...new Set(o.payments.flatMap((p) => (p.providerAccountId ? [p.providerAccountId] : []))),
+  ];
+  if (accounts.length > 0) {
+    const known = await tx.paymentProviderAccount.count({
+      where: { id: { in: accounts }, tenantId: device.tenantId },
+    });
+    if (known !== accounts.length) {
+      throw outOfScope('A payment names a provider account of another tenant');
+    }
+  }
   // Charges before the refunds that reference them.
   const payments = [...o.payments].sort(
     (a, b) => Number(a.refundOfId !== null) - Number(b.refundOfId !== null),

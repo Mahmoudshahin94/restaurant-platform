@@ -1,7 +1,9 @@
 // Exact names for short keys that would otherwise match innocent words ("shipping", "company").
 const SENSITIVE_EXACT =
   /^(pin|pin_?hash|pin_?code|cvv|cvc|pan|card_?number|authorization|cookie)$/i;
-const SENSITIVE_SUBSTRING = /password|secret|token|credential/i;
+// Payment provider secrets (ADR 0024) under any name a gateway uses, and sealed bytes.
+const SENSITIVE_SUBSTRING =
+  /password|passphrase|secret|token|credential|(api|private|signing|access|webhook)_?key|ciphertext|wrapped_?key/i;
 
 function isSensitiveKey(key: string): boolean {
   return SENSITIVE_EXACT.test(key) || SENSITIVE_SUBSTRING.test(key);

@@ -125,6 +125,24 @@ export class SnapshotService {
       discounts: await db.discount.findMany({ where: { tenantId }, orderBy: byId }),
       tableSections: await db.tableSection.findMany({ where: { locationId }, orderBy: byId }),
       diningTables: await db.diningTable.findMany({ where: { locationId }, orderBy: byId }),
+      // Payment providers (ADR 0024): the tenant's accounts and this location's, without their
+      // secrets (a separate, cloud-only table that is never read here).
+      paymentProviderAccounts: await db.paymentProviderAccount.findMany({
+        where: { tenantId, OR: [{ locationId: null }, { locationId }] },
+        select: {
+          id: true,
+          tenantId: true,
+          locationId: true,
+          method: true,
+          providerKey: true,
+          mode: true,
+          status: true,
+          publicConfig: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy: byId,
+      }),
       paymentMethods: await db.paymentMethod.findMany({ where: { tenantId }, orderBy: byId }),
       cashRegisters: await db.cashRegister.findMany({ where: { locationId }, orderBy: byId }),
       // Modules (ADR 0018), so the hub enforces them offline: overrides of the tenant, this
@@ -156,7 +174,7 @@ export class SnapshotService {
       .digest('hex')
       .slice(0, 32);
     return {
-      format: 6,
+      format: 7,
       tenantId,
       locationId,
       generatedAt: new Date().toISOString(),

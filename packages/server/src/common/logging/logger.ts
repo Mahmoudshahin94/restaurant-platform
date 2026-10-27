@@ -26,6 +26,16 @@ export const LOG_REDACT_PATHS = [
   '*.cvv',
   '*.credential',
   '*.credentialHash',
+  // Payment provider secrets (ADR 0024): the set an administrator types, and sealed bytes.
+  'secrets',
+  'secretKey',
+  '*.secrets',
+  '*.secretKey',
+  '*.apiKey',
+  '*.privateKey',
+  '*.webhookSecret',
+  '*.wrappedKey',
+  '*.ciphertext',
   // One level deeper, for objects logged under a key (e.g. `{ body: { password } }`).
   '*.*.password',
   '*.*.pin',
@@ -36,6 +46,11 @@ export const LOG_REDACT_PATHS = [
   '*.*.cardNumber',
   '*.*.cvv',
   '*.*.credential',
+  '*.*.secrets',
+  '*.*.secretKey',
+  '*.*.apiKey',
+  '*.*.privateKey',
+  '*.*.webhookSecret',
 ];
 
 /**

@@ -48,9 +48,10 @@ export class StorefrontService {
       include: { locations: { where: { isActive: true }, orderBy: { code: 'asc' } } },
     });
     if (!tenant) throw new DomainError('SITE_NOT_FOUND', 'Website not found');
-    const card = (await this.payments.methodFor(this.prisma, tenant.id)) !== null;
     const locations: PublicLocation[] = [];
     for (const location of tenant.locations) {
+      // Each location may have its own online provider, or none (ADR 0024).
+      const card = await this.payments.available(tenant.id, location.id);
       const status = await this.status.statusOf(location);
       locations.push(toPublicLocation(location, tenant.currencyCode, status, card));
     }
@@ -96,7 +97,7 @@ export class StorefrontService {
       include: { tenant: { select: { currencyCode: true } } },
     });
     if (!location?.isActive) throw new DomainError('LOCATION_NOT_FOUND', 'Location not found');
-    const card = (await this.payments.methodFor(this.prisma, location.tenantId)) !== null;
+    const card = await this.payments.available(location.tenantId, location.id);
     const status = await this.status.statusOf(location);
     return toPublicLocation(location, location.tenant.currencyCode, status, card);
   }

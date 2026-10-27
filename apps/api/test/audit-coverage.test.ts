@@ -17,7 +17,7 @@ let app: NestFastifyApplication;
 let prisma: PrismaClient;
 
 beforeAll(async () => {
-  ({ app, prisma } = await startApp({ ONLINE_PAYMENT_PROVIDER: 'mock' }));
+  ({ app, prisma } = await startApp({ DEV_PAYMENT_PROVIDERS: 'mock-online' }));
 });
 afterAll(async () => {
   await app.close();

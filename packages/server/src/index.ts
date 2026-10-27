@@ -37,11 +37,28 @@ export { LocationsModule } from './modules/locations/locations.module';
 export { MenuModule } from './modules/menu/menu.module';
 export { OrdersModule } from './modules/orders/orders.module';
 export { PaymentsModule } from './modules/payments/payments.module';
-export {
-  PAYMENT_TERMINAL,
-  type PaymentTerminalProvider,
-} from './modules/payments/providers/payment-terminal';
+export { type PaymentTerminalProvider } from './modules/payments/providers/payment-terminal';
 export { MockPaymentTerminal } from './modules/payments/providers/mock-terminal.provider';
+export { MockOnlinePaymentProvider } from './modules/payments/providers/mock-online.provider';
+export { PROVIDER_CATALOG, catalogEntry } from './modules/payments/providers/catalog';
+export {
+  PaymentProviderFactory,
+  type ConfiguredProvider,
+} from './modules/payments/providers/payment-provider.factory';
+export { PaymentSecretsService } from './modules/payments/secrets/payment-secrets.service';
+export {
+  EnvKeyProvider,
+  type KeyProvider,
+  PAYMENT_KEY_PROVIDER,
+  createKeyProvider,
+  parseKeyring,
+} from './modules/payments/secrets/key-provider';
+export {
+  SecretBox,
+  SecretBoxError,
+  type ProviderSecrets,
+  type SealedSecret,
+} from './modules/payments/secrets/secret-box';
 export { TerminalsModule } from './modules/terminals/terminals.module';
 export { KioskModule } from './modules/kiosk/kiosk.module';
 export { KIOSK_CANCEL_REASON } from './modules/kiosk/kiosk.service';

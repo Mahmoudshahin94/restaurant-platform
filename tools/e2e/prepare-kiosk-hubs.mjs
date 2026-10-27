@@ -135,8 +135,9 @@ const running = hubs.map((hub) =>
       HUB_SNAPSHOT_INTERVAL_SECONDS: '3600',
       HUB_CLOUD_TIMEOUT_MS: '1000',
       AUTH_RATE_LIMIT_PER_MINUTE: '1000',
-      // The documented test adapter of kiosk card terminals.
-      PAYMENT_TERMINAL_PROVIDER: 'mock',
+      // The documented test adapter of kiosk card terminals, for tenants without an account of
+      // their own (ADR 0024).
+      DEV_PAYMENT_PROVIDERS: 'mock-terminal',
     },
     stdio: 'inherit',
   }),

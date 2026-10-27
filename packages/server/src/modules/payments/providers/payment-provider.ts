@@ -26,7 +26,8 @@ export interface ProviderResult {
 
 /**
  * Boundary to whatever moves the money. The POS and API never talk to a payment processor
- * directly; adding a gateway or an integrated card terminal means adding an implementation here.
+ * directly; adding a gateway or an integrated card terminal means adding an implementation and an
+ * entry of the provider catalog (ADR 0024).
  * No implementation may receive or store raw card data.
  */
 export interface PaymentProvider {
@@ -40,5 +41,3 @@ export interface PaymentProvider {
   refundPayment(request: ProviderRefundRequest): Promise<ProviderResult>;
   getPaymentStatus(providerRef: string): Promise<ProviderResult>;
 }
-
-export const PAYMENT_PROVIDERS = Symbol('PAYMENT_PROVIDERS');

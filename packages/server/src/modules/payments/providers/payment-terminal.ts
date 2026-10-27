@@ -16,11 +16,9 @@ export interface TerminalResult extends ProviderResult {
  * resolves once the customer has paid or the card was declined. The payment it produces touches
  * no cash drawer, so it is recorded with its device and no shift (a database CHECK allows exactly
  * that for CARD). Its refunds, taken at the POS later, go back through the same adapter (found by
- * the payment's `provider` name). No implementation may receive or store raw card data.
+ * the payment's provider account). No implementation may receive or store raw card data.
  */
 export interface PaymentTerminalProvider extends PaymentProvider {
   readonly method: 'CARD';
   chargeAtTerminal(request: TerminalChargeRequest): Promise<TerminalResult>;
 }
-
-export const PAYMENT_TERMINAL = Symbol('PAYMENT_TERMINAL');

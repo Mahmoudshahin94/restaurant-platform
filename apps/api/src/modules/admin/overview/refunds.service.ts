@@ -66,12 +66,9 @@ export class RefundsService {
         input.amount,
         input.reason,
       );
-      if (!this.online.configured) {
-        throw new DomainError('PAYMENT_FAILED', 'No online payment provider is configured', {
-          reason: 'PROVIDER_NOT_CONFIGURED',
-        });
-      }
-      const result = await this.online.provider.refundPayment({
+      // Back through the account that took the charge (ADR 0024), even if disabled since.
+      const provider = await this.online.providerOf(charge, tx);
+      const result = await provider.refundPayment({
         refundId: input.id,
         providerRef: charge.providerRef,
         amount: input.amount,
@@ -91,6 +88,7 @@ export class RefundsService {
           type: 'REFUND',
           status: result.status,
           provider: charge.provider,
+          providerAccountId: charge.providerAccountId,
           providerRef: result.providerRef,
           amount: input.amount,
           refundOfId: charge.id,

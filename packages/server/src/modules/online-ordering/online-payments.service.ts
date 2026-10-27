@@ -1,44 +1,90 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { DomainError, derivePaymentStatus, newId } from '@pos/domain';
-import { APP_CONFIG, type AppConfig } from '../../config/env';
+import type { PaymentMethodType } from '@pos/shared-types';
 import { AuditService } from '../audit/audit.service';
-import type { PrismaTx } from '../../prisma/prisma.service';
+import { PrismaService, type PrismaTx } from '../../prisma/prisma.service';
 import { settledEntries } from '../orders/orders.mappers';
-import { MockOnlinePaymentProvider } from '../payments/providers/mock-online.provider';
 import type { PaymentProvider } from '../payments/providers/payment-provider';
-import { UnconfiguredOnlinePaymentProvider } from '../payments/providers/unconfigured-online.provider';
+import {
+  type ConfiguredProvider,
+  PaymentProviderFactory,
+} from '../payments/providers/payment-provider.factory';
+
+type Db = PrismaService | PrismaTx;
+
+/** The tender an online payment is recorded under (its names are snapshotted on the payment). */
+interface OnlineTender {
+  id: string;
+  nameEn: string;
+  nameAr: string;
+}
 
 /**
- * Online card payments of website orders (ADR 0013): charged at checkout through the configured
- * provider and voided when the location rejects the order or does not accept it in time. A void
- * is recorded append-only, as a REFUND row of the charge, so financial rows are never edited.
+ * Online card payments of website orders (ADR 0013): charged at checkout through the provider
+ * the tenant configured for the location (ADR 0024) and voided when the location rejects the order
+ * or does not accept it in time. A void is recorded append-only, as a REFUND row of the charge, so
+ * financial rows are never edited. A tenant without an ONLINE provider takes cash only: its
+ * website offers no card, and a card checkout is refused (`ONLINE_PAYMENT_UNAVAILABLE`).
  */
 @Injectable()
 export class OnlinePaymentsService {
   private readonly logger = new Logger(OnlinePaymentsService.name);
-  readonly provider: PaymentProvider;
 
   constructor(
-    @Inject(APP_CONFIG) config: AppConfig,
+    private readonly prisma: PrismaService,
+    private readonly providers: PaymentProviderFactory,
     private readonly audit: AuditService,
-  ) {
-    this.provider =
-      config.ONLINE_PAYMENT_PROVIDER === 'mock'
-        ? new MockOnlinePaymentProvider()
-        : new UnconfiguredOnlinePaymentProvider();
+  ) {}
+
+  /**
+   * The tenant's online tender: the one linked to the provider account (ADR 0024), else the first
+   * one listed. Online payments are recorded under it.
+   */
+  async methodFor(db: Db, tenantId: string, accountId: string | null) {
+    const where = { tenantId, type: 'ONLINE' as const, archivedAt: null };
+    return (
+      (accountId
+        ? await db.paymentMethod.findFirst({
+            where: { ...where, providerAccountId: accountId },
+            orderBy: { sortOrder: 'asc' },
+          })
+        : null) ?? (await db.paymentMethod.findFirst({ where, orderBy: { sortOrder: 'asc' } }))
+    );
   }
 
-  get configured(): boolean {
-    return !(this.provider instanceof UnconfiguredOnlinePaymentProvider);
+  /** Whether the location's website checkout offers online card payment. */
+  async available(tenantId: string, locationId: string): Promise<boolean> {
+    if (!(await this.providers.available(tenantId, 'ONLINE', locationId))) return false;
+    return (await this.methodFor(this.prisma, tenantId, null)) !== null;
   }
 
-  /** The tenant's online tender, if it has one; online card needs both it and a provider. */
-  async methodFor(tx: PrismaTx, tenantId: string) {
-    if (!this.configured) return null;
-    return tx.paymentMethod.findFirst({
-      where: { tenantId, type: 'ONLINE', archivedAt: null },
-      orderBy: { sortOrder: 'asc' },
-    });
+  /**
+   * The provider and tender that take a card checkout at this location, or the clear refusal
+   * `ONLINE_PAYMENT_UNAVAILABLE` (a cash-only business has no ONLINE provider).
+   */
+  async checkout(
+    tenantId: string,
+    locationId: string,
+  ): Promise<ConfiguredProvider & { method: OnlineTender }> {
+    const configured = await this.providers.forTenant(tenantId, 'ONLINE', locationId);
+    const method = await this.methodFor(this.prisma, tenantId, configured.accountId);
+    if (!method) {
+      throw new DomainError('ONLINE_PAYMENT_UNAVAILABLE', 'The business has no online tender');
+    }
+    return { ...configured, method };
+  }
+
+  /** The adapter that took a recorded online payment (its voids and refunds go back through it). */
+  providerOf(
+    payment: {
+      tenantId: string;
+      provider: string;
+      providerAccountId: string | null;
+      methodType: PaymentMethodType;
+    },
+    db: Db,
+  ): Promise<PaymentProvider> {
+    return this.providers.forPayment(payment, db);
   }
 
   /** Voids an order's captured online charges inside the caller's transaction. */
@@ -58,11 +104,14 @@ export class OnlinePaymentsService {
     );
     for (const charge of charges) {
       const result = charge.providerRef
-        ? await this.provider.cancelPayment(charge.providerRef).catch((error: unknown) => {
-            // The void is still recorded: an operator settles it with the gateway.
-            this.logger.error(`Void of payment ${charge.id} failed: ${String(error)}`);
-            return null;
-          })
+        ? await this.providers
+            .forPayment(charge, tx)
+            .then((provider) => provider.cancelPayment(charge.providerRef ?? ''))
+            .catch((error: unknown) => {
+              // The void is still recorded: an operator settles it with the gateway.
+              this.logger.error(`Void of payment ${charge.id} failed: ${String(error)}`);
+              return null;
+            })
         : null;
       await tx.payment.create({
         data: {
@@ -78,6 +127,7 @@ export class OnlinePaymentsService {
           type: 'REFUND',
           status: result?.status === 'CANCELLED' ? 'CAPTURED' : 'PENDING',
           provider: charge.provider,
+          providerAccountId: charge.providerAccountId,
           providerRef: charge.providerRef,
           amount: charge.amount,
           refundOfId: charge.id,

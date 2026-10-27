@@ -34,9 +34,14 @@ import {
   toPaymentDto,
 } from '../orders/orders.mappers';
 import { assertCloudMayChangeOrder } from '../orders/hub-ownership';
-import { PaymentProviderRegistry } from './providers/payment-provider.registry';
+import type { PaymentProvider } from './providers/payment-provider';
+import { PaymentProviderFactory } from './providers/payment-provider.factory';
+import type { PaymentTerminalProvider } from './providers/payment-terminal';
 
 type ChargeInput = z.output<typeof createPaymentSchema>;
+
+const isTerminal = (provider: PaymentProvider): provider is PaymentTerminalProvider =>
+  typeof (provider as Partial<PaymentTerminalProvider>).chargeAtTerminal === 'function';
 type RefundInput = z.output<typeof refundPaymentSchema>;
 
 export interface PaymentOutcome {
@@ -53,7 +58,7 @@ export interface PaymentOutcome {
 export class PaymentsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly providers: PaymentProviderRegistry,
+    private readonly providers: PaymentProviderFactory,
     private readonly audit: AuditService,
     private readonly bus: RealtimeBus,
     private readonly dialect: SqlDialect,
@@ -103,6 +108,12 @@ export class PaymentsService {
           throw new DomainError('PAYMENT_FAILED', 'Unknown payment method', {
             reason: 'UNKNOWN_METHOD',
           });
+        if (method.type === 'ONLINE') {
+          // Online card payments are the website's (ADR 0013): a till has no card token.
+          throw new DomainError('PAYMENT_FAILED', 'Online payments are taken on the website', {
+            reason: 'PROVIDER_NOT_CONFIGURED',
+          });
+        }
 
         if (method.type === 'CARD') {
           if (!input.reference) {
@@ -131,9 +142,16 @@ export class PaymentsService {
           cashRoundingIncrement: location.cashRoundingIncrement,
         });
 
-        // Local providers (cash, external card) settle synchronously. A remote gateway would
-        // create its intent before this transaction and confirm here.
-        const result = await this.providers.for(method.type).createPayment({
+        // The tenant's provider of the method at this location (ADR 0024). Local providers (cash,
+        // external card) settle synchronously; a remote gateway would create its intent before
+        // this transaction and confirm here.
+        const configured = await this.providers.forTenant(
+          order.tenantId,
+          method.type,
+          locationId,
+          tx,
+        );
+        const result = await configured.provider.createPayment({
           paymentId: input.id,
           orderId,
           amount: charge.amount,
@@ -154,7 +172,8 @@ export class PaymentsService {
             methodNameAr: method.nameAr,
             type: 'CHARGE',
             status: result.status,
-            provider: this.providers.for(method.type).name,
+            provider: configured.provider.name,
+            providerAccountId: configured.accountId,
             providerRef: result.providerRef,
             amount: charge.amount,
             tendered: charge.tendered,
@@ -244,8 +263,8 @@ export class PaymentsService {
         );
         if (!charge) throw new DomainError('PAYMENT_NOT_FOUND', 'Charge not found');
 
-        // Back the way it came: a kiosk's card payment is refunded through its terminal.
-        const provider = this.providers.of(charge);
+        // Back the way it came: through the account that took it (a kiosk's terminal, say).
+        const provider = await this.providers.forPayment(charge, tx);
         const result = await provider.refundPayment({
           refundId: input.id,
           providerRef: charge.providerRef,
@@ -266,6 +285,7 @@ export class PaymentsService {
             type: 'REFUND',
             status: result.status,
             provider: provider.name,
+            providerAccountId: charge.providerAccountId,
             providerRef: result.providerRef,
             amount: input.amount,
             refundOfId: charge.id,
@@ -371,7 +391,15 @@ export class PaymentsService {
     });
     if (!before) throw new DomainError('ORDER_NOT_FOUND', 'Order not found', { orderId });
     check(before);
-    const method = await this.cardMethod(before.tenantId);
+    // The tenant's card terminal provider at this location (ADR 0024), before anything is asked.
+    const terminal = await this.providers.forTenant(before.tenantId, 'TERMINAL', locationId);
+    if (!isTerminal(terminal.provider)) {
+      throw new DomainError('PAYMENT_FAILED', 'No card terminal is set up', {
+        reason: 'PROVIDER_NOT_CONFIGURED',
+      });
+    }
+    const reader = terminal.provider;
+    const method = await this.cardMethod(before.tenantId, terminal.accountId);
     const due = paymentTotals(before.total, settledEntries(before.payments)).balanceDue;
     const charge = prepareCharge({
       orderStatus: before.status,
@@ -380,8 +408,7 @@ export class PaymentsService {
       amount: due,
       cashRoundingIncrement: null,
     });
-    const terminal = this.providers.terminal;
-    const result = await terminal.chargeAtTerminal({
+    const result = await reader.chargeAtTerminal({
       paymentId: input.id,
       orderId,
       amount: charge.amount,
@@ -420,7 +447,8 @@ export class PaymentsService {
             methodNameAr: method.nameAr,
             type: 'CHARGE',
             status: result.status,
-            provider: terminal.name,
+            provider: reader.name,
+            providerAccountId: terminal.accountId,
             providerRef: result.providerRef,
             amount: charge.amount,
             reference: result.reference,
@@ -438,7 +466,7 @@ export class PaymentsService {
             metadata: {
               paymentId: payment.id,
               method: 'CARD',
-              provider: terminal.name,
+              provider: reader.name,
               amount: charge.amount,
               status: result.status,
               paymentStatus: updated.paymentStatus,
@@ -456,18 +484,26 @@ export class PaymentsService {
       if (raced) return raced;
       // Not recorded: the customer must not pay for an order that could not take the payment.
       if (result.status === 'CAPTURED' && result.providerRef) {
-        await terminal.cancelPayment(result.providerRef).catch(() => null);
+        await reader.cancelPayment(result.providerRef).catch(() => null);
       }
       throw error;
     }
   }
 
-  /** The tenant's card method that kiosk payments are recorded under (the first one listed). */
-  private async cardMethod(tenantId: string) {
-    const method = await this.prisma.paymentMethod.findFirst({
-      where: { tenantId, type: 'CARD', archivedAt: null },
-      orderBy: [{ sortOrder: 'asc' }, { nameEn: 'asc' }],
-    });
+  /**
+   * The tenant's card tender that kiosk payments are recorded under: the one linked to the
+   * terminal's provider account (ADR 0024), else the first one listed.
+   */
+  private async cardMethod(tenantId: string, accountId: string | null) {
+    const where = { tenantId, type: 'CARD' as const, archivedAt: null };
+    const orderBy = [{ sortOrder: 'asc' as const }, { nameEn: 'asc' as const }];
+    const method =
+      (accountId
+        ? await this.prisma.paymentMethod.findFirst({
+            where: { ...where, providerAccountId: accountId },
+            orderBy,
+          })
+        : null) ?? (await this.prisma.paymentMethod.findFirst({ where, orderBy }));
     if (!method) {
       throw new DomainError('PAYMENT_FAILED', 'The business accepts no card payments', {
         reason: 'UNKNOWN_METHOD',

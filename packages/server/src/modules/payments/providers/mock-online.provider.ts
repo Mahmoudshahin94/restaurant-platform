@@ -10,20 +10,37 @@ import type {
 /**
  * The documented TEST adapter for online card payments on the customer website (ADR 0013). It
  * stands in for a real gateway (its browser SDK turns the card into a token; the server charges
- * the token) so the whole flow can be built and tested without one. It is refused in production
- * (`ONLINE_PAYMENT_PROVIDER=mock` fails configuration there) and moves no money.
+ * the token) so the whole flow can be built and tested without one. A development adapter of the
+ * provider catalog (ADR 0024): refused in production, TEST mode only; it moves no money. Its
+ * optional secret key stands in for a gateway's API key (it only records that one was given).
  *
  * Test tokens: `tok_mock_decline…` is declined; any other `tok_mock_…` is approved. The charge is
  * captured at once (the customer pays when ordering); an order the location rejects, or does not
  * accept in time, is voided.
  *
- * State lives in memory, keyed by our payment id, so a retried charge is idempotent within one
- * process; a real gateway keeps it on its side.
+ * State lives in this process's memory, keyed by our payment id and shared by every configured
+ * instance, so a retried charge is idempotent and a void finds its charge; a real gateway keeps
+ * it on its side.
  */
+const payments = new Map<string, ProviderResult['status']>();
+
+export interface MockOnlineConfig {
+  statementDescriptor?: string | undefined;
+  secretKey?: string | undefined;
+}
+
 export class MockOnlinePaymentProvider implements PaymentProvider {
   readonly name = 'mock-online';
   readonly method = 'ONLINE' as const;
-  private readonly payments = new Map<string, ProviderResult['status']>();
+  private readonly payments = payments;
+  /** Whether the account gave it a key (what a gateway would authenticate with). */
+  readonly hasSecretKey: boolean;
+  readonly statementDescriptor: string | null;
+
+  constructor(config: MockOnlineConfig = {}) {
+    this.hasSecretKey = Boolean(config.secretKey);
+    this.statementDescriptor = config.statementDescriptor ?? null;
+  }
 
   private ref(paymentId: string): string {
     return `mock_${createHash('sha256').update(paymentId).digest('hex').slice(0, 24)}`;

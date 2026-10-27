@@ -1,5 +1,5 @@
 import { newId } from '@pos/domain';
-import { type MockPaymentTerminal, PAYMENT_TERMINAL, PrismaService } from '@pos/server';
+import { MockPaymentTerminal, PrismaService } from '@pos/server';
 import type { ApiErrorBody } from '@pos/shared-types';
 import type {
   KioskAttendant,
@@ -38,7 +38,6 @@ let kioskRow: Record<string, unknown>;
 const api = '/api/v1';
 const loc = () => `${api}/locations/${fixture.ids.locationId}`;
 const db = () => asHubTx(hub.app.get(PrismaService));
-const terminal = () => hub.app.get<MockPaymentTerminal>(PAYMENT_TERMINAL);
 
 beforeEach(async () => {
   fixture = await buildSnapshot();
@@ -313,7 +312,7 @@ describe('the kiosk at a restaurant', () => {
   it('records a declined card and leaves the order waiting; another attempt pays it', async () => {
     const kiosk = await pairKiosk();
     const order = (await kioskOrder(kiosk, 'TERMINAL')).json<Order>();
-    terminal().declineNext();
+    MockPaymentTerminal.declineNext();
     const declined = (await pay(kiosk, order.id)).json<KioskPaymentOutcome>();
     expect(declined.payment.status).toBe('FAILED');
     expect(declined.order).toMatchObject({ status: 'PLACED', paymentStatus: 'UNPAID' });

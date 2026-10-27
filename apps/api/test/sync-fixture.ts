@@ -170,6 +170,7 @@ export function syncBuilders({ tenant, menu, cashMethodId, registerId }: SyncCon
           tenantId: order.tenantId,
           locationId: order.locationId,
           orderId: order.id,
+          providerAccountId: null,
           shiftId: shift.id,
           deviceId: null,
           paymentMethodId: cashMethodId,

@@ -88,7 +88,7 @@ describe('location snapshot', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json<LocationSnapshot>();
     expect(body).toMatchObject({
-      format: 6,
+      format: 7,
       tenantId: tenant.tenantId,
       locationId: tenant.locationA,
     });
