@@ -22,6 +22,8 @@ const CLOUD_ONLY_MODELS = new Set([
   'WebOrderCounter',
   'TenantDomain',
   'WebsiteConfig',
+  // Payment provider secrets never leave the cloud (ADR 0024).
+  'PaymentProviderSecret',
 ]);
 const CLOUD_ONLY_ENUMS = new Set([
   'ProcessedOperationStatus',

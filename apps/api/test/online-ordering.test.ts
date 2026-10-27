@@ -38,7 +38,7 @@ let host: Record<string, string>;
 
 beforeAll(async () => {
   ({ app, prisma } = await startApp({
-    ONLINE_PAYMENT_PROVIDER: 'mock',
+    DEV_PAYMENT_PROVIDERS: 'mock-online',
     WEB_ORDER_TIMEOUT_SWEEP_SECONDS: '0',
     WEB_ORDER_RATE_LIMIT_PER_MINUTE: '100000',
     TRACKING_RATE_LIMIT_PER_MINUTE: '100000',
@@ -504,7 +504,7 @@ describe('POST /orders', () => {
 
   it('offers no online card without a configured gateway', async () => {
     const plain = await startApp({
-      ONLINE_PAYMENT_PROVIDER: 'none',
+      DEV_PAYMENT_PROVIDERS: '',
       WEB_ORDER_TIMEOUT_SWEEP_SECONDS: '0',
     });
     try {
@@ -514,10 +514,8 @@ describe('POST /orders', () => {
         headers: host,
         payload: webOrder({ payment: { option: 'ONLINE_CARD', cardToken: 'tok_mock_visa' } }),
       });
-      expect(res.json()).toMatchObject({
-        code: 'PAYMENT_FAILED',
-        details: { reason: 'PROVIDER_NOT_CONFIGURED' },
-      });
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toMatchObject({ code: 'ONLINE_PAYMENT_UNAVAILABLE' });
       const location = (
         await plain.app.inject({
           method: 'GET',

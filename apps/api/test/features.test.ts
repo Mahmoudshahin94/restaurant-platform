@@ -293,7 +293,7 @@ describe('modules reach the location hubs', () => {
         locationId: tenant.locationA,
       }),
     );
-    expect(snapshot.format).toBe(6);
+    expect(snapshot.format).toBe(7);
     expect(snapshot.tables.featureOverrides.map((o) => o.feature).sort()).toEqual([
       'KDS',
       'LOYALTY',

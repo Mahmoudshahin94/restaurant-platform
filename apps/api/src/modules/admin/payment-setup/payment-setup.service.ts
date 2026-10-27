@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DomainError } from '@pos/domain';
-import { AuditService, PrismaService } from '@pos/server';
+import { AuditService, PrismaService, type PrismaTx } from '@pos/server';
+import { type PaymentProviderMethod, TENDER_TYPE_OF } from '@pos/shared-types';
 import type {
   CashRegisterAdmin,
   PaymentMethodAdmin,
@@ -17,6 +18,7 @@ interface MethodRow {
   nameEn: string;
   nameAr: string;
   sortOrder: number;
+  providerAccountId: string | null;
   archivedAt: Date | null;
 }
 
@@ -26,6 +28,7 @@ const toMethod = (row: MethodRow): PaymentMethodAdmin => ({
   nameEn: row.nameEn,
   nameAr: row.nameAr,
   sortOrder: row.sortOrder,
+  providerAccountId: row.providerAccountId,
   archivedAt: row.archivedAt?.toISOString() ?? null,
 });
 
@@ -73,6 +76,7 @@ export class PaymentSetupService {
     input: z.output<typeof createPaymentMethodSchema>,
   ): Promise<PaymentMethodAdmin> {
     return this.prisma.$transaction(async (tx) => {
+      await this.assertAccount(tx, tenantId, input.type, input.providerAccountId);
       const row = await tx.paymentMethod.create({ data: { ...input, tenantId } });
       await this.audit.record(
         {
@@ -96,6 +100,9 @@ export class PaymentSetupService {
     return this.prisma.$transaction(async (tx) => {
       const before = await tx.paymentMethod.findFirst({ where: { id: methodId, tenantId } });
       if (!before) throw new DomainError('PAYMENT_METHOD_NOT_FOUND', 'Payment method not found');
+      if (input.providerAccountId !== undefined) {
+        await this.assertAccount(tx, tenantId, before.type, input.providerAccountId);
+      }
       const row = await tx.paymentMethod.update({ where: { id: methodId }, data: input });
       await this.audit.record(
         {
@@ -105,7 +112,12 @@ export class PaymentSetupService {
           locationId: null,
           metadata: {
             changes: input,
-            before: { nameEn: before.nameEn, nameAr: before.nameAr, sortOrder: before.sortOrder },
+            before: {
+              nameEn: before.nameEn,
+              nameAr: before.nameAr,
+              sortOrder: before.sortOrder,
+              providerAccountId: before.providerAccountId,
+            },
           },
         },
         tx,
@@ -149,6 +161,35 @@ export class PaymentSetupService {
       );
       return toMethod(row);
     });
+  }
+
+  /**
+   * A tender may be linked to one of the tenant's provider accounts whose payments are recorded
+   * under its type (ADR 0024): an online tender to an ONLINE account, a card tender to a CARD or
+   * kiosk TERMINAL account.
+   */
+  private async assertAccount(
+    tx: PrismaTx,
+    tenantId: string,
+    type: PaymentMethodAdmin['type'],
+    accountId: string | null,
+  ): Promise<void> {
+    if (!accountId) return;
+    const account = await tx.paymentProviderAccount.findFirst({
+      where: { id: accountId, tenantId },
+      select: { method: true },
+    });
+    if (!account) throw new DomainError('PAYMENT_PROVIDER_NOT_FOUND', 'Payment provider not found');
+    if (TENDER_TYPE_OF[account.method as PaymentProviderMethod] !== type) {
+      throw new DomainError(
+        'PAYMENT_PROVIDER_INVALID',
+        'This provider takes another kind of payment',
+        {
+          reason: 'WRONG_METHOD',
+          method: account.method,
+        },
+      );
+    }
   }
 
   async listRegisters(locationId: string): Promise<CashRegisterAdmin[]> {

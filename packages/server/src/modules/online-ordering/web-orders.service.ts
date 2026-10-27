@@ -121,7 +121,7 @@ export class WebOrdersService implements OnApplicationBootstrap, OnModuleDestroy
     const total = quote.pricing.total;
     const charge =
       input.payment.option === 'ONLINE_CARD'
-        ? await this.charge(input, location.tenantId, currencyCode, total)
+        ? await this.charge(input, location.tenantId, location.id, currencyCode, total)
         : null;
 
     const businessDate = businessDateFor(now, location.timezone);
@@ -187,7 +187,8 @@ export class WebOrdersService implements OnApplicationBootstrap, OnModuleDestroy
               methodNameAr: charge.method.nameAr,
               type: 'CHARGE',
               status: 'CAPTURED',
-              provider: this.payments.provider.name,
+              provider: charge.provider.name,
+              providerAccountId: charge.accountId,
               providerRef: charge.providerRef,
               amount: total,
             },
@@ -218,7 +219,7 @@ export class WebOrdersService implements OnApplicationBootstrap, OnModuleDestroy
       this.bus.publish([this.bus.event('order.created', row, orderEventPayload(row))]);
       return { result: this.created(row), created: true };
     } catch (error) {
-      if (charge) await this.payments.provider.cancelPayment(charge.providerRef).catch(() => null);
+      if (charge) await charge.provider.cancelPayment(charge.providerRef).catch(() => null);
       if (isUniqueViolation(error)) {
         // Two identical requests raced: the loser returns what the winner created.
         const winner = await this.findForReplay(input);
@@ -228,15 +229,20 @@ export class WebOrdersService implements OnApplicationBootstrap, OnModuleDestroy
     }
   }
 
-  private async charge(input: CreateInput, tenantId: string, currency: string, amount: number) {
-    const method = await this.payments.methodFor(this.prisma, tenantId);
-    if (!method) {
-      throw new DomainError('PAYMENT_FAILED', 'Online card payment is not available', {
-        reason: 'PROVIDER_NOT_CONFIGURED',
-      });
-    }
+  /**
+   * Charges the card through the location's online provider (ADR 0024); a business without one
+   * is refused with `ONLINE_PAYMENT_UNAVAILABLE` before anything is charged.
+   */
+  private async charge(
+    input: CreateInput,
+    tenantId: string,
+    locationId: string,
+    currency: string,
+    amount: number,
+  ) {
+    const { provider, accountId, method } = await this.payments.checkout(tenantId, locationId);
     const paymentId = newId();
-    const result = await this.payments.provider.createPayment({
+    const result = await provider.createPayment({
       paymentId,
       orderId: input.id,
       amount,
@@ -247,7 +253,7 @@ export class WebOrdersService implements OnApplicationBootstrap, OnModuleDestroy
     if (result.status !== 'CAPTURED' || !result.providerRef) {
       throw new DomainError('PAYMENT_FAILED', 'The card was declined', { reason: 'CARD_DECLINED' });
     }
-    return { paymentId, method, providerRef: result.providerRef };
+    return { paymentId, method, provider, accountId, providerRef: result.providerRef };
   }
 
   private async findForReplay(input: CreateInput): Promise<PublicOrderRow | null> {

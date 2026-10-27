@@ -4,6 +4,7 @@ import {
   type CreateCashRegisterRequest,
   type CreateEmployeeRequest,
   type CreatePaymentMethodRequest,
+  type CreatePaymentProviderAccountRequest,
   type CreateRoleRequest,
   type CreateUserRequest,
   type CustomerQuery,
@@ -17,10 +18,13 @@ import {
   type UpdateCashRegisterRequest,
   type UpdateEmployeeRequest,
   type UpdatePaymentMethodRequest,
+  type UpdatePaymentProviderAccountRequest,
   type UpdateRoleRequest,
   type UpdateUserRequest,
   type WebsiteConfig,
   adminDeviceSchema,
+  paymentProviderAccountSchema,
+  paymentProvidersOverviewSchema,
   tenantDomainSchema,
   websitePreviewSchema,
   websiteStateSchema,
@@ -195,6 +199,26 @@ export function adminApi(http: HttpClient) {
       restore: (tid: string, id: string) =>
         http.request('POST', `${tenant(tid)}/payment-methods/${id}/restore`, {
           schema: paymentMethodAdminSchema,
+        }),
+    },
+    /**
+     * Payment provider accounts (ADR 0024). Secrets are sent on create and update only; answers
+     * carry `secret.hasSecret`, its fingerprint and last change, never the secret.
+     */
+    paymentProviders: {
+      overview: (tid: string) =>
+        http.request('GET', `${tenant(tid)}/payment-providers`, {
+          schema: paymentProvidersOverviewSchema,
+        }),
+      create: (tid: string, body: CreatePaymentProviderAccountRequest) =>
+        http.request('POST', `${tenant(tid)}/payment-providers`, {
+          body,
+          schema: paymentProviderAccountSchema,
+        }),
+      update: (tid: string, id: string, body: UpdatePaymentProviderAccountRequest) =>
+        http.request('PATCH', `${tenant(tid)}/payment-providers/${id}`, {
+          body,
+          schema: paymentProviderAccountSchema,
         }),
     },
     cashRegisters: {

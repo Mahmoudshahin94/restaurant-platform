@@ -42,6 +42,8 @@ export function toHubSchema(schema, extra) {
   for (const name of removed) {
     out = out.replace(new RegExp(`\\n {2}\\w+ +${name}(\\[\\]|\\?)?(?= *\\n)`, 'g'), '');
   }
+  // A relation in a block of its own leaves an empty block behind.
+  out = out.replace(/\n{3,}/g, '\n\n');
   // PostgreSQL native column types have no SQLite equivalent; Prisma's defaults apply.
   out = out.replace(/\s@db\.\w+(\([^)]*\))?/g, '');
   const header = [

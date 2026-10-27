@@ -207,6 +207,13 @@ const NAV: NavGroup[] = [
         tenantWide: true,
       },
       {
+        to: '/settings/payment-providers',
+        labelKey: 'paymentProviders',
+        icon: CreditCard,
+        permission: 'settings.manage',
+        tenantWide: true,
+      },
+      {
         to: '/settings/cash-registers',
         labelKey: 'cashRegisters',
         icon: Banknote,

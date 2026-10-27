@@ -1,5 +1,5 @@
 import type { LoggerService } from '@nestjs/common';
-import { pino, type Logger } from 'pino';
+import { type DestinationStream, pino, type Logger } from 'pino';
 import type { AppConfig } from '../../config/env';
 import { RequestContext } from '../context/request-context';
 
@@ -26,6 +26,16 @@ export const LOG_REDACT_PATHS = [
   '*.cvv',
   '*.credential',
   '*.credentialHash',
+  // Payment provider secrets (ADR 0024): the set an administrator types, and sealed bytes.
+  'secrets',
+  'secretKey',
+  '*.secrets',
+  '*.secretKey',
+  '*.apiKey',
+  '*.privateKey',
+  '*.webhookSecret',
+  '*.wrappedKey',
+  '*.ciphertext',
   // One level deeper, for objects logged under a key (e.g. `{ body: { password } }`).
   '*.*.password',
   '*.*.pin',
@@ -36,6 +46,11 @@ export const LOG_REDACT_PATHS = [
   '*.*.cardNumber',
   '*.*.cvv',
   '*.*.credential',
+  '*.*.secrets',
+  '*.*.secretKey',
+  '*.*.apiKey',
+  '*.*.privateKey',
+  '*.*.webhookSecret',
 ];
 
 /**
@@ -56,12 +71,21 @@ export function loggableError(error: unknown): { message: string; stack?: string
   };
 }
 
-export function createRootLogger(config: AppConfig, service = 'api'): Logger {
-  return pino({
-    level: config.NODE_ENV === 'test' ? 'silent' : config.LOG_LEVEL,
+export function createRootLogger(
+  config: AppConfig,
+  service = 'api',
+  stream?: DestinationStream,
+): Logger {
+  const options = {
     redact: { paths: LOG_REDACT_PATHS, censor: '[REDACTED]' },
     base: { service },
     timestamp: pino.stdTimeFunctions.isoTime,
+  };
+  // A test reading the log gets every line, redacted exactly as in production.
+  if (stream) return pino({ ...options, level: 'trace' }, stream);
+  return pino({
+    ...options,
+    level: config.NODE_ENV === 'test' ? 'silent' : config.LOG_LEVEL,
     ...(config.NODE_ENV === 'development'
       ? { transport: { target: 'pino-pretty', options: { singleLine: true } } }
       : {}),

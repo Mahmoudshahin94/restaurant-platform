@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MenuModule } from '../menu/menu.module';
+import { PaymentsModule } from '../payments/payments.module';
 import { WebsiteModule } from '../website/website.module';
 import {
   OnlineOrderingSettingsController,
@@ -18,7 +19,7 @@ import { WebOrdersService } from './web-orders.service';
  * cloud-only `web_order_counters` table).
  */
 @Module({
-  imports: [MenuModule, WebsiteModule],
+  imports: [MenuModule, PaymentsModule, WebsiteModule],
   controllers: [SiteController, WebOrdersController, OnlineOrderingSettingsController],
   providers: [
     OnlineStatusService,

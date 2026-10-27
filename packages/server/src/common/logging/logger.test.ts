@@ -51,6 +51,28 @@ describe('log redaction', () => {
     expect(line).toContain('[REDACTED]');
   });
 
+  it('censors payment provider secrets (ADR 0024), also one level down', () => {
+    const { logger, text } = capture();
+    logger.info({
+      body: { providerKey: 'mock-online', secrets: { secretKey: 'sk_test_logged12345' } },
+      secretKey: 'sk_test_top0012345',
+      account: { apiKey: 'api-key-value', privateKey: 'private-key-value' },
+      sealed: { ciphertext: 'cipher-bytes', wrappedKey: 'wrapped-bytes' },
+    });
+    const line = text();
+    for (const secret of [
+      'sk_test_logged12345',
+      'sk_test_top0012345',
+      'api-key-value',
+      'private-key-value',
+      'cipher-bytes',
+      'wrapped-bytes',
+    ]) {
+      expect(line).not.toContain(secret);
+    }
+    expect(line).toContain('mock-online');
+  });
+
   it('keeps only the kind, code and frames of Prisma errors', () => {
     const error = Object.assign(
       new Error('Invalid `prisma.user.create()` invocation: { passwordHash: "leaked-hash" }'),

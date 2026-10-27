@@ -15,7 +15,7 @@ Run through this before shipping a build to a location or deploying the cloud. C
 
 ## 2. Cloud configuration (production)
 
-- [ ] `NODE_ENV=production` (secure cookies; the mock payment provider is refused)
+- [ ] `NODE_ENV=production` (secure cookies; the test payment adapters are refused)
 - [ ] `JWT_ACCESS_SECRET` (≥ 32 random characters) and `TRACKING_TOKEN_SECRET` set from a secret
       store, unique per environment, never the `.env.example` values
 - [ ] `DATABASE_URL` uses a least-privilege role over TLS; backups and point-in-time recovery on
@@ -25,7 +25,18 @@ Run through this before shipping a build to a location or deploying the cloud. C
 - [ ] `TRUST_PROXY` = number of proxies in front of the API (rate limits are per client IP)
 - [ ] `RATE_LIMIT_PER_MINUTE`, `AUTH_RATE_LIMIT_PER_MINUTE`, `WEB_ORDER_RATE_LIMIT_PER_MINUTE`,
       `TRACKING_RATE_LIMIT_PER_MINUTE` reviewed for the expected traffic
-- [ ] `ONLINE_PAYMENT_PROVIDER=none` until a real gateway adapter exists (ADR 0013)
+- [ ] `DEV_PAYMENT_PROVIDERS` unset (the server refuses to start otherwise). Until a real gateway
+      adapter exists, tenants have no online provider and their websites take no card (ADR 0024)
+- [ ] **Payment secrets key** (ADR 0024): `PAYMENT_SECRETS_KEY=1:<base64 of 32 random bytes>`
+      (`openssl rand -base64 32`) from the secret store, unique per environment, never the
+      `.env.example` value. The cloud refuses to start without it. Treat it like the database's
+      own credentials: anyone with the key and a database dump can read every tenant's provider
+      secrets; losing every version of it loses them (administrators then re-enter them). Keep it
+      out of logs, images and CI output; the hubs never need it.
+- [ ] **Key rotation** (yearly, and at once if the key may have leaked): add the new version
+      (`1:<old>,2:<new>`), deploy, run `pnpm --filter @pos/api payment-secrets:rotate` (it reports
+      how many secrets it re-encrypted and any it could not open), then remove `1:` and deploy
+      again. If it leaked, also have each tenant replace its provider keys at the provider.
 - [ ] `LOG_LEVEL=info`; logs shipped to a store that keeps `requestId`, `tenantId`,
       `locationId`, `userId`, `orderId`, `deviceId`
 - [ ] Load balancer health checks: liveness `GET /health`, readiness `GET /ready` (503

@@ -20,6 +20,7 @@ mirrors the operational subset.
 | Floor     | TableSection, Table (`DiningTable` in Prisma)                                                                                     | ✅ 0004                            |
 | Orders    | Order, OrderItem, OrderItemModifier, OrderTax, OrderDiscount, OrderStatusHistory, OrderCounter                                    | ✅ 0004 (+ 0005)                   |
 | Payments  | PaymentMethod, Payment                                                                                                            | ✅ Phase 3                         |
+| Payments  | PaymentProviderAccount; PaymentProviderSecret (cloud)                                                                             | ✅ Phase M8                        |
 | Cash      | Shift, CashRegister, CashTransaction                                                                                              | ✅ Phase 3                         |
 | Kitchen   | KitchenTicket, KitchenTicketItem                                                                                                  | ✅ Phase 4                         |
 | Sync      | SyncOperation, HubState, InboundOrder (hub); ProcessedOperation, ChangeLog (cloud)                                                | ✅ Phases 5–8                      |
@@ -93,6 +94,9 @@ erDiagram
   Order ||--o{ OrderDiscount : "discounted by"
   Order ||--o{ Payment : "paid by"
   PaymentMethod ||--o{ Payment : "method"
+  PaymentProviderAccount |o--o{ PaymentMethod : "processes"
+  PaymentProviderAccount |o--o{ Payment : "took"
+  PaymentProviderAccount ||--o| PaymentProviderSecret : "sealed secrets (cloud)"
   Device |o--o{ Payment : "kiosk card terminal"
   Order ||--o{ KitchenTicket : "routed to"
   KitchenStation ||--o{ KitchenTicket : queues
@@ -283,8 +287,8 @@ historical orders. Since M5 a line also keeps its `sku` (the variant's, else the
 
 **Payments and cash** (Phase 3):
 
-- `PaymentMethod`: per tenant, typed `CASH`, `CARD` or `ONLINE`, with localized names and a
-  sort order.
+- `PaymentMethod`: per tenant, typed `CASH`, `CARD` or `ONLINE`, with localized names, a
+  sort order and, since M8, the provider account that processes it (`providerAccountId`).
 - `Payment`: append-only. The id is the client's UUID (idempotency key). A row is a `CHARGE` or a
   `REFUND` (`refundOfId` points at its charge) and snapshots the method's type and names. It
   stores `amount`, cash `tendered`/`change`, `roundingAdjustment`, the card approval `reference`
@@ -300,6 +304,20 @@ historical orders. Since M5 a line also keeps its `sku` (the variant's, else the
 - `CashTransaction`: every movement of cash in a shift: `SALE`, `REFUND` (linked to the
   payment), `PAY_IN` and `PAY_OUT` (with a reason).
 - `Location.cashRoundingIncrement`: optional cash rounding step in minor units (null = off).
+
+**Payment providers** (M8, [ADR 0024](adr/0024-payment-configuration.md)):
+
+- `PaymentProviderAccount`: which provider of the catalog (`providerKey`) takes a method (`CASH`,
+  `CARD`, `ONLINE`, `TERMINAL`) for the whole tenant (`locationId` null) or one location, its
+  `mode` (`TEST`/`LIVE`), `status` (`ACTIVE`/`DISABLED`) and `publicConfig` (JSON validated by the
+  provider's schema). Text columns checked by the database; one ACTIVE account per tenant, method
+  and scope (a partial unique index). Configuration: change-feed trigger, rides the snapshot.
+  Never deleted.
+- `PaymentProviderSecret` (cloud only): one per account, the AES-256-GCM envelope of its secrets
+  (`keyVersion`, `wrappedKey`, `ciphertext`) and a 12-hex-digit `fingerprint`. Not in the hub
+  schema, the snapshot or any API answer.
+- `Payment.providerAccountId`: the account that took the payment (null for the built-in and
+  development defaults); voids and refunds go back through it.
 
 **Kitchen** (Phase 4):
 
@@ -332,8 +350,9 @@ historical orders. Since M5 a line also keeps its `sku` (the variant's, else the
   actor (`DEVICE`) in the status history, and an optional `customerName` to call. They are placed
   `PLACED`; paid at the kiosk they are confirmed by SYSTEM rules (kitchen tickets with `KDS`) and,
   without a kitchen screen, completed at once. Paid at the counter they wait for a cashier.
-- Their card payments are `Payment` rows of method type `CARD` (the tenant's first card method),
-  provider the terminal adapter, `deviceId` the kiosk, and no `shiftId`.
+- Their card payments are `Payment` rows of method type `CARD` (the card tender linked to the
+  terminal's provider account, else the tenant's first card method; M8), provider the terminal
+  adapter and its account, `deviceId` the kiosk, and no `shiftId`.
 
 **Reporting** (Phase 9, [ADR 0015](adr/0015-reporting.md)): cloud-only PostgreSQL views, created
 by migration and not modelled in Prisma (so the hub schema is unaffected). `report_sales_orders`:

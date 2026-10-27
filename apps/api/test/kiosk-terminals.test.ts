@@ -164,7 +164,7 @@ describe('terminals waiting for their hub', () => {
     const created = await kiosk();
     const res = await app.inject({ method: 'GET', url: '/api/v1/sync/snapshot', headers: hub });
     const body = res.json<LocationSnapshot>();
-    expect(body.format).toBe(6);
+    expect(body.format).toBe(7);
     const row = body.tables.devices.find((d) => d.id === created.device.id);
     expect(row).toMatchObject({ status: 'PENDING', type: 'KIOSK' });
     expect(row?.pairingCodeHash).toMatch(/^[0-9a-f]{64}$/);
@@ -294,6 +294,7 @@ describe("a kiosk's orders in the cloud", () => {
           tenantId: order.tenantId,
           locationId: order.locationId,
           orderId: order.id,
+          providerAccountId: null,
           shiftId: null,
           deviceId,
           paymentMethodId: cardMethodId,

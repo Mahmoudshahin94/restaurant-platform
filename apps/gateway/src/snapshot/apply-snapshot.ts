@@ -54,6 +54,7 @@ const DELEGATE: Record<SnapshotTable, string> = {
   discounts: 'discount',
   tableSections: 'tableSection',
   diningTables: 'diningTable',
+  paymentProviderAccounts: 'paymentProviderAccount',
   paymentMethods: 'paymentMethod',
   cashRegisters: 'cashRegister',
   tenantEntitlements: 'tenantEntitlement',

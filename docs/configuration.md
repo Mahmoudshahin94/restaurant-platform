@@ -37,20 +37,20 @@ Device configuration       one terminal, screen or kiosk differing from its loca
 
 ## What exists today
 
-| Setting                                        | Layers today                                                                                                     | Phase |
-| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ----- |
-| Business type, status, legal name              | tenant (type and status set by the platform)                                                                     | M1 ✅ |
-| Default and supported locales, digit style     | platform → tenant (digits); tenant (locales)                                                                     | M4 ✅ |
-| Currency                                       | tenant (fixed at provisioning, ADR 0002; ILS default)                                                            | M4 ✅ |
-| Time zone, tax mode, cash rounding, KDS times  | tenant time zone; location settings                                                                              | ✅    |
-| Modules (POS, KDS, TABLES, BARCODE, …)         | platform → business type → tenant → location → device                                                            | M2 ✅ |
-| Branding and theme                             | platform → tenant → surface → device (theme mode)                                                                | M3 ✅ |
-| Currency display (symbol, display, format)     | platform → tenant                                                                                                | M4 ✅ |
-| Retail catalog (options, barcodes, stock flag) | modules (above); catalog data per tenant                                                                         | M5 ✅ |
-| Self-service kiosks (terminals, card terminal) | modules (device layer from paired terminals); kiosk branding surface; installation (`PAYMENT_TERMINAL_PROVIDER`) | M6 ✅ |
-| Website sections and domains                   | platform → business type (template) → tenant; installation (`PLATFORM_WEB_DOMAIN`, `DOMAIN_VERIFIER`)            | M7 ✅ |
-| Payment providers                              | tenant → location                                                                                                | M8    |
-| Release channel                                | platform → tenant                                                                                                | M10   |
+| Setting                                        | Layers today                                                                                               | Phase |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ----- |
+| Business type, status, legal name              | tenant (type and status set by the platform)                                                               | M1 ✅ |
+| Default and supported locales, digit style     | platform → tenant (digits); tenant (locales)                                                               | M4 ✅ |
+| Currency                                       | tenant (fixed at provisioning, ADR 0002; ILS default)                                                      | M4 ✅ |
+| Time zone, tax mode, cash rounding, KDS times  | tenant time zone; location settings                                                                        | ✅    |
+| Modules (POS, KDS, TABLES, BARCODE, …)         | platform → business type → tenant → location → device                                                      | M2 ✅ |
+| Branding and theme                             | platform → tenant → surface → device (theme mode)                                                          | M3 ✅ |
+| Currency display (symbol, display, format)     | platform → tenant                                                                                          | M4 ✅ |
+| Retail catalog (options, barcodes, stock flag) | modules (above); catalog data per tenant                                                                   | M5 ✅ |
+| Self-service kiosks (terminals, card terminal) | modules (device layer from paired terminals); kiosk branding surface; card reader = payment providers (M8) | M6 ✅ |
+| Website sections and domains                   | platform → business type (template) → tenant; installation (`PLATFORM_WEB_DOMAIN`, `DOMAIN_VERIFIER`)      | M7 ✅ |
+| Payment providers                              | platform (built-in, development) → tenant → location                                                       | M8 ✅ |
+| Release channel                                | platform → tenant                                                                                          | M10   |
 
 Each phase's ADR records the exact settings it adds and the layers they accept.
 
@@ -205,16 +205,16 @@ See [ADR 0022](adr/0022-self-service-kiosk.md). The kiosk adds no setting of its
 layers: what it offers follows the modules, resolved for its location **and the kiosk itself**
 (the device layer, now fed by paired terminals), and it looks like the tenant's `kiosk` surface.
 
-| What                                      | Decided by                                                             | Where it is written                                  |
-| ----------------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------- |
-| Whether a kiosk sells at all              | `SELF_CHECKOUT` (business type → tenant → location → device)           | admin → Settings → Modules; a device override by API |
-| Paid order to the kitchen, or handed over | `KDS` at the location: tickets where on; COMPLETED at once where off   | the same modules                                     |
-| Scanning items                            | `BARCODE` (the menu carries codes only with it)                        | the same modules                                     |
-| Modifier choices                          | `MODIFIERS`                                                            | the same modules                                     |
-| Look                                      | branding, `kiosk` surface over the tenant's                            | admin → Settings → Branding → Screens                |
-| Languages, money                          | the tenant's (M4); the customer may switch for the visit               | admin → Settings → Language and currency             |
-| Leaving the customer screens              | the `kiosk.attend` permission at the kiosk's location                  | admin → Staff → Roles                                |
-| Card terminal adapter                     | `PAYMENT_TERMINAL_PROVIDER` (`none`, `mock`; installation, not tenant) | the hub's environment (`mock` refused in production) |
+| What                                      | Decided by                                                           | Where it is written                                  |
+| ----------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------- |
+| Whether a kiosk sells at all              | `SELF_CHECKOUT` (business type → tenant → location → device)         | admin → Settings → Modules; a device override by API |
+| Paid order to the kitchen, or handed over | `KDS` at the location: tickets where on; COMPLETED at once where off | the same modules                                     |
+| Scanning items                            | `BARCODE` (the menu carries codes only with it)                      | the same modules                                     |
+| Modifier choices                          | `MODIFIERS`                                                          | the same modules                                     |
+| Look                                      | branding, `kiosk` surface over the tenant's                          | admin → Settings → Branding → Screens                |
+| Languages, money                          | the tenant's (M4); the customer may switch for the visit             | admin → Settings → Language and currency             |
+| Leaving the customer screens              | the `kiosk.attend` permission at the kiosk's location                | admin → Staff → Roles                                |
+| Card terminal adapter                     | the tenant's `TERMINAL` provider account (tenant → location, M8)     | admin → Settings → Payment providers                 |
 
 Code, not yet settings: the pairing code's lifetime (24 h), the idle reset (60 s, then 15 s to
 answer), the order-number screen (20 s), and how often a terminal's contact is reported to the
@@ -243,3 +243,30 @@ logo and names stay the branding's `website` surface (M3); its languages and mon
 Code, not yet settings: the preview link's lifetime (30 min), at most 5 custom domains, 30
 sections, 12 pictures in a gallery, 12 testimonials and 12 featured products, and text lengths
 (120 characters, 2,000 for long texts).
+
+## Payment providers (M8)
+
+See [ADR 0024](adr/0024-payment-configuration.md). A provider account says which provider takes a
+method (`CASH`, `CARD`, `ONLINE` website checkout, `TERMINAL` kiosk card reader) for the whole
+business or one location, in test or live mode. Resolution is `resolvePaymentProviders`
+(`@pos/domain`) over the layers below; only ACTIVE accounts say something, a disabled one inherits.
+
+| Layer    | What it says                                                                                      | Where it is written                                      |
+| -------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Platform | `cash` and `external-card` for the till (built in); `DEV_PAYMENT_PROVIDERS` for online and kiosks | code; the API's and hub's environment (refused in prod.) |
+| Tenant   | the business-wide account of each method                                                          | admin → Settings → Payment providers (`settings.manage`) |
+| Location | one location's own account, overriding the business-wide one there                                | the same page ("Applies to")                             |
+
+| What                                         | Decided by                                                                            | Where it is written                                         |
+| -------------------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Whether the website offers card checkout     | an ONLINE provider resolves at the location (none: pay at pickup or on delivery only) | admin → Settings → Payment providers                        |
+| Whether a kiosk takes cards                  | a TERMINAL provider resolves at the kiosk's location (none: pay at the counter)       | the same page                                               |
+| Test or live                                 | the account's mode, from the modes its provider supports (test adapters: TEST only)   | the same page (a test-mode badge shows it)                  |
+| Provider settings (descriptor, reader label) | the account's public configuration, validated by the provider's schema                | the same page                                               |
+| Provider secrets (API keys)                  | the account's secrets: sealed in the cloud, write-only, never synced                  | the same page (masked; shown as stored + fingerprint)       |
+| The tender a payment is recorded under       | the tender linked to the account, else the first tender of its type                   | admin → Settings → Payment methods ("Processed by")         |
+| The master key sealing secrets               | `PAYMENT_SECRETS_KEY` (`<version>:<base64>`, comma-separated; required in production) | the API's environment; rotate with `payment-secrets:rotate` |
+| Development defaults                         | `DEV_PAYMENT_PROVIDERS` (`mock-online`, `mock-terminal`; refused in production)       | the API's and hub's environment                             |
+
+Code, not yet settings: the provider catalog (`PROVIDER_CATALOG`), one ACTIVE account per method
+and scope, and the 12-digit fingerprint.

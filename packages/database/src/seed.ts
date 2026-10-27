@@ -24,6 +24,18 @@ interface SeedFile {
     { nameEn: string; nameAr: string; tables: { label: string; seats: number }[] }[]
   >;
   paymentMethods?: { type: 'CASH' | 'CARD' | 'ONLINE'; nameEn: string; nameAr: string }[];
+  /**
+   * Payment provider accounts (ADR 0024), tenant-wide, added when the tenant has no account of
+   * the method; each is linked to the tender of its type named `tender`. Development adapters
+   * only, without secrets (the seed cannot seal them).
+   */
+  paymentProviders?: {
+    method: 'ONLINE' | 'TERMINAL';
+    providerKey: string;
+    mode: 'TEST';
+    publicConfig?: Record<string, string>;
+    tender: string;
+  }[];
   /** Location code → cash drawers. */
   cashRegisters?: Record<string, { nameEn: string; nameAr: string }[]>;
   /** Modules the tenant switches on or off (tenant-wide overrides, ADR 0018); added when missing. */
@@ -307,6 +319,28 @@ async function seedConfiguration(
     if (found === 0) {
       await prisma.paymentMethod.create({ data: { ...method, tenantId, sortOrder: i } });
     }
+  }
+  for (const provider of file.paymentProviders ?? []) {
+    if (
+      (await prisma.paymentProviderAccount.count({
+        where: { tenantId, method: provider.method },
+      })) > 0
+    ) {
+      continue;
+    }
+    const account = await prisma.paymentProviderAccount.create({
+      data: {
+        tenantId,
+        method: provider.method,
+        providerKey: provider.providerKey,
+        mode: provider.mode,
+        publicConfig: provider.publicConfig ?? {},
+      },
+    });
+    await prisma.paymentMethod.updateMany({
+      where: { tenantId, nameEn: provider.tender, archivedAt: null },
+      data: { providerAccountId: account.id },
+    });
   }
   for (const [code, registers] of Object.entries(file.cashRegisters ?? {})) {
     const locationId = locationIds.get(code);

@@ -164,6 +164,7 @@ function onlineCharge(orderId: string, amount: number, refundOfId: string | null
     orderId,
     shiftId: null,
     deviceId: null,
+    providerAccountId: null,
     paymentMethodId: fixture.ids.online,
     methodType: 'ONLINE' as const,
     methodNameEn: 'Online card',

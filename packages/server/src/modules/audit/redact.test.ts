@@ -31,3 +31,35 @@ describe('redactForAudit key matching', () => {
     });
   });
 });
+
+describe('redactForAudit and payment provider secrets (ADR 0024)', () => {
+  it('redacts provider secrets under the names gateways use, and sealed bytes', () => {
+    expect(
+      redactForAudit({
+        providerKey: 'mock-online',
+        fingerprint: 'a1b2c3d4e5f6',
+        secrets: { secretKey: 'sk_test_value' },
+        apiKey: 'k1',
+        api_key: 'k2',
+        privateKey: 'k3',
+        webhookSigningSecret: 'k4',
+        clientSecret: 'k5',
+        passphrase: 'k6',
+        ciphertext: 'c',
+        wrappedKey: 'w',
+      }),
+    ).toEqual({
+      providerKey: 'mock-online',
+      fingerprint: 'a1b2c3d4e5f6',
+      secrets: '[REDACTED]',
+      apiKey: '[REDACTED]',
+      api_key: '[REDACTED]',
+      privateKey: '[REDACTED]',
+      webhookSigningSecret: '[REDACTED]',
+      clientSecret: '[REDACTED]',
+      passphrase: '[REDACTED]',
+      ciphertext: '[REDACTED]',
+      wrappedKey: '[REDACTED]',
+    });
+  });
+});

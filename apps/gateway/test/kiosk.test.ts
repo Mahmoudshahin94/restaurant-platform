@@ -1,5 +1,5 @@
 import { newId } from '@pos/domain';
-import { type MockPaymentTerminal, PAYMENT_TERMINAL, PrismaService } from '@pos/server';
+import { MockPaymentTerminal, PrismaService } from '@pos/server';
 import type { ApiErrorBody } from '@pos/shared-types';
 import type {
   KioskAttendant,
@@ -38,7 +38,6 @@ let kioskRow: Record<string, unknown>;
 const api = '/api/v1';
 const loc = () => `${api}/locations/${fixture.ids.locationId}`;
 const db = () => asHubTx(hub.app.get(PrismaService));
-const terminal = () => hub.app.get<MockPaymentTerminal>(PAYMENT_TERMINAL);
 
 beforeEach(async () => {
   fixture = await buildSnapshot();
@@ -313,7 +312,7 @@ describe('the kiosk at a restaurant', () => {
   it('records a declined card and leaves the order waiting; another attempt pays it', async () => {
     const kiosk = await pairKiosk();
     const order = (await kioskOrder(kiosk, 'TERMINAL')).json<Order>();
-    terminal().declineNext();
+    MockPaymentTerminal.declineNext();
     const declined = (await pay(kiosk, order.id)).json<KioskPaymentOutcome>();
     expect(declined.payment.status).toBe('FAILED');
     expect(declined.order).toMatchObject({ status: 'PLACED', paymentStatus: 'UNPAID' });
@@ -414,6 +413,59 @@ describe('the kiosk at a restaurant', () => {
       where: { entityId: order.id, status: 'PENDING' },
     });
     expect(pending).toBeGreaterThan(0);
+  });
+});
+
+describe('the kiosk card reader is the tenant’s provider (ADR 0024)', () => {
+  /** A TERMINAL account of the tenant, as the snapshot brings it: no secrets, ever. */
+  const terminalAccount = (locationId: string | null, status = 'ACTIVE') => ({
+    id: newId(),
+    tenantId: fixture.ids.tenantId,
+    locationId,
+    method: 'TERMINAL',
+    providerKey: 'mock-terminal',
+    mode: 'TEST',
+    status,
+    publicConfig: { terminalLabel: 'Front reader' },
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  async function restartWithoutDevelopmentDefault(): Promise<void> {
+    await hub.close();
+    removeDir(hub.dataDir);
+    hub = await startHub(undefined, { DEV_PAYMENT_PROVIDERS: '' });
+    await pair(hub, cloud);
+    expect(await hub.snapshots.syncNow()).toBe('applied');
+  }
+
+  it('refuses card payments when the tenant has no terminal provider: pay at the counter', async () => {
+    await restartWithoutDevelopmentDefault();
+    const kiosk = await pairKiosk();
+    const order = (await kioskOrder(kiosk, 'TERMINAL')).json<Order>();
+    const res = await pay(kiosk, order.id);
+    expect(res.json<ApiErrorBody>()).toMatchObject({
+      code: 'PAYMENT_FAILED',
+      details: { reason: 'PROVIDER_NOT_CONFIGURED' },
+    });
+    expect(await db().payment.count()).toBe(0);
+  });
+
+  it('charges through the location’s own account and records it on the payment', async () => {
+    await restartWithoutDevelopmentDefault();
+    const tenantWide = terminalAccount(null, 'DISABLED');
+    const here = terminalAccount(fixture.ids.locationId);
+    fixture.tables.paymentProviderAccounts = [tenantWide, here];
+    await resync();
+    const kiosk = await pairKiosk();
+    const order = (await kioskOrder(kiosk, 'TERMINAL')).json<Order>();
+    const paid = (await pay(kiosk, order.id)).json<KioskPaymentOutcome>();
+    expect(paid.payment.status).toBe('CAPTURED');
+    const row = await db().payment.findUniqueOrThrow({ where: { id: paid.payment.id } });
+    expect(row).toMatchObject({ provider: 'mock-terminal', providerAccountId: here.id });
+    // The hub holds the account but no secret table at all.
+    expect(await db().paymentProviderAccount.count()).toBe(2);
+    expect('paymentProviderSecret' in db()).toBe(false);
   });
 });
 

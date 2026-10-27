@@ -111,8 +111,12 @@ and publishes.
 A branch takes orders only when online ordering is OPEN (the seed opens `MAIN` when it creates it;
 otherwise `PUT /api/v1/locations/:lid/online-ordering { "state": "OPEN" }` as the owner), it is
 within its opening hours, and **its hub is running** (a hub silent for 3 minutes makes the
-branch "Offline"). With `ONLINE_PAYMENT_PROVIDER=mock` (the `.env` example) the checkout offers a
-test card: "Approved" or "Declined" test tokens, no card details, no money. To try the whole flow:
+branch "Offline"). The seed gives the demo restaurant a test online provider (Settings → Payment
+providers, ADR 0024), so its checkout offers a test card: "Approved" or "Declined" test tokens, no
+card details, no money. The other demo businesses take cash only until an administrator adds an
+online provider there; with `DEV_PAYMENT_PROVIDERS=mock-online` (the `.env` example) every
+business without its own account gets the test card too. Provider secrets are sealed with
+`PAYMENT_SECRETS_KEY` (unset: a development key derived from `JWT_ACCESS_SECRET`). To try the whole flow:
 order on the website, watch the POS (signed in at the hub) announce it, accept or reject it, and
 watch the order page change within a few seconds. Unaccepted orders are cancelled after
 `onlineAcceptMinutes` (10).
@@ -147,8 +151,9 @@ pnpm --filter @pos/kiosk dev      # http://localhost:5176 (proxies /api to the h
 In the admin, System → Devices → Add a device → Self-service kiosk shows a pairing code; type it
 on the kiosk's first screen (the hub needs the code from its next snapshot: within seconds while
 the API runs). The demo restaurant has `SELF_CHECKOUT` on in its seed; the supermarket gets it from
-its business type. Card payments at the kiosk need `PAYMENT_TERMINAL_PROVIDER=mock` in `.env` (the
-documented test terminal: every card is approved). Staff leave the customer screens with the
+its business type. Card payments at the kiosk need a kiosk card reader provider: add a "Test card
+reader" in Settings → Payment providers, or set `DEV_PAYMENT_PROVIDERS=mock-terminal` in `.env` for
+every business without one (the documented test terminal: every card is approved). Staff leave the customer screens with the
 corner button, an employee code and PIN, and the `kiosk.attend` permission (the demo cashier has
 it). To pair the browser again, unpair it from the attendant menu.
 

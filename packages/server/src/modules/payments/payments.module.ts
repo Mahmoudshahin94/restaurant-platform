@@ -1,40 +1,31 @@
 import { Module } from '@nestjs/common';
+import { SERVER_MODE, type ServerMode } from '../../common/auth/managed-in-cloud';
 import { APP_CONFIG, type AppConfig } from '../../config/env';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
-import { CashPaymentProvider } from './providers/cash.provider';
-import { ExternalCardPaymentProvider } from './providers/external-card.provider';
-import { MockPaymentTerminal } from './providers/mock-terminal.provider';
-import { PAYMENT_PROVIDERS } from './providers/payment-provider';
-import { PaymentProviderRegistry } from './providers/payment-provider.registry';
-import { PAYMENT_TERMINAL, type PaymentTerminalProvider } from './providers/payment-terminal';
-import { UnconfiguredOnlinePaymentProvider } from './providers/unconfigured-online.provider';
-import { UnconfiguredPaymentTerminal } from './providers/unconfigured-terminal.provider';
+import { PaymentProviderFactory } from './providers/payment-provider.factory';
+import { NO_KEYS, PAYMENT_KEY_PROVIDER, createKeyProvider } from './secrets/key-provider';
+import { PaymentSecretsService } from './secrets/payment-secrets.service';
 
-/** Payments: provider abstraction, charges, refunds. Swap or add providers here. */
+/**
+ * Payments: charges and refunds, and the providers that take them (ADR 0024): each tenant's
+ * provider accounts pick and configure an adapter of the provider catalog. Add providers to the
+ * catalog, not here.
+ */
 @Module({
   controllers: [PaymentsController],
   providers: [
     {
-      provide: PAYMENT_PROVIDERS,
-      useValue: [
-        new CashPaymentProvider(),
-        new ExternalCardPaymentProvider(),
-        new UnconfiguredOnlinePaymentProvider(),
-      ],
+      // The cloud seals provider secrets; it refuses to start in production without a key.
+      provide: PAYMENT_KEY_PROVIDER,
+      inject: [APP_CONFIG, SERVER_MODE],
+      useFactory: (config: AppConfig, mode: ServerMode) =>
+        mode === 'cloud' ? createKeyProvider(config) : NO_KEYS,
     },
-    {
-      // Kiosk card terminals (ADR 0022): one adapter per installation, chosen by configuration.
-      provide: PAYMENT_TERMINAL,
-      inject: [APP_CONFIG],
-      useFactory: (config: AppConfig): PaymentTerminalProvider =>
-        config.PAYMENT_TERMINAL_PROVIDER === 'mock'
-          ? new MockPaymentTerminal()
-          : new UnconfiguredPaymentTerminal(),
-    },
-    PaymentProviderRegistry,
+    PaymentSecretsService,
+    PaymentProviderFactory,
     PaymentsService,
   ],
-  exports: [PaymentsService, PAYMENT_TERMINAL],
+  exports: [PaymentsService, PaymentProviderFactory, PaymentSecretsService],
 })
 export class PaymentsModule {}

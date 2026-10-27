@@ -209,6 +209,11 @@ export const paymentMethodAdminSchema = z.object({
   nameEn: z.string(),
   nameAr: z.string(),
   sortOrder: z.int(),
+  /**
+   * The provider account that takes this tender's payments (ADR 0024): website and kiosk payments
+   * are recorded under the tender linked to the account that took them.
+   */
+  providerAccountId: idSchema.nullable(),
   archivedAt: isoDateTimeSchema.nullable(),
 });
 export type PaymentMethodAdmin = z.infer<typeof paymentMethodAdminSchema>;
@@ -218,14 +223,25 @@ export const createPaymentMethodSchema = z.object({
   nameEn: nameEnSchema,
   nameAr: nameArSchema,
   sortOrder: z.int().min(0).max(10_000).default(0),
+  providerAccountId: idSchema.nullable().default(null),
 });
 export type CreatePaymentMethodRequest = z.input<typeof createPaymentMethodSchema>;
 
-/** The type is fixed once created: recorded payments snapshot it. */
-export const updatePaymentMethodSchema = createPaymentMethodSchema
-  .omit({ type: true })
-  .partial()
-  .refine((v) => Object.keys(v).length > 0, { message: 'No fields to update' });
+/**
+ * The type is fixed once created: recorded payments snapshot it. Fields are optional without
+ * defaults, so an edit changes only what it names (a default would reset the order or unlink the
+ * provider account).
+ */
+export const updatePaymentMethodSchema = z
+  .object({
+    nameEn: nameEnSchema.optional(),
+    nameAr: nameArSchema.optional(),
+    sortOrder: z.int().min(0).max(10_000).optional(),
+    providerAccountId: idSchema.nullable().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, {
+    message: 'No fields to update',
+  });
 export type UpdatePaymentMethodRequest = z.input<typeof updatePaymentMethodSchema>;
 
 export const cashRegisterAdminSchema = z.object({

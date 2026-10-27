@@ -57,6 +57,8 @@ export const syncPaymentSchema = z.object({
   shiftId: idSchema.nullable(),
   /** The terminal device that took it (a kiosk); absent in operations of an older hub. */
   deviceId: idSchema.nullable().default(null),
+  /** The provider account that took it (ADR 0024); absent in operations of an older hub. */
+  providerAccountId: idSchema.nullable().default(null),
   paymentMethodId: idSchema,
   methodType: z.enum(enumValues(PaymentMethodType)),
   methodNameEn: text,

@@ -7,6 +7,7 @@
     "build": "nest build -p tsconfig.build.json",
     "dev": "nest start --watch -p tsconfig.build.json",
     "start": "node dist/main.js",
+    "payment-secrets:rotate": "node dist/rotate-payment-secrets.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run"

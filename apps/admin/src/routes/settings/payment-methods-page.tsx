@@ -1,7 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { QueryState, tKey, useCurrentLocale } from '@pos/app-kit';
 import { pickLocalized } from '@pos/i18n';
-import type { PaymentMethodAdmin } from '@pos/validation';
+import { TENDER_TYPE_OF } from '@pos/shared-types';
+import type { PaymentMethodAdmin, PaymentProviderAccount } from '@pos/validation';
 import {
   Alert,
   Button,
@@ -46,10 +47,31 @@ const methodForm = z.object({
     .number<string>()
     .int('common:validation.invalid')
     .min(0, 'common:validation.invalid'),
+  /** '' = no account: whichever provider takes the type (ADR 0024). */
+  providerAccountId: z.string(),
 });
 type FormInput = z.input<typeof methodForm>;
 type FormOutput = z.output<typeof methodForm>;
-const AFFECTS = ['payment-methods'];
+const AFFECTS = ['payment-methods', 'payment-providers'];
+
+/** The provider accounts a tender of this type can be linked to (ADR 0024). */
+function useLinkableAccounts() {
+  const tid = useTenantId();
+  const query = useQuery({
+    queryKey: keys.paymentProviders(tid),
+    queryFn: () => api.admin.paymentProviders.overview(tid),
+  });
+  return (type: PaymentMethodAdmin['type']): PaymentProviderAccount[] =>
+    (query.data?.accounts ?? []).filter((a) => TENDER_TYPE_OF[a.method] === type);
+}
+
+function useAccountName() {
+  const { t } = useTranslation('admin');
+  return (account: PaymentProviderAccount) =>
+    `${t(`paymentProviders.providers.${account.providerKey}`, account.providerKey)} · ${t(
+      `paymentProviders.methods.${account.method}`,
+    )}`;
+}
 
 function MethodDialog({
   method,
@@ -62,6 +84,8 @@ function MethodDialog({
   const tid = useTenantId();
   const errorText = useAdminErrorText();
   const [formError, setFormError] = useState<string | null>(null);
+  const linkable = useLinkableAccounts();
+  const accountName = useAccountName();
   const form = useForm<FormInput, unknown, FormOutput>({
     resolver: zodResolver(methodForm),
     defaultValues: {
@@ -69,15 +93,16 @@ function MethodDialog({
       nameEn: method?.nameEn ?? '',
       nameAr: method?.nameAr ?? '',
       sortOrder: String(method?.sortOrder ?? 0),
+      providerAccountId: method?.providerAccountId ?? '',
     },
   });
-  const save = useAdminMutation(
-    ({ type, ...values }: FormOutput) =>
-      method
-        ? api.admin.paymentMethods.update(tid, method.id, values)
-        : api.admin.paymentMethods.create(tid, { type, ...values }),
-    AFFECTS,
-  );
+  const type = form.watch('type');
+  const save = useAdminMutation(({ type, providerAccountId, ...values }: FormOutput) => {
+    const link = { ...values, providerAccountId: providerAccountId || null };
+    return method
+      ? api.admin.paymentMethods.update(tid, method.id, link)
+      : api.admin.paymentMethods.create(tid, { type, ...link });
+  }, AFFECTS);
   const onSubmit = form.handleSubmit(async (values) => {
     setFormError(null);
     try {
@@ -107,6 +132,19 @@ function MethodDialog({
           </NativeSelect>
         </Field>
         <LocalizedFields register={form.register} errors={form.formState.errors} />
+        <Field
+          label={t('admin:paymentMethods.providerAccount')}
+          hint={t('admin:paymentMethods.providerAccountHint')}
+        >
+          <NativeSelect {...form.register('providerAccountId')}>
+            <option value="">{t('admin:paymentMethods.anyProvider')}</option>
+            {linkable(type).map((account) => (
+              <option key={account.id} value={account.id}>
+                {accountName(account)}
+              </option>
+            ))}
+          </NativeSelect>
+        </Field>
         <Field
           label={t('admin:paymentMethods.sortOrder')}
           error={sortError ? tKey(t, sortError) : undefined}

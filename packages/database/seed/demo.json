@@ -386,6 +386,15 @@
       "nameAr": "بطاقة عبر الإنترنت"
     }
   ],
+  "paymentProviders": [
+    {
+      "method": "ONLINE",
+      "providerKey": "mock-online",
+      "mode": "TEST",
+      "publicConfig": { "statementDescriptor": "DEMO KITCHEN" },
+      "tender": "Online card"
+    }
+  ],
   "cashRegisters": {
     "MAIN": [
       {

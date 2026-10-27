@@ -90,6 +90,8 @@ export default tseslint.config(
       'packages/server/src/modules/website/host-tenant.resolver.ts',
       // The acceptance-timeout sweep finds due orders across tenants.
       'packages/server/src/modules/online-ordering/web-orders.service.ts',
+      // Key rotation finds secrets sealed with an old key across tenants (ADR 0024).
+      'packages/server/src/modules/payments/secrets/payment-secrets.service.ts',
       // The definition itself.
       'packages/server/src/common/tenancy/**/*.ts',
     ],

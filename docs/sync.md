@@ -69,7 +69,16 @@ order, join tables and role grants are replaced, staff missing from the snapshot
 and nothing referenced by local orders is ever deleted. A `menu.updated` event tells screens to
 refresh. Without the cloud the hub keeps serving its last snapshot.
 
-The snapshot is `format: 6` since self-service kiosks
+The snapshot is `format: 7` since payment configuration
+([ADR 0024](adr/0024-payment-configuration.md)): it carries `paymentProviderAccounts`, the
+tenant's accounts and this location's (upserted by id before the tenders that link them; never
+deleted, because payments name them), selected column by column. **Their secrets never travel:**
+`payment_provider_secrets` is a cloud-only table, absent from the hub's schema, so a hub can only
+run providers that need no secret (the kiosk's reader, cash and external card). Pushed payments
+carry `providerAccountId`; the cloud refuses an account of another tenant (`SYNC_SCOPE_MISMATCH`).
+Orders the hub fetches carry the account id of their online payments, never a secret.
+
+Format 6 came with self-service kiosks
 ([ADR 0022](adr/0022-self-service-kiosk.md)): a device row also carries `pairingCodeHash` and
 `pairingExpiresAt` while the terminal waits to pair, so the hub pairs it without the cloud. Devices
 are merged, not copied: their lifecycle only moves forward on the hub (`PENDING` < `ACTIVE` <

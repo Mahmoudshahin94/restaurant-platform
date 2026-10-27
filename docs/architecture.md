@@ -703,7 +703,7 @@ Configuration precedence is in [configuration.md](configuration.md).
 | M5    | Retail: SKU, barcodes, generic product options and variants, scanner abstraction                         | ✅ Done |
 | M6    | Self-service: kiosk app, terminal devices, shared order engine, self-checkout                            | ✅ Done |
 | M7    | Multi-tenant website: host resolution, verified domains, configurable sections                           | ✅ Done |
-| M8    | Payment configuration: per-tenant provider accounts, encrypted secrets                                   | ⏳      |
+| M8    | Payment configuration: per-tenant provider accounts, encrypted secrets                                   | ✅ Done |
 | M9    | Platform admin: separate app and identity, tenants, health, support and repair tools                     | ⏳      |
 | M10   | Versioning: one MADAR version, device versions, release tracking                                         | ⏳      |
 
@@ -995,6 +995,47 @@ the TLS check answered `200`. The check led to two changes: the featured-product
 for its menu instead of showing an empty heading, and the editor puts its two columns side by
 side only on wide screens.
 
+### Phase M8 decisions
+
+See [ADR 0024](adr/0024-payment-configuration.md) and
+[configuration.md](configuration.md#payment-providers-m8).
+
+- **Provider accounts:** `PaymentProviderAccount` says which provider takes `CASH`, `CARD`,
+  `ONLINE` (website checkout) or `TERMINAL` (kiosk reader) for the whole tenant or one location,
+  in TEST or LIVE mode, with public configuration validated by the provider's schema. One ACTIVE
+  account per tenant, method and scope; accounts are disabled, never deleted. Resolution is
+  platform → tenant → location (`resolvePaymentProviders`); a cash-only tenant has no ONLINE
+  account and its card checkout is refused (`ONLINE_PAYMENT_UNAVAILABLE`).
+- **Catalog and factory:** `PROVIDER_CATALOG` (definition + adapter) replaces the static registry
+  and the `ONLINE_PAYMENT_PROVIDER`/`PAYMENT_TERMINAL_PROVIDER` switches;
+  `PaymentProviderFactory.forTenant` configures the adapter for POS, kiosk and website payments,
+  and `forPayment` voids and refunds through the account recorded on each payment.
+  `DEV_PAYMENT_PROVIDERS` keeps the test adapters as development defaults (refused in production).
+- **Sealed secrets:** the cloud-only `PaymentProviderSecret` holds an AES-256-GCM envelope (a
+  fresh data key wrapped by the `KeyProvider`'s master key of a version); tenant and account ids
+  are the additional data, so a ciphertext cannot move between accounts or tenants. Production
+  refuses to start without `PAYMENT_SECRETS_KEY`; `payment-secrets:rotate` re-encrypts under the
+  newest version.
+- **Write-only:** answers show `hasSecret`, a fingerprint and the last change. Log and audit
+  redaction cover provider secrets; accounts ride the snapshot (format 7) without them.
+- **Admin:** Settings → Payment providers (tenant-wide `settings.manage`, EN/AR), with a test-mode
+  badge, masked secret fields and what is in effect at each location; tenders link to accounts.
+
+**Phase M8 verification (2026-10-27):** `pnpm build`, `typecheck`, `lint` and `test` green
+(1,051 unit, integration and component tests: API 328, domain 270, gateway 90, admin 57,
+app-kit 56, validation 53, i18n 45, server 40, customer-web 25, database 24, POS 22, kiosk 11,
+api-client 11, KDS 9, receipts 8, ui 2), `pnpm test:tools` (13), the hub schema check, a clean
+`migrate status`, `format:check`, and all 43 Playwright E2E tests (POS 16, admin 12,
+customer-web 8, KDS 4, kiosk 3) in one run, including the new scenarios 30–31. A manual browser
+check against a freshly seeded database: the coffee shop, without a provider, offered only "Pay
+at pickup"; its owner added the test card gateway in the admin with a secret key, which showed as
+"Stored" with fingerprint `9feeac12f1d1` (the SHA-256 the owner can compute from the key), was in
+no API answer, page or audit entry, and was sealed under key version 1. The coffee shop's site
+then offered the card, and a card order on `ramallah-roasters.localhost` and one on
+`demo-kitchen.localhost` (in Arabic) were each captured through their own business's account. The
+page was checked in Arabic (RTL) and the light theme; the check led to keeping the test-mode badge
+on one line.
+
 ## Architectural decisions and open questions
 
 Recorded as ADRs in [adr/](adr/):
@@ -1065,6 +1106,11 @@ Recorded as ADRs in [adr/](adr/):
     barcodes unique per tenant with GS1 check digits verified in the domain, one code lookup over
     the resolved menu on the cloud, the hub and the till (offline), and a scanner abstraction that
     reads keyboard-wedge scanners without blocking typing.
+22. [0024](adr/0024-payment-configuration.md): MADAR payment configuration: per-tenant provider
+    accounts resolved platform → tenant → location, a provider catalog of adapters with strict
+    configuration and secret schemas, and secrets sealed in the cloud only by AES-256-GCM envelope
+    encryption bound to the tenant and account, write-only through the API, with a versioned
+    master key that production requires and rotation re-encrypts.
 
 Open items to revisit:
 
