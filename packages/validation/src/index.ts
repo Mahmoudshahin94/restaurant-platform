@@ -5,6 +5,7 @@ export * from './menu';
 export * from './orders';
 export * from './pricing-config';
 export * from './payments';
+export * from './payment-providers';
 export * from './kitchen';
 export * from './realtime';
 export * from './hub';

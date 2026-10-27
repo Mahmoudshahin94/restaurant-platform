@@ -74,5 +74,8 @@
   "DEVICE_NOT_FOUND": "Device not found.",
   "PAIRING_CODE_INVALID": "That pairing code is not valid, was already used, or has expired. Ask for a new code in the admin portal.",
   "PAYMENT_METHOD_NOT_FOUND": "Payment method not found.",
+  "PAYMENT_PROVIDER_NOT_FOUND": "Payment provider account not found.",
+  "PAYMENT_PROVIDER_INVALID": "This payment provider cannot be set up this way. Check its settings.",
+  "ONLINE_PAYMENT_UNAVAILABLE": "This store does not take online card payments. Pay at pickup or on delivery.",
   "SYNC_ISSUE_NOT_FOUND": "Synchronization issue not found."
 }

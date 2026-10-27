@@ -249,6 +249,7 @@ model Tenant {
   files            TenantFile[]
   productBarcodes  ProductBarcode[]
   productImages    ProductImage[]
+  paymentProviders PaymentProviderAccount[]
 
   @@map("tenants")
 }
@@ -287,7 +288,7 @@ model Location {
   createdAt             DateTime            @default(now()) @map("created_at")
   updatedAt             DateTime            @updatedAt @map("updated_at")
 
-  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant           Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   userRoles        UserRole[]
   employees        Employee[]
   devices          Device[]
@@ -301,6 +302,7 @@ model Location {
   payments         Payment[]
   kitchenTickets   KitchenTicket[]
   featureOverrides FeatureOverride[]
+  paymentProviders PaymentProviderAccount[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -1188,20 +1190,26 @@ model OrderCounter {
 
 /// A tender the location accepts, e.g. "Cash", "Mada", "Visa".
 model PaymentMethod {
-  id         String            @id @default(uuid(7))
-  tenantId   String            @map("tenant_id")
-  type       PaymentMethodType
-  nameEn     String            @map("name_en")
-  nameAr     String            @map("name_ar")
-  sortOrder  Int               @default(0) @map("sort_order")
-  archivedAt DateTime?         @map("archived_at")
-  createdAt  DateTime          @default(now()) @map("created_at")
-  updatedAt  DateTime          @updatedAt @map("updated_at")
+  id                String            @id @default(uuid(7))
+  tenantId          String            @map("tenant_id")
+  type              PaymentMethodType
+  nameEn            String            @map("name_en")
+  nameAr            String            @map("name_ar")
+  sortOrder         Int               @default(0) @map("sort_order")
+  /// The provider account that takes this tender's payments (ADR 0024); null for the built-in
+  /// providers. Website and kiosk payments are recorded under the tender linked to the account
+  /// that took them (else the first tender of the type).
+  providerAccountId String?           @map("provider_account_id")
+  archivedAt        DateTime?         @map("archived_at")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
 
-  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  payments Payment[]
+  tenant          Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  providerAccount PaymentProviderAccount? @relation(fields: [providerAccountId], references: [id], onDelete: Restrict)
+  payments        Payment[]
 
   @@index([tenantId])
+  @@index([providerAccountId])
   @@map("payment_methods")
 }
 
@@ -1223,8 +1231,11 @@ model Payment {
   methodNameAr       String                 @map("method_name_ar")
   type               PaymentTransactionType
   status             PaymentRecordStatus
-  /// Provider adapter that processed it (e.g. "cash", "external-card").
+  /// Provider adapter that processed it: a key of the provider catalog (e.g. "cash").
   provider           String
+  /// The provider account whose configuration took it (ADR 0024): voids and refunds go back
+  /// through it. Null for the platform's defaults (built-in and development providers).
+  providerAccountId  String?                @map("provider_account_id")
   /// Provider-side id (gateway transaction id); null for cash.
   providerRef        String?                @map("provider_ref")
   /// Applied to the order (minor units, always positive).
@@ -1244,20 +1255,56 @@ model Payment {
   createdAt          DateTime               @default(now()) @map("created_at")
   updatedAt          DateTime               @updatedAt @map("updated_at")
 
-  location Location          @relation(fields: [locationId], references: [id], onDelete: Restrict)
-  order    Order             @relation(fields: [orderId], references: [id], onDelete: Restrict)
-  shift    Shift?            @relation(fields: [shiftId], references: [id], onDelete: Restrict)
-  device   Device?           @relation(fields: [deviceId], references: [id], onDelete: Restrict)
-  method   PaymentMethod     @relation(fields: [paymentMethodId], references: [id], onDelete: Restrict)
-  refundOf Payment?          @relation("PaymentRefunds", fields: [refundOfId], references: [id], onDelete: Restrict)
-  refunds  Payment[]         @relation("PaymentRefunds")
+  location Location                @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  order    Order                   @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  shift    Shift?                  @relation(fields: [shiftId], references: [id], onDelete: Restrict)
+  device   Device?                 @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  method   PaymentMethod           @relation(fields: [paymentMethodId], references: [id], onDelete: Restrict)
+  account  PaymentProviderAccount? @relation(fields: [providerAccountId], references: [id], onDelete: Restrict)
+  refundOf Payment?                @relation("PaymentRefunds", fields: [refundOfId], references: [id], onDelete: Restrict)
+  refunds  Payment[]               @relation("PaymentRefunds")
   cash     CashTransaction[]
 
   @@index([orderId])
   @@index([shiftId])
   @@index([deviceId])
+  @@index([providerAccountId])
   @@index([locationId, createdAt])
   @@map("payments")
+}
+
+/// Which payment provider takes a method (ADR 0024), for the whole tenant (no location) or as one
+/// location's override, in TEST or LIVE mode, with the provider's public configuration (validated
+/// by its schema in @pos/validation `PAYMENT_PROVIDER_DEFINITIONS`). Configuration: it rides the
+/// hub snapshot and the change feed. Its secrets are kept apart, encrypted and in the cloud only
+/// (`PaymentProviderSecret`). One ACTIVE account per tenant, method and scope (a partial unique
+/// index). Never deleted: its payments name it; a disabled account still voids and refunds them.
+model PaymentProviderAccount {
+  id           String   @id @default(uuid(7))
+  tenantId     String   @map("tenant_id")
+  /// Null: the whole tenant; otherwise this location's override.
+  locationId   String?  @map("location_id")
+  /// @pos/shared-types PaymentProviderMethod (CASH, CARD, ONLINE, TERMINAL), checked by the database.
+  method       String
+  /// A key of the provider catalog; fixed once created.
+  providerKey  String   @map("provider_key")
+  /// TEST or LIVE, checked by the database.
+  mode         String
+  /// ACTIVE or DISABLED, checked by the database.
+  status       String   @default("ACTIVE")
+  /// Non-secret settings only: shown to administrators and sent to the location hubs.
+  publicConfig Json     @default("{}") @map("public_config")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  location       Location?       @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  paymentMethods PaymentMethod[]
+  payments       Payment[]
+
+  @@index([tenantId, method])
+  @@index([locationId])
+  @@map("payment_provider_accounts")
 }
 
 /// A physical cash drawer at a location.

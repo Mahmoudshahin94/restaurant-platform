@@ -91,6 +91,15 @@ export const ERROR_CODES = [
   'SHIFT_ALREADY_OPEN',
   'CASH_REGISTER_NOT_FOUND',
   'PAYMENT_METHOD_NOT_FOUND',
+  // payment configuration (ADR 0024)
+  'PAYMENT_PROVIDER_NOT_FOUND',
+  /**
+   * The provider does not fit: unknown, not for this method or mode, its configuration or secrets
+   * do not match its schema, or a test adapter in production (details.reason, details.issues).
+   */
+  'PAYMENT_PROVIDER_INVALID',
+  /** The business takes no online card payments here: pay at pickup or on delivery. */
+  'ONLINE_PAYMENT_UNAVAILABLE',
   // kitchen
   'KITCHEN_TICKET_NOT_FOUND',
   'INVALID_TICKET_STATE',

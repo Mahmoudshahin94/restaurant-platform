@@ -139,6 +139,11 @@ export const SNAPSHOT_TABLES = [
   'discounts',
   'tableSections',
   'diningTables',
+  /**
+   * Payment provider accounts of the tenant and this location (ADR 0024), before the tenders that
+   * link them: public configuration only, never their secrets (those stay in the cloud).
+   */
+  'paymentProviderAccounts',
   'paymentMethods',
   'cashRegisters',
   /** Modules (ADR 0018): the platform's entitlements and the overrides of this location. */
@@ -156,9 +161,10 @@ export const locationSnapshotSchema = z.object({
   /**
    * Bumped when the snapshot format changes incompatibly (2: the tenant rename, ADR 0017; 3: the
    * modules a hub must enforce, ADR 0018; 4: branding and its files, ADR 0019; 5: options and
-   * barcodes, ADR 0021; 6: terminals waiting to pair, ADR 0022).
+   * barcodes, ADR 0021; 6: terminals waiting to pair, ADR 0022; 7: payment provider accounts,
+   * ADR 0024).
    */
-  format: z.literal(6),
+  format: z.literal(7),
   tenantId: idSchema,
   locationId: idSchema,
   generatedAt: isoDateTimeSchema,
