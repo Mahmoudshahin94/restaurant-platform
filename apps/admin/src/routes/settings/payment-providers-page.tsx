@@ -50,9 +50,13 @@ type Location = { id: string; nameEn: string; nameAr: string };
 export function ModeBadge({ mode }: { mode: PaymentProviderMode }) {
   const { t } = useTranslation('admin');
   return mode === 'TEST' ? (
-    <Badge variant="warning">{t('paymentProviders.modes.TEST')}</Badge>
+    <Badge variant="warning" className="whitespace-nowrap">
+      {t('paymentProviders.modes.TEST')}
+    </Badge>
   ) : (
-    <Badge variant="success">{t('paymentProviders.modes.LIVE')}</Badge>
+    <Badge variant="success" className="whitespace-nowrap">
+      {t('paymentProviders.modes.LIVE')}
+    </Badge>
   );
 }
 

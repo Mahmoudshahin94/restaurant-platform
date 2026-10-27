@@ -1021,7 +1021,20 @@ See [ADR 0024](adr/0024-payment-configuration.md) and
 - **Admin:** Settings → Payment providers (tenant-wide `settings.manage`, EN/AR), with a test-mode
   badge, masked secret fields and what is in effect at each location; tenders link to accounts.
 
-M8_VERIFICATION_PLACEHOLDER
+**Phase M8 verification (2026-10-27):** `pnpm build`, `typecheck`, `lint` and `test` green
+(1,051 unit, integration and component tests: API 328, domain 270, gateway 90, admin 57,
+app-kit 56, validation 53, i18n 45, server 40, customer-web 25, database 24, POS 22, kiosk 11,
+api-client 11, KDS 9, receipts 8, ui 2), `pnpm test:tools` (13), the hub schema check, a clean
+`migrate status`, `format:check`, and all 43 Playwright E2E tests (POS 16, admin 12,
+customer-web 8, KDS 4, kiosk 3) in one run, including the new scenarios 30–31. A manual browser
+check against a freshly seeded database: the coffee shop, without a provider, offered only "Pay
+at pickup"; its owner added the test card gateway in the admin with a secret key, which showed as
+"Stored" with fingerprint `9feeac12f1d1` (the SHA-256 the owner can compute from the key), was in
+no API answer, page or audit entry, and was sealed under key version 1. The coffee shop's site
+then offered the card, and a card order on `ramallah-roasters.localhost` and one on
+`demo-kitchen.localhost` (in Arabic) were each captured through their own business's account. The
+page was checked in Arabic (RTL) and the light theme; the check led to keeping the test-mode badge
+on one line.
 
 ## Architectural decisions and open questions
 
