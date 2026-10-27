@@ -598,7 +598,7 @@
       "description": "What takes each payment at each location, and where that comes from."
     },
     "sources": {
-      "PLATFORM": "MADAR default",
+      "PLATFORM": "Platform default",
       "TENANT": "Business-wide",
       "LOCATION": "This location"
     },

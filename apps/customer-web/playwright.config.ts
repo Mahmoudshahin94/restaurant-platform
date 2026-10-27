@@ -13,6 +13,7 @@ import { defineConfig } from '@playwright/test';
  * The website is reached on its tenant's own host (ADR 0023): MADAR's web domain is
  * `madar.localhost` here, so the demo restaurant answers on `demo-kitchen.madar.localhost`, and
  * tenant-websites.spec.ts adds `a.localhost` and `b.localhost` as two businesses' own domains.
+ * payment-providers.spec.ts also runs the admin, where the coffee shop adds its card gateway.
  */
 const ROOT_ENV = resolve(import.meta.dirname, '../../.env');
 if (existsSync(ROOT_ENV)) process.loadEnvFile(ROOT_ENV);
@@ -22,11 +23,13 @@ const HUB_PORT = 4130;
 const POS_PORT = 1440;
 const WEB_PORT = 5195;
 const KDS_PORT = 5196;
+const ADMIN_PORT = 5197;
 process.env.WEB_E2E_KDS_URL = `http://localhost:${String(KDS_PORT)}`;
 process.env.WEB_E2E_CLOUD_PORT = String(CLOUD_PORT);
 process.env.WEB_E2E_HUB_PORT = String(HUB_PORT);
 process.env.WEB_E2E_POS_URL = `http://localhost:${String(POS_PORT)}`;
 process.env.WEB_E2E_WEB_PORT = String(WEB_PORT);
+process.env.WEB_E2E_ADMIN_URL = `http://localhost:${String(ADMIN_PORT)}`;
 // The coffee shop's owner (an optional demo account) runs the second business.
 process.env.SEED_CAFE_OWNER_EMAIL ??= 'cafe-owner@demo.local';
 process.env.SEED_CAFE_OWNER_PASSWORD ??= 'Dev-Only-Cafe-Pass-1';
@@ -63,7 +66,10 @@ export default defineConfig({
         AUTH_RATE_LIMIT_PER_MINUTE: '1000',
         WEB_ORDER_RATE_LIMIT_PER_MINUTE: '1000',
         TRACKING_RATE_LIMIT_PER_MINUTE: '10000',
-        ONLINE_PAYMENT_PROVIDER: 'mock',
+        // No development payment defaults (ADR 0024): the demo restaurant's seeded test gateway
+        // takes its cards, and the coffee shop is cash only until its owner adds one.
+        DEV_PAYMENT_PROVIDERS: '',
+        CORS_ORIGINS: `http://localhost:${String(ADMIN_PORT)}`,
         WEB_ORDER_TIMEOUT_SWEEP_SECONDS: '5',
         // Websites by host (ADR 0023); the seed gives each tenant `<slug>.madar.localhost`.
         PLATFORM_WEB_DOMAIN: WEB_DOMAIN,
@@ -102,6 +108,14 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 60_000,
       env: { VITE_API_PROXY_TARGET: `http://localhost:${String(HUB_PORT)}` },
+    },
+    {
+      // The admin, where a business configures its payment providers (payment-providers.spec.ts).
+      command: `pnpm --filter @pos/admin exec vite --port ${String(ADMIN_PORT)} --strictPort`,
+      url: `http://localhost:${String(ADMIN_PORT)}`,
+      reuseExistingServer: false,
+      timeout: 60_000,
+      env: { VITE_API_PROXY_TARGET: `http://localhost:${String(CLOUD_PORT)}` },
     },
     {
       command: `pnpm exec vite --port ${String(WEB_PORT)} --strictPort`,
