@@ -8,6 +8,7 @@ import type { DynamicModule } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { TENANT_FILE_MAX_BYTES } from '@pos/shared-types';
+import type { DestinationStream } from 'pino';
 import type { FastifyRequest } from 'fastify';
 import { assertEveryRouteProtected } from './common/auth/route-inventory';
 import { AllExceptionsFilter } from './common/errors/all-exceptions.filter';
@@ -46,6 +47,11 @@ function budgetOf(request: FastifyRequest): RateBudget {
 export interface ServerAppOptions {
   /** `service` field on every log line (`api`, `hub`). */
   serviceName: string;
+  /**
+   * Tests only: every log line, at every level, goes here instead of stdout, so a test can read
+   * what the server would have logged (e.g. that no secret reaches a log line).
+   */
+  logStream?: DestinationStream;
 }
 
 /**
@@ -57,7 +63,7 @@ export async function createServerApp(
   config: AppConfig,
   options: ServerAppOptions,
 ): Promise<NestFastifyApplication> {
-  const logger = createRootLogger(config, options.serviceName);
+  const logger = createRootLogger(config, options.serviceName, options.logStream);
   const adapter = new FastifyAdapter({
     loggerInstance: logger,
     bodyLimit: 1024 * 1024,

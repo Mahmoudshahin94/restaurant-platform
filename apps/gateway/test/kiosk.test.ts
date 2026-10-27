@@ -416,6 +416,59 @@ describe('the kiosk at a restaurant', () => {
   });
 });
 
+describe('the kiosk card reader is the tenant’s provider (ADR 0024)', () => {
+  /** A TERMINAL account of the tenant, as the snapshot brings it: no secrets, ever. */
+  const terminalAccount = (locationId: string | null, status = 'ACTIVE') => ({
+    id: newId(),
+    tenantId: fixture.ids.tenantId,
+    locationId,
+    method: 'TERMINAL',
+    providerKey: 'mock-terminal',
+    mode: 'TEST',
+    status,
+    publicConfig: { terminalLabel: 'Front reader' },
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  async function restartWithoutDevelopmentDefault(): Promise<void> {
+    await hub.close();
+    removeDir(hub.dataDir);
+    hub = await startHub(undefined, { DEV_PAYMENT_PROVIDERS: '' });
+    await pair(hub, cloud);
+    expect(await hub.snapshots.syncNow()).toBe('applied');
+  }
+
+  it('refuses card payments when the tenant has no terminal provider: pay at the counter', async () => {
+    await restartWithoutDevelopmentDefault();
+    const kiosk = await pairKiosk();
+    const order = (await kioskOrder(kiosk, 'TERMINAL')).json<Order>();
+    const res = await pay(kiosk, order.id);
+    expect(res.json<ApiErrorBody>()).toMatchObject({
+      code: 'PAYMENT_FAILED',
+      details: { reason: 'PROVIDER_NOT_CONFIGURED' },
+    });
+    expect(await db().payment.count()).toBe(0);
+  });
+
+  it('charges through the location’s own account and records it on the payment', async () => {
+    await restartWithoutDevelopmentDefault();
+    const tenantWide = terminalAccount(null, 'DISABLED');
+    const here = terminalAccount(fixture.ids.locationId);
+    fixture.tables.paymentProviderAccounts = [tenantWide, here];
+    await resync();
+    const kiosk = await pairKiosk();
+    const order = (await kioskOrder(kiosk, 'TERMINAL')).json<Order>();
+    const paid = (await pay(kiosk, order.id)).json<KioskPaymentOutcome>();
+    expect(paid.payment.status).toBe('CAPTURED');
+    const row = await db().payment.findUniqueOrThrow({ where: { id: paid.payment.id } });
+    expect(row).toMatchObject({ provider: 'mock-terminal', providerAccountId: here.id });
+    // The hub holds the account but no secret table at all.
+    expect(await db().paymentProviderAccount.count()).toBe(2);
+    expect('paymentProviderSecret' in db()).toBe(false);
+  });
+});
+
 describe('self-checkout at a store', () => {
   beforeEach(async () => {
     // No kitchen, and barcodes on the cola: a shop's self-checkout.

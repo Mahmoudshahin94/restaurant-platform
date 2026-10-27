@@ -323,7 +323,7 @@ describe('branding reaches the location hubs', () => {
         locationId: tenant.locationA,
       }),
     );
-    expect(snapshot.format).toBe(6);
+    expect(snapshot.format).toBe(7);
     expect(snapshot.tables.tenantBranding).toEqual([
       expect.objectContaining({ tenantId: tenant.tenantId, primaryColor: '#2563eb' }),
     ]);

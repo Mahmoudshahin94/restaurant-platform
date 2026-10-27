@@ -1,5 +1,5 @@
 import type { LoggerService } from '@nestjs/common';
-import { pino, type Logger } from 'pino';
+import { type DestinationStream, pino, type Logger } from 'pino';
 import type { AppConfig } from '../../config/env';
 import { RequestContext } from '../context/request-context';
 
@@ -71,12 +71,21 @@ export function loggableError(error: unknown): { message: string; stack?: string
   };
 }
 
-export function createRootLogger(config: AppConfig, service = 'api'): Logger {
-  return pino({
-    level: config.NODE_ENV === 'test' ? 'silent' : config.LOG_LEVEL,
+export function createRootLogger(
+  config: AppConfig,
+  service = 'api',
+  stream?: DestinationStream,
+): Logger {
+  const options = {
     redact: { paths: LOG_REDACT_PATHS, censor: '[REDACTED]' },
     base: { service },
     timestamp: pino.stdTimeFunctions.isoTime,
+  };
+  // A test reading the log gets every line, redacted exactly as in production.
+  if (stream) return pino({ ...options, level: 'trace' }, stream);
+  return pino({
+    ...options,
+    level: config.NODE_ENV === 'test' ? 'silent' : config.LOG_LEVEL,
     ...(config.NODE_ENV === 'development'
       ? { transport: { target: 'pino-pretty', options: { singleLine: true } } }
       : {}),

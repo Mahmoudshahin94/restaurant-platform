@@ -24,6 +24,10 @@ export function testConfig(overrides: Partial<Record<string, string>> = {}): App
     PLATFORM_WEB_DOMAIN: 'localhost',
     DOMAIN_VERIFIER: 'mock',
     DEV_DEFAULT_TENANT_SLUG: undefined,
+    // Payment providers (ADR 0024): no development default and the derived development key,
+    // whatever the developer's .env says; tests that want them ask.
+    DEV_PAYMENT_PROVIDERS: '',
+    PAYMENT_SECRETS_KEY: undefined,
     ...overrides,
   });
 }
