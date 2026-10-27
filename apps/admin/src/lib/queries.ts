@@ -30,6 +30,7 @@ export const keys = {
   roles: (tid: string) => ['roles', tid] as const,
   employees: (tid: string) => ['employees', tid] as const,
   paymentMethods: (tid: string) => ['payment-methods', tid] as const,
+  paymentProviders: (tid: string) => ['payment-providers', tid] as const,
   cashRegisters: (locationId: string) => ['cash-registers', locationId] as const,
   onlineOrdering: (locationId: string) => ['online-ordering', locationId] as const,
   orders: (tid: string, query: object) => ['orders', tid, query] as const,

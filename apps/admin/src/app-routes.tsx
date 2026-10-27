@@ -27,6 +27,7 @@ import { LocationsPage } from './routes/settings/locations-page';
 import { ModulesPage } from './routes/settings/modules-page';
 import { OnlineOrderingPage } from './routes/settings/online-ordering-page';
 import { PaymentMethodsPage } from './routes/settings/payment-methods-page';
+import { PaymentProvidersPage } from './routes/settings/payment-providers-page';
 import { TenantPage } from './routes/settings/tenant-page';
 import { TablesPage } from './routes/settings/tables-page';
 import { TaxesPage } from './routes/settings/taxes-page';
@@ -142,6 +143,7 @@ export function AppRoutes() {
             guarded('settings/tables', 'orders.view', <TablesPage />),
           )}
           {guarded('settings/payment-methods', 'settings.manage', <PaymentMethodsPage />, true)}
+          {guarded('settings/payment-providers', 'settings.manage', <PaymentProvidersPage />, true)}
           {guarded('settings/cash-registers', 'settings.manage', <CashRegistersPage />)}
           {guarded('staff/users', 'users.manage', <UsersPage />, true)}
           {guarded('staff/roles', 'roles.manage', <RolesPage />, true)}

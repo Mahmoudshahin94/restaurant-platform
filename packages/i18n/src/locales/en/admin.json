@@ -27,6 +27,7 @@
     "localization": "Language and currency",
     "onlineOrdering": "Online ordering",
     "paymentMethods": "Payment methods",
+    "paymentProviders": "Payment providers",
     "cashRegisters": "Cash drawers",
     "users": "Users",
     "roles": "Roles",
@@ -535,7 +536,78 @@
       "ONLINE": "Online card"
     },
     "sortOrder": "Display order",
-    "empty": "No payment methods"
+    "empty": "No payment methods",
+    "providerAccount": "Processed by",
+    "providerAccountHint": "Website and kiosk payments are recorded under the method linked to the provider that took them.",
+    "anyProvider": "Any provider of this type"
+  },
+  "paymentProviders": {
+    "title": "Payment providers",
+    "description": "Who takes online card checkout and kiosk card readers, for the whole business or one location.",
+    "new": "Add provider",
+    "edit": "Edit provider",
+    "editNamed": "Edit {{name}}",
+    "empty": "No providers yet. Without an online provider the website takes no card payments: customers pay at pickup or on delivery.",
+    "builtIn": "Cash and cards approved on a standalone terminal are built in: they need no provider.",
+    "method": "Takes",
+    "methods": {
+      "CASH": "Cash",
+      "CARD": "Card (approval code)",
+      "ONLINE": "Online card checkout",
+      "TERMINAL": "Kiosk card reader"
+    },
+    "provider": "Provider",
+    "providerFixed": "Fixed once added: to switch providers, disable this one and add another.",
+    "providers": {
+      "cash": "Cash",
+      "external-card": "Card terminal (approval code)",
+      "mock-online": "Test card gateway",
+      "mock-terminal": "Test card reader"
+    },
+    "appliesTo": "Applies to",
+    "appliesToHint": "A location's own provider overrides the business-wide one there.",
+    "wholeBusiness": "Whole business",
+    "mode": "Mode",
+    "modeHint": "Test mode moves no real money.",
+    "modes": {
+      "TEST": "Test mode",
+      "LIVE": "Live"
+    },
+    "fields": {
+      "statementDescriptor": "Statement descriptor",
+      "secretKey": "Secret key",
+      "terminalLabel": "Reader label"
+    },
+    "secret": {
+      "title": "Secret",
+      "none": "None stored",
+      "stored": "Stored",
+      "updated": "changed {{at}}",
+      "writeOnlyHint": "Secrets are encrypted and never shown again, not even to you.",
+      "replaceHint": "A secret is stored. Type a new one to replace it, or leave the fields empty to keep it.",
+      "keep": "Stored — leave empty to keep"
+    },
+    "enabled": "Enabled",
+    "enabledHint": "A disabled provider takes no new payments; its past payments can still be refunded.",
+    "status": {
+      "ACTIVE": "Enabled",
+      "DISABLED": "Disabled"
+    },
+    "effective": {
+      "title": "In effect at each location",
+      "description": "What takes each payment at each location, and where that comes from."
+    },
+    "sources": {
+      "PLATFORM": "MADAR default",
+      "TENANT": "Business-wide",
+      "LOCATION": "This location"
+    },
+    "none": {
+      "ONLINE": "None: pay at pickup or on delivery",
+      "TERMINAL": "None: pay at the counter",
+      "CASH": "None",
+      "CARD": "None"
+    }
   },
   "cashRegisters": {
     "title": "Cash drawers",
