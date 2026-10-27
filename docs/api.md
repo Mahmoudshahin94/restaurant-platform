@@ -388,9 +388,13 @@ guestCount, notes }`. The `id` is a client-generated UUID and the **idempotency 
   code, max 64 chars. Anything that looks like a card number (13–19 digits) is rejected
   (`422 VALIDATION_FAILED`, `reason: LOOKS_LIKE_CARD_NUMBER`) and never stored. `tendered` is
   rejected for non-cash methods.
-- **Online** methods go through the provider registry; at the till they fail with
-  `reason: PROVIDER_NOT_CONFIGURED` (the POS does not offer them). Online card payments happen on
-  the customer website only (below); they carry no shift (`shiftId: null`).
+- **Providers** (MADAR M8, ADR 0024): each charge goes through the tenant's provider of the
+  method at the location (`PaymentProviderFactory`): built-in `cash` and `external-card` for the
+  till, unless an account says otherwise. The payment records the provider key (`provider`) and
+  the account (`providerAccountId`); a refund goes back through that account.
+- **Online** tenders are refused at the till (`reason: PROVIDER_NOT_CONFIGURED`; the POS does not
+  offer them). Online card payments happen on the customer website only (below); they carry no
+  shift (`shiftId: null`).
 - **Refund** takes `{ id, shiftId, amount, reason }` against one charge: at most what is left of
   it (`422 REFUND_NOT_ALLOWED`, `reason: EXCEEDS_REFUNDABLE | REASON_REQUIRED`). Cash refunds are
   paid out of the given shift's drawer. When a completed order is fully refunded it moves
@@ -514,11 +518,15 @@ trackingToken }`. Prices and totals sent by the browser are stripped and never r
   `reason: FULFILLMENT_UNAVAILABLE`), `503 LOCATION_OFFLINE`, `400 VALIDATION_FAILED`
   (`PAYMENT_OPTION_MISMATCH`: pay at pickup goes with pickup, cash on delivery with delivery),
   `422 PRODUCT_UNAVAILABLE` / `INVALID_MODIFIER_SELECTION` / … from the domain,
-  `422 PAYMENT_FAILED` (`CARD_DECLINED`, `PROVIDER_NOT_CONFIGURED`; no order is created).
-- **Online card** uses the payment provider; the only adapter is the documented mock
-  (`ONLINE_PAYMENT_PROVIDER=mock`, refused in production): `tok_mock_…` approves,
-  `tok_mock_decline…` declines; card numbers are never accepted. Rejection or timeout voids it as a
-  `REFUND` row (`reason: "VOID: …"`).
+  `422 PAYMENT_FAILED` (`CARD_DECLINED`, `PROVIDER_SECRET_UNREADABLE`; no order is created),
+  `409 ONLINE_PAYMENT_UNAVAILABLE` (the business has no online provider at this location: a
+  cash-only business; nothing is charged).
+- **Online card** uses the tenant's ONLINE provider account at the location (ADR 0024), recorded
+  under the online tender linked to it. The only adapter is the documented mock `mock-online`
+  (TEST mode, refused in production; a development default with `DEV_PAYMENT_PROVIDERS`):
+  `tok_mock_…` approves, `tok_mock_decline…` declines; card numbers are never accepted. Rejection
+  or timeout voids it through the same account as a `REFUND` row (`reason: "VOID: …"`).
+  `PublicLocation.onlineCardEnabled` says whether the location offers it.
 - **Tracking token:** `<orderId>.<signature>` (HMAC with `TRACKING_TOKEN_SECRET`); unknown, forged
   and missing tokens all answer `404 ORDER_NOT_FOUND`. `PublicOrder` carries status, payment
   status and option, fulfillment and address, items with options, totals, `placedAt`, `acceptBy`,
@@ -632,7 +640,9 @@ payment: TERMINAL|COUNTER, customerName? }` → the order (`201`, or `200` for a
   with `KDS`), and `COMPLETED` at once where the location has no kitchen screen. A decline is a
   `FAILED` payment with the order still `PLACED`. `PAYMENT_FAILED` reasons: `ALREADY_PAID`,
   `UNKNOWN_METHOD` (no card method), `BALANCE_CHANGED` (a cashier took the money meanwhile; the
-  terminal's charge is voided), `PROVIDER_NOT_CONFIGURED` (`PAYMENT_TERMINAL_PROVIDER=none`).
+  terminal's charge is voided), `PROVIDER_NOT_CONFIGURED` (the tenant has no `TERMINAL` provider
+  at this location, ADR 0024). The payment is recorded under the card tender linked to the
+  terminal's account (else the first card tender), with that account.
 - **Cancel**: the kiosk's own unpaid order → `CANCELLED` (`KIOSK_CANCELLED`); paid ones are
   refused (`INVALID_ORDER_STATE`, `REFUND_FIRST`).
 - Orders and payments of other kiosks (or of the POS) answer `404 ORDER_NOT_FOUND`.
@@ -749,8 +759,39 @@ userId, pin? }`; the PIN (4–8 digits) is stored hashed; responses only say `ha
 | POST       | `/locations/:lid/cash-registers/:registerId/archive · /restore` | `settings.manage` at the location  |
 
 A method's `type` cannot change; the last active cash method cannot be archived
-(`LAST_CASH_METHOD`), nor a drawer with an open shift (`SHIFT_OPEN`). Audit:
-`payment_method.*`, `cash_register.*`.
+(`LAST_CASH_METHOD`), nor a drawer with an open shift (`SHIFT_OPEN`). A method may name the
+provider account that processes it (`providerAccountId`): one of the tenant's accounts whose
+method records that tender type (`404 PAYMENT_PROVIDER_NOT_FOUND`, `422 PAYMENT_PROVIDER_INVALID`
+`WRONG_METHOD`). An update changes only the fields it names. Audit: `payment_method.*`,
+`cash_register.*`.
+
+### Payment providers (MADAR M8)
+
+| Method | Path                                         | Permission                    |
+| ------ | -------------------------------------------- | ----------------------------- |
+| GET    | `/tenants/:tid/payment-providers`            | `settings.manage` tenant-wide |
+| POST   | `/tenants/:tid/payment-providers`            | `settings.manage` tenant-wide |
+| PATCH  | `/tenants/:tid/payment-providers/:accountId` | `settings.manage` tenant-wide |
+
+See [ADR 0024](adr/0024-payment-configuration.md).
+
+- **GET** → `{ catalog, accounts, effective }`: the providers this installation offers (test
+  adapters only outside production) with their modes and form fields; the tenant's accounts; and
+  for each active location and method the provider in effect, its mode, account and layer
+  (`PLATFORM`, `TENANT`, `LOCATION`).
+- **POST** `{ method, providerKey, mode, locationId?, publicConfig?, secrets?, status? }` → `201`
+  the account. **PATCH** `{ mode?, publicConfig?, secrets?, status? }`: method, provider and scope
+  are fixed; `secrets` replaces the stored set, absent keeps it.
+- **Secrets are write-only:** an account carries `secret: { hasSecret, fingerprint, updatedAt }`
+  only. The fingerprint is the first 12 hex digits of the SHA-256 of the secrets' canonical JSON.
+- **Errors:** `422 PAYMENT_PROVIDER_INVALID` with `reason` `UNKNOWN_PROVIDER`, `BUILT_IN`,
+  `WRONG_METHOD`, `MODE_NOT_SUPPORTED`, `INVALID_CONFIG` / `INVALID_SECRETS` (with `issues`:
+  path and code, never the value) or `NO_SECRETS`; `409 CONFLICT` `ACTIVE_ACCOUNT_EXISTS` (one
+  ACTIVE account per method and scope: disable the other first); `404 PAYMENT_PROVIDER_NOT_FOUND`
+  (also another tenant's account); `404 LOCATION_NOT_FOUND`.
+- An account for a method the business has no tender for creates one, linked to it.
+- Audit: `payment_provider.created`, `payment_provider.updated` (changes, before, fingerprints;
+  never secrets).
 
 ### Overview and searches
 

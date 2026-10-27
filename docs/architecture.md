@@ -703,7 +703,7 @@ Configuration precedence is in [configuration.md](configuration.md).
 | M5    | Retail: SKU, barcodes, generic product options and variants, scanner abstraction                         | ✅ Done |
 | M6    | Self-service: kiosk app, terminal devices, shared order engine, self-checkout                            | ✅ Done |
 | M7    | Multi-tenant website: host resolution, verified domains, configurable sections                           | ✅ Done |
-| M8    | Payment configuration: per-tenant provider accounts, encrypted secrets                                   | ⏳      |
+| M8    | Payment configuration: per-tenant provider accounts, encrypted secrets                                   | ✅ Done |
 | M9    | Platform admin: separate app and identity, tenants, health, support and repair tools                     | ⏳      |
 | M10   | Versioning: one MADAR version, device versions, release tracking                                         | ⏳      |
 
@@ -995,6 +995,34 @@ the TLS check answered `200`. The check led to two changes: the featured-product
 for its menu instead of showing an empty heading, and the editor puts its two columns side by
 side only on wide screens.
 
+### Phase M8 decisions
+
+See [ADR 0024](adr/0024-payment-configuration.md) and
+[configuration.md](configuration.md#payment-providers-m8).
+
+- **Provider accounts:** `PaymentProviderAccount` says which provider takes `CASH`, `CARD`,
+  `ONLINE` (website checkout) or `TERMINAL` (kiosk reader) for the whole tenant or one location,
+  in TEST or LIVE mode, with public configuration validated by the provider's schema. One ACTIVE
+  account per tenant, method and scope; accounts are disabled, never deleted. Resolution is
+  platform → tenant → location (`resolvePaymentProviders`); a cash-only tenant has no ONLINE
+  account and its card checkout is refused (`ONLINE_PAYMENT_UNAVAILABLE`).
+- **Catalog and factory:** `PROVIDER_CATALOG` (definition + adapter) replaces the static registry
+  and the `ONLINE_PAYMENT_PROVIDER`/`PAYMENT_TERMINAL_PROVIDER` switches;
+  `PaymentProviderFactory.forTenant` configures the adapter for POS, kiosk and website payments,
+  and `forPayment` voids and refunds through the account recorded on each payment.
+  `DEV_PAYMENT_PROVIDERS` keeps the test adapters as development defaults (refused in production).
+- **Sealed secrets:** the cloud-only `PaymentProviderSecret` holds an AES-256-GCM envelope (a
+  fresh data key wrapped by the `KeyProvider`'s master key of a version); tenant and account ids
+  are the additional data, so a ciphertext cannot move between accounts or tenants. Production
+  refuses to start without `PAYMENT_SECRETS_KEY`; `payment-secrets:rotate` re-encrypts under the
+  newest version.
+- **Write-only:** answers show `hasSecret`, a fingerprint and the last change. Log and audit
+  redaction cover provider secrets; accounts ride the snapshot (format 7) without them.
+- **Admin:** Settings → Payment providers (tenant-wide `settings.manage`, EN/AR), with a test-mode
+  badge, masked secret fields and what is in effect at each location; tenders link to accounts.
+
+M8_VERIFICATION_PLACEHOLDER
+
 ## Architectural decisions and open questions
 
 Recorded as ADRs in [adr/](adr/):
@@ -1065,6 +1093,11 @@ Recorded as ADRs in [adr/](adr/):
     barcodes unique per tenant with GS1 check digits verified in the domain, one code lookup over
     the resolved menu on the cloud, the hub and the till (offline), and a scanner abstraction that
     reads keyboard-wedge scanners without blocking typing.
+22. [0024](adr/0024-payment-configuration.md): MADAR payment configuration: per-tenant provider
+    accounts resolved platform → tenant → location, a provider catalog of adapters with strict
+    configuration and secret schemas, and secrets sealed in the cloud only by AES-256-GCM envelope
+    encryption bound to the tenant and account, write-only through the API, with a versioned
+    master key that production requires and rotation re-encrypts.
 
 Open items to revisit:
 
