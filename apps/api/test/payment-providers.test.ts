@@ -5,8 +5,8 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { PrismaClient } from '@pos/database';
 import { newId } from '@pos/domain';
 import { PaymentSecretsService, WebOrdersService } from '@pos/server';
+import type { ApiErrorBody } from '@pos/shared-types';
 import type {
-  ApiErrorBody,
   LocationSnapshot,
   PairedDevice,
   PaymentProviderAccount,
@@ -96,7 +96,7 @@ async function business(): Promise<Business> {
       payload: { name: 'Hub', type: 'GATEWAY' },
     });
     const device = paired.json<PairedDevice>();
-    if (locationId === tenant.locationA) hub = device.credential;
+    if (locationId === tenant.locationA) hub = device.credential ?? '';
     await prisma.device.update({
       where: { id: device.device.id },
       data: { status: 'ACTIVE', lastSeenAt: new Date() },
@@ -146,8 +146,8 @@ async function cardOrder(who: Business, locationId: string) {
   });
 }
 
-async function paymentOf(res: { json: <T>() => T }) {
-  const { order } = res.json<WebOrderCreated>();
+async function paymentOf(res: { json: () => unknown }) {
+  const { order } = res.json() as WebOrderCreated;
   return prisma.payment.findFirstOrThrow({ where: { orderId: order.id, type: 'CHARGE' } });
 }
 
@@ -309,10 +309,8 @@ describe('secrets are write-only (ADR 0024)', () => {
       },
     });
     const account = created.json<PaymentProviderAccount>();
-    expect(account.secret).toMatchObject({
-      hasSecret: true,
-      fingerprint: expect.stringMatching(/^[0-9a-f]{12}$/),
-    });
+    expect(account.secret.hasSecret).toBe(true);
+    expect(account.secret.fingerprint).toMatch(/^[0-9a-f]{12}$/);
     const bodies = [created.body];
 
     // Updating without secrets keeps them; with new ones replaces them (a new fingerprint).
