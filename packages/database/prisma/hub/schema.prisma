@@ -178,6 +178,7 @@ enum ActorType {
   DEVICE
   CUSTOMER
   SYSTEM
+  PLATFORM
 
   @@map("actor_type")
 }
@@ -190,6 +191,7 @@ enum ActionSource {
   HUB
   SYSTEM
   KIOSK
+  PLATFORM
 
   @@map("action_source")
 }

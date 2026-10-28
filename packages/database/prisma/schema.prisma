@@ -175,6 +175,7 @@ enum ActorType {
   DEVICE
   CUSTOMER
   SYSTEM
+  PLATFORM
 
   @@map("actor_type")
 }
@@ -187,6 +188,7 @@ enum ActionSource {
   HUB
   SYSTEM
   KIOSK
+  PLATFORM
 
   @@map("action_source")
 }
@@ -1613,4 +1615,116 @@ model WebOrderCounter {
 
   @@id([locationId, businessDate])
   @@map("web_order_counters")
+}
+
+/// @cloud-only
+/// The platform (ADR 0025): MADAR's own operators, their audit trail and the errors they watch.
+/// None of it belongs to a tenant: rows that concern one name it in `subjectTenantId`, which the
+/// tenant-scoped client does not treat as ownership.
+///
+/// @pos/shared-types PlatformRole: what a platform operator may do (PLATFORM_ROLE_PERMISSIONS).
+enum PlatformRole {
+  OWNER
+  OPERATOR
+  SUPPORT
+  VIEWER
+
+  @@map("platform_role")
+}
+
+/// @cloud-only
+/// An operator of MADAR itself. A separate identity from tenant users: its own table, tokens
+/// (audience `madar-platform`) and refresh cookie. The first owner is created by
+/// `pnpm platform:create-owner`; there is no sign-up.
+model PlatformUser {
+  id              String       @id @default(uuid(7)) @db.Uuid
+  /// Stored lowercase.
+  email           String       @unique
+  /// argon2id hash. Never logged, never returned by the API.
+  passwordHash    String       @map("password_hash")
+  displayName     String       @map("display_name")
+  role            PlatformRole
+  preferredLocale Locale       @default(en) @map("preferred_locale")
+  isActive        Boolean      @default(true) @map("is_active")
+  /// Wrong passwords in a row; reaching the limit locks the account until `lockedUntil`.
+  failedLogins    Int          @default(0) @map("failed_logins")
+  lockedUntil     DateTime?    @map("locked_until") @db.Timestamptz(3)
+  lastLoginAt     DateTime?    @map("last_login_at") @db.Timestamptz(3)
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  refreshTokens PlatformRefreshToken[]
+
+  @@map("platform_users")
+}
+
+/// @cloud-only
+/// Rotating refresh tokens of platform users, like `RefreshToken` (hash only, families, reuse
+/// detection), in a table of their own.
+model PlatformRefreshToken {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  platformUserId String    @map("platform_user_id") @db.Uuid
+  familyId       String    @map("family_id") @db.Uuid
+  tokenHash      String    @unique @map("token_hash")
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(3)
+  replacedById   String?   @map("replaced_by_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  platformUser PlatformUser @relation(fields: [platformUserId], references: [id], onDelete: Cascade)
+
+  @@index([familyId])
+  @@index([platformUserId])
+  @@map("platform_refresh_tokens")
+}
+
+/// @cloud-only
+/// Append-only trail of what platform operators did: sign-ins, provisioning, status changes,
+/// configuration and every support operation (with its reason, before and after). An action on a
+/// tenant also writes the tenant's own audit log, so the business sees it.
+model PlatformAuditLog {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  /// Null for events without a known operator (a sign-in with an unknown e-mail).
+  actorId         String?  @map("actor_id") @db.Uuid
+  /// The tenant the action concerned, if any.
+  subjectTenantId String?  @map("subject_tenant_id") @db.Uuid
+  action          String
+  entityType      String   @map("entity_type")
+  entityId        String?  @map("entity_id")
+  /// Redacted of secrets before insert, like tenant audit entries.
+  metadata        Json     @default("{}")
+  requestId       String?  @map("request_id")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([createdAt])
+  @@index([subjectTenantId, createdAt])
+  @@index([actorId])
+  @@map("platform_audit_logs")
+}
+
+/// @cloud-only
+/// A server error (HTTP 5xx) for the health board, written by the exception filter: the route
+/// pattern, never the URL or body, and a redacted, shortened message. Sampled per route and code,
+/// so a failure storm cannot fill the table.
+model PlatformErrorEvent {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  /// `api` or `hub`.
+  service         String
+  status          Int
+  code            String
+  method          String
+  /// The route pattern (`/api/v1/locations/:locationId/orders`), never the concrete URL.
+  route           String
+  /// Error class and redacted message, at most 500 characters.
+  message         String
+  /// Errors of the same route and code dropped by sampling since the previous event.
+  suppressed      Int      @default(0)
+  subjectTenantId String?  @map("subject_tenant_id") @db.Uuid
+  locationId      String?  @map("location_id") @db.Uuid
+  requestId       String?  @map("request_id")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([createdAt])
+  @@index([subjectTenantId, createdAt])
+  @@map("platform_error_events")
 }

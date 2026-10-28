@@ -17,6 +17,7 @@ import {
   DeviceType,
   LOCALES,
   OnlineOrderingState,
+  PlatformRole,
   FulfillmentType,
   SyncIssueResolution,
   TenantStatus,
@@ -47,6 +48,7 @@ describe('Prisma enums mirror @pos/shared-types', () => {
     ['CashTransactionType', $Enums.CashTransactionType, CashTransactionType],
     ['KitchenTicketStatus', $Enums.KitchenTicketStatus, KitchenTicketStatus],
     ['TicketPriority', $Enums.TicketPriority, TicketPriority],
+    ['PlatformRole', $Enums.PlatformRole, PlatformRole],
   ])('%s', (_name, prismaEnum, sharedEnum) => {
     expect(Object.values(prismaEnum).sort()).toEqual(Object.values(sharedEnum).sort());
   });
