@@ -1,10 +1,16 @@
 import { RequestMethod, type INestApplication } from '@nestjs/common';
 import { GUARDS_METADATA, METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { ModulesContainer, Reflector } from '@nestjs/core';
-import type { Feature, Permission, TerminalDeviceType } from '@pos/shared-types';
+import type {
+  Feature,
+  Permission,
+  PlatformPermission,
+  TerminalDeviceType,
+} from '@pos/shared-types';
 import { IS_PUBLIC_KEY, PERMISSIONS_KEY, type PermissionRequirement } from './decorators';
 import { DEVICE_ROUTE_KEY } from './device-route';
 import { HOST_ROUTE_KEY } from './host-route';
+import { PLATFORM_GUARD_NAME, PLATFORM_PERMISSIONS_KEY } from './platform-route';
 import { requiredFeaturesOf } from './require-feature';
 
 /**
@@ -15,10 +21,13 @@ import { requiredFeaturesOf } from './require-feature';
  * - `device`: a terminal's device credential and `@DeviceRoute` (a kiosk at its hub, ADR 0022);
  * - `host`: the tenant website, `@HostRoute`: no credential, the tenant is the one whose verified
  *   domain the request's host names (`HostTenantGuard`, ADR 0023);
+ * - `platform`: MADAR's operators, `@RequirePlatformPermissions`: a platform token only, checked
+ *   by `PlatformGuard` (ADR 0025); staff tokens and device credentials are refused;
  * - `unprotected`: none of these — refused at runtime by the permissions guard, and at start-up by
  *   `assertEveryRouteProtected`.
  */
-export type RouteAccess = 'public' | 'guarded' | 'permissions' | 'device' | 'host' | 'unprotected';
+export type RouteAccess =
+  'public' | 'guarded' | 'permissions' | 'device' | 'host' | 'platform' | 'unprotected';
 
 export interface RouteEntry {
   method: string;
@@ -26,6 +35,8 @@ export interface RouteEntry {
   path: string;
   access: RouteAccess;
   permissions: readonly Permission[];
+  /** Platform routes: the platform permissions the operator needs (an empty list: any). */
+  platformPermissions: readonly PlatformPermission[];
   /** Modules the route needs (`@RequireFeature`); refused with FEATURE_DISABLED while off. */
   features: readonly Feature[];
   /** Device routes: the terminal types it serves. */
@@ -79,23 +90,29 @@ export function listRoutes(app: INestApplication): RouteEntry[] {
         const isHost =
           (Reflect.getMetadata(HOST_ROUTE_KEY, handler) ??
             Reflect.getMetadata(HOST_ROUTE_KEY, controller)) === true;
+        const platform = (Reflect.getMetadata(PLATFORM_PERMISSIONS_KEY, handler) ??
+          Reflect.getMetadata(PLATFORM_PERMISSIONS_KEY, controller)) as
+          PlatformPermission[] | undefined;
         const guards = guardNames(controller, handler);
         const access: RouteAccess = isHost
           ? 'host'
-          : isPublic
-            ? guards.length > 0
-              ? 'guarded'
-              : 'public'
-            : devices
-              ? 'device'
-              : requirement
-                ? 'permissions'
-                : 'unprotected';
+          : platform && !isPublic
+            ? 'platform'
+            : isPublic
+              ? guards.length > 0
+                ? 'guarded'
+                : 'public'
+              : devices
+                ? 'device'
+                : requirement
+                  ? 'permissions'
+                  : 'unprotected';
         routes.push({
           method: RequestMethod[method],
           path: joinPath(base, firstPath(Reflect.getMetadata(PATH_METADATA, handler))),
           access,
           permissions: requirement?.permissions ?? [],
+          platformPermissions: platform ?? [],
           features: requiredFeaturesOf(reflector, [handler, controller]),
           devices: devices ?? [],
           guards,
@@ -115,6 +132,24 @@ export function listRoutes(app: INestApplication): RouteEntry[] {
  */
 export function assertEveryRouteProtected(app: INestApplication): void {
   const routes = listRoutes(app);
+  const platformMixed = routes.filter((r) =>
+    r.access === 'platform'
+      ? r.permissions.length > 0 || r.devices.length > 0
+      : r.platformPermissions.length > 0,
+  );
+  if (platformMixed.length > 0) {
+    const list = platformMixed.map((r) => `${r.method} ${r.path} (${r.handler})`).join(', ');
+    throw new Error(
+      `Platform routes cannot be public or also require staff permissions or devices: ${list}`,
+    );
+  }
+  const unguardedPlatform = routes.filter(
+    (r) => r.access === 'platform' && !r.guards.includes(PLATFORM_GUARD_NAME),
+  );
+  if (unguardedPlatform.length > 0) {
+    const list = unguardedPlatform.map((r) => `${r.method} ${r.path} (${r.handler})`).join(', ');
+    throw new Error(`Platform routes must authenticate with ${PLATFORM_GUARD_NAME}: ${list}`);
+  }
   const hostMixed = routes.filter(
     (r) => r.access === 'host' && (r.permissions.length > 0 || r.devices.length > 0),
   );
@@ -138,7 +173,7 @@ export function assertEveryRouteProtected(app: INestApplication): void {
   if (unprotected.length > 0) {
     const list = unprotected.map((r) => `${r.method} ${r.path} (${r.handler})`).join(', ');
     throw new Error(
-      `Routes without @Public(), @RequirePermissions, @DeviceRoute or @HostRoute: ${list}`,
+      `Routes without @Public(), @RequirePermissions, @DeviceRoute, @HostRoute or @RequirePlatformPermissions: ${list}`,
     );
   }
 }

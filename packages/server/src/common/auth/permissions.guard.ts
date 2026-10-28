@@ -14,6 +14,7 @@ import { TenantContext } from '../tenancy/tenant-context';
 import { IS_PUBLIC_KEY, PERMISSIONS_KEY, type PermissionRequirement } from './decorators';
 import { type AuthenticatedTerminal, DEVICE_ROUTE_KEY } from './device-route';
 import { HOST_ROUTE_KEY } from './host-route';
+import { PLATFORM_PERMISSIONS_KEY } from './platform-route';
 import type { Principal, RequestScope } from './principal';
 
 type Params = Record<string, string | undefined>;
@@ -39,6 +40,8 @@ export class PermissionsGuard implements CanActivate {
     if (this.reflector.getAllAndOverride<boolean | undefined>(IS_PUBLIC_KEY, targets)) return true;
     // Website routes are scoped by HostTenantGuard, which runs after the global guards.
     if (this.reflector.getAllAndOverride<boolean | undefined>(HOST_ROUTE_KEY, targets)) return true;
+    // Platform routes are authorized by the cloud's PlatformGuard (ADR 0025).
+    if (this.reflector.getAllAndOverride<unknown>(PLATFORM_PERMISSIONS_KEY, targets)) return true;
 
     const request = context.switchToHttp().getRequest<FastifyRequest>();
     if (this.reflector.getAllAndOverride<unknown>(DEVICE_ROUTE_KEY, targets)) {

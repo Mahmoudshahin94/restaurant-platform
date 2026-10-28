@@ -14,8 +14,29 @@ import type { Pairing } from '../hub-state.service';
 /** The cloud could not be reached or answered 5xx/429: try again later. */
 export class CloudUnavailable extends Error {}
 
+/**
+ * The platform suspended (or archived) this hub's business (ADR 0025): nothing is lost, the
+ * outbox keeps its changes and the hub keeps trying, as while the cloud is unreachable.
+ */
+export class CloudTenantSuspended extends CloudUnavailable {}
+
 /** The cloud refused the hub's credential (device disabled or re-paired). */
 export class CloudCredentialRejected extends Error {}
+
+const TENANT_REFUSALS = new Set(['TENANT_SUSPENDED', 'TENANT_ARCHIVED']);
+
+/**
+ * The refusal code when a 403 says the platform suspended or archived the hub's business, else
+ * null (a refused credential). Reads a clone, so the response stays readable.
+ */
+export async function tenantRefusalOf(response: Response): Promise<string | null> {
+  if (response.status !== 403) return null;
+  const body = (await response
+    .clone()
+    .json()
+    .catch(() => null)) as { code?: unknown } | null;
+  return typeof body?.code === 'string' && TENANT_REFUSALS.has(body.code) ? body.code : null;
+}
 
 /** The cloud refused the request itself (4xx): retrying the same request will not help. */
 export class CloudRequestRejected extends Error {
@@ -108,6 +129,12 @@ export class CloudClient {
     } catch (error) {
       // Connection refused, DNS failure, timeout, abort.
       throw new CloudUnavailable(error instanceof Error ? error.message : String(error));
+    }
+    const refusal = await tenantRefusalOf(response);
+    if (refusal) {
+      throw new CloudTenantSuspended(
+        `The platform refused this business (${refusal}); changes wait in the outbox`,
+      );
     }
     if (response.status === 401 || response.status === 403) {
       throw new CloudCredentialRejected('The cloud rejected this hub’s credential (re-pair it)');

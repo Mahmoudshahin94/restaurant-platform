@@ -369,6 +369,25 @@ describe('pushing the outbox', () => {
     expect(await status()).toMatchObject({ state: 'ONLINE', pendingOperations: 0 });
   });
 
+  it('keeps its outbox while its business is suspended, and sends it once reactivated', async () => {
+    const cashier = await signIn('cashier@hub.test');
+    await placeOrder(cashier);
+    cloud.mode = 'suspended';
+    await hub.engine.pushNow();
+    // Not a refused credential: the hub waits, as while the cloud is unreachable (ADR 0025).
+    expect(await status()).toMatchObject({ state: 'OFFLINE' });
+    expect((await status()).lastError).toContain('TENANT_SUSPENDED');
+    expect(await db().syncOperation.count({ where: { status: 'PENDING' } })).toBeGreaterThan(0);
+    expect(await db().syncOperation.count({ where: { status: 'FAILED' } })).toBe(0);
+    // Its configuration pull is refused the same way: still waiting, not "re-pair".
+    await hub.engine.syncNow();
+    expect(await status()).toMatchObject({ state: 'OFFLINE' });
+
+    cloud.mode = 'up';
+    await hub.engine.syncNow();
+    expect(await status()).toMatchObject({ state: 'ONLINE', pendingOperations: 0 });
+  });
+
   it('resends operations a crash left in flight; the cloud answers DUPLICATE', async () => {
     const cashier = await signIn('cashier@hub.test');
     const order = await placeOrder(cashier);

@@ -27,7 +27,8 @@ type PushOperation = SyncPushRequest['operations'][number];
  */
 export class FakeCloud {
   snapshot: LocationSnapshot | null = null;
-  mode: 'up' | 'reject' | 'error' = 'up';
+  /** `suspended`: the platform suspended the hub's business (ADR 0025). */
+  mode: 'up' | 'reject' | 'error' | 'suspended' = 'up';
   requests = 0;
   /** Every push request received, in order. */
   pushes: SyncPushRequest[] = [];
@@ -81,6 +82,7 @@ export class FakeCloud {
         return void json(401, { code: 'UNAUTHENTICATED' });
       }
       if (this.mode === 'error') return void json(500, { code: 'INTERNAL_ERROR' });
+      if (this.mode === 'suspended') return void json(403, { code: 'TENANT_SUSPENDED' });
       const orderPath = /^\/api\/v1\/sync\/orders\/([^/]+)$/.exec(url.pathname);
       if (orderPath) {
         const order = this.orders.get(decodeURIComponent(orderPath[1] ?? ''));

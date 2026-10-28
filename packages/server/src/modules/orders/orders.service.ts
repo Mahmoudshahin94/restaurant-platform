@@ -32,9 +32,10 @@ import type { z } from 'zod';
 import { SERVER_MODE, type ServerMode } from '../../common/auth/managed-in-cloud';
 import {
   type Actor,
-  type DeviceActor,
   type Principal,
+  type SystemActor,
   isDeviceActor,
+  isSupportActor,
 } from '../../common/auth/principal';
 import { RequestContext } from '../../common/context/request-context';
 import { ChangeRecorder, ticketIdsOf } from '../../prisma/change-recorder';
@@ -76,11 +77,18 @@ const toItemRequests = (items: CreateInput['items']) =>
 const sameSet = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && [...a].sort().every((v, i) => v === [...b].sort()[i]);
 
-/** How an actor is recorded: a staff member as the user, a kiosk as its device. */
-function recordedAs(actor: Actor) {
-  return isDeviceActor(actor)
-    ? { actorType: 'DEVICE' as const, actorId: actor.deviceId, userId: null }
-    : { actorType: 'USER' as const, actorId: actor.userId, userId: actor.userId };
+/**
+ * How an actor is recorded: a staff member as the user, a kiosk as its device, a platform
+ * operator's support repair as the operator (ADR 0025).
+ */
+function recordedAs(actor: Actor | SystemActor) {
+  if (isDeviceActor(actor)) {
+    return { actorType: 'DEVICE' as const, actorId: actor.deviceId, userId: null };
+  }
+  if (isSupportActor(actor)) {
+    return { actorType: 'PLATFORM' as const, actorId: actor.platformUserId, userId: null };
+  }
+  return { actorType: 'USER' as const, actorId: actor.userId, userId: actor.userId };
 }
 
 /**
@@ -428,10 +436,12 @@ export class OrdersService {
   /**
    * Moves an order by a SYSTEM rule of the state machine, on behalf of a terminal device: a
    * kiosk's order once paid at its terminal (confirmed, then handed over where there is no
-   * kitchen), or cancelled by the kiosk before anything was paid (ADR 0022).
+   * kitchen), or cancelled by the kiosk before anything was paid (ADR 0022). The platform's
+   * support tools correct a stuck order through the same rules (ADR 0025): the money guards
+   * (paid before handing over, nothing held when cancelling) and the hub's ownership still apply.
    */
   async transitionAsSystem(
-    device: DeviceActor,
+    actor: SystemActor,
     locationId: string,
     orderId: string,
     to: OrderStatus,
@@ -447,7 +457,7 @@ export class OrdersService {
       reason,
     });
     if (to === 'CANCELLED') this.assertNothingHeld(current);
-    return this.applyTransition(device, current, to, reason);
+    return this.applyTransition(actor, current, to, reason);
   }
 
   /** Whether the location's kitchen screen takes this order's tickets (the KDS module). */
@@ -472,7 +482,7 @@ export class OrdersService {
 
   /** Writes a checked status change with its history, audit, kitchen effects and outbox. */
   private async applyTransition(
-    actor: Actor,
+    actor: Actor | SystemActor,
     current: OrderRow,
     to: OrderStatus,
     reason: string | null,

@@ -120,6 +120,15 @@ const envSchema = z
       .default('http://{domain}:5175'),
     /** Key of the website preview tokens; derived from JWT_ACCESS_SECRET when unset. */
     WEBSITE_PREVIEW_SECRET: z.string().min(32).optional(),
+    // --- The platform admin (cloud only, ADR 0025) ---
+    /**
+     * Signing key of platform access tokens (audience `madar-platform`) and of the support tools'
+     * confirmations. Derived from JWT_ACCESS_SECRET when unset, so it always differs from the
+     * staff tokens' key; set it to rotate the two independently.
+     */
+    PLATFORM_JWT_SECRET: z.string().min(32).optional(),
+    /** Server errors (5xx) kept per route and code each minute for the health board; 0 = none. */
+    PLATFORM_ERROR_SAMPLE_PER_MINUTE: z.coerce.number().int().min(0).max(1000).default(10),
   })
   .refine((env) => env.NODE_ENV !== 'production' || env.DEV_PAYMENT_PROVIDERS.length === 0, {
     path: ['DEV_PAYMENT_PROVIDERS'],

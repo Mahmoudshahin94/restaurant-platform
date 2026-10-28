@@ -10,6 +10,8 @@ export interface RequestContextStore {
   requestId: string;
   source: ActionSource;
   userId?: string;
+  /** A platform operator on a platform route (ADR 0025); never set together with `userId`. */
+  platformUserId?: string;
   /** A paired hub calling the cloud with its device credential. */
   deviceId?: string;
   tenantId?: string;

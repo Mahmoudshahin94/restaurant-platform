@@ -16,6 +16,7 @@ import { HUB_CONFIG, type HubConfig } from '../config';
 import { asHubTx } from '../database/hub-database';
 import { HubStateService } from '../hub-state.service';
 import { applySnapshot, belongsToTenant, storeSnapshotFiles } from './apply-snapshot';
+import { tenantRefusalOf } from '../sync/cloud-client';
 
 export type SnapshotOutcome = 'applied' | 'unchanged' | 'offline' | 'rejected' | 'not-paired';
 
@@ -82,6 +83,12 @@ export class SnapshotSyncService implements OnApplicationBootstrap, OnModuleDest
     if (response.status === 304) {
       this.state.markCloud('ONLINE');
       return 'unchanged';
+    }
+    const refusal = await tenantRefusalOf(response);
+    if (refusal) {
+      // The platform suspended the business (ADR 0025): keep serving from the last snapshot.
+      this.state.markCloud('OFFLINE', `The platform refused this business (${refusal})`);
+      return 'offline';
     }
     if (response.status === 401 || response.status === 403) {
       // The device was disabled or re-paired in the cloud: keep serving, but say so loudly.

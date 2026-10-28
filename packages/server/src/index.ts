@@ -14,6 +14,10 @@ export * from './common/auth/managed-in-cloud';
 export * from './common/auth/principal';
 export * from './common/auth/require-feature';
 export * from './common/auth/route-inventory';
+export * from './common/auth/platform-route';
+export * from './common/auth/cookies';
+export * from './common/errors/error-events';
+export { HTTP_STATUS_BY_ERROR_CODE } from './common/errors/http-status';
 export * from './common/context/request-context';
 export * from './common/tenancy/tenant-context';
 export { TENANT_KEYS, scopeToTenant, type WithoutTenant } from './common/tenancy/scoped-prisma';
@@ -23,6 +27,7 @@ export * from './modules/audit/audit.service';
 export { redactForAudit } from './modules/audit/redact';
 export * from './modules/auth/access.service';
 export * from './modules/auth/token.service';
+export * from './modules/auth/platform-token.service';
 export { TerminalAuthService } from './modules/auth/terminal-auth.service';
 export { FeatureService, type FeatureScope } from './modules/features/feature.service';
 export * from './modules/realtime/realtime.bus';
@@ -34,8 +39,11 @@ export { sniffImageType } from './modules/files/image-type';
 export { FloorModule } from './modules/floor/floor.module';
 export { KitchenModule } from './modules/kitchen/kitchen.module';
 export { LocationsModule } from './modules/locations/locations.module';
+export { toLocationDto } from './modules/locations/locations.service';
 export { MenuModule } from './modules/menu/menu.module';
 export { OrdersModule } from './modules/orders/orders.module';
+export { OrdersService } from './modules/orders/orders.service';
+export { isHubOwnedOrder } from './modules/orders/hub-ownership';
 export { PaymentsModule } from './modules/payments/payments.module';
 export { type PaymentTerminalProvider } from './modules/payments/providers/payment-terminal';
 export { MockPaymentTerminal } from './modules/payments/providers/mock-terminal.provider';
@@ -65,6 +73,7 @@ export { KIOSK_CANCEL_REASON } from './modules/kiosk/kiosk.service';
 export { PricingConfigModule } from './modules/pricing-config/pricing-config.module';
 export { ReportsModule } from './modules/reports/reports.module';
 export { TenantsModule } from './modules/tenants/tenants.module';
+export { toTenantDto } from './modules/tenants/tenants.service';
 export { currencyOf, localesOf } from './modules/tenants/tenants.service';
 export { ShiftsModule } from './modules/shifts/shifts.module';
 export { OnlineOrderingModule } from './modules/online-ordering/online-ordering.module';
@@ -80,6 +89,7 @@ export {
   type TxtLookup,
 } from './modules/website/domain-verifier';
 export { HostTenantResolver } from './modules/website/host-tenant.resolver';
+export { TenantDomainsService } from './modules/website/tenant-domains.service';
 export {
   PREVIEW_TTL_SECONDS,
   WebsitePreviewTokens,

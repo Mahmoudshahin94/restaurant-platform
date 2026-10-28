@@ -2,11 +2,12 @@ import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@pos/database';
 import { newId } from '@pos/domain';
 import { RequestContext } from '../../common/context/request-context';
+import { TenantContext } from '../../common/tenancy/tenant-context';
 import { ChangeRecorder } from '../../prisma/change-recorder';
 import { PrismaService, type PrismaTx } from '../../prisma/prisma.service';
 import { redactForAudit } from './redact';
 
-export type ActorType = 'USER' | 'EMPLOYEE' | 'DEVICE' | 'CUSTOMER' | 'SYSTEM';
+export type ActorType = 'USER' | 'EMPLOYEE' | 'DEVICE' | 'CUSTOMER' | 'SYSTEM' | 'PLATFORM';
 
 export interface AuditEntry {
   /** Dot-namespaced verb, e.g. `auth.login`, `location.updated`, `product.price_changed`. */
@@ -41,7 +42,14 @@ export class AuditService {
 
   private async write(entry: AuditEntry, tx: PrismaTx): Promise<void> {
     const ctx = RequestContext.get();
-    const actorId = entry.actorId !== undefined ? entry.actorId : (ctx?.userId ?? null);
+    // A platform operator's request (ADR 0025) is recorded as the operator, never a tenant user.
+    const userId = ctx?.userId;
+    const platformActor = ctx?.platformUserId;
+    const actorId = entry.actorId !== undefined ? entry.actorId : (userId ?? platformActor ?? null);
+    const defaultType = platformActor && !userId ? 'PLATFORM' : actorId ? 'USER' : 'SYSTEM';
+    // Platform requests name no tenant of their own: their work runs inside `runInTenant`.
+    const scope = TenantContext.current();
+    const scopedTenant = scope.kind === 'tenant' ? scope.tenantId : null;
     const id = newId();
     await tx.auditLog.create({
       data: {
@@ -50,9 +58,9 @@ export class AuditService {
         entityType: entry.entityType,
         entityId: entry.entityId ?? null,
         metadata: redactForAudit(entry.metadata ?? {}) as Prisma.InputJsonValue,
-        actorType: entry.actorType ?? (actorId ? 'USER' : 'SYSTEM'),
+        actorType: entry.actorType ?? defaultType,
         actorId,
-        tenantId: entry.tenantId !== undefined ? entry.tenantId : (ctx?.tenantId ?? null),
+        tenantId: entry.tenantId !== undefined ? entry.tenantId : (ctx?.tenantId ?? scopedTenant),
         locationId: entry.locationId !== undefined ? entry.locationId : (ctx?.locationId ?? null),
         source: ctx?.source ?? 'SYSTEM',
         requestId: ctx?.requestId ?? null,
