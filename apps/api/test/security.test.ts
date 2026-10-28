@@ -51,6 +51,10 @@ const PUBLIC_ROUTES = [
   'POST /auth/logout',
   'POST /auth/pin',
   'POST /auth/refresh',
+  // The platform admin's sign-in (ADR 0025); every other platform route is `platform`.
+  'POST /platform/auth/login',
+  'POST /platform/auth/logout',
+  'POST /platform/auth/refresh',
 ];
 
 /**
