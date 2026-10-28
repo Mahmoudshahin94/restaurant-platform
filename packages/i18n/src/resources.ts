@@ -6,6 +6,7 @@ import arOrders from './locales/ar/orders.json';
 import arPos from './locales/ar/pos.json';
 import arPayments from './locales/ar/payments.json';
 import arPricing from './locales/ar/pricing.json';
+import arPlatform from './locales/ar/platform.json';
 import arReceipt from './locales/ar/receipt.json';
 import arAdmin from './locales/ar/admin.json';
 import arAuth from './locales/ar/auth.json';
@@ -20,6 +21,7 @@ import enOrders from './locales/en/orders.json';
 import enPos from './locales/en/pos.json';
 import enPayments from './locales/en/payments.json';
 import enPricing from './locales/en/pricing.json';
+import enPlatform from './locales/en/platform.json';
 import enReceipt from './locales/en/receipt.json';
 import enAdmin from './locales/en/admin.json';
 import enAuth from './locales/en/auth.json';
@@ -65,6 +67,7 @@ export const resources = {
     kds: enKds,
     kiosk: enKiosk,
     customer: enCustomer,
+    platform: enPlatform,
   },
   ar: {
     common: { ...arCommon, ...platformStrings('ar') },
@@ -81,6 +84,7 @@ export const resources = {
     kds: arKds,
     kiosk: arKiosk,
     customer: arCustomer,
+    platform: arPlatform,
   },
 } as const;
 
