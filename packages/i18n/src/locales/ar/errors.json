@@ -14,6 +14,8 @@
   "CSRF_REJECTED": "تم حظر الطلب لأسباب أمنية.",
   "TENANT_NOT_FOUND": "المنشأة غير موجودة.",
   "LOCATION_NOT_FOUND": "الفرع غير موجود.",
+  "TENANT_SUSPENDED": "هذه المنشأة موقوفة. تواصل مع دعم $t(common:platform.name).",
+  "TENANT_ARCHIVED": "هذه المنشأة مؤرشفة: يمكن عرضها دون تعديلها.",
   "FEATURE_DISABLED": "هذه الوحدة غير مفعّلة لمنشأتك.",
   "FEATURE_NOT_CONFIGURABLE": "هذه الوحدة تديرها $t(common:platform.name) ولا يمكن تغييرها هنا.",
   "FILE_NOT_FOUND": "لم يتم العثور على هذا الملف.",
@@ -77,5 +79,8 @@
   "PAYMENT_PROVIDER_NOT_FOUND": "حساب مزوّد الدفع غير موجود.",
   "PAYMENT_PROVIDER_INVALID": "لا يمكن إعداد مزوّد الدفع بهذه الطريقة. تحقّق من إعداداته.",
   "ONLINE_PAYMENT_UNAVAILABLE": "هذا المتجر لا يقبل الدفع بالبطاقة عبر الإنترنت. ادفع عند الاستلام أو عند التوصيل.",
-  "SYNC_ISSUE_NOT_FOUND": "مشكلة المزامنة غير موجودة."
+  "SYNC_ISSUE_NOT_FOUND": "مشكلة المزامنة غير موجودة.",
+  "SUPPORT_CONFIRMATION_INVALID": "هذا التأكيد لا يطابق المعاينة. عاين الإصلاح مرة أخرى.",
+  "SUPPORT_PREVIEW_STALE": "تغيّر السجل أو انتهت صلاحية المعاينة. عاين الإصلاح مرة أخرى.",
+  "SUPPORT_NOT_EXECUTABLE": "لا يمكن تطبيق هذا الإصلاح على هذا السجل."
 }

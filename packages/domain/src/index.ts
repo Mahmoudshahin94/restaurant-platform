@@ -11,6 +11,7 @@ export * from './menu';
 export * from './order';
 export * from './pricing';
 export * from './payments';
+export * from './platform';
 export * from './kitchen';
 export * from './online';
 export * from './reports';

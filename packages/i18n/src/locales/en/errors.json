@@ -14,6 +14,8 @@
   "CSRF_REJECTED": "The request was blocked for security reasons.",
   "TENANT_NOT_FOUND": "Business not found.",
   "LOCATION_NOT_FOUND": "Location not found.",
+  "TENANT_SUSPENDED": "This business is suspended. Contact $t(common:platform.name) support.",
+  "TENANT_ARCHIVED": "This business is archived: it can be viewed but not changed.",
   "FEATURE_DISABLED": "This module is turned off for your business.",
   "FEATURE_NOT_CONFIGURABLE": "This module is managed by $t(common:platform.name) and cannot be changed here.",
   "FILE_NOT_FOUND": "This file was not found.",
@@ -77,5 +79,8 @@
   "PAYMENT_PROVIDER_NOT_FOUND": "Payment provider account not found.",
   "PAYMENT_PROVIDER_INVALID": "This payment provider cannot be set up this way. Check its settings.",
   "ONLINE_PAYMENT_UNAVAILABLE": "This store does not take online card payments. Pay at pickup or on delivery.",
-  "SYNC_ISSUE_NOT_FOUND": "Synchronization issue not found."
+  "SYNC_ISSUE_NOT_FOUND": "Synchronization issue not found.",
+  "SUPPORT_CONFIRMATION_INVALID": "This confirmation does not match the preview. Preview the repair again.",
+  "SUPPORT_PREVIEW_STALE": "The record changed or the preview expired. Preview the repair again.",
+  "SUPPORT_NOT_EXECUTABLE": "This repair cannot be applied to this record."
 }

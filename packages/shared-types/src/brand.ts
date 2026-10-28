@@ -18,6 +18,8 @@ export const PLATFORM_BRAND = {
     pos: 'MADAR POS',
     kds: 'MADAR Kitchen',
     kiosk: 'MADAR Kiosk',
+    /** The operators' console (ADR 0025). */
+    platform: 'MADAR Platform',
     website: 'MADAR',
   },
   /** The POS desktop app (Tauri): bundle identifier and keychain service. */

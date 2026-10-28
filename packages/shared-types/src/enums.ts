@@ -138,6 +138,8 @@ export const ActionSource = {
   SYSTEM: 'SYSTEM',
   /** A self-service kiosk, authenticated by its device credential (ADR 0022). */
   KIOSK: 'KIOSK',
+  /** MADAR's platform admin (ADR 0025): set by the platform's own guard, never claimed. */
+  PLATFORM: 'PLATFORM',
 } as const;
 export type ActionSource = ValueOf<typeof ActionSource>;
 
@@ -148,6 +150,8 @@ export const ActorType = {
   DEVICE: 'DEVICE',
   CUSTOMER: 'CUSTOMER',
   SYSTEM: 'SYSTEM',
+  /** A platform operator (ADR 0025): `actorId` is a platform user, never one of the tenant's. */
+  PLATFORM: 'PLATFORM',
 } as const;
 export type ActorType = ValueOf<typeof ActorType>;
 

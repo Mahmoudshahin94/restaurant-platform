@@ -810,14 +810,16 @@
     "ADMIN": "بوابة الإدارة",
     "HUB": "خادم الفرع",
     "SYSTEM": "النظام",
-    "KIOSK": "الكشك"
+    "KIOSK": "الكشك",
+    "PLATFORM": "منصة $t(common:platform.name)"
   },
   "actorTypes": {
     "USER": "مستخدم",
     "EMPLOYEE": "موظف",
     "DEVICE": "جهاز",
     "CUSTOMER": "عميل",
-    "SYSTEM": "النظام"
+    "SYSTEM": "النظام",
+    "PLATFORM": "دعم $t(common:platform.name)"
   },
   "customers": {
     "title": "العملاء",
