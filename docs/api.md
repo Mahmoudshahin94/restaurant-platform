@@ -63,6 +63,10 @@ Validation failures (`400 VALIDATION_FAILED`) list
 - Unknown emails and wrong passwords return the same `INVALID_CREDENTIALS` with equalized
   timing. Disabled accounts get `ACCOUNT_DISABLED`.
 - Login and refresh have their own per-IP rate-limit budget (`AUTH_RATE_LIMIT_PER_MINUTE`).
+- **Tenant status** (MADAR M9, ADR 0025): a suspended tenant's staff get `403 TENANT_SUSPENDED` on
+  sign-in, refresh and every request (and the realtime socket); an archived tenant's may sign in
+  and read, and get `403 TENANT_ARCHIVED` on anything else. Platform tokens are refused here
+  (`401`): they are for `/platform/*` only.
 
 ## Authorization
 
@@ -903,6 +907,60 @@ locations where the caller holds it.
   `kdsLateMinutes`) and `lateShareBps`.
 - The hub keeps its shift-close `GET /locations/:lid/reports/daily-summary` (Phase 3,
   `shifts.manage`); it is not one of these reports.
+
+## Platform admin (MADAR M9, cloud only)
+
+MADAR's operators, never a tenant's staff (ADR 0025). Every route below except sign-in needs a
+**platform** access token (`aud=madar-platform`, its own key); staff tokens, device credentials and
+anonymous calls get `401`, and a platform token gets `401` on every other route. Permissions are
+the platform catalog's, by role (OWNER and OPERATOR: everything; SUPPORT: read + `support.find`;
+VIEWER: read). A route naming `:tenantId` answers `404 TENANT_NOT_FOUND` for an unknown tenant and
+works inside that tenant only; a tenant's status does not restrict the platform.
+
+| Method | Path                                                   | Permission              | Notes                                                                                                                                         |
+| ------ | ------------------------------------------------------ | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/platform/auth/login`                                 | public, rate-limited    | `{ email, password }` → token + platform user; cookie `madar_prt` on `/api/v1/platform/auth`; 5 failures lock 15 min (`429 RATE_LIMITED`)     |
+| POST   | `/platform/auth/refresh`                               | public, rate-limited    | Cookie + allowed `Origin`; rotation and reuse detection as for staff                                                                          |
+| POST   | `/platform/auth/logout`                                | public                  | Revokes the family; clears the cookie                                                                                                         |
+| GET    | `/platform/auth/me`                                    | any platform user       | The operator with role and permissions                                                                                                        |
+| GET    | `/platform/tenants`                                    | `tenants.view`          | `?search=&status=&businessType=&page=&pageSize=` (name, slug or domain)                                                                       |
+| POST   | `/platform/tenants`                                    | `tenants.provision`     | `{ tenant, location, owner, entitlements? }` → detail + the owner's one-time password (shown once); `409 CONFLICT` `SLUG_TAKEN`/`EMAIL_TAKEN` |
+| GET    | `/platform/tenants/:tenantId`                          | `tenants.view`          | Profile, owners, counts, primary domain, last activity                                                                                        |
+| POST   | `/platform/tenants/:tenantId/status`                   | `tenants.status`        | `{ status, reason }`: ACTIVE ↔ SUSPENDED, → ARCHIVED, ARCHIVED → ACTIVE; both audit logs                                                      |
+| GET    | `/platform/tenants/:tenantId/locations`                | `tenants.view`          |                                                                                                                                               |
+| GET    | `/platform/tenants/:tenantId/users`                    | `tenants.view`          | Accounts and roles (no password hashes)                                                                                                       |
+| GET    | `/platform/tenants/:tenantId/devices`                  | `tenants.view`          | Hubs and terminals: online, version, reported outbox                                                                                          |
+| GET    | `/platform/tenants/:tenantId/modules`                  | `tenants.view`          | Entitlement, configurable, explicit, business-type default, enabled                                                                           |
+| PUT    | `/platform/tenants/:tenantId/entitlements`             | `tenants.configure`     | `{ entitlements: [{ feature, entitled, tenantConfigurable }], reason }`                                                                       |
+| GET    | `/platform/tenants/:tenantId/branding`                 | `tenants.view`          | The tenant's branding (read-only)                                                                                                             |
+| GET    | `/platform/tenants/:tenantId/domains`                  | `tenants.view`          |                                                                                                                                               |
+| POST   | `/platform/tenants/:tenantId/domains/:domainId/verify` | `tenants.configure`     | Looks the TXT record up again (ADR 0023)                                                                                                      |
+| GET    | `/platform/tenants/:tenantId/payment-accounts`         | `tenants.payments.view` | Accounts with `secret: { hasSecret, fingerprint, updatedAt }` only                                                                            |
+| GET    | `/platform/tenants/:tenantId/health`                   | `health.view`           | Per location: hubs, terminals online, outbox, open issues, last sync and activity; recent errors                                              |
+| GET    | `/platform/tenants/:tenantId/audit-logs`               | `audit.view`            | The tenant's audit log (`auditLogQuerySchema`), operators named                                                                               |
+| GET    | `/platform/health`                                     | `health.view`           | One row per tenant, plus recent server errors                                                                                                 |
+| GET    | `/platform/errors`                                     | `health.view`           | `?tenantId=&limit=` error events (5xx, redacted, sampled)                                                                                     |
+| GET    | `/platform/audit-logs`                                 | `audit.view`            | `?tenantId=&action=&actorId=&page=&pageSize=` the platform's own log                                                                          |
+| GET    | `/platform/support/operations`                         | `support.find`          | The repair catalog with the roles allowed for each                                                                                            |
+| GET    | `/platform/tenants/:tenantId/support/find`             | `support.find`          | `?kind=ORDER\|CUSTOMER\|PRODUCT\|PAYMENT\|SYNC_OPERATION&q=` (at most 20)                                                                     |
+| POST   | `/platform/tenants/:tenantId/support/preview`          | `support.repair`        | `{ operation, params }` → before, after, changes, `executable`, `blockedReason`, `confirmation`                                               |
+| POST   | `/platform/tenants/:tenantId/support/execute`          | `support.repair`        | `{ operation, params, confirmationToken, reason }` → before and after as executed                                                             |
+
+- **Repairs** (`operation` → `params`): `sync.retry` and `sync.reprocess` → `{ operationId }`
+  (ADR 0014's RESEND and APPLY_HUB); `order.correct_status` → `{ orderId, to }` (SYSTEM rules of
+  the state machine; `REFUND_FIRST`, `NOT_REFUNDED`, `OWNED_BY_LOCATION` block it);
+  `order_item.correct_product` → `{ orderItemId, productId, variantId }` (the line's snapshot
+  stays); `order.recalculate_totals` → `{ orderId }` (open orders; `FINALIZED` only reports the
+  diff); `entity.restore` → `{ entityType, entityId }` (an archived category, product, modifier
+  group, kitchen station, tax, discount, payment method or cash drawer).
+- **Executing** needs the preview's confirmation (five minutes, bound to the operation, tenant,
+  parameters, operator and the record's state) and a reason (5–500 characters), and the operator's
+  role must be allowed for the repair (`403 INSUFFICIENT_PERMISSION`). A confirmation of another
+  preview is `422 SUPPORT_CONFIRMATION_INVALID`; an expired one or a record that changed is
+  `409 SUPPORT_PREVIEW_STALE` (preview again); a blocked repair is `409 SUPPORT_NOT_EXECUTABLE`.
+  An archived tenant is `403 TENANT_ARCHIVED`.
+- Hubs of a suspended tenant get `403 TENANT_SUSPENDED` on `/sync/*` (archived: reads only); its
+  website gets `403 TENANT_SUSPENDED`.
 
 ## Security headers and limits
 

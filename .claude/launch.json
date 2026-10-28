@@ -20,6 +20,12 @@
       "port": 5173
     },
     {
+      "name": "platform-admin",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@pos/platform-admin", "dev"],
+      "port": 5177
+    },
+    {
       "name": "pos",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@pos/pos", "dev"],

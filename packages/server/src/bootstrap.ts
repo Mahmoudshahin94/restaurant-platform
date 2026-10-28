@@ -12,6 +12,7 @@ import type { DestinationStream } from 'pino';
 import type { FastifyRequest } from 'fastify';
 import { assertEveryRouteProtected } from './common/auth/route-inventory';
 import { AllExceptionsFilter } from './common/errors/all-exceptions.filter';
+import type { ErrorEventSink } from './common/errors/error-events';
 import { PinoNestLogger, createRootLogger } from './common/logging/logger';
 import { RealtimeGateway } from './modules/realtime/realtime.gateway';
 import type { AppConfig } from './config/env';
@@ -21,6 +22,9 @@ const AUTH_RATE_LIMITED_ROUTES = new Set([
   `/${API_PREFIX}/auth/login`,
   `/${API_PREFIX}/auth/refresh`,
   `/${API_PREFIX}/auth/pin`,
+  // The platform admin's sign-in (ADR 0025); its accounts also lock after repeated failures.
+  `/${API_PREFIX}/platform/auth/login`,
+  `/${API_PREFIX}/platform/auth/refresh`,
   // A hub's terminals pair with a one-time code (ADR 0022).
   `/${API_PREFIX}/terminals/pair`,
 ]);
@@ -52,6 +56,11 @@ export interface ServerAppOptions {
    * what the server would have logged (e.g. that no secret reaches a log line).
    */
   logStream?: DestinationStream;
+  /**
+   * Where 5xx answers go besides the log (the cloud's platform health board, ADR 0025), read from
+   * the application once it is built. The hub has none.
+   */
+  errorSink?: (app: NestFastifyApplication) => ErrorEventSink;
 }
 
 /**
@@ -88,7 +97,7 @@ export async function createServerApp(
     credentials: true,
     exposedHeaders: ['x-request-id'],
   });
-  app.useGlobalFilters(new AllExceptionsFilter());
+  app.useGlobalFilters(new AllExceptionsFilter(options.errorSink?.(app)));
   app.enableShutdownHooks();
 
   await app.register(helmet);

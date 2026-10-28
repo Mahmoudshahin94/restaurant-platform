@@ -810,14 +810,16 @@
     "ADMIN": "Admin portal",
     "HUB": "Location hub",
     "SYSTEM": "System",
-    "KIOSK": "Kiosk"
+    "KIOSK": "Kiosk",
+    "PLATFORM": "$t(common:platform.name) platform"
   },
   "actorTypes": {
     "USER": "User",
     "EMPLOYEE": "Employee",
     "DEVICE": "Device",
     "CUSTOMER": "Customer",
-    "SYSTEM": "System"
+    "SYSTEM": "System",
+    "PLATFORM": "$t(common:platform.name) support"
   },
   "customers": {
     "title": "Customers",

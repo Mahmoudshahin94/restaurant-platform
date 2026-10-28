@@ -8,4 +8,5 @@ export * from './features';
 export * from './localization';
 export * from './payments';
 export * from './permissions';
+export * from './platform';
 export * from './website';

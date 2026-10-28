@@ -42,6 +42,8 @@ const TERMINAL_SOURCES: Record<TerminalDeviceType, ActionSource> = {
 };
 
 function sourceOf(request: FastifyRequest): ActionSource {
+  // Set by the cloud's PlatformGuard only, so it cannot be claimed (ADR 0025).
+  if (request.platformUser) return ActionSource.PLATFORM;
   if (request.terminal) return TERMINAL_SOURCES[request.terminal.type];
   const header = request.headers['x-client-source'];
   if (header === ActionSource.HUB && deviceOf(request)) return ActionSource.HUB;
@@ -73,6 +75,7 @@ export class RequestContextInterceptor implements NestInterceptor {
       requestId: request.id,
       source: sourceOf(request),
       ...(request.principal ? { userId: request.principal.userId } : {}),
+      ...(request.platformUser ? { platformUserId: request.platformUser.id } : {}),
       ...(device ? { deviceId: device.id } : {}),
       ...(tenantId ? { tenantId } : {}),
       ...(locationId ? { locationId } : {}),
@@ -82,6 +85,7 @@ export class RequestContextInterceptor implements NestInterceptor {
     };
     request.log = request.log.child({
       userId: store.userId,
+      platformUserId: store.platformUserId,
       deviceId: store.deviceId,
       tenantId: store.tenantId,
       locationId: store.locationId,

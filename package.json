@@ -21,6 +21,7 @@
     "db:deploy": "pnpm --filter @pos/database migrate:deploy",
     "db:seed": "pnpm --filter @pos/database seed",
     "db:reset": "pnpm --filter @pos/database migrate:reset",
+    "platform:create-owner": "pnpm --filter @pos/api platform:create-owner",
     "test:tools": "node --test \"tools/**/*.test.{js,mjs}\"",
     "printer:sim": "node tools/printer-sim/server.mjs"
   },

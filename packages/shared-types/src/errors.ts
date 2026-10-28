@@ -22,6 +22,10 @@ export const ERROR_CODES = [
   // tenancy
   'TENANT_NOT_FOUND',
   'LOCATION_NOT_FOUND',
+  /** The platform suspended the business: its staff, hubs and website are refused (ADR 0025). */
+  'TENANT_SUSPENDED',
+  /** The business is archived: it can be read, not changed (ADR 0025). */
+  'TENANT_ARCHIVED',
   // modules (ADR 0018)
   /** The route or action needs a module that is off for this tenant, location or device. */
   'FEATURE_DISABLED',
@@ -117,6 +121,13 @@ export const ERROR_CODES = [
   'SYNC_ISSUE_NOT_FOUND',
   'LOCATION_OFFLINE',
   'ONLINE_ORDERING_DISABLED',
+  // platform support tools (ADR 0025)
+  /** No preview of this operation, target and operator matches the confirmation (details.reason). */
+  'SUPPORT_CONFIRMATION_INVALID',
+  /** The record changed since the preview, or the preview expired: preview again. */
+  'SUPPORT_PREVIEW_STALE',
+  /** The preview shows what is wrong, but this operation may not change it (details.reason). */
+  'SUPPORT_NOT_EXECUTABLE',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

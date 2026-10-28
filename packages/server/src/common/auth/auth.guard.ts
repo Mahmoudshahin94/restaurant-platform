@@ -1,6 +1,6 @@
 import { type CanActivate, type ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { DomainError } from '@pos/domain';
+import { DomainError, accessKindOf, assertTenantAccess } from '@pos/domain';
 import type { TerminalDeviceType } from '@pos/shared-types';
 import type { FastifyRequest } from 'fastify';
 import { AccessService } from '../../modules/auth/access.service';
@@ -9,13 +9,19 @@ import { TokenService } from '../../modules/auth/token.service';
 import { IS_PUBLIC_KEY } from './decorators';
 import { DEVICE_ROUTE_KEY } from './device-route';
 import { HOST_ROUTE_KEY } from './host-route';
+import { PLATFORM_PERMISSIONS_KEY } from './platform-route';
 
 /**
  * Global guard: every route requires a valid access token unless marked @Public() or
  * @HostRoute() (the tenant website, whose tenant comes from the host name). A device
  * route (`@DeviceRoute`, ADR 0022) requires the device credential of a terminal of its types
  * instead, and refuses staff tokens; every other route refuses device credentials, since they
- * carry no bearer token.
+ * carry no bearer token. A platform route (`@RequirePlatformPermissions`, ADR 0025) is left to
+ * the cloud's `PlatformGuard`, which takes platform tokens only; staff tokens are signed with
+ * another key for another audience, so a platform token is refused here.
+ *
+ * The staff member's tenant must allow the request (ADR 0025): a suspended tenant nothing, an
+ * archived one reading only.
  */
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -32,6 +38,7 @@ export class AuthGuard implements CanActivate {
     if (isPublic) return true;
     // The website: no account; HostTenantGuard finds the tenant from the host name (ADR 0023).
     if (this.reflector.getAllAndOverride<boolean | undefined>(HOST_ROUTE_KEY, targets)) return true;
+    if (this.reflector.getAllAndOverride<unknown>(PLATFORM_PERMISSIONS_KEY, targets)) return true;
 
     const request = context.switchToHttp().getRequest<FastifyRequest>();
     const header = request.headers.authorization;
@@ -52,7 +59,9 @@ export class AuthGuard implements CanActivate {
       throw new DomainError('UNAUTHENTICATED', 'Missing bearer token');
     }
     const claims = await this.tokens.verifyAccessToken(header.slice('Bearer '.length).trim());
-    request.principal = await this.access.loadPrincipal(claims.userId, claims.tenantId);
+    const principal = await this.access.loadPrincipal(claims.userId, claims.tenantId);
+    assertTenantAccess(principal.tenantStatus, accessKindOf(request.method));
+    request.principal = principal;
     return true;
   }
 }

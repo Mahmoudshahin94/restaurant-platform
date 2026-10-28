@@ -49,12 +49,35 @@ export interface RoleSpec {
   permissions: '*' | string[];
 }
 
+/** The tenant's first account: an Owner (the system role), tenant-wide. */
+export interface OwnerSpec {
+  /** Lowercase; e-mail addresses are unique across tenants. */
+  email: string;
+  displayName: string;
+  /** argon2id hash (`hashSecret`); the password itself never reaches provisioning. */
+  passwordHash: string;
+  preferredLocale?: Locale;
+}
+
+/** What the platform allows the tenant for one module (ADR 0018). */
+export interface EntitlementSpec {
+  entitled: boolean;
+  tenantConfigurable: boolean;
+}
+
 export interface ProvisionedTenant {
   tenantId: string;
   /** Location code → id. */
   locationIds: Map<string, string>;
   /** Role name → id. */
   roleIds: Map<string, string>;
+  /** The owner's user id, when an owner was given. */
+  ownerId: string | null;
+}
+
+/** An owner e-mail that already belongs to another tenant's account. */
+export class OwnerEmailTakenError extends Error {
+  override readonly name = 'OwnerEmailTakenError';
 }
 
 /** Every tenant starts with an Owner: a system role holding every permission. */
@@ -73,9 +96,8 @@ export function newDomainVerificationToken(): string {
 /**
  * Creates a tenant with its locations and roles (ADR 0017), or brings an existing one (same
  * slug) up to the given locations and roles without touching anything else. The tenant's own
- * settings are never overwritten. Used by the development seed; the platform operator's API
- * (Phase 9) provisions through it as well. The client must not be tenant-scoped: provisioning
- * happens outside any tenant.
+ * settings are never overwritten. Used by the development seed and the platform operator's API
+ * (ADR 0025). The client must not be tenant-scoped: provisioning happens outside any tenant.
  */
 export async function provisionTenant(
   prisma: PrismaClient | Prisma.TransactionClient,
@@ -89,6 +111,13 @@ export async function provisionTenant(
      * (ADR 0023).
      */
     webDomain?: string;
+    /**
+     * The modules the platform allows (ADR 0018), written for a new tenant only: an existing
+     * tenant's entitlements are the platform's later decisions.
+     */
+    entitlements?: Partial<Record<string, EntitlementSpec>>;
+    /** The first account, an Owner tenant-wide; kept as it is when the e-mail is the tenant's. */
+    owner?: OwnerSpec;
   },
 ): Promise<ProvisionedTenant> {
   const {
@@ -96,12 +125,22 @@ export async function provisionTenant(
     currencyCode = DEFAULT_TENANT_CURRENCY,
     ...tenantFields
   } = input.tenant;
+  const existing = await prisma.tenant.findUnique({
+    where: { slug: input.tenant.slug },
+    select: { id: true },
+  });
   const tenant = await prisma.tenant.upsert({
     where: { slug: input.tenant.slug },
     update: {},
     // Without a choice the tenant offers every locale (the column default).
     create: { ...tenantFields, currencyCode, ...(supportedLocales ? { supportedLocales } : {}) },
   });
+  if (!existing && input.entitlements) {
+    const rows = Object.entries(input.entitlements).flatMap(([feature, spec]) =>
+      spec ? [{ tenantId: tenant.id, feature, ...spec }] : [],
+    );
+    if (rows.length > 0) await prisma.tenantEntitlement.createMany({ data: rows });
+  }
 
   if (input.webDomain) await provisionSubdomain(prisma, tenant, input.webDomain);
 
@@ -148,7 +187,41 @@ export async function provisionTenant(
     });
     roleIds.set(spec.name, role.id);
   }
-  return { tenantId: tenant.id, locationIds, roleIds };
+  const ownerRoleId = roleIds.get(roles.find((r) => r.isSystem)?.name ?? '');
+  if (input.owner && !ownerRoleId) throw new Error('A tenant needs a system (owner) role');
+  const ownerId =
+    input.owner && ownerRoleId
+      ? await provisionOwner(prisma, tenant.id, ownerRoleId, input.owner)
+      : null;
+  return { tenantId: tenant.id, locationIds, roleIds, ownerId };
+}
+
+async function provisionOwner(
+  prisma: PrismaClient | Prisma.TransactionClient,
+  tenantId: string,
+  roleId: string,
+  owner: OwnerSpec,
+): Promise<string> {
+  const email = owner.email.toLowerCase();
+  const found = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, tenantId: true },
+  });
+  if (found && found.tenantId !== tenantId) {
+    throw new OwnerEmailTakenError('This e-mail already belongs to another account');
+  }
+  if (found) return found.id;
+  const user = await prisma.user.create({
+    data: {
+      tenantId,
+      email,
+      passwordHash: owner.passwordHash,
+      displayName: owner.displayName,
+      ...(owner.preferredLocale ? { preferredLocale: owner.preferredLocale } : {}),
+      roles: { create: { roleId, locationId: null } },
+    },
+  });
+  return user.id;
 }
 
 async function provisionSubdomain(

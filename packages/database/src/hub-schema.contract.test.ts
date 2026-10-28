@@ -24,11 +24,17 @@ const CLOUD_ONLY_MODELS = new Set([
   'WebsiteConfig',
   // Payment provider secrets never leave the cloud (ADR 0024).
   'PaymentProviderSecret',
+  // The platform's operators, their audit trail and error events (ADR 0025).
+  'PlatformUser',
+  'PlatformRefreshToken',
+  'PlatformAuditLog',
+  'PlatformErrorEvent',
 ]);
 const CLOUD_ONLY_ENUMS = new Set([
   'ProcessedOperationStatus',
   'ChangeTopic',
   'SyncIssueResolution',
+  'PlatformRole',
 ]);
 
 type Datamodel = typeof Prisma.dmmf.datamodel;

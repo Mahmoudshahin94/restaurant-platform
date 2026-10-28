@@ -37,6 +37,13 @@ Run through this before shipping a build to a location or deploying the cloud. C
       (`1:<old>,2:<new>`), deploy, run `pnpm --filter @pos/api payment-secrets:rotate` (it reports
       how many secrets it re-encrypted and any it could not open), then remove `1:` and deploy
       again. If it leaked, also have each tenant replace its provider keys at the provider.
+- [ ] **Platform admin** (ADR 0025): `PLATFORM_JWT_SECRET` (≥ 32 random characters) from the
+      secret store, so platform tokens rotate independently of staff tokens; `CORS_ORIGINS`
+      includes the platform admin's origin, served on its own host (not a tenant domain)
+- [ ] **First platform owner:** run `pnpm platform:create-owner` once (see dev-setup.md), with
+      `PLATFORM_USER_PASSWORD` set and the production `DATABASE_URL`; store the password in the
+      team's vault. Until a second factor exists, keep the number of platform accounts small and
+      their passwords long; deactivate leavers at once (it takes effect on the next request)
 - [ ] `LOG_LEVEL=info`; logs shipped to a store that keeps `requestId`, `tenantId`,
       `locationId`, `userId`, `orderId`, `deviceId`
 - [ ] Load balancer health checks: liveness `GET /health`, readiness `GET /ready` (503

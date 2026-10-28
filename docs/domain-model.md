@@ -319,6 +319,19 @@ historical orders. Since M5 a line also keeps its `sku` (the variant's, else the
 - `Payment.providerAccountId`: the account that took the payment (null for the built-in and
   development defaults); voids and refunds go back through it.
 
+**The platform** (M9, [ADR 0025](adr/0025-platform-admin.md)), all cloud-only and owned by no
+tenant (rows about one name it in `subjectTenantId`, which the tenant-scoped client ignores):
+
+- `PlatformUser`: a MADAR operator (e-mail, argon2id hash, role `OWNER|OPERATOR|SUPPORT|VIEWER`,
+  locale, active, failed sign-ins and lock). Never related to `User`.
+- `PlatformRefreshToken`: rotating refresh tokens of platform users (hash, family, reuse).
+- `PlatformAuditLog`: append-only (a trigger refuses UPDATE and DELETE): actor, subject tenant,
+  action, entity, redacted metadata (support repairs keep reason, before and after).
+- `PlatformErrorEvent`: a sampled 5xx answer: route pattern, code, status, redacted message,
+  tenant, location, request id, how many of the same were dropped since.
+- `ActorType.PLATFORM` and `ActionSource.PLATFORM` record a platform operator's actions in a
+  tenant's audit log, order status history and sync ledger. `Tenant.status` is now enforced.
+
 **Kitchen** (Phase 4):
 
 - `KitchenTicket`: one per order and station (unique `orderId + stationId`), created when the

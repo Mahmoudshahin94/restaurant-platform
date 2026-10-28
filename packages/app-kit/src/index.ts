@@ -8,6 +8,7 @@ export * from './locale';
 export * from './localization';
 export * from './money';
 export * from './permissions';
+export * from './platform-session';
 export * from './session';
 export * from './storage';
 export * from './realtime';

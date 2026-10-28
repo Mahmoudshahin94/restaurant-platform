@@ -1,5 +1,5 @@
 import { type CanActivate, type ExecutionContext, Injectable } from '@nestjs/common';
-import { DomainError, isUuid } from '@pos/domain';
+import { DomainError, accessKindOf, assertTenantAccess, isUuid } from '@pos/domain';
 import type { FastifyRequest } from 'fastify';
 import { requestMemo } from '../../common/context/request-context';
 import { TenantContext } from '../../common/tenancy/tenant-context';
@@ -19,6 +19,8 @@ import { HostTenantResolver } from './host-tenant.resolver';
  *   sends plays no part.
  * - A `:locationId` must be one of the tenant's locations (`404`, as for staff routes), and the
  *   route's modules are checked for the tenant and that location.
+ * - A suspended tenant's site answers `403 TENANT_SUSPENDED`; an archived one's can be read but
+ *   takes no order (`TENANT_ARCHIVED`, ADR 0025).
  */
 @Injectable()
 export class HostTenantGuard implements CanActivate {
@@ -32,6 +34,13 @@ export class HostTenantGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<FastifyRequest>();
     const site = await this.sites.resolve(request.host);
     if (!site) throw new DomainError('SITE_NOT_FOUND', 'No website answers on this host');
+    const tenant = await TenantContext.runInTenant(site.tenantId, () =>
+      this.prisma.tenant.findUniqueOrThrow({
+        where: { id: site.tenantId },
+        select: { status: true },
+      }),
+    );
+    assertTenantAccess(tenant.status, accessKindOf(request.method));
 
     const { locationId } = (request.params ?? {}) as { locationId?: string };
     if (locationId !== undefined) await this.assertLocation(site.tenantId, locationId);

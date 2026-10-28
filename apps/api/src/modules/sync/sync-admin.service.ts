@@ -146,8 +146,12 @@ export class SyncAdminService {
     return this.describe(this.prisma, row);
   }
 
+  /**
+   * Settles a refused operation. `resolver` is the staff member deciding, or a platform operator
+   * using the support tools (ADR 0025), whose audit entry then names them as `PLATFORM`.
+   */
   async resolve(
-    principal: Principal,
+    resolver: Pick<Principal, 'userId'>,
     locationId: string,
     operationId: string,
     input: ResolveSyncIssueRequest,
@@ -164,7 +168,7 @@ export class SyncAdminService {
           const cloud = await this.cloudCopy(tx, row);
           assertSyncResolution(await this.facts(tx, row, cloud), input.action);
           const hubVersion = row.payload ? summarise(row.entityType, asRecord(row.payload)) : null;
-          const decided = { resolvedAt: new Date(), resolvedById: principal.userId };
+          const decided = { resolvedAt: new Date(), resolvedById: resolver.userId };
           const audit = {
             action: 'sync.issue_resolved',
             entityType: row.entityType,

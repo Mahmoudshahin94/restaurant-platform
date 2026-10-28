@@ -1,5 +1,5 @@
 import { type CanActivate, type ExecutionContext, Injectable } from '@nestjs/common';
-import { DomainError, isUuid } from '@pos/domain';
+import { DomainError, accessKindOf, assertTenantAccess, isUuid } from '@pos/domain';
 import { PrismaService, TenantContext, parseDeviceCredential, secretMatches } from '@pos/server';
 import type { FastifyRequest } from 'fastify';
 
@@ -21,6 +21,8 @@ const SEEN_WRITE_INTERVAL_MS = 60_000;
 /**
  * Authenticates a location hub by its device credential (`Authorization: Device <id>.<secret>`).
  * Used on `@Public()` routes, which skip staff authentication; the hub is never a staff user.
+ * A suspended tenant's hubs are refused (`TENANT_SUSPENDED`), an archived tenant's may only read
+ * (ADR 0025); they are still marked as seen, so the platform's health board shows them online.
  */
 @Injectable()
 export class DeviceGuard implements CanActivate {
@@ -34,7 +36,10 @@ export class DeviceGuard implements CanActivate {
 
     // The credential names the device, and the device its tenant: nothing is scoped yet.
     const device = await TenantContext.runUnscoped('device sign-in: find the device', () =>
-      this.prisma.device.findUnique({ where: { id: credential.deviceId } }),
+      this.prisma.device.findUnique({
+        where: { id: credential.deviceId },
+        include: { tenant: { select: { status: true } } },
+      }),
     );
     if (
       device?.type !== 'GATEWAY' ||
@@ -49,6 +54,7 @@ export class DeviceGuard implements CanActivate {
         this.prisma.device.update({ where: { id: device.id }, data: { lastSeenAt: new Date() } }),
       );
     }
+    assertTenantAccess(device.tenant.status, accessKindOf(request.method));
     request.device = {
       id: device.id,
       tenantId: device.tenantId,

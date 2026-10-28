@@ -1,10 +1,13 @@
 import type { RoleAssignment } from '@pos/domain';
+import type { TenantStatus } from '@pos/shared-types';
 
 /** The authenticated staff user behind a request, with their role assignments loaded fresh. */
 export interface Principal {
   userId: string;
   tenantId: string;
   assignments: readonly RoleAssignment[];
+  /** The tenant's status when the principal was loaded (ADR 0025): archived tenants only read. */
+  tenantStatus: TenantStatus;
 }
 
 /**
@@ -16,10 +19,25 @@ export interface DeviceActor {
   tenantId: string;
 }
 
+/**
+ * A platform operator repairing a tenant's record with the support tools (ADR 0025): recorded as
+ * `PLATFORM` with the operator's id, never as one of the tenant's users.
+ */
+export interface SupportActor {
+  platformUserId: string;
+  tenantId: string;
+}
+
 /** Who changes an order or takes a payment: a staff member, or a terminal device. */
 export type Actor = Principal | DeviceActor;
 
-export const isDeviceActor = (actor: Actor): actor is DeviceActor => 'deviceId' in actor;
+/** Who may move an order by a SYSTEM rule of the state machine: a terminal, or support. */
+export type SystemActor = DeviceActor | SupportActor;
+
+export const isDeviceActor = (actor: Actor | SystemActor): actor is DeviceActor =>
+  'deviceId' in actor;
+export const isSupportActor = (actor: Actor | SystemActor): actor is SupportActor =>
+  'platformUserId' in actor;
 
 /** The tenant scope a request was authorized for (set by PermissionsGuard). */
 export interface RequestScope {

@@ -704,7 +704,7 @@ Configuration precedence is in [configuration.md](configuration.md).
 | M6    | Self-service: kiosk app, terminal devices, shared order engine, self-checkout                            | ✅ Done |
 | M7    | Multi-tenant website: host resolution, verified domains, configurable sections                           | ✅ Done |
 | M8    | Payment configuration: per-tenant provider accounts, encrypted secrets                                   | ✅ Done |
-| M9    | Platform admin: separate app and identity, tenants, health, support and repair tools                     | ⏳      |
+| M9    | Platform admin: separate app and identity, tenants, health, support and repair tools                     | ✅ Done |
 | M10   | Versioning: one MADAR version, device versions, release tracking                                         | ⏳      |
 
 ### Phase M1 decisions
@@ -1036,6 +1036,57 @@ then offered the card, and a card order on `ramallah-roasters.localhost` and one
 page was checked in Arabic (RTL) and the light theme; the check led to keeping the test-mode badge
 on one line.
 
+### Phase M9 decisions
+
+See [ADR 0025](adr/0025-platform-admin.md) and
+[configuration.md](configuration.md#platform-admin-m9).
+
+- **A separate identity:** `PlatformUser` (OWNER, OPERATOR, SUPPORT, VIEWER) and
+  `PlatformRefreshToken`, cloud-only; tokens for the audience `madar-platform` signed with their
+  own key (`PLATFORM_JWT_SECRET`, derived when unset); the refresh cookie `madar_prt` on
+  `/api/v1/platform/auth`. Sign-in rate-limited per address and locked per account after five
+  failures, every attempt audited. The first owner comes from `pnpm platform:create-owner`; a
+  second factor is the follow-up.
+- **The `platform` route class:** `@RequirePlatformPermissions` + `PlatformGuard`; the staff
+  guards let these routes through and refuse platform tokens, the platform guard refuses staff
+  tokens; the start-up check and the security tests cover every route. A platform request is
+  scoped to the `:tenantId` it names, and what it writes in the tenant is recorded as
+  `PLATFORM` (actor and source).
+- **Tenant status enforced:** `assertTenantAccess` refuses a suspended tenant's staff (requests,
+  sign-in, refresh, realtime), hubs (pull and push; the hub keeps its outbox and retries) and
+  website with `TENANT_SUSPENDED`, and an archived tenant's writes with `TENANT_ARCHIVED`.
+- **Provisioning** through `provisionTenant` (now with the owner and the business type's
+  entitlements) in one transaction; the owner's one-time password is returned once.
+- **Support tools:** a catalog of repairs (sync retry/reprocess via ADR 0014, order status via the
+  SYSTEM rules and money guards, product mapping with the snapshot untouched, totals of open
+  orders from their own lines with only a diff for finalized ones, restoring archived records),
+  each previewed and executed with an HMAC confirmation bound to the before-state (five minutes),
+  a reason and an allowed role; platform and tenant audit entries with before and after. No SQL
+  console.
+- **Health and errors:** per tenant and location, hubs and terminals online, versions, reported
+  outbox, open sync issues, last sync and activity; `PlatformErrorEvent` written by the exception
+  filter for 5xx answers (route pattern, redacted message, sampled).
+- **`apps/platform-admin`:** tenants and provisioning, a tenant's ten tabs, support tools, the
+  health board and the platform audit log; EN/AR with RTL, MADAR's own branding.
+
+**Phase M9 verification (2026-10-28):** `pnpm build`, `typecheck`, `lint` and `test` green
+(1,103 unit, integration and component tests: API 357, domain 279, gateway 91, admin 57,
+app-kit 56, validation 53, i18n 46, server 43, customer-web 25, database 25, POS 22, kiosk 11,
+api-client 11, KDS 9, platform admin 8, receipts 8, ui 2), `pnpm test:tools` (13), the hub
+schema check, a clean `migrate status`, `format:check`, and all 44 Playwright E2E tests (POS 16,
+admin 12, customer-web 8, KDS 4, kiosk 3, platform admin 1) in one run, including the new
+scenario 32. A manual browser check against a freshly seeded database, with the first owner and
+an operator created by `platform:create-owner`: a retail business provisioned in English (its
+owner signed in with the one-time password, as Owner); the health board showing the demo
+restaurant's live hub online; the restaurant suspended (its owner's sign-in and its website
+refused with `TENANT_SUSPENDED`, its hub waiting with its outbox kept instead of asking to be
+re-paired) and reactivated (the hub reconnected by itself); and, in Arabic (RTL), an order's
+status corrected from PLACED to CANCELLED through preview → confirm → reason, recorded as
+`PLATFORM` in the order's history and in both audit logs with before and after. Light and dark
+themes checked. The check led to two fixes: the hub's snapshot fetch now treats a suspension like
+its push and pull, and the error-event sink is passed to the server explicitly (looking an
+optional provider up stopped the hub at start-up).
+
 ## Architectural decisions and open questions
 
 Recorded as ADRs in [adr/](adr/):
@@ -1111,6 +1162,12 @@ Recorded as ADRs in [adr/](adr/):
     configuration and secret schemas, and secrets sealed in the cloud only by AES-256-GCM envelope
     encryption bound to the tenant and account, write-only through the API, with a versioned
     master key that production requires and rotation re-encrypts.
+23. [0025](adr/0025-platform-admin.md): MADAR platform admin: a separate operator identity with
+    its own tokens, cookie and permission catalog behind a `platform` route class; tenant
+    suspension and archiving enforced for staff, hubs and websites; provisioning through
+    `provisionTenant`; support repairs from a catalog, previewed and executed with a confirmation
+    bound to the before-state, a reason and a role, audited in both logs; error events for the
+    health board.
 
 Open items to revisit:
 

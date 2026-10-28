@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { hashSecret, verifySecret } from '@pos/database';
-import { DomainError, newId } from '@pos/domain';
+import { DomainError, assertTenantAccess, newId } from '@pos/domain';
 import type { TokenResponse } from '@pos/validation';
 import { TenantContext } from '../../common/tenancy/tenant-context';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -63,6 +63,7 @@ export class AuthService {
       throw new DomainError('INVALID_CREDENTIALS', 'Invalid email or password');
     }
     if (!user.isActive) throw new DomainError('ACCOUNT_DISABLED', 'Account is disabled');
+    await this.assertTenantOpen(user.tenantId);
 
     const session = await this.issueSession(user.id, user.tenantId, newId());
     await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
@@ -207,6 +208,8 @@ export class AuthService {
       await this.revokeFamily(stored.familyId);
       throw new DomainError('ACCOUNT_DISABLED', 'Account is disabled');
     }
+    // The session survives a suspension: it continues once the platform reactivates the tenant.
+    await this.assertTenantOpen(stored.user.tenantId);
 
     const nextRaw = this.tokens.generateRefreshToken();
     const nextId = newId();
@@ -284,6 +287,18 @@ export class AuthService {
       expiresIn: this.tokens.accessTtlSeconds,
       user: await this.access.loadAuthUser(userId),
     };
+  }
+
+  /**
+   * A suspended tenant's staff cannot sign in or refresh (ADR 0025); an archived tenant's still
+   * can, to read.
+   */
+  private async assertTenantOpen(tenantId: string): Promise<void> {
+    const tenant = await this.prisma.tenant.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: { status: true },
+    });
+    assertTenantAccess(tenant.status, 'read');
   }
 
   private async revokeFamily(familyId: string): Promise<void> {

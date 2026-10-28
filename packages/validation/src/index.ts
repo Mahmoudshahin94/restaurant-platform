@@ -19,3 +19,4 @@ export * from './localization';
 export * from './kiosk';
 export * from './website';
 export * from './website-defaults';
+export * from './platform';

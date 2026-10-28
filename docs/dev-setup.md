@@ -166,6 +166,21 @@ directly, set `VITE_API_PROXY_TARGET=http://localhost:3000`. Keyboard shortcuts:
 add its origin (`tauri://localhost` on macOS/Linux, `http://tauri.localhost` on Windows) to
 `CORS_ORIGINS`.
 
+## The platform admin (MADAR M9)
+
+MADAR's own operators use `apps/platform-admin` (http://localhost:5177, `pnpm --filter
+@pos/platform-admin dev`), a separate sign-in from the business admin (ADR 0025). There is no
+sign-up: create the first owner once, with the password in the environment (12+ characters):
+
+```bash
+pnpm --filter @pos/api build
+PLATFORM_USER_PASSWORD='choose-a-long-one' pnpm platform:create-owner -- --email ops@madar.local --name "MADAR Ops"
+```
+
+`--role OPERATOR|SUPPORT|VIEWER` creates other operators (default OWNER), `--locale ar` an
+Arabic-speaking one. Add `http://localhost:5177` to `CORS_ORIGINS` in `.env` (the refresh cookie
+checks the origin).
+
 ## Everyday commands
 
 | Command                                      | What it does                                                    |
@@ -174,7 +189,7 @@ add its origin (`tauri://localhost` on macOS/Linux, `http://tauri.localhost` on 
 | `pnpm typecheck`                             | `tsc --noEmit` everywhere                                       |
 | `pnpm lint`                                  | ESLint (type-aware + i18n rule)                                 |
 | `pnpm test`                                  | Unit + integration tests (integration uses `TEST_DATABASE_URL`) |
-| `pnpm e2e`                                   | Every Playwright suite, one after another (27 critical flows)   |
+| `pnpm e2e`                                   | Every Playwright suite, one after another (32 critical flows)   |
 | `pnpm test:e2e`                              | Playwright end-to-end tests (suites in parallel)                |
 | `pnpm test:tools`                            | Tests for repository tools (lint rule, printer decoder)         |
 | `pnpm printer:sim`                           | Simulated ESC/POS network printer on port 9100                  |
@@ -189,8 +204,9 @@ createdb pos_kds_pos_e2e        # once (POS suite; or set POS_E2E_DATABASE_URL)
 createdb pos_kds_kds_e2e        # once (KDS suite; or set KDS_E2E_DATABASE_URL)
 createdb pos_kds_web_e2e        # once (customer website suite; or set WEB_E2E_DATABASE_URL)
 createdb pos_kds_kiosk_e2e      # once (kiosk suite; or set KIOSK_E2E_DATABASE_URL)
+createdb pos_kds_platform_e2e   # once (platform admin suite; or set PLATFORM_E2E_DATABASE_URL)
 pnpm build                      # E2E runs the built API and hub
-pnpm e2e                        # all five suites, one after another (a few minutes)
+pnpm e2e                        # all six suites, one after another (a few minutes)
 ```
 
 [testing.md](testing.md) maps the specification's 19 critical scenarios to the tests and explains
@@ -215,7 +231,10 @@ the demo restaurant and two at the supermarket (their codes go to a temporary fi
 for each (:4140, :4141), stops the cloud and serves both hubs; the kiosks (:5201 restaurant, :5202
 supermarket) and the restaurant's KDS (:5203) start. A card-paid kiosk order reaches the KDS, a
 pay-at-counter order in Arabic is collected by the cashier, and the supermarket's scanned items
-become a completed sale. `tools/e2e/prepare-db.mjs` refuses any database whose name
+become a completed sale. The platform admin suite starts the cloud (:3150) after creating its
+operator with `create-platform-owner`, and the platform admin (:5198): an operator provisions a
+coffee shop, suspends it (its owner's sign-in is refused), reactivates it and, in Arabic, corrects
+an order's status through the support tools. `tools/e2e/prepare-db.mjs` refuses any database whose name
 does not end in `_e2e`.
 Locally it uses the installed Google Chrome (`PLAYWRIGHT_CHANNEL`, default `chrome`). In CI, run
 `pnpm exec playwright install chromium` first.
