@@ -1069,7 +1069,23 @@ See [ADR 0025](adr/0025-platform-admin.md) and
 - **`apps/platform-admin`:** tenants and provisioning, a tenant's ten tabs, support tools, the
   health board and the platform audit log; EN/AR with RTL, MADAR's own branding.
 
-**Phase M9 verification (2026-10-28):** see the pull request for the full gate.
+**Phase M9 verification (2026-10-28):** `pnpm build`, `typecheck`, `lint` and `test` green
+(1,103 unit, integration and component tests: API 357, domain 279, gateway 91, admin 57,
+app-kit 56, validation 53, i18n 46, server 43, customer-web 25, database 25, POS 22, kiosk 11,
+api-client 11, KDS 9, platform admin 8, receipts 8, ui 2), `pnpm test:tools` (13), the hub
+schema check, a clean `migrate status`, `format:check`, and all 44 Playwright E2E tests (POS 16,
+admin 12, customer-web 8, KDS 4, kiosk 3, platform admin 1) in one run, including the new
+scenario 32. A manual browser check against a freshly seeded database, with the first owner and
+an operator created by `platform:create-owner`: a retail business provisioned in English (its
+owner signed in with the one-time password, as Owner); the health board showing the demo
+restaurant's live hub online; the restaurant suspended (its owner's sign-in and its website
+refused with `TENANT_SUSPENDED`, its hub waiting with its outbox kept instead of asking to be
+re-paired) and reactivated (the hub reconnected by itself); and, in Arabic (RTL), an order's
+status corrected from PLACED to CANCELLED through preview → confirm → reason, recorded as
+`PLATFORM` in the order's history and in both audit logs with before and after. Light and dark
+themes checked. The check led to two fixes: the hub's snapshot fetch now treats a suspension like
+its push and pull, and the error-event sink is passed to the server explicitly (looking an
+optional provider up stopped the hub at start-up).
 
 ## Architectural decisions and open questions
 
