@@ -270,3 +270,22 @@ business or one location, in test or live mode. Resolution is `resolvePaymentPro
 
 Code, not yet settings: the provider catalog (`PROVIDER_CATALOG`), one ACTIVE account per method
 and scope, and the 12-digit fingerprint.
+
+## Platform admin (M9)
+
+See [ADR 0025](adr/0025-platform-admin.md). The platform layer is now written by MADAR's operators
+in the platform admin (`apps/platform-admin`), a separate identity from every tenant's staff.
+
+| What                                         | Decided by                                                                                  | Where it is written                                        |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| A tenant's status                            | ACTIVE, SUSPENDED (staff, hubs and website refused), ARCHIVED (read-only), with a reason    | platform admin → tenant → Overview (`tenants.status`)      |
+| Which modules a tenant may use (entitlement) | at provisioning the business type's defaults are entitled, the rest not; then the operator  | platform admin → tenant → Modules (`tenants.configure`)    |
+| Whether the tenant may switch a module       | the entitlement's "configurable by the tenant"                                              | the same tab                                               |
+| A new tenant's profile, location and owner   | the provisioning form (currency ILS by default, `<slug>.<PLATFORM_WEB_DOMAIN>` subdomain)   | platform admin → Tenants → Provision (`tenants.provision`) |
+| Who may operate the platform                 | a platform user's role (OWNER, OPERATOR, SUPPORT, VIEWER), fixed permissions per role       | `pnpm platform:create-owner` (no sign-up, no screen yet)   |
+| Platform token key                           | `PLATFORM_JWT_SECRET` (derived from `JWT_ACCESS_SECRET` when unset, always a different key) | the API's environment                                      |
+| Error events kept for the health board       | `PLATFORM_ERROR_SAMPLE_PER_MINUTE` per route and code (default 10; 0 = none)                | the API's environment                                      |
+
+Code, not settings: the platform permission catalog and role mapping, the support repairs and
+their roles, the five-minute confirmation, the five-failure lock of a platform account and the
+one-day platform session.
