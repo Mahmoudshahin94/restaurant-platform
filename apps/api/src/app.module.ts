@@ -17,6 +17,7 @@ import {
 } from '@pos/server';
 import { AdminModule } from './modules/admin/admin.module';
 import { DevicesModule } from './modules/devices/devices.module';
+import { PlatformModule } from './modules/platform/platform.module';
 import { CloudReportsModule } from './modules/reports/reports.module';
 import { SyncModule } from './modules/sync/sync.module';
 import { WebOrderChangeRecorder } from './modules/sync/web-order-change.recorder';
@@ -56,6 +57,8 @@ export class AppModule {
         AdminModule,
         // Cloud-only: reports over PostgreSQL views (Phase 9).
         CloudReportsModule,
+        // Cloud-only: MADAR's own platform admin (ADR 0025), a separate identity.
+        PlatformModule,
       ],
     };
   }

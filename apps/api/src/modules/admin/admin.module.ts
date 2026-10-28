@@ -40,5 +40,7 @@ import { UsersService } from './staff/users.service';
     RefundsService,
     AuditLogsService,
   ],
+  // The platform admin reads a tenant's payment accounts (secrets' status only, ADR 0025).
+  exports: [PaymentProvidersService],
 })
 export class AdminModule {}

@@ -20,5 +20,7 @@ import { SyncController } from './sync.controller';
     CloudOrdersService,
     SyncAdminService,
   ],
+  // The platform's support tools settle refused operations through the same rules (ADR 0025).
+  exports: [SyncAdminService],
 })
 export class SyncModule {}
