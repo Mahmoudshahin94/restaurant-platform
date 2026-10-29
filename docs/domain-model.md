@@ -26,6 +26,8 @@ mirrors the operational subset.
 | Sync      | SyncOperation, HubState, InboundOrder (hub); ProcessedOperation, ChangeLog (cloud)                                                | ✅ Phases 5–8                      |
 | Online    | WebOrderCounter (cloud); website fields on Order and Location                                                                     | ✅ Phase 7                         |
 | Website   | TenantDomain, WebsiteConfig (cloud)                                                                                               | ✅ Phase M7                        |
+| Platform  | PlatformUser, PlatformRefreshToken, PlatformAuditLog, PlatformErrorEvent (cloud)                                                  | ✅ Phase M9                        |
+| Releases  | Release, TenantReleaseChannel (cloud); `Device.lastVersionAt`                                                                     | ✅ Phase M10                       |
 | Reporting | Views `report_sales_orders`, `report_payments`, `report_refunds`, `report_kitchen_tickets` (cloud, not Prisma models)             | ✅ Phase 9                         |
 | Customers | Customer, Address (accounts)                                                                                                      | ⏳ deferred (guest checkout only)  |
 | Inventory | InventoryItem, Recipe, StockMovement                                                                                              | ⏳ module boundary only            |
@@ -211,7 +213,9 @@ sign-in. Managed in the admin portal (Phase 8).
 holds non-secret descriptive data only. Terminals (POS, KDS, kiosk, customer display; M6,
 [ADR 0022](adr/0022-self-service-kiosk.md)) start `PENDING` with `pairingCodeHash` and
 `pairingExpiresAt` (a CHECK keeps them together, and only while pending), pair with their hub
-(`pairedAt`), and report `lastSeenAt` and `appVersion` (`x-madar-client-version`). A terminal's
+(`pairedAt`), and report `lastSeenAt` and `appVersion` (`x-madar-client-version`). Every device,
+hubs included, keeps `lastVersionAt`, when it first reported its current version (M10,
+[ADR 0026](adr/0026-versions-and-releases.md); a CHECK requires a version with it). A terminal's
 credential hash lives on its hub only; a hub's in the cloud. The lifecycle only moves forward:
 `PENDING` → `ACTIVE` → `DISABLED`.
 
@@ -331,6 +335,16 @@ tenant (rows about one name it in `subjectTenantId`, which the tenant-scoped cli
   tenant, location, request id, how many of the same were dropped since.
 - `ActorType.PLATFORM` and `ActionSource.PLATFORM` record a platform operator's actions in a
   tenant's audit log, order status history and sync ledger. `Tenant.status` is now enforced.
+
+**Releases** (M10, [ADR 0026](adr/0026-versions-and-releases.md)), cloud-only:
+
+- `Release`: a published MADAR version (unique; semantic, checked by `is_madar_version()` in the
+  database), its channel (`release_channel`: `STABLE` or `BETA`), operator notes (at most 4,000
+  characters), `publishedAt`, the publishing operator, and the optional
+  `minSupportedHubVersion` / `minSupportedClientVersion` a cloud running it enforces.
+- `TenantReleaseChannel`: one row per tenant at most (`tenantId` is the key, so the tenant-scoped
+  client confines it like the tenant's own data): its `channel` and an optional `pinnedVersion`,
+  and the operator who changed it last. No row means STABLE.
 
 **Kitchen** (Phase 4):
 

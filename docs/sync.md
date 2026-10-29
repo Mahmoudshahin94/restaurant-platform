@@ -48,7 +48,8 @@ changes nothing) and depend on nothing, so they never wait for another entity.
 **Terminals (M6, ADR 0022).** A terminal paired at the hub, a new app version it reports, and
 (at most every five minutes) its last contact each write a `DEVICE_UPSERT` operation
 (`entity_type` `Device`): `{ id, tenantId, locationId, type, status, pairedAt, lastSeenAt,
-appVersion }`, never its credential or pairing code. The cloud moves the device from `PENDING` to
+appVersion, lastVersionAt }` (`lastVersionAt`, when it first reported that version, since M10),
+never its credential or pairing code. The cloud moves the device from `PENDING` to
 `ACTIVE` (clearing its pairing code), keeps the latest contact and the version, refuses a device
 of another location or a hub (`REJECTED`), and never brings back a device an administrator
 disabled (`APPLIED`, nothing changed). An order whose payment names a device depends on that
@@ -256,6 +257,13 @@ bigserial sequence, **never by timestamps**:
   `DUPLICATE` for any it had already applied.
 - **Credential refused** (HTTP 401/403): the hub shows `SYNC_ERROR` ("re-pair it") and checks again
   occasionally.
+- **Business suspended** (`403 TENANT_SUSPENDED`/`TENANT_ARCHIVED`, ADR 0025) and **hub too old**
+  (`426 HUB_UPGRADE_REQUIRED`, ADR 0026): treated like an unreachable cloud, never like a refused
+  credential. The hub keeps serving its LAN from its last snapshot, keeps every change in its
+  outbox and retries with backoff. Every request of the hub carries `x-madar-client-version` (its
+  MADAR version); a cloud that no longer serves it refuses the snapshot too, so a hub is never
+  sent configuration with columns it does not know. While refused, `GET /hub/status` reports
+  `upgradeRequired: { minimumVersion }`; once the hub is updated the outbox goes out.
 - **Housekeeping:** completed operations keep their row (and sequence) but drop their payload after
   `HUB_OUTBOX_RETENTION_DAYS` (30).
 
@@ -346,15 +354,17 @@ prefixed by source: `<LOCATIONCODE>-042` for hub orders, `W-017` for web orders.
 The hub derives one state (`GET /hub/status` → `state`), and announces changes with the realtime
 events `sync.status_changed`, `sync.completed` and `sync.failed`:
 
-| State        | When                                                    | Footer shows               |
-| ------------ | ------------------------------------------------------- | -------------------------- |
-| `SYNC_ERROR` | an operation is `FAILED`, or the credential was refused | `Sync error · 2 failed`    |
-| `OFFLINE`    | the last contact with the cloud failed                  | `Offline · 3 pending`      |
-| `SYNCING`    | operations are waiting or a push is running             | `Syncing · 5 pending`      |
-| `ONLINE`     | nothing waiting, cloud reachable                        | `Online · 12 synchronized` |
+| State        | When                                                    | Footer shows                      |
+| ------------ | ------------------------------------------------------- | --------------------------------- |
+| `SYNC_ERROR` | an operation is `FAILED`, or the credential was refused | `Sync error · 2 failed`           |
+| (any)        | the cloud requires a newer hub (`upgradeRequired`)      | `Hub update required · 3 pending` |
+| `OFFLINE`    | the last contact with the cloud failed                  | `Offline · 3 pending`             |
+| `SYNCING`    | operations are waiting or a push is running             | `Syncing · 5 pending`             |
+| `ONLINE`     | nothing waiting, cloud reachable                        | `Online · 12 synchronized`        |
 
 "Synchronized" counts operations completed in the last 24 hours. The footer opens the
 synchronization screen (`/sync`): state and figures (waiting, failed, synchronized, last contact,
-next attempt, last error), "Sync now", and the outbox as tabs (waiting, failed, recently
+next attempt, hub version, last error; while the cloud requires a newer hub, a notice saying that
+nothing is lost and which version to install), "Sync now", and the outbox as tabs (waiting, failed, recently
 synchronized) with the order number, error and attempts of each change. Anyone with
 `orders.view` sees it and can "Sync now"; retrying a failed change needs `sync.view`.
