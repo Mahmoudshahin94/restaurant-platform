@@ -37,8 +37,11 @@ export class TerminalsService {
     private readonly changes: ChangeRecorder,
   ) {}
 
-  /** `code` is normalized (`pairTerminalSchema`). Any failure looks the same: unknown code. */
-  async pair(code: string): Promise<PairedTerminal> {
+  /**
+   * `code` is normalized (`pairTerminalSchema`). Any failure looks the same: unknown code. The
+   * terminal's version, when it reports one, is recorded from the start (ADR 0026).
+   */
+  async pair(code: string, version: string | null = null): Promise<PairedTerminal> {
     const now = new Date();
     const secret = newDeviceSecret();
     return this.prisma.$transaction(async (tx) => {
@@ -64,6 +67,7 @@ export class TerminalsService {
           pairingExpiresAt: null,
           pairedAt: now,
           lastSeenAt: now,
+          ...(version ? { appVersion: version, lastVersionAt: now } : {}),
         },
       });
       await this.audit.record(
@@ -75,7 +79,7 @@ export class TerminalsService {
           actorId: device.id,
           tenantId: device.tenantId,
           locationId: device.locationId,
-          metadata: { name: device.name, type: device.type },
+          metadata: { name: device.name, type: device.type, appVersion: version },
         },
         tx,
       );

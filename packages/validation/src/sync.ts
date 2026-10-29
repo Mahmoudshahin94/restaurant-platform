@@ -290,6 +290,8 @@ export const syncDeviceSchema = z.object({
   pairedAt: at.nullable(),
   lastSeenAt: at.nullable(),
   appVersion: z.string().min(1).max(40).nullable(),
+  /** When the terminal first reported that version (ADR 0026); absent from older outbox rows. */
+  lastVersionAt: at.nullable().optional(),
 });
 export type SyncDevice = z.infer<typeof syncDeviceSchema>;
 

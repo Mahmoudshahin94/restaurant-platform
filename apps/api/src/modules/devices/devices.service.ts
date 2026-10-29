@@ -32,6 +32,7 @@ const toDto = (row: DeviceRow): Device => ({
   pairedAt: row.pairedAt?.toISOString() ?? null,
   lastSeenAt: row.lastSeenAt?.toISOString() ?? null,
   appVersion: row.appVersion,
+  lastVersionAt: row.lastVersionAt?.toISOString() ?? null,
   createdAt: row.createdAt.toISOString(),
 });
 

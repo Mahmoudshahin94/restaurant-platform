@@ -1,6 +1,6 @@
 {
   "name": "@pos/kiosk",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Self-service kiosk: a touch-first web app where customers order and pay; a LAN client of the location hub, paired as a device (ADR 0022)",
   "type": "module",

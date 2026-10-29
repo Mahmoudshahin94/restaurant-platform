@@ -37,20 +37,20 @@ Device configuration       one terminal, screen or kiosk differing from its loca
 
 ## What exists today
 
-| Setting                                        | Layers today                                                                                               | Phase |
-| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ----- |
-| Business type, status, legal name              | tenant (type and status set by the platform)                                                               | M1 ✅ |
-| Default and supported locales, digit style     | platform → tenant (digits); tenant (locales)                                                               | M4 ✅ |
-| Currency                                       | tenant (fixed at provisioning, ADR 0002; ILS default)                                                      | M4 ✅ |
-| Time zone, tax mode, cash rounding, KDS times  | tenant time zone; location settings                                                                        | ✅    |
-| Modules (POS, KDS, TABLES, BARCODE, …)         | platform → business type → tenant → location → device                                                      | M2 ✅ |
-| Branding and theme                             | platform → tenant → surface → device (theme mode)                                                          | M3 ✅ |
-| Currency display (symbol, display, format)     | platform → tenant                                                                                          | M4 ✅ |
-| Retail catalog (options, barcodes, stock flag) | modules (above); catalog data per tenant                                                                   | M5 ✅ |
-| Self-service kiosks (terminals, card terminal) | modules (device layer from paired terminals); kiosk branding surface; card reader = payment providers (M8) | M6 ✅ |
-| Website sections and domains                   | platform → business type (template) → tenant; installation (`PLATFORM_WEB_DOMAIN`, `DOMAIN_VERIFIER`)      | M7 ✅ |
-| Payment providers                              | platform (built-in, development) → tenant → location                                                       | M8 ✅ |
-| Release channel                                | platform → tenant                                                                                          | M10   |
+| Setting                                        | Layers today                                                                                               | Phase  |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------ |
+| Business type, status, legal name              | tenant (type and status set by the platform)                                                               | M1 ✅  |
+| Default and supported locales, digit style     | platform → tenant (digits); tenant (locales)                                                               | M4 ✅  |
+| Currency                                       | tenant (fixed at provisioning, ADR 0002; ILS default)                                                      | M4 ✅  |
+| Time zone, tax mode, cash rounding, KDS times  | tenant time zone; location settings                                                                        | ✅     |
+| Modules (POS, KDS, TABLES, BARCODE, …)         | platform → business type → tenant → location → device                                                      | M2 ✅  |
+| Branding and theme                             | platform → tenant → surface → device (theme mode)                                                          | M3 ✅  |
+| Currency display (symbol, display, format)     | platform → tenant                                                                                          | M4 ✅  |
+| Retail catalog (options, barcodes, stock flag) | modules (above); catalog data per tenant                                                                   | M5 ✅  |
+| Self-service kiosks (terminals, card terminal) | modules (device layer from paired terminals); kiosk branding surface; card reader = payment providers (M8) | M6 ✅  |
+| Website sections and domains                   | platform → business type (template) → tenant; installation (`PLATFORM_WEB_DOMAIN`, `DOMAIN_VERIFIER`)      | M7 ✅  |
+| Payment providers                              | platform (built-in, development) → tenant → location                                                       | M8 ✅  |
+| Release channel and minimum versions           | platform (releases, minimums) → tenant (channel or pinned version, set by the platform)                    | M10 ✅ |
 
 Each phase's ADR records the exact settings it adds and the layers they accept.
 
@@ -289,3 +289,24 @@ in the platform admin (`apps/platform-admin`), a separate identity from every te
 Code, not settings: the platform permission catalog and role mapping, the support repairs and
 their roles, the five-minute confirmation, the five-failure lock of a platform account and the
 one-day platform session.
+
+## Versions and releases (M10)
+
+See [ADR 0026](adr/0026-versions-and-releases.md) and [release.md](release.md). One MADAR version
+names a build of everything; what differs between businesses is configuration (the sections
+above), never a branch.
+
+| What                                    | Decided by                                                                                          | Where it is written                                              |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| The MADAR version of a build            | the root `package.json`, stamped on every app, package, the desktop app and `MADAR_VERSION`         | `pnpm version:set <version>` (checked by `pnpm version:check`)   |
+| A published release                     | version, channel (STABLE or BETA), notes                                                            | platform admin → Releases → Publish (`releases.publish`)         |
+| The oldest hub and app the cloud serves | the highest minimum of the published releases up to the version the cloud runs (empty = no minimum) | the release's minimum hub and app versions (`releases.publish`)  |
+| Which releases a tenant follows         | its channel (none = STABLE; BETA takes beta and stable releases), or a pinned published version     | platform admin → Releases → Change channel (`releases.rollout`)  |
+| Whether a device is flagged             | its reported version against its tenant's target (Outdated) and the cloud's minimum (Unsupported)   | reported by the device (`x-madar-client-version`); not a setting |
+
+The tenant's channel tracks a rollout; it never lowers the minimums, which are one rule for every
+tenant because the cloud is one deployment. The platform admin is never refused for its version.
+
+Code, not settings: the semantic-version rule, the 15-second cache of the release policy per API
+instance, the `426` refusals and which callers they exempt (the platform's routes, and apps that
+report no version).

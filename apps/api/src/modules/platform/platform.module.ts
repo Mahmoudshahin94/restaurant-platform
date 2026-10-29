@@ -10,19 +10,22 @@ import { PlatformHealthService } from './health/platform-health.service';
 import { PlatformAuditService } from './platform-audit.service';
 import {
   PlatformOverviewController,
+  PlatformReleasesController,
   PlatformTenantsController,
   SupportController,
 } from './platform.controllers';
 import { PlatformDirectoryService } from './platform-directory.service';
+import { PlatformReleasesService } from './releases/platform-releases.service';
 import { SupportConfirmations } from './support/support-confirmation';
 import { SupportService } from './support/support.service';
 import { PlatformTenantsService } from './tenants/platform-tenants.service';
 
 /**
  * The platform admin's API (ADR 0025), cloud only: MADAR's operators, their sign-in, tenants and
- * provisioning, health, audit logs and the support tools. Its own identity and tokens: every
- * route is `PlatformGuard`'s, and refuses staff tokens. Its `PlatformErrorEventsService` is the
- * exception filter's error-event sink, which feeds the health board (see `createApp`).
+ * provisioning, health, audit logs, the support tools and releases (ADR 0026). Its own identity
+ * and tokens: every route is `PlatformGuard`'s, and refuses staff tokens. Its
+ * `PlatformErrorEventsService` is the exception filter's error-event sink, which feeds the health
+ * board (see `createApp`).
  */
 @Module({
   imports: [AdminModule, SyncModule, OrdersModule, WebsiteModule],
@@ -31,6 +34,7 @@ import { PlatformTenantsService } from './tenants/platform-tenants.service';
     PlatformTenantsController,
     PlatformOverviewController,
     SupportController,
+    PlatformReleasesController,
   ],
   providers: [
     PlatformTokenService,
@@ -43,6 +47,7 @@ import { PlatformTenantsService } from './tenants/platform-tenants.service';
     PlatformHealthService,
     SupportConfirmations,
     SupportService,
+    PlatformReleasesService,
   ],
 })
 export class PlatformModule {}

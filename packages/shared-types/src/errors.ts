@@ -26,6 +26,12 @@ export const ERROR_CODES = [
   'TENANT_SUSPENDED',
   /** The business is archived: it can be read, not changed (ADR 0025). */
   'TENANT_ARCHIVED',
+  // versions (ADR 0026)
+  /** The app is older than the cloud supports: update it (details.minimumVersion, details.version). */
+  'CLIENT_UPGRADE_REQUIRED',
+  /** The location hub is older than the cloud supports: it must be updated before it syncs again. */
+  'HUB_UPGRADE_REQUIRED',
+  'RELEASE_NOT_FOUND',
   // modules (ADR 0018)
   /** The route or action needs a module that is off for this tenant, location or device. */
   'FEATURE_DISABLED',

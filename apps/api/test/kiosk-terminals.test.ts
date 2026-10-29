@@ -187,7 +187,12 @@ describe('terminals waiting for their hub', () => {
     expect(added.changes.map((c) => c.topic)).toEqual(['CONFIG']);
     await prisma.device.update({
       where: { id: created.device.id },
-      data: { lastSeenAt: new Date(), appVersion: '1.0.1', metadata: { ip: '10.0.0.9' } },
+      data: {
+        lastSeenAt: new Date(),
+        appVersion: '1.0.1',
+        lastVersionAt: new Date(),
+        metadata: { ip: '10.0.0.9' },
+      },
     });
     expect((await pull(added.cursor)).changes).toEqual([]);
     await app.inject({
@@ -229,6 +234,36 @@ describe("the hub's report of its terminals", () => {
     expect(after.appVersion).toBe('1.1.0');
   });
 
+  it('keeps when the terminal started running its version (ADR 0026)', async () => {
+    const created = await kiosk();
+    const since = new Date(Date.now() - 3_600_000).toISOString();
+    await push([
+      op('Device', report(created.device.id, { appVersion: '1.0.0', lastVersionAt: since }), 1),
+    ]);
+    const row = await prisma.device.findUniqueOrThrow({ where: { id: created.device.id } });
+    expect(row).toMatchObject({ appVersion: '1.0.0', lastVersionAt: new Date(since) });
+    // The same version reported again keeps its date; a new one takes the report's.
+    await push([op('Device', report(created.device.id, { appVersion: '1.0.0' }), 2)]);
+    expect(
+      (await prisma.device.findUniqueOrThrow({ where: { id: created.device.id } })).lastVersionAt,
+    ).toEqual(new Date(since));
+    const updated = new Date().toISOString();
+    await push([
+      op('Device', report(created.device.id, { appVersion: '1.1.0', lastVersionAt: updated }), 3),
+    ]);
+    expect(
+      await prisma.device.findUniqueOrThrow({ where: { id: created.device.id } }),
+    ).toMatchObject({ appVersion: '1.1.0', lastVersionAt: new Date(updated) });
+    // The admin portal shows both.
+    const listed = (await app.inject({ method: 'GET', url: devicesUrl(), headers: owner })).json<
+      AdminDevice[]
+    >();
+    expect(listed.find((d) => d.id === created.device.id)).toMatchObject({
+      appVersion: '1.1.0',
+      lastVersionAt: updated,
+    });
+  });
+
   it('never brings back a terminal an administrator disabled', async () => {
     const created = await kiosk();
     await app.inject({
@@ -259,6 +294,7 @@ describe("the hub's report of its terminals", () => {
       'appVersion',
       'id',
       'lastSeenAt',
+      'lastVersionAt',
       'locationId',
       'pairedAt',
       'status',

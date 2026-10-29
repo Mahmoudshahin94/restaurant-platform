@@ -1,6 +1,6 @@
 {
   "name": "@pos/platform-admin",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "MADAR's platform admin: the operators' console (ADR 0025)",
   "type": "module",

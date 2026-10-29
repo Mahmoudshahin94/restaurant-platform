@@ -41,6 +41,12 @@ export const PLATFORM_PERMISSIONS = [
   'support.find',
   /** Preview and execute the support tools' repairs. */
   'support.repair',
+  /** Releases, and the versions every tenant's devices run (ADR 0026). */
+  'releases.view',
+  /** Publish a release and change its notes or minimum versions. */
+  'releases.publish',
+  /** Put a tenant on a release channel, or pin it to a version. */
+  'releases.rollout',
 ] as const;
 export type PlatformPermission = (typeof PLATFORM_PERMISSIONS)[number];
 
@@ -53,6 +59,7 @@ const READ: readonly PlatformPermission[] = [
   'tenants.payments.view',
   'health.view',
   'audit.view',
+  'releases.view',
 ];
 
 /** What each role may do. Roles are fixed in code (there is no role editor for the platform). */

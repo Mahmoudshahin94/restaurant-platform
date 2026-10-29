@@ -3,7 +3,15 @@ import type { I18nResources } from '@pos/i18n';
 import type { PlatformPermission } from '@pos/shared-types';
 import { Button, cn } from '@pos/ui';
 import { useQueryClient } from '@tanstack/react-query';
-import { Activity, Building2, LifeBuoy, LogOut, ScrollText, type LucideIcon } from 'lucide-react';
+import {
+  Activity,
+  Building2,
+  LifeBuoy,
+  LogOut,
+  PackageCheck,
+  ScrollText,
+  type LucideIcon,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { session, useSession } from '../lib/api';
@@ -15,6 +23,7 @@ type NavKey = Exclude<keyof I18nResources['platform']['nav'], 'main'>;
 const NAV: { to: string; labelKey: NavKey; icon: LucideIcon; permission: PlatformPermission }[] = [
   { to: '/tenants', labelKey: 'tenants', icon: Building2, permission: 'tenants.view' },
   { to: '/health', labelKey: 'health', icon: Activity, permission: 'health.view' },
+  { to: '/releases', labelKey: 'releases', icon: PackageCheck, permission: 'releases.view' },
   { to: '/support', labelKey: 'support', icon: LifeBuoy, permission: 'support.find' },
   { to: '/audit', labelKey: 'audit', icon: ScrollText, permission: 'audit.view' },
 ];

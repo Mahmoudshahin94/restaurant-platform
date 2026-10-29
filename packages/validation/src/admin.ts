@@ -281,6 +281,8 @@ export const adminDeviceSchema = z.object({
   pairingExpiresAt: isoDateTimeSchema.nullable(),
   lastSeenAt: isoDateTimeSchema.nullable(),
   appVersion: z.string().nullable(),
+  /** When the device first reported `appVersion` (ADR 0026). */
+  lastVersionAt: isoDateTimeSchema.nullable(),
   /** Seen within the heartbeat window (3 minutes). */
   online: z.boolean(),
   outbox: reportedOutboxSchema.nullable(),

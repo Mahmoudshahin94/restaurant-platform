@@ -705,7 +705,7 @@ Configuration precedence is in [configuration.md](configuration.md).
 | M7    | Multi-tenant website: host resolution, verified domains, configurable sections                           | ✅ Done |
 | M8    | Payment configuration: per-tenant provider accounts, encrypted secrets                                   | ✅ Done |
 | M9    | Platform admin: separate app and identity, tenants, health, support and repair tools                     | ✅ Done |
-| M10   | Versioning: one MADAR version, device versions, release tracking                                         | ⏳      |
+| M10   | Versioning: one MADAR version, device versions, release tracking                                         | ✅ Done |
 
 ### Phase M1 decisions
 
@@ -1087,6 +1087,69 @@ themes checked. The check led to two fixes: the hub's snapshot fetch now treats 
 its push and pull, and the error-event sink is passed to the server explicitly (looking an
 optional provider up stopped the hub at start-up).
 
+### Phase M10 decisions
+
+See [ADR 0026](adr/0026-versions-and-releases.md),
+[configuration.md](configuration.md#versions-and-releases-m10) and [release.md](release.md).
+
+- **One version:** the root `package.json` (`1.0.0`), stamped by `pnpm version:set` on every app
+  and package, the POS desktop app (Tauri, Cargo) and the `MADAR_VERSION` constant; a drift check
+  in `pnpm test:tools`. Vite's `define` gives every app its version; every footer shows it,
+  `/health` answers it, and every app and hub sends it in `x-madar-client-version`.
+- **Device versions** in real columns: `Device.appVersion` and the new `lastVersionAt`, recorded
+  from the hub's own requests (cloud `DeviceGuard`), at terminal pairing and as terminals work
+  (hub), and reported to the cloud with the terminal's `DEVICE_UPSERT`.
+- **Releases** (`Release`: version, channel, notes, minimum hub and app versions) and
+  **`TenantReleaseChannel`** (STABLE, BETA or a pinned version), cloud-only. The cloud enforces
+  the highest minimum of the releases up to the version it runs: `426 HUB_UPGRADE_REQUIRED` for a
+  hub (which then waits with its outbox, like a suspended business, and says "Hub update
+  required" on the POS), `426 CLIENT_UPGRADE_REQUIRED` for an app (which shows "Update required"
+  in English or Arabic). This closes the snapshot schema-skew risk. The platform's routes are
+  never refused; the channel tracks a rollout and never lowers the minimums.
+- **The platform admin's Releases page:** the cloud's version and minimums, publishing and
+  correcting releases, each tenant's channel or pin (with a reason, in both audit logs), and every
+  active device's version with the outdated and unsupported ones flagged; the health board's
+  Versions column.
+- **Release documentation:** `CHANGELOG.md` (MADAR 1.0.0) and the versioning and rollout
+  procedure in [release.md](release.md). Client customisation stays in configuration, never in
+  branches.
+
+**Phase M10 verification (2026-10-29):** `pnpm build`, `typecheck`, `lint` and `test` green
+(1,132 unit, integration and component tests: API 370, domain 287, gateway 92, app-kit 59, admin
+57, validation 53, i18n 46, server 43, customer-web 25, database 25, POS 22, api-client 12, kiosk
+11, platform admin 11, KDS 9, receipts 8, ui 2), `pnpm test:tools` (21, including the version
+drift check), the hub schema check, a clean `migrate status`, `format:check`, and all 46 Playwright
+E2E tests (POS 16, admin 12, customer-web 8, KDS 4, kiosk 3, platform admin 3) in one run,
+including the new scenarios 33 and 34. A manual browser check against a separate, freshly seeded
+database on non-standard ports: `/health` answering `1.0.0`; the version in the admin's and
+platform admin's footers; release 1.0.0 published with a hub minimum and 1.1.0-beta.1 on the beta
+channel; Demo Kitchen moved to Beta with a reason, its hub reporting 0.9.0 flagged _Unsupported_
+and its 1.0.0 hub _Outdated_, and the health board counting both; the app minimum set on the
+release, after which the admin (requests reporting 0.9.0) showed "Update required" in English and
+Arabic (RTL) while a 1.0.0 admin kept working. Light and dark themes checked. The check led to
+three fixes: the release dialogs now start from a fresh form each time they open, the Releases
+page no longer widens past the viewport, and the admin and platform admin now generate the shared
+app kit's styles (the update screen was unstyled there).
+
+### The expansion as a whole
+
+After M1–M10 the same codebase serves restaurants, cafés, supermarkets, clothing and retail
+stores, for many businesses at once:
+
+- **Isolation by construction** (M1): a tenant root, a tenant context on every request, hub and
+  job, and a database client that refuses unscoped queries in the cloud.
+- **Behaviour by configuration** (M2–M8): modules with business-type defaults and platform
+  entitlements, branding and themes, currencies and languages, a retail catalog with barcodes and
+  variants, self-service kiosks and self-checkout, a website per tenant on its own domains, and
+  payment providers per tenant and location with encrypted secrets. One precedence rule
+  (platform → business type → tenant → location → device) resolves them all.
+- **Operated as a platform** (M9–M10): a separate operator identity and console for provisioning,
+  suspension, health, audit and audited repairs; one version for everything, devices reporting
+  theirs, and the cloud refusing what it cannot serve.
+- **Unchanged foundations:** the hub owns its location's SQLite database and works offline; the
+  exactly-once sync ledger, the pricing engine and order state machine in `@pos/domain`, integer
+  money, deny-by-default route protection and bilingual (EN/AR, RTL) screens.
+
 ## Architectural decisions and open questions
 
 Recorded as ADRs in [adr/](adr/):
@@ -1168,6 +1231,10 @@ Recorded as ADRs in [adr/](adr/):
     `provisionTenant`; support repairs from a catalog, previewed and executed with a confirmation
     bound to the before-state, a reason and a role, audited in both logs; error events for the
     health board.
+24. [0026](adr/0026-versions-and-releases.md): MADAR versions and releases: one version stamped
+    on everything and reported by every app and hub; device versions in real columns; releases
+    with minimum hub and app versions the cloud enforces with `426` (hubs wait with their outbox);
+    tenant release channels for rollout tracking; the platform admin's Releases page.
 
 Open items to revisit:
 

@@ -1,6 +1,6 @@
 import { newId } from '@pos/domain';
 import { type RouteEntry, listRoutes } from '@pos/server';
-import type { ApiErrorBody } from '@pos/shared-types';
+import { type ApiErrorBody, MADAR_VERSION } from '@pos/shared-types';
 import type { HubStatus, PairedTerminal, TokenResponse } from '@pos/validation';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { FakeCloud, type TestHub, pair, removeDir, startHub } from './harness';
@@ -185,9 +185,10 @@ describe('hub routes', () => {
     ).toBeUndefined();
   });
 
-  it('serves liveness and readiness outside the versioned prefix', async () => {
+  it('serves liveness (with its MADAR version) and readiness outside the versioned prefix', async () => {
     expect((await hub.app.inject({ method: 'GET', url: '/health' })).json()).toEqual({
       status: 'ok',
+      version: MADAR_VERSION,
     });
     const ready = await hub.app.inject({ method: 'GET', url: '/ready' });
     expect(ready.json()).toEqual({ status: 'ready', database: 'ok' });

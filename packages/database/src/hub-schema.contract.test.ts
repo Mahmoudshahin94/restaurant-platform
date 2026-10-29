@@ -29,12 +29,16 @@ const CLOUD_ONLY_MODELS = new Set([
   'PlatformRefreshToken',
   'PlatformAuditLog',
   'PlatformErrorEvent',
+  // Releases and each tenant's release channel (ADR 0026).
+  'Release',
+  'TenantReleaseChannel',
 ]);
 const CLOUD_ONLY_ENUMS = new Set([
   'ProcessedOperationStatus',
   'ChangeTopic',
   'SyncIssueResolution',
   'PlatformRole',
+  'ReleaseChannel',
 ]);
 
 type Datamodel = typeof Prisma.dmmf.datamodel;

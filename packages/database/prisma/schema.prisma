@@ -252,6 +252,7 @@ model Tenant {
   website          WebsiteConfig?
   paymentProviders PaymentProviderAccount[]
   paymentSecrets   PaymentProviderSecret[]
+  releaseChannel   TenantReleaseChannel?
 
   @@map("tenants")
 }
@@ -460,6 +461,8 @@ model Device {
   lastSeenAt       DateTime?    @map("last_seen_at") @db.Timestamptz(3)
   /// The app version the device last reported (`x-madar-client-version`).
   appVersion       String?      @map("app_version")
+  /// When the device first reported that version (ADR 0026): how long it has run it.
+  lastVersionAt    DateTime?    @map("last_version_at") @db.Timestamptz(3)
   /// Non-secret descriptive data: OS, printer model, IP on the LAN, a hub's outbox.
   metadata         Json         @default("{}")
   createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -1727,4 +1730,55 @@ model PlatformErrorEvent {
   @@index([createdAt])
   @@index([subjectTenantId, createdAt])
   @@map("platform_error_events")
+}
+
+/// @cloud-only
+/// Releases (ADR 0026): where a release is published, and which releases a tenant follows.
+enum ReleaseChannel {
+  STABLE
+  BETA
+
+  @@map("release_channel")
+}
+
+/// @cloud-only
+/// A MADAR version the platform published: its notes, and the oldest hub and app the cloud still
+/// serves once it runs this version. Versions are semantic and checked by the database too.
+model Release {
+  id                        String         @id @default(uuid(7)) @db.Uuid
+  version                   String         @unique
+  channel                   ReleaseChannel
+  /// For operators: what changed, what to watch, how to roll back.
+  notes                     String         @default("")
+  publishedAt               DateTime       @default(now()) @map("published_at") @db.Timestamptz(3)
+  /// Hubs older than this are refused (`HUB_UPGRADE_REQUIRED`) by a cloud running this version.
+  minSupportedHubVersion    String?        @map("min_supported_hub_version")
+  /// Apps older than this are refused (`CLIENT_UPGRADE_REQUIRED`) by a cloud running this version.
+  minSupportedClientVersion String?        @map("min_supported_client_version")
+  /// The platform user who published it.
+  publishedById             String?        @map("published_by_id") @db.Uuid
+  createdAt                 DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                 DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([publishedAt])
+  @@map("releases")
+}
+
+/// @cloud-only
+/// The release channel the platform put a tenant on, or the version it pinned it to. No row =
+/// STABLE. It tracks a controlled rollout (which version the tenant's devices should run); it never
+/// lowers the cloud's minimums.
+model TenantReleaseChannel {
+  tenantId      String         @id @map("tenant_id") @db.Uuid
+  channel       ReleaseChannel @default(STABLE)
+  /// A version the tenant stays on whatever its channel publishes.
+  pinnedVersion String?        @map("pinned_version")
+  /// The platform user who changed it last.
+  updatedById   String?        @map("updated_by_id") @db.Uuid
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_release_channels")
 }

@@ -181,20 +181,34 @@ PLATFORM_USER_PASSWORD='choose-a-long-one' pnpm platform:create-owner -- --email
 Arabic-speaking one. Add `http://localhost:5177` to `CORS_ORIGINS` in `.env` (the refresh cookie
 checks the origin).
 
+## The MADAR version (M10)
+
+The root `package.json` holds the one MADAR version ([ADR 0026](adr/0026-versions-and-releases.md));
+`pnpm version:set 1.1.0` stamps it on every app and package, the POS desktop app and the
+`MADAR_VERSION` constant, and `pnpm version:check` fails on drift. Every app shows it in its
+footer ("… · v1.0.0"), `GET /health` answers it, and every app and hub sends it in
+`x-madar-client-version`. To see an app refused as too old in development, publish a release in
+the platform admin (Releases) with a minimum app version above the running one, or send an older
+`x-madar-client-version`: the cloud answers `426 CLIENT_UPGRADE_REQUIRED` and the app shows
+"Update required". Lower the minimum again on the same page (the platform admin is never
+refused).
+
 ## Everyday commands
 
-| Command                                      | What it does                                                    |
-| -------------------------------------------- | --------------------------------------------------------------- |
-| `pnpm build`                                 | Builds every package and app (Turborepo, dependency-ordered)    |
-| `pnpm typecheck`                             | `tsc --noEmit` everywhere                                       |
-| `pnpm lint`                                  | ESLint (type-aware + i18n rule)                                 |
-| `pnpm test`                                  | Unit + integration tests (integration uses `TEST_DATABASE_URL`) |
-| `pnpm e2e`                                   | Every Playwright suite, one after another (32 critical flows)   |
-| `pnpm test:e2e`                              | Playwright end-to-end tests (suites in parallel)                |
-| `pnpm test:tools`                            | Tests for repository tools (lint rule, printer decoder)         |
-| `pnpm printer:sim`                           | Simulated ESC/POS network printer on port 9100                  |
-| `pnpm db:migrate`                            | Create/apply a migration in development (`prisma migrate dev`)  |
-| `pnpm --filter @pos/database migrate:status` | Check for drift / pending migrations                            |
+| Command                                      | What it does                                                                                |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `pnpm build`                                 | Builds every package and app (Turborepo, dependency-ordered)                                |
+| `pnpm typecheck`                             | `tsc --noEmit` everywhere                                                                   |
+| `pnpm lint`                                  | ESLint (type-aware + i18n rule)                                                             |
+| `pnpm test`                                  | Unit + integration tests (integration uses `TEST_DATABASE_URL`)                             |
+| `pnpm e2e`                                   | Every Playwright suite, one after another (34 critical flows)                               |
+| `pnpm test:e2e`                              | Playwright end-to-end tests (suites in parallel)                                            |
+| `pnpm test:tools`                            | Tests for repository tools (lint rules, printer decoder, brand, E2E matrix, one version)    |
+| `pnpm version:check`                         | Fails if any app, package, the desktop app or `MADAR_VERSION` differs from the root version |
+| `pnpm version:set <version>`                 | Stamps a new MADAR version everywhere (see [release.md](release.md))                        |
+| `pnpm printer:sim`                           | Simulated ESC/POS network printer on port 9100                                              |
+| `pnpm db:migrate`                            | Create/apply a migration in development (`prisma migrate dev`)                              |
+| `pnpm --filter @pos/database migrate:status` | Check for drift / pending migrations                                                        |
 
 ## End-to-end tests (Playwright)
 

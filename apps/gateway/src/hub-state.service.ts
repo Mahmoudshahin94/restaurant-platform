@@ -24,6 +24,11 @@ export interface CloudLink {
   lastError: string | null;
   /** The cloud refused the hub's credential: nothing syncs until the hub is paired again. */
   credentialRejected: boolean;
+  /**
+   * The cloud no longer serves this hub's version (ADR 0026): nothing syncs until it is updated,
+   * with the oldest version the cloud serves when it said.
+   */
+  upgradeRequired: { minimumVersion: string | null } | null;
 }
 
 interface StateShape {
@@ -43,6 +48,7 @@ export class HubStateService {
     lastAttemptAt: null,
     lastError: null,
     credentialRejected: false,
+    upgradeRequired: null,
   };
 
   constructor(private readonly prisma: PrismaService) {}
@@ -77,6 +83,17 @@ export class HubStateService {
       lastAttemptAt: new Date().toISOString(),
       lastError: error,
       credentialRejected: false,
+      upgradeRequired: null,
+    };
+  }
+
+  markUpgradeRequired(minimumVersion: string | null, message: string): void {
+    this.cloud = {
+      status: 'OFFLINE',
+      lastAttemptAt: new Date().toISOString(),
+      lastError: message,
+      credentialRejected: false,
+      upgradeRequired: { minimumVersion },
     };
   }
 
@@ -86,6 +103,7 @@ export class HubStateService {
       lastAttemptAt: new Date().toISOString(),
       lastError: message,
       credentialRejected: true,
+      upgradeRequired: null,
     };
   }
 }

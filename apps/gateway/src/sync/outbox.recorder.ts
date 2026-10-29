@@ -27,6 +27,7 @@ const deviceReport = {
   pairedAt: true,
   lastSeenAt: true,
   appVersion: true,
+  lastVersionAt: true,
 } as const;
 
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as object;

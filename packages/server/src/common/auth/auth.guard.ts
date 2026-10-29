@@ -6,6 +6,7 @@ import type { FastifyRequest } from 'fastify';
 import { AccessService } from '../../modules/auth/access.service';
 import { TerminalAuthService } from '../../modules/auth/terminal-auth.service';
 import { TokenService } from '../../modules/auth/token.service';
+import { reportedVersion } from './client-version';
 import { IS_PUBLIC_KEY } from './decorators';
 import { DEVICE_ROUTE_KEY } from './device-route';
 import { HOST_ROUTE_KEY } from './host-route';
@@ -47,11 +48,10 @@ export class AuthGuard implements CanActivate {
       targets,
     );
     if (deviceTypes) {
-      const version = request.headers['x-madar-client-version'];
       request.terminal = await this.terminals.authenticate(
         header,
         deviceTypes,
-        typeof version === 'string' ? version : undefined,
+        reportedVersion(request.headers),
       );
       return true;
     }

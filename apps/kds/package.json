@@ -1,6 +1,6 @@
 {
   "name": "@pos/kds",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Kitchen display: a web app for kitchen tablets and screens (served by the location hub from Phase 5)",
   "type": "module",

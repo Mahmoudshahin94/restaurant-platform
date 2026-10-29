@@ -16,9 +16,10 @@ import { HUB_CONFIG, type HubConfig } from '../config';
 import { asHubTx } from '../database/hub-database';
 import { HubStateService } from '../hub-state.service';
 import { applySnapshot, belongsToTenant, storeSnapshotFiles } from './apply-snapshot';
-import { tenantRefusalOf } from '../sync/cloud-client';
+import { hubHeaders, tenantRefusalOf, upgradeRefusalOf } from '../sync/cloud-client';
 
-export type SnapshotOutcome = 'applied' | 'unchanged' | 'offline' | 'rejected' | 'not-paired';
+export type SnapshotOutcome =
+  'applied' | 'unchanged' | 'offline' | 'rejected' | 'not-paired' | 'upgrade-required';
 
 /**
  * Keeps the hub's copy of the location configuration current: pulls the snapshot from the cloud
@@ -69,8 +70,7 @@ export class SnapshotSyncService implements OnApplicationBootstrap, OnModuleDest
     try {
       response = await fetch(`${pairing.cloudUrl}/api/v1/sync/snapshot`, {
         headers: {
-          authorization: `Device ${pairing.credential}`,
-          'x-client-source': 'HUB',
+          ...hubHeaders(pairing.credential),
           ...(current ? { 'if-none-match': `"${current.version}"` } : {}),
         },
         signal: AbortSignal.timeout(this.config.cloudTimeoutMs),
@@ -83,6 +83,14 @@ export class SnapshotSyncService implements OnApplicationBootstrap, OnModuleDest
     if (response.status === 304) {
       this.state.markCloud('ONLINE');
       return 'unchanged';
+    }
+    const upgrade = await upgradeRefusalOf(response);
+    if (upgrade) {
+      // The cloud no longer serves this version (ADR 0026): keep serving from the last snapshot,
+      // which this version understands, until the hub is updated.
+      this.state.markUpgradeRequired(upgrade.minimumVersion, upgrade.message);
+      this.logger.error(upgrade.message);
+      return 'upgrade-required';
     }
     const refusal = await tenantRefusalOf(response);
     if (refusal) {

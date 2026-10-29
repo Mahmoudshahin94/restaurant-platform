@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { parseArgs } from 'node:util';
 import { NestFactory } from '@nestjs/core';
+import { CLIENT_VERSION_HEADER, MADAR_VERSION } from '@pos/shared-types';
 import type { LocationList } from './pair-types';
 import { loadHubConfig } from '../config';
 import { HubStateService } from '../hub-state.service';
@@ -81,7 +82,7 @@ async function main(): Promise<void> {
     }>(
       await fetch(`${cloud}/api/v1/auth/login`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', [CLIENT_VERSION_HEADER]: MADAR_VERSION },
         body: JSON.stringify({ email: values.email, password, client: 'native' }),
       }),
       'Sign-in',
@@ -89,6 +90,7 @@ async function main(): Promise<void> {
     const headers = {
       authorization: `Bearer ${login.accessToken}`,
       'content-type': 'application/json',
+      [CLIENT_VERSION_HEADER]: MADAR_VERSION,
     };
     const locations = await json<LocationList>(
       await fetch(`${cloud}/api/v1/tenants/${login.user.tenantId}/locations`, { headers }),

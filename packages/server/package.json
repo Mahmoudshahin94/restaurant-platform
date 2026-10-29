@@ -1,6 +1,6 @@
 {
   "name": "@pos/server",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Server application layer shared by the cloud API and the location hub: NestJS modules for auth, orders, payments, shifts, kitchen and realtime, written against an injected database client",
   "main": "./dist/index.js",

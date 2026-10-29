@@ -1,7 +1,8 @@
 # Cloud API
 
-Base path `/api/v1`. Health endpoints are unversioned: `GET /health` (liveness) and
-`GET /ready` (checks the database).
+Base path `/api/v1`. Health endpoints are unversioned: `GET /health` (liveness; answers
+`{ "status": "ok", "version": "1.0.0" }`, the MADAR version the server runs, ADR 0026) and
+`GET /ready` (checks the database). The location hub answers both the same way.
 
 ## Conventions
 
@@ -17,6 +18,13 @@ Base path `/api/v1`. Health endpoints are unversioned: `GET /health` (liveness) 
 - **Client source:** send `x-client-source: POS | KDS | WEBSITE | ADMIN` so audit entries
   record where an action came from (default `ADMIN`). `HUB` is honoured only from a paired hub
   (device credential) and `SYSTEM` never (Phase 10); other values fall back to `ADMIN`.
+- **Client version** (MADAR M10, [ADR 0026](adr/0026-versions-and-releases.md)): every MADAR app
+  and hub sends `x-madar-client-version: <its MADAR version>` (a semantic version; anything else
+  is ignored). Devices have it recorded as their version. An app older than the cloud serves gets
+  `426 CLIENT_UPGRADE_REQUIRED` on every route, before anything else answers, with
+  `details: { minimumVersion, version }`; a hub gets `426 HUB_UPGRADE_REQUIRED` on `/sync/*`
+  (also when it sends no version once a hub minimum exists). The platform's routes and callers
+  that send no version are never refused for it.
 
 ## Errors
 
@@ -610,7 +618,10 @@ The hub (`apps/gateway`) serves the same API as the cloud to the POS and KDS on 
 
 `HubStatus`: `{ paired, tenantId, locationId, cloud: ONLINE|OFFLINE|UNKNOWN,
 state: ONLINE|OFFLINE|SYNCING|SYNC_ERROR, lastSnapshotAt, snapshotVersion, lastError,
-pendingOperations, failedOperations, syncedOperations (24 h), lastSyncAt, nextAttemptAt }`.
+pendingOperations, failedOperations, syncedOperations (24 h), lastSyncAt, nextAttemptAt, version,
+upgradeRequired: { minimumVersion } | null }`. `version` is the hub's MADAR version;
+`upgradeRequired` is set while the cloud refuses it (`426 HUB_UPGRADE_REQUIRED`): the hub keeps
+serving its LAN and its outbox until it is updated (ADR 0026).
 Clients use it to know they are behind a hub. Outbox rows (`HubSyncOperation`) carry the entity,
 a label (the order number), status, retry count, next retry, error code and message.
 
@@ -675,10 +686,14 @@ payment: TERMINAL|COUNTER, customerName? }` → the order (`201`, or `200` for a
 - **Terminals** (M6) `{ name, type: POS|KDS|KIOSK|CUSTOMER_DISPLAY }` return the device, `PENDING`,
   with `pairing: { code, expiresAt }` (24 h) instead of a credential: the code is typed on the
   terminal and checked by the location's hub. `…/pairing-code` gives a terminal still `PENDING` a
-  new one (`409 CONFLICT`, `NOT_PENDING`, otherwise). Devices carry `pairedAt`, `appVersion` and,
-  while pending, `pairingExpiresAt`.
+  new one (`409 CONFLICT`, `NOT_PENDING`, otherwise). Devices carry `pairedAt`, `appVersion`,
+  `lastVersionAt` (when that version was first reported, M10) and, while pending,
+  `pairingExpiresAt`. A terminal's version is recorded by its hub when it pairs (the pairing
+  request's `x-madar-client-version`) and as it works.
 - **Device authentication:** `Authorization: Device <deviceId>.<secret>` (staff tokens are refused
-  on `/sync/*`). `lastSeenAt` is refreshed at most once a minute.
+  on `/sync/*`). `lastSeenAt` is refreshed at most once a minute; the hub's
+  `x-madar-client-version` is recorded on its device as soon as it changes, and a hub below the
+  cloud's minimum gets `426 HUB_UPGRADE_REQUIRED` (ADR 0026).
 - **Snapshot:** everything the hub's location needs (see `SNAPSHOT_TABLES` in
   `@pos/validation`): tenant, its location, roles and grants, staff of this location (with
   password and PIN hashes), catalog, taxes, discounts, floor, payment methods, drawers. Rows of
@@ -961,6 +976,29 @@ works inside that tenant only; a tenant's status does not restrict the platform.
   An archived tenant is `403 TENANT_ARCHIVED`.
 - Hubs of a suspended tenant get `403 TENANT_SUSPENDED` on `/sync/*` (archived: reads only); its
   website gets `403 TENANT_SUSPENDED`.
+
+### Releases (MADAR M10)
+
+[ADR 0026](adr/0026-versions-and-releases.md). `releases.view` is every platform role's;
+`releases.publish` and `releases.rollout` are OWNER's and OPERATOR's. Tenant tokens get `401`.
+
+| Method | Path                                          | Permission         | Notes                                                                                                                                                      |
+| ------ | --------------------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/platform/releases`                          | `releases.view`    | `{ cloudVersion, minimums: { hub, client }, latest: { STABLE, BETA }, releases[] }`, newest version first                                                  |
+| POST   | `/platform/releases`                          | `releases.publish` | `{ version, channel, notes?, minSupportedHubVersion?, minSupportedClientVersion? }`; `409 CONFLICT` `VERSION_TAKEN`; a minimum above the version is `400`  |
+| PATCH  | `/platform/releases/:releaseId`               | `releases.publish` | `{ channel?, notes?, minSupportedHubVersion?, minSupportedClientVersion? }` (`null` removes a minimum; the version never changes); `404 RELEASE_NOT_FOUND` |
+| GET    | `/platform/device-versions`                   | `releases.view`    | `?tenantId=&outdatedOnly=true` → per tenant: channel, pin, target version, outdated and unsupported counts, active devices with version, since and status  |
+| GET    | `/platform/tenants/:tenantId/release-channel` | `releases.view`    | `{ channel, pinnedVersion, targetVersion, updatedAt }` (no row: STABLE)                                                                                    |
+| PUT    | `/platform/tenants/:tenantId/release-channel` | `releases.rollout` | `{ channel, pinnedVersion?, reason }`; a pin must be a published version (`404 RELEASE_NOT_FOUND`); both audit logs                                        |
+
+- **The minimums the cloud enforces** are the highest declared by the published releases whose
+  version is at or below the cloud's own (`cloudVersion`): publishing a newer release changes
+  nothing until it is deployed. Every API instance re-reads them within 15 seconds.
+- **Device status:** `UNSUPPORTED` (below the cloud's minimum for its kind: hub or app),
+  `OUTDATED` (below the tenant's target: its pin, else its channel's newest release; BETA takes
+  beta and stable releases), `CURRENT`, `UNKNOWN` (never reported a version).
+- `GET /platform/health` rows add `targetVersion`, `outdatedDevices` and `unsupportedDevices`; the
+  board adds `cloudVersion` and `minimums`.
 
 ## Security headers and limits
 

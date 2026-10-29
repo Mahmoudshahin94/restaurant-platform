@@ -19,7 +19,10 @@ import { TenantStatusBadge } from '../components/status-badge';
 import { api } from '../lib/api';
 import { useDateTime } from '../lib/format';
 
-/** Every business at a glance, refreshed every 30 seconds. */
+/**
+ * Every business at a glance, refreshed every 30 seconds, with how many of its devices run a
+ * version older than its rollout or the cloud's minimum (ADR 0026).
+ */
 export function HealthBoardPage() {
   const { t } = useTranslation('platform');
   const locale = useCurrentLocale();
@@ -42,7 +45,8 @@ export function HealthBoardPage() {
         {(data) => (
           <div className="grid gap-6">
             <p className="text-xs text-muted-foreground">
-              {t('shared.updatedAt', { at: formatDate(data.generatedAt) })}
+              {t('shared.updatedAt', { at: formatDate(data.generatedAt) })} ·{' '}
+              <span dir="ltr">{t('health.cloudVersion', { version: data.cloudVersion })}</span>
             </p>
             <Card className="overflow-x-auto">
               <Table>
@@ -58,6 +62,7 @@ export function HealthBoardPage() {
                     <TableHead>{t('health.lastSync')}</TableHead>
                     <TableHead>{t('health.lastActivity')}</TableHead>
                     <TableHead>{t('health.errors24h')}</TableHead>
+                    <TableHead>{t('health.versions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -108,6 +113,23 @@ export function HealthBoardPage() {
                         {formatDate(row.lastActivityAt, t('shared.never'))}
                       </TableCell>
                       <TableCell className="ltr-nums">{row.errors24h}</TableCell>
+                      <TableCell>
+                        <Link to="/releases" className="flex flex-wrap gap-1">
+                          {row.unsupportedDevices > 0 ? (
+                            <Badge variant="destructive">
+                              {t('releases.unsupportedCount', { count: row.unsupportedDevices })}
+                            </Badge>
+                          ) : null}
+                          {row.outdatedDevices > 0 ? (
+                            <Badge variant="warning">
+                              {t('releases.outdatedCount', { count: row.outdatedDevices })}
+                            </Badge>
+                          ) : null}
+                          {row.unsupportedDevices + row.outdatedDevices === 0 ? (
+                            <Badge variant="success">{t('health.versionsCurrent')}</Badge>
+                          ) : null}
+                        </Link>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

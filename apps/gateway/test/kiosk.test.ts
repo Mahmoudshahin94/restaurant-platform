@@ -67,6 +67,7 @@ async function pairKiosk(code = KIOSK_CODE): Promise<Record<string, string>> {
   const res = await hub.app.inject({
     method: 'POST',
     url: `${api}/terminals/pair`,
+    headers: { 'x-madar-client-version': '1.0.0' },
     payload: { code: `${code.slice(0, 4).toLowerCase()}-${code.slice(4)}` },
   });
   expect(res.statusCode).toBe(200);
@@ -126,6 +127,10 @@ describe('pairing a terminal with its hub', () => {
     expect(wrong.json<ApiErrorBody>().code).toBe('PAIRING_CODE_INVALID');
 
     const kiosk = await pairKiosk();
+    // The version it reported while pairing is recorded at once, with since when (ADR 0026).
+    const paired = await db().device.findUniqueOrThrow({ where: { id: String(kioskRow.id) } });
+    expect(paired.appVersion).toBe('1.0.0');
+    expect(paired.lastVersionAt).toEqual(paired.pairedAt);
     const me = await hub.app.inject({ method: 'GET', url: `${api}/terminals/me`, headers: kiosk });
     expect(me.json()).toMatchObject({ id: kioskRow.id, type: 'KIOSK', name: 'Kiosk 1' });
 
@@ -147,7 +152,11 @@ describe('pairing a terminal with its hub', () => {
     expect(stored.credentialHash).toMatch(/^[0-9a-f]{64}$/);
     const reports = await db().syncOperation.findMany({ where: { entityType: 'Device' } });
     expect(reports.length).toBeGreaterThanOrEqual(1);
-    expect(reports.at(-1)?.payload).toMatchObject({ status: 'ACTIVE', appVersion: '1.0.0' });
+    expect(reports.at(-1)?.payload).toMatchObject({
+      status: 'ACTIVE',
+      appVersion: '1.0.0',
+      lastVersionAt: paired.lastVersionAt?.toISOString(),
+    });
     expect(JSON.stringify(reports.map((r) => r.payload))).not.toMatch(/credential|pairingCode/i);
   });
 

@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@pos/server';
+import { MADAR_VERSION } from '@pos/shared-types';
 import type { HealthBoard, LocationHealth, TenantHealth } from '@pos/validation';
+import { ReleasePolicyService } from '../../releases/release-policy.service';
 import { SyncAdminService } from '../../sync/sync-admin.service';
 import { PlatformDirectoryService } from '../platform-directory.service';
 import { PlatformTenantsService } from '../tenants/platform-tenants.service';
@@ -13,7 +15,8 @@ const later = (a: string | null, b: string | null): string | null =>
  * Health for the platform (ADR 0025): per tenant and location, the hubs and terminals heard from
  * within the heartbeat window and the versions they run, what the hubs report waiting and failed
  * in their outboxes, refused changes nobody settled (ADR 0014), the last sync, the newest order,
- * and recent server errors.
+ * recent server errors, and how many devices run a version older than their tenant's rollout or
+ * the cloud's minimum (ADR 0026).
  */
 @Injectable()
 export class PlatformHealthService {
@@ -23,15 +26,26 @@ export class PlatformHealthService {
     private readonly tenants: PlatformTenantsService,
     private readonly directory: PlatformDirectoryService,
     private readonly errors: PlatformErrorEventsService,
+    private readonly releases: ReleasePolicyService,
   ) {}
 
   async board(): Promise<HealthBoard> {
     const now = new Date();
+    const [releases, minimums] = await Promise.all([
+      this.releases.releases(),
+      this.releases.minimums(),
+    ]);
     const [tenants, recentErrors] = await Promise.all([
-      this.directory.healthBoard(this.tenants.staleAfterMs, now),
+      this.directory.healthBoard(this.tenants.staleAfterMs, { releases, minimums }, now),
       this.errors.recent({ limit: 20 }),
     ]);
-    return { generatedAt: now.toISOString(), tenants, recentErrors };
+    return {
+      generatedAt: now.toISOString(),
+      cloudVersion: MADAR_VERSION,
+      minimums,
+      tenants,
+      recentErrors,
+    };
   }
 
   async tenant(tenantId: string): Promise<TenantHealth> {

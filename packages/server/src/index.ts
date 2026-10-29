@@ -16,6 +16,7 @@ export * from './common/auth/require-feature';
 export * from './common/auth/route-inventory';
 export * from './common/auth/platform-route';
 export * from './common/auth/cookies';
+export * from './common/auth/client-version';
 export * from './common/errors/error-events';
 export { HTTP_STATUS_BY_ERROR_CODE } from './common/errors/http-status';
 export * from './common/context/request-context';

@@ -10,7 +10,7 @@ import {
   localesOf,
   sendTenantFile,
 } from '@pos/server';
-import type { ResolvedBranding, ResolvedLocales } from '@pos/shared-types';
+import { MADAR_VERSION, type ResolvedBranding, type ResolvedLocales } from '@pos/shared-types';
 import {
   type HubStatus,
   type HubSyncOperation,
@@ -192,6 +192,8 @@ export class HubController {
       syncedOperations: figures.synced,
       lastSyncAt: this.engine.lastSyncAt?.toISOString() ?? null,
       nextAttemptAt: this.engine.nextAttemptAt?.toISOString() ?? null,
+      version: MADAR_VERSION,
+      upgradeRequired: this.state.cloud.upgradeRequired,
     };
   }
 }
