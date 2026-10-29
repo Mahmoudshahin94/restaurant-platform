@@ -10,3 +10,5 @@ export * from './payments';
 export * from './permissions';
 export * from './platform';
 export * from './website';
+export * from './version';
+export * from './release';

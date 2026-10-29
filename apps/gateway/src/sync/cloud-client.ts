@@ -1,3 +1,4 @@
+import { CLIENT_VERSION_HEADER, MADAR_VERSION } from '@pos/shared-types';
 import {
   type SyncOrder,
   type SyncPullResponse,
@@ -20,6 +21,28 @@ export class CloudUnavailable extends Error {}
  */
 export class CloudTenantSuspended extends CloudUnavailable {}
 
+/**
+ * The cloud no longer serves this hub's version (ADR 0026): it must be updated. Like a suspension,
+ * nothing is lost: the LAN keeps working from the last snapshot and the outbox keeps every change
+ * until an updated hub sends them.
+ */
+export class CloudUpgradeRequired extends CloudUnavailable {
+  constructor(readonly minimumVersion: string | null) {
+    super(
+      `The cloud requires hub version ${minimumVersion ?? 'newer than this one'} (this hub runs ${MADAR_VERSION}); changes wait in the outbox`,
+    );
+  }
+}
+
+/** The headers of every hub request to the cloud: its credential, and its MADAR version. */
+export function hubHeaders(credential: string): Record<string, string> {
+  return {
+    authorization: `Device ${credential}`,
+    'x-client-source': 'HUB',
+    [CLIENT_VERSION_HEADER]: MADAR_VERSION,
+  };
+}
+
 /** The cloud refused the hub's credential (device disabled or re-paired). */
 export class CloudCredentialRejected extends Error {}
 
@@ -36,6 +59,21 @@ export async function tenantRefusalOf(response: Response): Promise<string | null
     .json()
     .catch(() => null)) as { code?: unknown } | null;
   return typeof body?.code === 'string' && TENANT_REFUSALS.has(body.code) ? body.code : null;
+}
+
+/**
+ * The minimum version when a 426 says the cloud no longer serves this hub's version, else null.
+ * Reads a clone, so the response stays readable.
+ */
+export async function upgradeRefusalOf(response: Response): Promise<CloudUpgradeRequired | null> {
+  if (response.status !== 426) return null;
+  const body = (await response
+    .clone()
+    .json()
+    .catch(() => null)) as { code?: unknown; details?: { minimumVersion?: unknown } } | null;
+  if (body?.code !== 'HUB_UPGRADE_REQUIRED') return null;
+  const minimum = body.details?.minimumVersion;
+  return new CloudUpgradeRequired(typeof minimum === 'string' ? minimum.slice(0, 40) : null);
 }
 
 /** The cloud refused the request itself (4xx): retrying the same request will not help. */
@@ -119,8 +157,7 @@ export class CloudClient {
       response = await fetch(`${this.pairing.cloudUrl}${path}`, {
         method,
         headers: {
-          authorization: `Device ${this.pairing.credential}`,
-          'x-client-source': 'HUB',
+          ...hubHeaders(this.pairing.credential),
           ...(options.body === undefined ? {} : { 'content-type': 'application/json' }),
         },
         body: options.body === undefined ? undefined : JSON.stringify(options.body),
@@ -130,6 +167,8 @@ export class CloudClient {
       // Connection refused, DNS failure, timeout, abort.
       throw new CloudUnavailable(error instanceof Error ? error.message : String(error));
     }
+    const upgrade = await upgradeRefusalOf(response);
+    if (upgrade) throw upgrade;
     const refusal = await tenantRefusalOf(response);
     if (refusal) {
       throw new CloudTenantSuspended(

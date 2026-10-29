@@ -106,6 +106,14 @@ async function applyDevice(
   if (row.status === 'DISABLED') return { rowVersion: null };
   const paired = row.status === 'PENDING' && reported.status === 'ACTIVE';
   const seen = reported.lastSeenAt ? date(reported.lastSeenAt) : null;
+  // The version, and since when it runs it (ADR 0026): kept from the hub's report, else now.
+  const version = reported.appVersion;
+  const sinceVersion =
+    version && (version !== row.appVersion || !row.lastVersionAt)
+      ? reported.lastVersionAt
+        ? date(reported.lastVersionAt)
+        : (seen ?? new Date())
+      : null;
   await tx.device.update({
     where: { id: row.id },
     data: {
@@ -118,7 +126,8 @@ async function applyDevice(
           }
         : {}),
       ...(seen && (!row.lastSeenAt || seen > row.lastSeenAt) ? { lastSeenAt: seen } : {}),
-      ...(reported.appVersion ? { appVersion: reported.appVersion } : {}),
+      ...(version ? { appVersion: version } : {}),
+      ...(sinceVersion ? { lastVersionAt: sinceVersion } : {}),
     },
   });
   return { rowVersion: null };

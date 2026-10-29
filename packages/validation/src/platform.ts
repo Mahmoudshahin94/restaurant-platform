@@ -281,11 +281,20 @@ export const healthBoardRowSchema = z.object({
   lastActivityAt: isoDateTimeSchema.nullable(),
   /** Server errors in the last 24 hours. */
   errors24h: z.int(),
+  /** The version the tenant's devices should run (its channel's newest release, or its pin). */
+  targetVersion: z.string().nullable(),
+  /** Active devices below the target, still served (ADR 0026). */
+  outdatedDevices: z.int(),
+  /** Active devices below the cloud's minimum: refused until updated. */
+  unsupportedDevices: z.int(),
 });
 export type HealthBoardRow = z.infer<typeof healthBoardRowSchema>;
 
 export const healthBoardSchema = z.object({
   generatedAt: isoDateTimeSchema,
+  /** The MADAR version the cloud runs, and the oldest hub and app it serves (ADR 0026). */
+  cloudVersion: z.string(),
+  minimums: z.object({ hub: z.string().nullable(), client: z.string().nullable() }),
   tenants: z.array(healthBoardRowSchema),
   recentErrors: z.array(platformErrorEventSchema),
 });

@@ -1,6 +1,6 @@
 import { newId } from '@pos/domain';
 import { PrismaService, RealtimeBus } from '@pos/server';
-import type { RealtimeEvent } from '@pos/shared-types';
+import { MADAR_VERSION, type RealtimeEvent } from '@pos/shared-types';
 import type {
   HubStatus,
   HubSyncOperation,
@@ -386,6 +386,40 @@ describe('pushing the outbox', () => {
     cloud.mode = 'up';
     await hub.engine.syncNow();
     expect(await status()).toMatchObject({ state: 'ONLINE', pendingOperations: 0 });
+  });
+
+  it('reports its version, and waits with its outbox while the cloud requires an update', async () => {
+    const cashier = await signIn('cashier@hub.test');
+    await hub.engine.syncNow();
+    expect(cloud.reportedVersion).toBe(MADAR_VERSION);
+    expect(await status()).toMatchObject({ version: MADAR_VERSION, upgradeRequired: null });
+
+    await placeOrder(cashier);
+    cloud.mode = 'outdated';
+    await hub.engine.pushNow();
+    // Not a refused credential: the LAN keeps working and the outbox keeps every change (ADR 0026).
+    expect(await status()).toMatchObject({
+      state: 'OFFLINE',
+      upgradeRequired: { minimumVersion: '99.0.0' },
+    });
+    expect((await status()).lastError).toContain('99.0.0');
+    expect(await db().syncOperation.count({ where: { status: 'PENDING' } })).toBeGreaterThan(0);
+    expect(await db().syncOperation.count({ where: { status: 'FAILED' } })).toBe(0);
+    // Its configuration pull is refused the same way, and the hub keeps its last snapshot.
+    expect(await hub.snapshots.syncNow()).toBe('upgrade-required');
+    await hub.engine.syncNow();
+    expect(await status()).toMatchObject({ upgradeRequired: { minimumVersion: '99.0.0' } });
+    // Staff can still take orders at the location.
+    expect((await placeOrder(cashier)).id).toBeTruthy();
+
+    // Updated (here: the cloud serves it again): everything waiting is sent.
+    cloud.mode = 'up';
+    await hub.engine.syncNow();
+    expect(await status()).toMatchObject({
+      state: 'ONLINE',
+      pendingOperations: 0,
+      upgradeRequired: null,
+    });
   });
 
   it('resends operations a crash left in flight; the cloud answers DUPLICATE', async () => {

@@ -31,6 +31,35 @@ describe('HttpClient', () => {
     expect((init?.headers as Record<string, string>)['x-client-source']).toBe('ADMIN');
   });
 
+  it('reports its MADAR version, and hands an upgrade refusal to the app (ADR 0026)', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+      json(426, {
+        code: 'CLIENT_UPGRADE_REQUIRED',
+        message: 'too old',
+        details: { minimumVersion: '1.1.0', version: '1.0.0' },
+      }),
+    );
+    const onUpgradeRequired = vi.fn();
+    const client = new HttpClient({
+      baseUrl: '',
+      source: 'ADMIN',
+      getAccessToken: () => null,
+      clientVersion: '1.0.0',
+      onUpgradeRequired,
+      fetchImpl,
+    });
+    await expect(client.request('GET', '/x')).rejects.toMatchObject({
+      code: 'CLIENT_UPGRADE_REQUIRED',
+      status: 426,
+    });
+    const [, init] = fetchImpl.mock.calls[0]!;
+    expect((init?.headers as Record<string, string>)['x-madar-client-version']).toBe('1.0.0');
+    expect(onUpgradeRequired).toHaveBeenCalledOnce();
+    expect(onUpgradeRequired.mock.calls[0]![0]).toMatchObject({
+      details: { minimumVersion: '1.1.0' },
+    });
+  });
+
   it('turns error envelopes into typed ApiErrors', async () => {
     const client = new HttpClient({
       baseUrl: '',

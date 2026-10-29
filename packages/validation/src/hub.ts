@@ -21,6 +21,8 @@ export const deviceSchema = z.object({
   lastSeenAt: isoDateTimeSchema.nullable(),
   /** The app version the device last reported. */
   appVersion: z.string().nullable(),
+  /** When it first reported that version (ADR 0026). */
+  lastVersionAt: isoDateTimeSchema.nullable(),
   createdAt: isoDateTimeSchema,
 });
 export type Device = z.infer<typeof deviceSchema>;
@@ -204,5 +206,12 @@ export const hubStatusSchema = z.object({
   lastSyncAt: isoDateTimeSchema.nullable(),
   /** When the engine tries the cloud again after a failure; null when it is not waiting. */
   nextAttemptAt: isoDateTimeSchema.nullable(),
+  /** The MADAR version the hub runs (ADR 0026). */
+  version: z.string(),
+  /**
+   * The cloud refuses this hub until it is updated (`HUB_UPGRADE_REQUIRED`): the LAN keeps working
+   * and the outbox keeps every change. The oldest version the cloud serves, when it said.
+   */
+  upgradeRequired: z.object({ minimumVersion: z.string().nullable() }).nullable(),
 });
 export type HubStatus = z.infer<typeof hubStatusSchema>;

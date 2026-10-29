@@ -12,14 +12,12 @@ import { PrismaService } from '../../prisma/prisma.service';
 const SEEN_WRITE_INTERVAL_MS = 60_000;
 /** Tell the cloud (outbox) at most this often that a terminal is alive; a new version at once. */
 const SEEN_REPORT_INTERVAL_MS = 5 * 60_000;
-/** What `x-madar-client-version` may carry (e.g. `1.0.0`, `1.2.0-beta.1+42`). */
-const VERSION = /^[0-9A-Za-z][0-9A-Za-z.+-]{0,39}$/;
-
 /**
  * Authenticates terminals paired with this hub (ADR 0022) by their device credential, and keeps
- * what they report: the last contact and the app version (`x-madar-client-version`). The cloud
- * hears of both through the outbox (`DEVICE_UPSERT`), throttled. A credential is valid only for an
- * ACTIVE terminal whose hub issued it; the cloud's disabling reaches the hub with the snapshot.
+ * what they report: the last contact, and the app version (`x-madar-client-version`) with when it
+ * changed (ADR 0026). The cloud hears of both through the outbox (`DEVICE_UPSERT`), throttled. A
+ * credential is valid only for an ACTIVE terminal whose hub issued it; the cloud's disabling
+ * reaches the hub with the snapshot.
  */
 @Injectable()
 export class TerminalAuthService {
@@ -33,7 +31,7 @@ export class TerminalAuthService {
   async authenticate(
     header: string | undefined,
     types: readonly TerminalDeviceType[],
-    version?: string,
+    version: string | null = null,
   ): Promise<AuthenticatedTerminal> {
     const credential = parseDeviceCredential(header);
     const reject = () => new DomainError('UNAUTHENTICATED', 'Invalid device credential');
@@ -56,7 +54,7 @@ export class TerminalAuthService {
         deviceType: device.type,
       });
     }
-    await this.touch(device, version !== undefined && VERSION.test(version) ? version : null);
+    await this.touch(device, version);
     return {
       id: device.id,
       tenantId: device.tenantId,
@@ -78,7 +76,12 @@ export class TerminalAuthService {
       this.prisma.$transaction(async (tx) => {
         await tx.device.update({
           where: { id: device.id },
-          data: { lastSeenAt: new Date(now), appVersion },
+          data: {
+            lastSeenAt: new Date(now),
+            appVersion,
+            // When it started running this version (ADR 0026).
+            ...(versionChanged ? { lastVersionAt: new Date(now) } : {}),
+          },
         });
         if (report) await this.changes.record(tx, { deviceIds: [device.id] });
       }),

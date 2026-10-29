@@ -27,8 +27,13 @@ type PushOperation = SyncPushRequest['operations'][number];
  */
 export class FakeCloud {
   snapshot: LocationSnapshot | null = null;
-  /** `suspended`: the platform suspended the hub's business (ADR 0025). */
-  mode: 'up' | 'reject' | 'error' | 'suspended' = 'up';
+  /**
+   * `suspended`: the platform suspended the hub's business (ADR 0025). `outdated`: the cloud no
+   * longer serves the hub's version (ADR 0026).
+   */
+  mode: 'up' | 'reject' | 'error' | 'suspended' | 'outdated' = 'up';
+  /** The MADAR version the hub reported on its last request (`x-madar-client-version`). */
+  reportedVersion: string | null = null;
   requests = 0;
   /** Every push request received, in order. */
   pushes: SyncPushRequest[] = [];
@@ -83,6 +88,15 @@ export class FakeCloud {
       }
       if (this.mode === 'error') return void json(500, { code: 'INTERNAL_ERROR' });
       if (this.mode === 'suspended') return void json(403, { code: 'TENANT_SUSPENDED' });
+      const version = req.headers['x-madar-client-version'];
+      this.reportedVersion = typeof version === 'string' ? version : null;
+      if (this.mode === 'outdated') {
+        return void json(426, {
+          code: 'HUB_UPGRADE_REQUIRED',
+          message: 'Update the hub',
+          details: { minimumVersion: '99.0.0', version: this.reportedVersion },
+        });
+      }
       const orderPath = /^\/api\/v1\/sync\/orders\/([^/]+)$/.exec(url.pathname);
       if (orderPath) {
         const order = this.orders.get(decodeURIComponent(orderPath[1] ?? ''));

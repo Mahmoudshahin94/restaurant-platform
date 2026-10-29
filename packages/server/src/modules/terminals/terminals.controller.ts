@@ -1,7 +1,9 @@
-import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Req } from '@nestjs/common';
 import { TERMINAL_DEVICE_TYPES } from '@pos/shared-types';
 import { type PairedTerminal, type Terminal, pairTerminalSchema } from '@pos/validation';
+import type { FastifyRequest } from 'fastify';
 import type { z } from 'zod';
+import { reportedVersion } from '../../common/auth/client-version';
 import { Public } from '../../common/auth/decorators';
 import {
   type AuthenticatedTerminal,
@@ -25,8 +27,9 @@ export class TerminalsController {
   @HttpCode(200)
   pair(
     @Body(new ZodValidationPipe(pairTerminalSchema)) body: z.output<typeof pairTerminalSchema>,
+    @Req() request: FastifyRequest,
   ): Promise<PairedTerminal> {
-    return this.terminals.pair(body.code);
+    return this.terminals.pair(body.code, reportedVersion(request.headers));
   }
 
   /** The calling terminal: whether its credential still works (and its last contact). */

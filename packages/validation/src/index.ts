@@ -20,3 +20,4 @@ export * from './kiosk';
 export * from './website';
 export * from './website-defaults';
 export * from './platform';
+export * from './release';

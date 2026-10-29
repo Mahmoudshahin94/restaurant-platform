@@ -1,4 +1,4 @@
-import type { ActionSource } from '@pos/shared-types';
+import { type ActionSource, CLIENT_VERSION_HEADER } from '@pos/shared-types';
 import type { z } from 'zod';
 import { ApiError, toApiError } from './errors';
 
@@ -13,8 +13,13 @@ export interface HttpClientOptions {
    * (`Device <id>.<secret>`, ADR 0022). Wins over `getAccessToken` when it returns one.
    */
   getAuthorization?: () => string | null;
-  /** The app's version, sent as `x-madar-client-version` (devices report it, ADR 0022). */
+  /**
+   * The app's MADAR version, sent as `x-madar-client-version` on every request (ADR 0026): devices
+   * report it (ADR 0022), and the cloud refuses an app older than it serves.
+   */
   clientVersion?: string;
+  /** Called when the cloud refuses this app as too old (`426 CLIENT_UPGRADE_REQUIRED`). */
+  onUpgradeRequired?: (error: ApiError) => void;
   /**
    * Called once when a request fails with TOKEN_EXPIRED. Return true after obtaining a new
    * access token to retry the request; false to give up (the caller should sign out).
@@ -111,7 +116,7 @@ export class HttpClient {
     const token = this.options.getAccessToken();
     const authorization = this.options.getAuthorization?.() ?? (token ? `Bearer ${token}` : null);
     if (authorization) headers.authorization = authorization;
-    if (this.options.clientVersion) headers['x-madar-client-version'] = this.options.clientVersion;
+    if (this.options.clientVersion) headers[CLIENT_VERSION_HEADER] = this.options.clientVersion;
     if (opts.raw) headers['content-type'] = opts.raw.contentType;
     else if (opts.body !== undefined) headers['content-type'] = 'application/json';
 
@@ -142,7 +147,11 @@ export class HttpClient {
   ): Promise<Result<S>> {
     if (response.status === 204 || response.status === 304) return undefined as Result<S>;
     const body = await safeJson(response);
-    if (!response.ok) throw toApiError(response.status, body);
+    if (!response.ok) {
+      const error = toApiError(response.status, body);
+      if (error.code === 'CLIENT_UPGRADE_REQUIRED') this.options.onUpgradeRequired?.(error);
+      throw error;
+    }
     if (schema && this.options.validateResponses) {
       const parsed = schema.safeParse(body);
       if (!parsed.success) {

@@ -1,7 +1,20 @@
 import { type CanActivate, type ExecutionContext, Injectable } from '@nestjs/common';
-import { DomainError, accessKindOf, assertTenantAccess, isUuid } from '@pos/domain';
-import { PrismaService, TenantContext, parseDeviceCredential, secretMatches } from '@pos/server';
+import {
+  DomainError,
+  accessKindOf,
+  assertTenantAccess,
+  assertVersionSupported,
+  isUuid,
+} from '@pos/domain';
+import {
+  PrismaService,
+  TenantContext,
+  parseDeviceCredential,
+  reportedVersion,
+  secretMatches,
+} from '@pos/server';
 import type { FastifyRequest } from 'fastify';
+import { ReleasePolicyService } from '../releases/release-policy.service';
 
 export interface AuthenticatedDevice {
   id: string;
@@ -23,10 +36,16 @@ const SEEN_WRITE_INTERVAL_MS = 60_000;
  * Used on `@Public()` routes, which skip staff authentication; the hub is never a staff user.
  * A suspended tenant's hubs are refused (`TENANT_SUSPENDED`), an archived tenant's may only read
  * (ADR 0025); they are still marked as seen, so the platform's health board shows them online.
+ * The hub's MADAR version (`x-madar-client-version`) is recorded on its device row, and a hub
+ * older than the cloud serves is refused with `426 HUB_UPGRADE_REQUIRED` (ADR 0026): a cloud whose
+ * snapshot has columns the hub does not know never sends it one.
  */
 @Injectable()
 export class DeviceGuard implements CanActivate {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly releases: ReleasePolicyService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<FastifyRequest>();
@@ -49,12 +68,26 @@ export class DeviceGuard implements CanActivate {
     ) {
       throw reject();
     }
-    if (!device.lastSeenAt || Date.now() - device.lastSeenAt.getTime() > SEEN_WRITE_INTERVAL_MS) {
+    const version = reportedVersion(request.headers);
+    const versionChanged = version !== null && version !== device.appVersion;
+    const now = new Date();
+    if (
+      versionChanged ||
+      !device.lastSeenAt ||
+      now.getTime() - device.lastSeenAt.getTime() > SEEN_WRITE_INTERVAL_MS
+    ) {
       await TenantContext.runInTenant(device.tenantId, () =>
-        this.prisma.device.update({ where: { id: device.id }, data: { lastSeenAt: new Date() } }),
+        this.prisma.device.update({
+          where: { id: device.id },
+          data: {
+            lastSeenAt: now,
+            ...(versionChanged ? { appVersion: version, lastVersionAt: now } : {}),
+          },
+        }),
       );
     }
     assertTenantAccess(device.tenant.status, accessKindOf(request.method));
+    assertVersionSupported('HUB', version, (await this.releases.minimums()).hub);
     request.device = {
       id: device.id,
       tenantId: device.tenantId,

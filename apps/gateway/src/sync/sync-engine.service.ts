@@ -18,6 +18,7 @@ import {
   CloudCredentialRejected,
   CloudRequestRejected,
   CloudUnavailable,
+  CloudUpgradeRequired,
 } from './cloud-client';
 import { InboundOrdersService } from './inbound-orders.service';
 import { OutboxSignal } from './outbox-signal';
@@ -570,6 +571,9 @@ export class SyncEngineService implements OnApplicationBootstrap, OnModuleDestro
   private async refreshConfiguration(): Promise<void> {
     const outcome = await this.snapshots.syncNow();
     if (outcome === 'rejected') throw new CloudCredentialRejected('Snapshot refused');
+    if (outcome === 'upgrade-required') {
+      throw new CloudUpgradeRequired(this.state.cloud.upgradeRequired?.minimumVersion ?? null);
+    }
     if (outcome !== 'applied' && outcome !== 'unchanged') {
       throw new CloudUnavailable(`Snapshot ${outcome}`);
     }
@@ -595,6 +599,9 @@ export class SyncEngineService implements OnApplicationBootstrap, OnModuleDestro
     if (error instanceof CloudCredentialRejected) {
       this.state.markCredentialRejected(error.message);
       this.logger.error(error.message);
+    } else if (error instanceof CloudUpgradeRequired) {
+      if (!this.state.cloud.upgradeRequired) this.logger.error(error.message);
+      this.state.markUpgradeRequired(error.minimumVersion, error.message);
     } else {
       const message = error instanceof Error ? error.message : String(error);
       if (!(error instanceof CloudUnavailable))
