@@ -37,7 +37,7 @@ import { PairScreen } from './components/pair-screen';
 import { PayingScreen } from './components/paying-screen';
 import { UnavailableScreen } from './components/unavailable-screen';
 import { WelcomeScreen } from './components/welcome-screen';
-import { KIOSK_VERSION, api } from './lib/api';
+import { api } from './lib/api';
 import { useIdleReset } from './lib/idle';
 import { useCartQuote } from './lib/quote';
 import { useDevice } from './stores/device';
@@ -449,7 +449,7 @@ function KioskFlow({ kiosk }: { kiosk: KioskContext }) {
           <AttendantMenu
             attendant={overlay.attendant}
             kiosk={kiosk}
-            version={KIOSK_VERSION}
+            version={MADAR_VERSION}
             onResume={() => {
               setOverlay({ kind: 'none' });
             }}

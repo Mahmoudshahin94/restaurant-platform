@@ -16,6 +16,7 @@ export const session = createSessionClient({
   mode: 'native',
   baseUrl: (import.meta.env.VITE_API_URL as string | undefined) ?? '',
   validateResponses: import.meta.env.DEV,
+  clientVersion: MADAR_VERSION,
   tokenStore: refreshTokens,
 });
 

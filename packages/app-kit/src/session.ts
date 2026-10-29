@@ -2,6 +2,7 @@ import { type ApiClient, createApiClient } from '@pos/api-client';
 import type { ActionSource } from '@pos/shared-types';
 import type { AuthUser } from '@pos/validation';
 import { type StoreApi, type UseBoundStore, create } from 'zustand';
+import { reportUpgradeRequired } from './upgrade';
 
 export interface SessionState {
   status: 'unknown' | 'authenticated' | 'anonymous';
@@ -30,6 +31,11 @@ export interface SessionClientOptions {
   baseUrl?: string;
   validateResponses?: boolean;
   tokenStore?: RefreshTokenStore;
+  /**
+   * The app's MADAR version (its build's `MADAR_VERSION`), reported on every request; a refusal
+   * as too old shows `UpgradeRequiredGate`'s notice (ADR 0026).
+   */
+  clientVersion?: string;
 }
 
 export interface SessionClient {
@@ -98,6 +104,8 @@ export function createSessionClient(options: SessionClientOptions): SessionClien
     getAccessToken: () => useSession.getState().accessToken,
     refreshSession,
     validateResponses: options.validateResponses ?? false,
+    ...(options.clientVersion ? { clientVersion: options.clientVersion } : {}),
+    onUpgradeRequired: reportUpgradeRequired,
   });
 
   return {

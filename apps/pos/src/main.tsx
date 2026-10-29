@@ -1,5 +1,11 @@
 import './app.css';
-import { DirectionBridge, ThemeProvider, applyStoredThemeMode, initialLocale } from '@pos/app-kit';
+import {
+  DirectionBridge,
+  ThemeProvider,
+  UpgradeRequiredGate,
+  applyStoredThemeMode,
+  initialLocale,
+} from '@pos/app-kit';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -29,7 +35,9 @@ async function bootstrap(): Promise<void> {
         <DirectionBridge i18n={i18n}>
           <ThemeProvider app="pos" surface="pos">
             <QueryClientProvider client={queryClient}>
-              <AppRoutes />
+              <UpgradeRequiredGate app="pos">
+                <AppRoutes />
+              </UpgradeRequiredGate>
             </QueryClientProvider>
           </ThemeProvider>
         </DirectionBridge>

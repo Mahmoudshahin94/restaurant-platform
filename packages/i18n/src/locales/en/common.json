@@ -1,5 +1,14 @@
 {
   "poweredBy": "Powered by $t(common:platform.company)",
+  "version": "$t(common:platform.name) v{{version}}",
+  "versionShort": "v{{version}}",
+  "upgrade": {
+    "title": "Update required",
+    "body": "This version of {{product}} is no longer supported. Install the latest version to continue; nothing you saved is lost.",
+    "running": "This version",
+    "required": "Required",
+    "checkAgain": "Check again"
+  },
   "actions": {
     "save": "Save",
     "cancel": "Cancel",

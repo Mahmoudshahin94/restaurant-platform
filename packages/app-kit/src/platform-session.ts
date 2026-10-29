@@ -13,6 +13,8 @@ export interface PlatformSessionState {
 export interface PlatformSessionClientOptions {
   baseUrl?: string;
   validateResponses?: boolean;
+  /** The app's MADAR version, reported on every request (the platform's routes never refuse it). */
+  clientVersion?: string;
 }
 
 export interface PlatformSessionClient {
@@ -67,6 +69,7 @@ export function createPlatformSessionClient(
     getAccessToken: () => useSession.getState().accessToken,
     refreshSession,
     validateResponses: options.validateResponses ?? false,
+    ...(options.clientVersion ? { clientVersion: options.clientVersion } : {}),
   });
 
   return {

@@ -3,5 +3,6 @@
 @import '@fontsource-variable/inter';
 @import '@fontsource-variable/noto-sans-arabic';
 
-/* Generate utilities used by the shared component package. */
+/* Generate utilities used by the shared component packages. */
 @source '../../../packages/ui/src';
+@source '../../../packages/app-kit/src';

@@ -101,6 +101,7 @@ function Summary({ hub }: { hub: HubStatus }) {
     { label: t('sync.figures.failed'), value: String(hub.failedOperations) },
     { label: t('sync.figures.synced'), value: String(hub.syncedOperations) },
     { label: t('sync.figures.lastSync'), value: when(hub.lastSyncAt) },
+    { label: t('sync.hubVersion'), value: hub.version },
     ...(hub.nextAttemptAt
       ? [{ label: t('sync.figures.nextAttempt'), value: when(hub.nextAttemptAt) }]
       : []),
@@ -114,7 +115,17 @@ function Summary({ hub }: { hub: HubStatus }) {
           </Badge>
           <p className="text-sm">{t(`sync.state.${hub.state}`)}</p>
         </div>
-        <dl className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+        {hub.upgradeRequired ? (
+          <Alert variant="destructive" title={t('hub.upgradeRequired')}>
+            {hub.upgradeRequired.minimumVersion
+              ? t('sync.upgradeRequired', {
+                  version: hub.version,
+                  minimum: hub.upgradeRequired.minimumVersion,
+                })
+              : t('sync.upgradeRequiredNoMinimum', { version: hub.version })}
+          </Alert>
+        ) : null}
+        <dl className="grid grid-cols-2 gap-4 sm:grid-cols-6">
           {figures.map((f) => (
             <div key={f.label} className="grid gap-1">
               <dt className="text-xs text-muted-foreground">{f.label}</dt>

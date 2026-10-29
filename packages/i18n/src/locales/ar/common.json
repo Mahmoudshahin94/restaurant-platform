@@ -1,5 +1,14 @@
 {
   "poweredBy": "بدعم من $t(common:platform.company)",
+  "version": "$t(common:platform.name) الإصدار {{version}}",
+  "versionShort": "v{{version}}",
+  "upgrade": {
+    "title": "يلزم التحديث",
+    "body": "لم يعد هذا الإصدار من {{product}} مدعومًا. ثبّت أحدث إصدار للمتابعة؛ لن تفقد شيئًا مما حفظته.",
+    "running": "هذا الإصدار",
+    "required": "المطلوب",
+    "checkAgain": "تحقّق مجددًا"
+  },
   "actions": {
     "save": "حفظ",
     "cancel": "إلغاء",

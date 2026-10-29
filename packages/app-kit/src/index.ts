@@ -15,3 +15,4 @@ export * from './realtime';
 export * from './scanner';
 export * from './tenant-context';
 export * from './theme';
+export * from './upgrade';

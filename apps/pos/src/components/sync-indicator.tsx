@@ -13,11 +13,15 @@ const ICON = {
 
 /**
  * The connectivity indicator the POS always shows (docs/sync.md): ONLINE · 12 synchronized,
- * OFFLINE · 3 pending, SYNCING · 5 pending, SYNC ERROR · 2 failed. Opens the detail screen.
+ * OFFLINE · 3 pending, SYNCING · 5 pending, SYNC ERROR · 2 failed, Hub update required · 3 pending.
+ * Opens the detail screen.
  */
 export function SyncIndicator({ status }: { status: HubStatus }) {
   const { t } = useTranslation('pos');
-  const Icon = ICON[status.state];
+  // The cloud no longer serves this hub's version (ADR 0026): say so instead of "Offline".
+  const upgrade = status.upgradeRequired !== null;
+  const Icon = upgrade ? TriangleAlert : ICON[status.state];
+  const label = upgrade ? t('hub.upgradeRequired') : t(`hub.${status.state}`);
   const detail =
     status.state === 'SYNC_ERROR'
       ? t('hub.failed', { count: status.failedOperations })
@@ -28,11 +32,11 @@ export function SyncIndicator({ status }: { status: HubStatus }) {
     <Link
       to="/sync"
       role="status"
-      aria-label={`${t(`hub.${status.state}`)} · ${detail}. ${t('hub.open')}`}
+      aria-label={`${label} · ${detail}. ${t('hub.open')}`}
       className={cn(
         'flex items-center gap-1.5 rounded px-1.5 hover:bg-muted',
         status.state === 'OFFLINE' && 'font-semibold text-foreground',
-        status.state === 'SYNC_ERROR' && 'font-semibold text-destructive',
+        (upgrade || status.state === 'SYNC_ERROR') && 'font-semibold text-destructive',
       )}
     >
       <Icon
@@ -40,7 +44,7 @@ export function SyncIndicator({ status }: { status: HubStatus }) {
         className={cn('size-3.5', status.state === 'SYNCING' && 'motion-safe:animate-spin')}
       />
       <span>
-        {t(`hub.${status.state}`)} · {detail}
+        {label} · {detail}
       </span>
     </Link>
   );

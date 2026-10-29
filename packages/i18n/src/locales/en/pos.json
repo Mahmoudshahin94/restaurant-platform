@@ -88,7 +88,8 @@
     "pending_other": "{{count}} pending",
     "failed_one": "{{count}} failed",
     "failed_other": "{{count}} failed",
-    "open": "Open synchronization details"
+    "open": "Open synchronization details",
+    "upgradeRequired": "Hub update required"
   },
   "sync": {
     "title": "Synchronization",
@@ -140,7 +141,10 @@
       "FAILED": "No failed changes.",
       "COMPLETED": "Nothing was synchronized recently."
     },
-    "notHub": "This terminal is connected to the cloud directly; there is nothing to synchronize."
+    "notHub": "This terminal is connected to the cloud directly; there is nothing to synchronize.",
+    "upgradeRequired": "This location’s hub runs $t(common:platform.name) {{version}}, which the cloud no longer supports. Orders are still saved here and nothing is lost: they are sent as soon as the hub is updated to {{minimum}} or later.",
+    "upgradeRequiredNoMinimum": "This location’s hub runs $t(common:platform.name) {{version}}, which the cloud no longer supports. Orders are still saved here and nothing is lost: they are sent as soon as the hub is updated.",
+    "hubVersion": "Hub version"
   },
   "web": {
     "banner_one": "{{count}} online order is waiting",

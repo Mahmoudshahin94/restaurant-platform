@@ -1,5 +1,5 @@
 import tailwindcss from '@tailwindcss/vite';
-import { brandIndexHtml } from '@pos/shared-types';
+import { MADAR_VERSION, brandIndexHtml } from '@pos/shared-types';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
@@ -13,6 +13,8 @@ export default defineConfig({
     // The page title and favicon come from PLATFORM_BRAND (ADR 0019).
     { name: 'platform-brand', transformIndexHtml: (html) => brandIndexHtml(html, 'kds') },
   ],
+  // The MADAR version this build is (ADR 0026): shown in the footer, reported on every request.
+  define: { MADAR_VERSION: JSON.stringify(MADAR_VERSION) },
   server: {
     port: 5174,
     strictPort: true,

@@ -1,4 +1,5 @@
 import { createStorefrontClient } from '@pos/api-client';
+import { reportUpgradeRequired } from '@pos/app-kit';
 import { previewToken } from './preview';
 
 /**
@@ -10,4 +11,7 @@ export const storefront = createStorefrontClient({
   baseUrl: (import.meta.env.VITE_API_URL as string | undefined) ?? '',
   validateResponses: import.meta.env.DEV,
   getPreviewToken: previewToken,
+  // The site's MADAR version: a cloud that no longer serves it says so (ADR 0026).
+  clientVersion: MADAR_VERSION,
+  onUpgradeRequired: reportUpgradeRequired,
 });
