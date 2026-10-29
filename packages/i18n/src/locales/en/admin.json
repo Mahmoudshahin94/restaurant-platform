@@ -1097,7 +1097,8 @@
     "TOO_MANY": "You have the most custom domains allowed.",
     "NOT_VERIFIED": "Verify the domain first.",
     "PLATFORM_ADDRESS": "Your $t(common:platform.name) address always stays.",
-    "PRIMARY": "Make another domain primary first."
+    "PRIMARY": "Make another domain primary first.",
+    "VERSION_TAKEN": "This version is already published."
   },
   "website": {
     "title": "Website",

@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -18,6 +19,7 @@ import {
 import {
   type AdminDevice,
   type AuditLogEntry,
+  type DeviceVersions,
   type HealthBoard,
   type Location,
   type Paginated,
@@ -29,6 +31,8 @@ import {
   type PlatformTenantSummary,
   type PlatformTenantUser,
   type ProvisionedTenantDto,
+  type ReleaseDto,
+  type ReleasesOverview,
   type SupportExecution,
   type SupportFindResult,
   type SupportOperationDto,
@@ -36,17 +40,22 @@ import {
   type TenantBrandingDto,
   type TenantDomainDto,
   type TenantHealth,
+  type TenantRollout,
   auditLogQuerySchema,
   changeTenantStatusSchema,
+  deviceVersionsQuerySchema,
   idSchema,
   platformAuditQuerySchema,
   platformErrorsQuerySchema,
   platformTenantsQuerySchema,
   provisionTenantSchema,
+  publishReleaseSchema,
   setEntitlementsSchema,
+  setTenantRolloutSchema,
   supportExecuteSchema,
   supportFindQuerySchema,
   supportRequestSchema,
+  updateReleaseSchema,
 } from '@pos/validation';
 import type { z } from 'zod';
 import { PlatformGuard } from './auth/platform.guard';
@@ -54,6 +63,7 @@ import { PlatformErrorEventsService } from './health/platform-error-events.servi
 import { PlatformHealthService } from './health/platform-health.service';
 import { PlatformAuditService } from './platform-audit.service';
 import { PlatformDirectoryService } from './platform-directory.service';
+import { PlatformReleasesService } from './releases/platform-releases.service';
 import { SupportService } from './support/support.service';
 import { PlatformTenantsService } from './tenants/platform-tenants.service';
 
@@ -268,5 +278,65 @@ export class SupportController {
     body: z.output<typeof supportExecuteSchema>,
   ): Promise<SupportExecution> {
     return this.support.execute({ tenantId, actor }, body);
+  }
+}
+
+/**
+ * Releases and rollout (ADR 0026): the releases MADAR published and the minimum versions they
+ * declare (`releases.publish`), each tenant's channel or pinned version (`releases.rollout`), and
+ * the versions every device reports (`releases.view`).
+ */
+@Controller('platform')
+@UseGuards(PlatformGuard)
+export class PlatformReleasesController {
+  constructor(private readonly releases: PlatformReleasesService) {}
+
+  @RequirePlatformPermissions(['releases.view'])
+  @Get('releases')
+  overview(): Promise<ReleasesOverview> {
+    return this.releases.overview();
+  }
+
+  @RequirePlatformPermissions(['releases.publish'])
+  @Post('releases')
+  publish(
+    @Body(new ZodValidationPipe(publishReleaseSchema))
+    body: z.output<typeof publishReleaseSchema>,
+  ): Promise<ReleaseDto> {
+    return this.releases.publish(body);
+  }
+
+  @RequirePlatformPermissions(['releases.publish'])
+  @Patch('releases/:releaseId')
+  update(
+    @Param('releaseId', id) releaseId: string,
+    @Body(new ZodValidationPipe(updateReleaseSchema)) body: z.output<typeof updateReleaseSchema>,
+  ): Promise<ReleaseDto> {
+    return this.releases.update(releaseId, body);
+  }
+
+  @RequirePlatformPermissions(['releases.view'])
+  @Get('device-versions')
+  deviceVersions(
+    @Query(new ZodValidationPipe(deviceVersionsQuerySchema))
+    query: z.output<typeof deviceVersionsQuerySchema>,
+  ): Promise<DeviceVersions> {
+    return this.releases.deviceVersions(query);
+  }
+
+  @RequirePlatformPermissions(['releases.view'])
+  @Get('tenants/:tenantId/release-channel')
+  rollout(@Param('tenantId', id) tenantId: string): Promise<TenantRollout> {
+    return this.releases.rollout(tenantId);
+  }
+
+  @RequirePlatformPermissions(['releases.rollout'])
+  @Put('tenants/:tenantId/release-channel')
+  setRollout(
+    @Param('tenantId', id) tenantId: string,
+    @Body(new ZodValidationPipe(setTenantRolloutSchema))
+    body: z.output<typeof setTenantRolloutSchema>,
+  ): Promise<TenantRollout> {
+    return this.releases.setRollout(tenantId, body);
   }
 }

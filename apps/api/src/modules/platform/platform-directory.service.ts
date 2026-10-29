@@ -6,16 +6,26 @@ import {
   type ProvisionedTenant,
   provisionTenant,
 } from '@pos/database';
-import { DomainError } from '@pos/domain';
+import {
+  DEFAULT_ROLLOUT,
+  DomainError,
+  type ReleaseFacts,
+  type RolloutSetting,
+  type SupportedMinimums,
+  deviceVersionStatus,
+  targetVersion,
+} from '@pos/domain';
 import { PrismaService, TenantContext, isUniqueViolation } from '@pos/server';
 import { DomainStatus } from '@pos/shared-types';
 import {
+  type DeviceVersion,
   type HealthBoardRow,
   type Paginated,
   type PlatformTenantSummary,
   type platformTenantsQuerySchema,
   type provisionTenantSchema,
   reportedOutboxSchema,
+  type TenantDeviceVersions,
 } from '@pos/validation';
 import type { z } from 'zod';
 
@@ -28,6 +38,17 @@ const OPEN_ISSUES: Prisma.ProcessedOperationWhereInput = {
 };
 
 const max = (a: Date | null, b: Date | null): Date | null => (!a ? b : !b ? a : a > b ? a : b);
+
+/** What the version columns need to know of the releases (ADR 0026). */
+export interface VersionLimits {
+  releases: readonly ReleaseFacts[];
+  minimums: SupportedMinimums;
+}
+
+/** A tenant's rollout setting, with the version its devices should run. */
+export interface TenantRolloutRow extends RolloutSetting {
+  targetVersion: string | null;
+}
 
 /**
  * The platform's view across tenants (ADR 0025): listing and searching tenants, provisioning a
@@ -165,32 +186,44 @@ export class PlatformDirectoryService {
    * last reported waiting and failed in their outboxes, refused changes nobody settled, the last
    * change received, the newest order and the server errors of the last day.
    */
-  healthBoard(staleAfterMs: number, now = new Date()): Promise<HealthBoardRow[]> {
+  healthBoard(
+    staleAfterMs: number,
+    limits: VersionLimits,
+    now = new Date(),
+  ): Promise<HealthBoardRow[]> {
     return TenantContext.runUnscoped('platform: the health board', async () => {
       const dayAgo = new Date(now.getTime() - 24 * 60 * 60_000);
-      const [tenants, locations, devices, issues, received, orders, errors] = await Promise.all([
-        this.prisma.tenant.findMany({
-          orderBy: { nameEn: 'asc' },
-          select: { id: true, slug: true, nameEn: true, nameAr: true, status: true },
-        }),
-        this.prisma.location.groupBy({ by: ['tenantId'], _count: { _all: true } }),
-        this.prisma.device.findMany({
-          where: { status: 'ACTIVE' },
-          select: { tenantId: true, type: true, lastSeenAt: true, metadata: true },
-        }),
-        this.prisma.processedOperation.groupBy({
-          by: ['tenantId'],
-          where: OPEN_ISSUES,
-          _count: { _all: true },
-        }),
-        this.prisma.processedOperation.groupBy({ by: ['tenantId'], _max: { updatedAt: true } }),
-        this.prisma.order.groupBy({ by: ['tenantId'], _max: { createdAt: true } }),
-        this.prisma.platformErrorEvent.groupBy({
-          by: ['subjectTenantId'],
-          where: { createdAt: { gte: dayAgo } },
-          _count: { _all: true },
-        }),
-      ]);
+      const [tenants, locations, devices, issues, received, orders, errors, rollouts] =
+        await Promise.all([
+          this.prisma.tenant.findMany({
+            orderBy: { nameEn: 'asc' },
+            select: { id: true, slug: true, nameEn: true, nameAr: true, status: true },
+          }),
+          this.prisma.location.groupBy({ by: ['tenantId'], _count: { _all: true } }),
+          this.prisma.device.findMany({
+            where: { status: 'ACTIVE' },
+            select: {
+              tenantId: true,
+              type: true,
+              lastSeenAt: true,
+              metadata: true,
+              appVersion: true,
+            },
+          }),
+          this.prisma.processedOperation.groupBy({
+            by: ['tenantId'],
+            where: OPEN_ISSUES,
+            _count: { _all: true },
+          }),
+          this.prisma.processedOperation.groupBy({ by: ['tenantId'], _max: { updatedAt: true } }),
+          this.prisma.order.groupBy({ by: ['tenantId'], _max: { createdAt: true } }),
+          this.prisma.platformErrorEvent.groupBy({
+            by: ['subjectTenantId'],
+            where: { createdAt: { gte: dayAgo } },
+            _count: { _all: true },
+          }),
+          this.rolloutsUnscoped(limits.releases),
+        ]);
       const byTenant = <T extends { tenantId: string }>(rows: T[]) =>
         new Map(rows.map((r) => [r.tenantId, r]));
       const locationCounts = byTenant(locations);
@@ -218,6 +251,11 @@ export class PlatformDirectoryService {
           hubSeen = max(hubSeen, hub.lastSeenAt);
         }
         const lastSync = max(lastReceived.get(tenant.id)?._max.updatedAt ?? null, hubSeen);
+        const target = (rollouts.get(tenant.id) ?? this.rolloutOf(null, limits.releases))
+          .targetVersion;
+        const statuses = own.map((d) =>
+          deviceVersionStatus(d.appVersion, { target, minimum: this.minimumFor(d.type, limits) }),
+        );
         return {
           tenantId: tenant.id,
           slug: tenant.slug,
@@ -235,8 +273,99 @@ export class PlatformDirectoryService {
           lastSyncAt: lastSync?.toISOString() ?? null,
           lastActivityAt: lastOrders.get(tenant.id)?._max.createdAt?.toISOString() ?? null,
           errors24h: errorCounts.get(tenant.id) ?? 0,
+          targetVersion: target,
+          outdatedDevices: statuses.filter((v) => v === 'OUTDATED').length,
+          unsupportedDevices: statuses.filter((v) => v === 'UNSUPPORTED').length,
         };
       });
     });
+  }
+
+  /**
+   * The versions every active device reports (ADR 0026), per tenant with its rollout: each device
+   * against its tenant's target version and the cloud's minimum for its kind (hubs and apps).
+   */
+  deviceVersions(
+    staleAfterMs: number,
+    limits: VersionLimits,
+    filter: { tenantId?: string } = {},
+    now = new Date(),
+  ): Promise<TenantDeviceVersions[]> {
+    return TenantContext.runUnscoped('platform: device versions', async () => {
+      const [tenants, devices, rollouts] = await Promise.all([
+        this.prisma.tenant.findMany({
+          where: filter.tenantId ? { id: filter.tenantId } : {},
+          orderBy: { nameEn: 'asc' },
+          select: { id: true, slug: true, nameEn: true, nameAr: true },
+        }),
+        this.prisma.device.findMany({
+          where: { status: 'ACTIVE', ...(filter.tenantId ? { tenantId: filter.tenantId } : {}) },
+          orderBy: [{ locationId: 'asc' }, { type: 'asc' }, { name: 'asc' }],
+          include: { location: { select: { code: true } } },
+        }),
+        this.rolloutsUnscoped(limits.releases),
+      ]);
+      return tenants.map((tenant) => {
+        const rollout = rollouts.get(tenant.id) ?? this.rolloutOf(null, limits.releases);
+        const own: DeviceVersion[] = devices
+          .filter((d) => d.tenantId === tenant.id)
+          .map((d) => ({
+            id: d.id,
+            tenantId: d.tenantId,
+            locationId: d.locationId,
+            locationCode: d.location.code,
+            name: d.name,
+            type: d.type,
+            status: d.status,
+            appVersion: d.appVersion,
+            lastVersionAt: d.lastVersionAt?.toISOString() ?? null,
+            lastSeenAt: d.lastSeenAt?.toISOString() ?? null,
+            online: d.lastSeenAt !== null && now.getTime() - d.lastSeenAt.getTime() <= staleAfterMs,
+            versionStatus: deviceVersionStatus(d.appVersion, {
+              target: rollout.targetVersion,
+              minimum: this.minimumFor(d.type, limits),
+            }),
+          }));
+        return {
+          tenantId: tenant.id,
+          slug: tenant.slug,
+          nameEn: tenant.nameEn,
+          nameAr: tenant.nameAr,
+          channel: rollout.channel,
+          pinnedVersion: rollout.pinnedVersion,
+          targetVersion: rollout.targetVersion,
+          outdated: own.filter((d) => d.versionStatus === 'OUTDATED').length,
+          unsupported: own.filter((d) => d.versionStatus === 'UNSUPPORTED').length,
+          devices: own,
+        };
+      });
+    });
+  }
+
+  /** A hub is held to the hub minimum, every other device (an app) to the client minimum. */
+  private minimumFor(type: string, limits: VersionLimits): string | null {
+    return type === 'GATEWAY' ? limits.minimums.hub : limits.minimums.client;
+  }
+
+  private rolloutOf(
+    row: RolloutSetting | null,
+    releases: readonly ReleaseFacts[],
+  ): TenantRolloutRow {
+    const setting = row ?? DEFAULT_ROLLOUT;
+    return {
+      channel: setting.channel,
+      pinnedVersion: setting.pinnedVersion,
+      targetVersion: targetVersion(setting, releases),
+    };
+  }
+
+  /** Every tenant's rollout setting; a tenant without one follows STABLE. Call inside runUnscoped. */
+  private async rolloutsUnscoped(
+    releases: readonly ReleaseFacts[],
+  ): Promise<Map<string, TenantRolloutRow>> {
+    const rows = await this.prisma.tenantReleaseChannel.findMany({
+      select: { tenantId: true, channel: true, pinnedVersion: true },
+    });
+    return new Map(rows.map((row) => [row.tenantId, this.rolloutOf(row, releases)]));
   }
 }

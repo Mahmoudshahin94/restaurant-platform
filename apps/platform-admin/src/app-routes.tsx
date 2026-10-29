@@ -9,6 +9,7 @@ import { RequirePermission } from './components/require-permission';
 import { AuditPage } from './routes/audit-page';
 import { HealthBoardPage } from './routes/health-board-page';
 import { LoginPage } from './routes/login-page';
+import { ReleasesPage } from './routes/releases-page';
 import { SupportPage } from './routes/support-page';
 import { TenantDetailPage } from './routes/tenant/tenant-detail-page';
 import { TenantsPage } from './routes/tenants-page';
@@ -42,6 +43,7 @@ export function AppRoutes() {
           {guarded('tenants', 'tenants.view', <TenantsPage />)}
           {guarded('tenants/:tenantId/:tab?', 'tenants.view', <TenantDetailPage />)}
           {guarded('health', 'health.view', <HealthBoardPage />)}
+          {guarded('releases', 'releases.view', <ReleasesPage />)}
           {guarded('support', 'support.find', <SupportPage />)}
           {guarded('audit', 'audit.view', <AuditPage />)}
           <Route path="*" element={<NotFound />} />

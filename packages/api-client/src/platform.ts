@@ -1,15 +1,20 @@
 import {
   type AuditLogQuery,
   type ChangeTenantStatusRequest,
+  type DeviceVersionsQuery,
   type PlatformAuditQuery,
   type PlatformErrorsQuery,
   type PlatformLoginRequest,
   type PlatformTenantsQuery,
   type ProvisionTenantRequest,
+  type PublishReleaseRequest,
   type SetEntitlementsRequest,
+  type SetTenantRolloutRequest,
   type SupportExecuteRequest,
   type SupportFindQuery,
   type SupportRequest,
+  type UpdateReleaseRequest,
+  deviceVersionsSchema,
   healthBoardSchema,
   locationSchema,
   paymentProvidersOverviewSchema,
@@ -24,6 +29,8 @@ import {
   platformTokenResponseSchema,
   platformUserSchema,
   provisionedTenantSchema,
+  releaseSchema,
+  releasesOverviewSchema,
   supportExecutionSchema,
   supportFindResultSchema,
   supportOperationSchema,
@@ -31,6 +38,7 @@ import {
   tenantBrandingSchema,
   tenantDomainSchema,
   tenantHealthSchema,
+  tenantRolloutSchema,
 } from '@pos/validation';
 import { z } from 'zod';
 import { HttpClient, type HttpClientOptions } from './http';
@@ -155,6 +163,27 @@ export function createPlatformApiClient(options: HttpClientOptions) {
         http.request('POST', `${tenant(tid)}/support/execute`, {
           body,
           schema: supportExecutionSchema,
+        }),
+    },
+
+    /** Releases and rollout (ADR 0026). */
+    releases: {
+      overview: () => http.request('GET', `${API}/releases`, { schema: releasesOverviewSchema }),
+      publish: (body: PublishReleaseRequest) =>
+        http.request('POST', `${API}/releases`, { body, schema: releaseSchema }),
+      update: (releaseId: string, body: UpdateReleaseRequest) =>
+        http.request('PATCH', `${API}/releases/${releaseId}`, { body, schema: releaseSchema }),
+      deviceVersions: (query: DeviceVersionsQuery = {}) =>
+        http.request('GET', `${API}/device-versions`, {
+          query,
+          schema: deviceVersionsSchema,
+        }),
+      rollout: (tid: string) =>
+        http.request('GET', `${tenant(tid)}/release-channel`, { schema: tenantRolloutSchema }),
+      setRollout: (tid: string, body: SetTenantRolloutRequest) =>
+        http.request('PUT', `${tenant(tid)}/release-channel`, {
+          body,
+          schema: tenantRolloutSchema,
         }),
     },
   };
