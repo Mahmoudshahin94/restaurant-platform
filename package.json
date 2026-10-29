@@ -1,5 +1,6 @@
 {
   "name": "pos-kds",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "MADAR: offline-first, multi-tenant commerce platform (POS, KDS, online ordering, admin)",
@@ -23,6 +24,8 @@
     "db:reset": "pnpm --filter @pos/database migrate:reset",
     "platform:create-owner": "pnpm --filter @pos/api platform:create-owner",
     "test:tools": "node --test \"tools/**/*.test.{js,mjs}\"",
+    "version:set": "node tools/release/set-version.mjs",
+    "version:check": "node tools/release/set-version.mjs --check",
     "printer:sim": "node tools/printer-sim/server.mjs"
   },
   "devDependencies": {

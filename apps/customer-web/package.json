@@ -1,6 +1,6 @@
 {
   "name": "@pos/customer-web",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Customer website: menu, cart, guest checkout and order tracking against the cloud API (online ordering)",
   "type": "module",

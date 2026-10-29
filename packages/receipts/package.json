@@ -1,6 +1,6 @@
 {
   "name": "@pos/receipts",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Receipt layout model and printer encodings (ESC/POS raster); no DOM, no I/O",
   "type": "module",

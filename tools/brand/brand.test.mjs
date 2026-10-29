@@ -56,12 +56,22 @@ function withoutComments(source) {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`\\])\/\/.*$/gm, '$1');
 }
 
+/**
+ * Whether `text` spells `name` out. A code identifier that contains it (`MADAR_VERSION`, ADR 0026)
+ * is not the brand shown to anyone, so letters, digits or `_` of the Latin alphabet around it do
+ * not count; Arabic text matches anywhere (its prefixes attach to the word).
+ */
+function spellsOut(text, name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<![A-Za-z0-9_])${escaped}(?![A-Za-z0-9_])`).test(text);
+}
+
 function offenders(files, read = (f) => readFileSync(f, 'utf8')) {
   const found = [];
   for (const file of files) {
     const text = read(file);
     for (const name of FORBIDDEN) {
-      if (text.includes(name)) found.push(`${relative(root, file)}: "${name}"`);
+      if (spellsOut(text, name)) found.push(`${relative(root, file)}: "${name}"`);
     }
   }
   return found;
@@ -72,6 +82,15 @@ const sourceDirs = ['apps', 'packages'].flatMap((top) =>
 );
 
 describe('platform brand', () => {
+  it('counts the brand as a word, not inside an identifier', () => {
+    assert.equal(spellsOut("label: 'MADAR Admin'", brand.name), true);
+    assert.equal(spellsOut('<p>MADAR</p>', brand.name), true);
+    assert.equal(spellsOut('بدعم من مدار', brand.nameAr), true);
+    assert.equal(spellsOut('شكرًا لمدار', brand.nameAr), true);
+    assert.equal(spellsOut('clientVersion: MADAR_VERSION', brand.name), false);
+    assert.equal(spellsOut('const MADARX = 1', brand.name), false);
+  });
+
   it('is never spelled out in app or package code', () => {
     const files = sourceDirs
       .filter((dir) => {

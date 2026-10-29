@@ -1,6 +1,6 @@
 {
   "name": "@pos/database",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Cloud PostgreSQL schema, migrations, Prisma client and development seed",
   "type": "module",
