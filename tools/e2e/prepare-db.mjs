@@ -14,14 +14,16 @@ execSync('pnpm exec prisma migrate deploy', { cwd, stdio: 'inherit' });
 // Orders, payments and shifts from earlier runs would leave tables occupied and drawers open,
 // and their sync records would name orders that no longer exist; start every run from a clean
 // floor. Websites and their domains start over too (the seed gives each tenant its address), and
-// so do payment provider accounts (the seed gives the demo restaurant its test provider).
+// so do payment provider accounts (the seed gives the demo restaurant its test provider), and the
+// releases and release channels the platform admin's suite publishes (ADR 0026).
 execSync('pnpm exec prisma db execute --stdin --schema prisma/schema.prisma', {
   cwd,
   stdio: ['pipe', 'inherit', 'inherit'],
   input: `TRUNCATE TABLE devices, kitchen_ticket_items, kitchen_tickets, cash_transactions, payments, shifts,
           order_item_modifiers, order_items,
           order_taxes, order_discounts, order_status_history, orders, order_counters,
-          processed_operations, change_log, tenant_domains, website_configs CASCADE;
+          processed_operations, change_log, tenant_domains, website_configs,
+          releases, tenant_release_channels CASCADE;
           UPDATE payment_methods SET provider_account_id = NULL;
           DELETE FROM payment_provider_secrets;
           DELETE FROM payment_provider_accounts;`,

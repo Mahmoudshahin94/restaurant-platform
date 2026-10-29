@@ -460,6 +460,8 @@ model Device {
   lastSeenAt       DateTime?    @map("last_seen_at")
   /// The app version the device last reported (`x-madar-client-version`).
   appVersion       String?      @map("app_version")
+  /// When the device first reported that version (ADR 0026): how long it has run it.
+  lastVersionAt    DateTime?    @map("last_version_at")
   /// Non-secret descriptive data: OS, printer model, IP on the LAN, a hub's outbox.
   metadata         Json         @default("{}")
   createdAt        DateTime     @default(now()) @map("created_at")
