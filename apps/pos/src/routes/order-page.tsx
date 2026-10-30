@@ -18,7 +18,9 @@ import { OptionsDialog, type OptionsResult } from '../components/options-dialog'
 import { ProductGrid } from '../components/product-grid';
 import { type ScanNotice, ScanToast } from '../components/scan-toast';
 import { useDiscounts, useFloor, useLocationId, useLocationMenu } from '../lib/queries';
+import { api } from '../lib/session';
 import { useCart } from '../stores/cart';
+import { usePreferences } from '../stores/preferences';
 
 type Picking = {
   product: PublishedMenuProduct;
@@ -41,6 +43,7 @@ export function OrderPage() {
   const { t } = useTranslation('pos');
   const locale = useCurrentLocale();
   const barcodesOn = useFeature(Feature.BARCODE);
+  const showPictures = usePreferences((p) => p.showPictures);
   const [entering, setEntering] = useState(false);
   const [notice, setNotice] = useState<ScanNotice | null>(null);
   const noticeKey = useRef(0);
@@ -130,6 +133,7 @@ export function OrderPage() {
           <ProductGrid
             menu={data}
             onSelect={select}
+            pictureUrl={showPictures ? api.hub.mediaUrl : undefined}
             {...(barcodesOn
               ? {
                   onEnterCode: () => {

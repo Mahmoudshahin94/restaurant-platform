@@ -62,7 +62,7 @@ const call = (route: RouteEntry, headers: Record<string, string> = {}) =>
   });
 
 describe('hub routes', () => {
-  it('protects every route; only sign-in, health, the hub status and its sign-in look are public', () => {
+  it('protects every route; only sign-in, health, the hub status, its sign-in look and the menu’s pictures are public', () => {
     expect(routes.filter((r) => r.access === 'unprotected')).toEqual([]);
     expect(routes.filter((r) => r.access === 'guarded')).toEqual([]);
     expect(
@@ -75,6 +75,7 @@ describe('hub routes', () => {
       'GET /hub/branding',
       'GET /hub/branding/files/:fileId',
       'GET /hub/locales',
+      'GET /hub/media/:fileId',
       'GET /hub/status',
       'GET /ready',
       'POST /auth/login',

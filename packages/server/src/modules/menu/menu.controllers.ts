@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpCode,
   Param,
   Patch,
@@ -20,6 +21,7 @@ import {
   type ModifierGroup,
   type Product,
   type PublishedMenu,
+  type TenantFileDto,
   catalogLookupQuerySchema,
   createCategorySchema,
   createKitchenStationSchema,
@@ -41,6 +43,7 @@ import { ZodValidationPipe } from '../../common/validation/zod-validation.pipe';
 import { CategoriesService } from './categories.service';
 import { KitchenStationsService } from './kitchen-stations.service';
 import { ModifierGroupsService } from './modifier-groups.service';
+import { TenantFilesService } from '../files/tenant-files.service';
 import { ProductsService } from './products.service';
 import { PublishedMenuService } from './published-menu.service';
 import { ManagedInCloud } from '../../common/auth/managed-in-cloud';
@@ -228,7 +231,25 @@ export class ModifierGroupsController {
 @ManagedInCloud()
 @Controller('tenants/:tenantId/products')
 export class ProductsController {
-  constructor(private readonly products: ProductsService) {}
+  constructor(
+    private readonly products: ProductsService,
+    private readonly files: TenantFilesService,
+  ) {}
+
+  /**
+   * Uploads a product picture (ADR 0027): the image bytes as the body, their type as
+   * `Content-Type`. It is attached by listing its id in the product's or a variant's
+   * `imageFileIds`. Whoever edits products may add pictures (branding needs `settings.manage`).
+   */
+  @RequirePermissions(['products.update'])
+  @Post('images')
+  uploadImage(
+    @Param('tenantId', id) tenantId: string,
+    @Headers('content-type') contentType: string | undefined,
+    @Body() body: unknown,
+  ): Promise<TenantFileDto> {
+    return this.files.upload(tenantId, 'PRODUCT_IMAGE', contentType, body);
+  }
 
   @RequirePermissions(['products.view'], { scope: 'any-location' })
   @Get()

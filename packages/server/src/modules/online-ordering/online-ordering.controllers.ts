@@ -49,7 +49,7 @@ export class SiteController {
     return this.storefront.site(site.tenantId, site.domain, preview);
   }
 
-  /** A logo or favicon of the tenant's branding, or a picture of its website's sections. */
+  /** A logo or favicon of the tenant's branding, a picture of its website or of its products. */
   @Get('files/:fileId')
   async file(
     @CurrentSite() site: SiteHost,

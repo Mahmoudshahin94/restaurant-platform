@@ -12,7 +12,12 @@
     "all": "All",
     "noResults": "No items match your search.",
     "soldOut": "Sold out",
-    "loading": "Loading menu…"
+    "loading": "Loading menu…",
+    "settings": {
+      "title": "Menu",
+      "pictures": "Show product pictures",
+      "picturesHint": "Turn off for a faster, text-only menu on this till."
+    }
   },
   "scan": {
     "enterCode": "Enter barcode",

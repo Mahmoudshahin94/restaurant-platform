@@ -153,6 +153,8 @@ export function createApiClient(options: HttpClientOptions) {
         }),
       /** The URL of a file of that branding (public: an <img> can show it directly). */
       brandingFileUrl: (fileId: string) => `${http.baseUrl}${API}/hub/branding/files/${fileId}`,
+      /** The URL of a product picture of the hub's menu (public, ADR 0027). */
+      mediaUrl: (fileId: string) => `${http.baseUrl}${API}/hub/media/${fileId}`,
       /** "Sync now": sends the outbox and checks the cloud for configuration changes. */
       sync: () =>
         http.request('POST', `${API}/hub/sync`, { schema: hubStatusSchema, noRetry: true }),
@@ -506,6 +508,15 @@ export function createApiClient(options: HttpClientOptions) {
           http.request('GET', `${API}/tenants/${tenantId}/products`, {
             query: { ...query },
             schema: z.array(productSchema),
+          }),
+        /**
+         * Uploads a product picture (PNG, JPEG or WebP, `products.update`, ADR 0027). Attach it by
+         * listing the returned id in the product's or a variant's `imageFileIds`.
+         */
+        uploadImage: (tenantId: string, file: Blob) =>
+          http.request('POST', `${API}/tenants/${tenantId}/products/images`, {
+            raw: { bytes: file, contentType: file.type },
+            schema: tenantFileSchema,
           }),
       },
     },

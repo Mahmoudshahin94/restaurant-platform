@@ -276,7 +276,10 @@ maxSelect? }` with optional per-product overrides) and `stationIds`. On `PATCH`,
     tenant has answers `409 BARCODE_TAKEN` (`details.code`); a product-level code on a product
     with variants `422 BARCODE_INVALID` (`reason: VARIANT_REQUIRED`). Archived variants free
     their codes.
-  - `imageFileIds`: `PRODUCT_IMAGE` tenant files (`POST /tenants/:tid/files?kind=PRODUCT_IMAGE`).
+  - `imageFileIds`: `PRODUCT_IMAGE` tenant files, uploaded with `POST /tenants/:tid/products/images`
+    (image bytes as the body, `products.update`, ADR 0027). The first is the cover: the published
+    menu's `imageFileId` on the product, and each variant's own first picture as its
+    `imageFileId` (null: show the product's).
   - New option axes need `PRODUCT_VARIANTS` and new codes `BARCODE` (`403 FEATURE_DISABLED`);
     stored ones can be sent back unchanged with the module off.
   - The DTO has `options`, `barcodes` (product-level), `imageFileIds`, and on each variant
@@ -677,6 +680,7 @@ payment: TERMINAL|COUNTER, customerName? }` → the order (`201`, or `200` for a
 | POST   | `/locations/:lid/devices/:deviceId/pairing-code` | `devices.manage`  |
 | POST   | `/locations/:lid/devices/:deviceId/disable`      | `devices.manage`  |
 | GET    | `/sync/snapshot`                                 | device credential |
+| GET    | `/sync/files/:fileId`                            | device credential |
 | POST   | `/sync/push`                                     | device credential |
 | GET    | `/sync/pull`                                     | device credential |
 

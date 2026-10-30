@@ -1150,6 +1150,14 @@ stores, for many businesses at once:
   exactly-once sync ledger, the pricing engine and order state machine in `@pos/domain`, integer
   money, deny-by-default route protection and bilingual (EN/AR, RTL) screens.
 
+### Product pictures (after M10)
+
+See [ADR 0027](adr/0027-product-pictures.md). Products show their pictures on the POS (a per-till
+switch), the kiosk and the website; the admin uploads them (resized in the browser) and orders
+them, the first being the cover. Hubs get the covers' rows in the snapshot (format 8) and download
+the bytes once, checked by SHA-256, so menu edits do not resend pictures; the hub serves them on
+the location network. Variant pictures are shown everywhere but are set through the API only.
+
 ## Architectural decisions and open questions
 
 Recorded as ADRs in [adr/](adr/):
@@ -1235,6 +1243,9 @@ Recorded as ADRs in [adr/](adr/):
     on everything and reported by every app and hub; device versions in real columns; releases
     with minimum hub and app versions the cloud enforces with `426` (hubs wait with their outbox);
     tenant release channels for rollout tracking; the platform admin's Releases page.
+25. [0027](adr/0027-product-pictures.md): product pictures on the POS, kiosk and website: a cover
+    per product and variant in the published menu, uploads by whoever edits products (resized in
+    the browser), covers' rows in the hub snapshot and their bytes downloaded once by the hub.
 
 Open items to revisit:
 

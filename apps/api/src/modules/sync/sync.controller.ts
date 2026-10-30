@@ -11,7 +11,7 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { Public, ZodValidationPipe } from '@pos/server';
+import { Public, ZodValidationPipe, sendTenantFile } from '@pos/server';
 import {
   type LocationSnapshot,
   type SyncOrder,
@@ -64,6 +64,17 @@ export class SyncController {
       return undefined;
     }
     return snapshot;
+  }
+
+  /** A product picture the snapshot names, which the hub keeps for its screens (ADR 0027). */
+  @Get('files/:fileId')
+  async file(
+    @Req() request: FastifyRequest,
+    @Param('fileId', new ZodValidationPipe(idSchema)) fileId: string,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<Buffer> {
+    const { file, bytes } = await this.snapshots.productPicture(deviceOf(request), fileId);
+    return sendTenantFile(reply, file, bytes, 'private');
   }
 
   /** The hub's outbox: one result per operation, in order (docs/sync.md). */

@@ -198,6 +198,7 @@ export async function buildSnapshot() {
     featureOverrides: [] as Record<string, unknown>[],
     tenantFiles: [] as Record<string, unknown>[],
     tenantBranding: [] as Record<string, unknown>[],
+    productImages: [] as Record<string, unknown>[],
     orderCounters: [] as { locationId: string; businessDate: string; lastNumber: number }[],
   };
   return { ids, tables };
@@ -252,7 +253,7 @@ export function withVersion(
 ): LocationSnapshot {
   const json = JSON.parse(JSON.stringify(tables)) as LocationSnapshot['tables'];
   return {
-    format: 7,
+    format: 8,
     tenantId: ids.tenantId,
     locationId: ids.locationId,
     generatedAt: new Date().toISOString(),

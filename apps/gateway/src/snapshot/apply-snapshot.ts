@@ -25,6 +25,7 @@ const REPLACED: ReadonlySet<SnapshotTable> = new Set([
   'featureOverrides',
   'tenantFiles',
   'tenantBranding',
+  'productImages',
 ]);
 
 const DELEGATE: Record<SnapshotTable, string> = {
@@ -61,6 +62,7 @@ const DELEGATE: Record<SnapshotTable, string> = {
   featureOverrides: 'featureOverride',
   tenantFiles: 'tenantFile',
   tenantBranding: 'tenantBranding',
+  productImages: 'productImage',
   orderCounters: 'orderCounter',
 };
 

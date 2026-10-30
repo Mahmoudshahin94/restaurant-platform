@@ -76,6 +76,8 @@ export function createKioskClient(options: KioskClientOptions) {
       }),
     /** The URL of a logo of the tenant's branding, served publicly by the hub (ADR 0019). */
     brandingFileUrl: (fileId: string) => `${options.baseUrl}${API}/hub/branding/files/${fileId}`,
+    /** The URL of a product picture of the hub's menu (public, ADR 0027). */
+    mediaUrl: (fileId: string) => `${options.baseUrl}${API}/hub/media/${fileId}`,
   };
 }
 

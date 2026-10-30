@@ -43,6 +43,7 @@ import { useAdminErrorText } from '../../lib/admin-errors';
 import { ACCEPT } from '../../lib/file-types';
 import { api } from '../../lib/api';
 import { keys, useAdminMutation, useTenant, useTenantId } from '../../lib/queries';
+import { useTenantFileUrl } from '../../lib/tenant-files';
 
 type Values = Omit<UpdateBrandingRequest, 'surfaces'>;
 type Draft = Values & { surfaces: Partial<Record<BrandSurface, BrandingLayer>> };
@@ -638,30 +639,6 @@ export function FilePicker({
       </div>
     </Field>
   );
-}
-
-/** An uploaded file, downloaded with the admin's session, as an object URL. */
-function useTenantFileUrl(fileId: string | null): string | null {
-  const tid = useTenantId();
-  const blob = useQuery({
-    queryKey: ['tenant-file', tid, fileId],
-    queryFn: () => api.files.content(tid, fileId ?? ''),
-    enabled: fileId !== null,
-    staleTime: Infinity,
-  });
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    if (!fileId || !blob.data) {
-      setUrl(null);
-      return undefined;
-    }
-    const objectUrl = URL.createObjectURL(blob.data);
-    setUrl(objectUrl);
-    return () => {
-      URL.revokeObjectURL(objectUrl);
-    };
-  }, [fileId, blob.data]);
-  return url;
 }
 
 /** A small screen in the chosen theme with the branding applied, independent of the admin's. */

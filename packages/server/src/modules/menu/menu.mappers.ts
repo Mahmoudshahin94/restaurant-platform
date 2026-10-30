@@ -43,13 +43,13 @@ export type CatalogProductRow = ProductRow & {
   stations: ProductStationRow[];
   taxes: ProductTaxRow[];
   barcodes: ProductBarcodeRow[];
+  images: ProductImageRow[];
 };
 
 /** A product with everything the admin edits (ADR 0021: options, barcodes, pictures). */
 export type ProductWithRelations = Omit<CatalogProductRow, 'variants'> & {
   variants: VariantWithValues[];
   options: OptionWithValues[];
-  images: ProductImageRow[];
 };
 
 export type ModifierGroupWithModifiers = ModifierGroupRow & { modifiers: ModifierRow[] };
@@ -61,6 +61,7 @@ export const catalogProductInclude = {
   stations: true,
   taxes: true,
   barcodes: true,
+  images: true,
 } as const;
 
 /** Prisma include for a product with everything its DTO needs. */
@@ -258,6 +259,11 @@ export function toCatalogProduct(row: CatalogProductRow): CatalogProduct {
       code: b.code,
       variantId: b.variantId,
       isPrimary: b.isPrimary,
+    })),
+    images: row.images.map((i) => ({
+      fileId: i.fileId,
+      variantId: i.variantId,
+      sortOrder: i.sortOrder,
     })),
   };
 }

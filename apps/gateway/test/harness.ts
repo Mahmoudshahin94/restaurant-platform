@@ -47,6 +47,8 @@ export class FakeCloud {
   readonly orders = new Map<string, SyncOrder>();
   /** Administrators' decisions served at `/sync/resolutions/:operationId` (ADR 0014). */
   readonly resolutions = new Map<string, SyncResolution>();
+  /** Product pictures the cloud serves at `/sync/files/:fileId` (ADR 0027). */
+  readonly files = new Map<string, Buffer>();
   readonly credential = 'device-id.secret-value';
   private server: Server | null = null;
   url = '';
@@ -102,6 +104,13 @@ export class FakeCloud {
         const order = this.orders.get(decodeURIComponent(orderPath[1] ?? ''));
         if (order) json(200, order);
         else json(404, { code: 'ORDER_NOT_FOUND' });
+        return;
+      }
+      const filePath = /^\/api\/v1\/sync\/files\/([^/]+)$/.exec(url.pathname);
+      if (filePath) {
+        const bytes = this.files.get(decodeURIComponent(filePath[1] ?? ''));
+        if (bytes) res.writeHead(200, { 'content-type': 'image/png' }).end(bytes);
+        else json(404, { code: 'FILE_NOT_FOUND' });
         return;
       }
       const resolutionPath = /^\/api\/v1\/sync\/resolutions\/([^/]+)$/.exec(url.pathname);

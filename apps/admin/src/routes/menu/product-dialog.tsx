@@ -27,6 +27,7 @@ import { useCurrentLocale } from '@pos/app-kit';
 import { moneyField, optionalMoneyField, useMoney } from '../../lib/money';
 import { useCatalogMutation, useTenantId } from '../../lib/queries';
 import { catalogRequest, draftOf } from './variant-matrix';
+import { ProductImagesEditor } from './product-images';
 import { BarcodeList, type CatalogErrors, VariantsEditor } from './variants-editor';
 
 const required = 'common:validation.required';
@@ -222,6 +223,8 @@ export function ProductDialog({
   const errorText = useErrorText();
   const { toInput } = useMoney();
   const [formError, setFormError] = useState<string | null>(null);
+  // Pictures (ADR 0027): uploaded at once, attached in this order when the product is saved.
+  const [imageFileIds, setImageFileIds] = useState<string[]>(product?.imageFileIds ?? []);
   // Retail capabilities (ADR 0021): what the editor offers follows the tenant's modules.
   const optionsOn = useFeature(Feature.PRODUCT_VARIANTS);
   const barcodesOn = useFeature(Feature.BARCODE);
@@ -290,6 +293,7 @@ export function ProductDialog({
       })),
       stationIds: values.stationIds,
       taxIds: values.taxIds,
+      imageFileIds,
     };
     if (product) return api.menu.products.update(tid, product.id, body);
     return api.menu.products.create(tid, {
@@ -384,6 +388,8 @@ export function ProductDialog({
             />
           )}
         />
+
+        <ProductImagesEditor value={imageFileIds} onChange={setImageFileIds} />
 
         {barcodesOn && !hasVariants ? (
           <Controller

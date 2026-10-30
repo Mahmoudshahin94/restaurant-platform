@@ -1,6 +1,7 @@
 import type {
   Catalog,
   CatalogBarcode,
+  CatalogImage,
   CatalogModifierGroup,
   CatalogProduct,
   LocationMenu,
@@ -21,6 +22,16 @@ function codesOf(barcodes: readonly CatalogBarcode[], variantId: string | null):
     .filter((b) => b.variantId === variantId)
     .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || a.code.localeCompare(b.code))
     .map((b) => b.code);
+}
+
+/** The cover picture of the product (`variantId` null) or of one variant: its first picture. */
+function coverOf(images: readonly CatalogImage[], variantId: string | null): string | null {
+  let cover: CatalogImage | null = null;
+  for (const image of images) {
+    if (image.variantId !== variantId) continue;
+    if (!cover || image.sortOrder < cover.sortOrder) cover = image;
+  }
+  return cover?.fileId ?? null;
 }
 
 function resolveGroup(
@@ -74,6 +85,7 @@ export function resolveLocationMenu(
     const setting = settingByProduct.get(product.id);
     const variants = product.variants.filter(isLive).sort(bySortOrder);
     const barcodes = capabilities.barcodes ? product.barcodes : [];
+    const images = product.images ?? [];
     const resolved: MenuProduct = {
       id: product.id,
       sku: product.sku,
@@ -93,8 +105,10 @@ export function resolveLocationMenu(
         sku: v.sku,
         price: v.price,
         barcodes: codesOf(barcodes, v.id),
+        imageFileId: coverOf(images, v.id),
       })),
       barcodes: variants.length === 0 ? codesOf(barcodes, null) : [],
+      imageFileId: coverOf(images, null),
       modifierGroups: [...product.modifierGroups]
         .sort(
           (a, b) => a.sortOrder - b.sortOrder || a.modifierGroupId.localeCompare(b.modifierGroupId),

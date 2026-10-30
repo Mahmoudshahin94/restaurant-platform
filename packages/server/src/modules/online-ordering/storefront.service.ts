@@ -83,9 +83,13 @@ export class StorefrontService {
       where: { id: fileId, tenantId },
       select: { kind: true },
     });
+    // Pictures of the website's sections, its branding, and the pictures of its products
+    // (ADR 0027); nothing else the tenant uploaded.
     const shown =
       file !== null &&
       (file.kind === TenantFileKind.WEBSITE_IMAGE ||
+        (file.kind === TenantFileKind.PRODUCT_IMAGE &&
+          (await this.prisma.productImage.count({ where: { tenantId, fileId } })) > 0) ||
         (await this.branding.fileIds(tenantId)).includes(fileId));
     if (!shown) throw new DomainError('FILE_NOT_FOUND', 'File not found', { fileId });
     return this.files.content(tenantId, fileId);

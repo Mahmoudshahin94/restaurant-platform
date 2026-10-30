@@ -262,8 +262,9 @@ insert. It records `actorType/actorId`, `source` (POS/KDS/WEBSITE/ADMIN/HUB/SYST
   tenant), `symbology` (`EAN13`, `EAN8`, `UPC_A`, `CODE128`, `OTHER`; check constraint) and
   `isPrimary` (one per product or variant, a partial unique index). A product with variants has
   its codes on the variants. EAN/UPC check digits are verified by `@pos/domain`.
-- `ProductImage`: a `PRODUCT_IMAGE` tenant file shown for a product or one variant, ordered.
-  Cloud only for now (not in the hub snapshot).
+- `ProductImage`: a `PRODUCT_IMAGE` tenant file shown for a product or one variant, ordered; the
+  first is the cover on the POS, the kiosk and the website. The hub receives the covers' rows in
+  its snapshot and downloads their bytes itself ([ADR 0027](adr/0027-product-pictures.md)).
 
 Orders store **snapshots** (name, prices, modifiers) so that later menu edits never change
 historical orders. Since M5 a line also keeps its `sku` (the variant's, else the product's) and
