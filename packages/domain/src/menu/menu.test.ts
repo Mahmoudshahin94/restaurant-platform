@@ -274,6 +274,29 @@ describe('barcodes and SKUs on the menu (ADR 0021)', () => {
   });
 });
 
+describe('product pictures on the menu (ADR 0027)', () => {
+  it('publishes the first picture of each product and of each variant as its cover', () => {
+    const catalog = sampleCatalog();
+    const fries = catalog.products.find((p) => p.id === 'prod-fries')!;
+    fries.images = [
+      { fileId: 'file-second', variantId: null, sortOrder: 1 },
+      { fileId: 'file-first', variantId: null, sortOrder: 0 },
+    ];
+    const cola = catalog.products.find((p) => p.id === 'prod-cola')!;
+    cola.images = [{ fileId: 'file-large', variantId: 'var-large', sortOrder: 0 }];
+    const menu = resolveLocationMenu(catalog, []);
+
+    expect(findMenuProduct(menu, 'prod-fries')!.imageFileId).toBe('file-first');
+    const publishedCola = findMenuProduct(menu, 'prod-cola')!;
+    // A variant's picture is its own; the product without one has no cover.
+    expect(publishedCola.imageFileId).toBeNull();
+    expect(publishedCola.variants.map((v) => [v.id, v.imageFileId])).toEqual([
+      ['var-small', null],
+      ['var-large', 'file-large'],
+    ]);
+  });
+});
+
 describe('isValidSelectionRange', () => {
   it.each([
     [0, null, true],

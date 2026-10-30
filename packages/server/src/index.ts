@@ -33,7 +33,7 @@ export { TerminalAuthService } from './modules/auth/terminal-auth.service';
 export { FeatureService, type FeatureScope } from './modules/features/feature.service';
 export * from './modules/realtime/realtime.bus';
 export { BrandingService } from './modules/branding/branding.service';
-export { TenantFilesService } from './modules/files/tenant-files.service';
+export { TenantFilesService, toTenantFileDto } from './modules/files/tenant-files.service';
 export { sendTenantFile } from './modules/files/file-response';
 export * from './modules/files/tenant-file-storage';
 export { sniffImageType } from './modules/files/image-type';

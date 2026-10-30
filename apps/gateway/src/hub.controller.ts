@@ -95,6 +95,24 @@ export class HubController {
     return sendTenantFile(reply, file, bytes, 'public');
   }
 
+  /**
+   * A product picture the menu shows (ADR 0027), for the POS and the kiosk on the location's
+   * network. Public like the branding: the menu's pictures are what customers see anyway. Only
+   * pictures of the hub's products; `404` until the hub has fetched the file from the cloud.
+   */
+  @Public()
+  @Get('media/:fileId')
+  async media(
+    @Param('fileId', new ZodValidationPipe(idSchema)) fileId: string,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<Buffer> {
+    const tenantId = await this.pairedTenant();
+    const shown = await this.prisma.productImage.count({ where: { tenantId, fileId } });
+    if (!shown) throw new DomainError('FILE_NOT_FOUND', 'File not found', { fileId });
+    const { file, bytes } = await this.files.content(tenantId, fileId);
+    return sendTenantFile(reply, file, bytes, 'public');
+  }
+
   /** "Sync now": send the outbox and check the cloud for configuration changes. */
   @RequirePermissions(['orders.view'], { scope: 'any-location' })
   @Post('sync')

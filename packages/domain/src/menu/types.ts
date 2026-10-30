@@ -45,6 +45,13 @@ export interface CatalogBarcode {
   isPrimary: boolean;
 }
 
+/** A picture of the product, or of one of its variants (`variantId`); the lowest `sortOrder` is its cover. */
+export interface CatalogImage {
+  fileId: string;
+  variantId: string | null;
+  sortOrder: number;
+}
+
 export interface CatalogProductGroupLink {
   modifierGroupId: string;
   sortOrder: number;
@@ -65,6 +72,8 @@ export interface CatalogProduct extends LocalizedName, LocalizedDescription {
   stationIds: string[];
   taxIds: string[];
   barcodes: CatalogBarcode[];
+  /** Pictures of the product and its variants (none: shown as text). */
+  images?: CatalogImage[];
 }
 
 export interface CatalogTax extends LocalizedName {
@@ -121,6 +130,8 @@ export interface MenuVariant extends LocalizedName {
   price: number;
   /** The variant's barcodes, primary first (none without the BARCODE module). */
   barcodes: string[];
+  /** The variant's own cover picture (a tenant file id), or null: show the product's. */
+  imageFileId: string | null;
 }
 
 export interface MenuProduct extends LocalizedName, LocalizedDescription {
@@ -139,6 +150,8 @@ export interface MenuProduct extends LocalizedName, LocalizedDescription {
    * by its variants' codes). None without the BARCODE module (ADR 0021).
    */
   barcodes: string[];
+  /** The product's cover picture (a tenant file id), or null when it has none. */
+  imageFileId: string | null;
 }
 
 export interface MenuCategory extends LocalizedName, LocalizedDescription {

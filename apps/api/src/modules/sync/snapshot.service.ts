@@ -1,12 +1,14 @@
 import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
+import { DomainError } from '@pos/domain';
 import {
   BrandingService,
   PrismaService,
   TENANT_FILE_STORAGE,
   type TenantFileStorage,
+  toTenantFileDto,
 } from '@pos/server';
-import type { LocationSnapshot, SnapshotTable } from '@pos/validation';
+import type { LocationSnapshot, SnapshotTable, TenantFileDto } from '@pos/validation';
 import type { AuthenticatedDevice } from '../devices/device.guard';
 
 /**
@@ -23,6 +25,24 @@ export class SnapshotService {
     @Inject(TENANT_FILE_STORAGE) private readonly storage: TenantFileStorage,
   ) {}
 
+  /**
+   * A product picture of the hub's tenant, for the hub to keep (ADR 0027). Only files a product
+   * or variant shows: nothing else the tenant uploaded leaves the cloud this way.
+   */
+  async productPicture(
+    device: AuthenticatedDevice,
+    fileId: string,
+  ): Promise<{ file: TenantFileDto; bytes: Buffer }> {
+    const { tenantId } = device;
+    const shown = await this.prisma.productImage.count({ where: { tenantId, fileId } });
+    const file = shown
+      ? await this.prisma.tenantFile.findFirst({ where: { id: fileId, tenantId } })
+      : null;
+    const bytes = file ? await this.storage.get(tenantId, file.storageKey) : null;
+    if (!file || !bytes) throw new DomainError('FILE_NOT_FOUND', 'File not found', { fileId });
+    return { file: toTenantFileDto(file), bytes };
+  }
+
   async build(device: AuthenticatedDevice): Promise<LocationSnapshot> {
     const { tenantId, locationId } = device;
     const db = this.prisma;
@@ -38,11 +58,25 @@ export class SnapshotService {
 
     // Branding (ADR 0019): only the files it shows travel, with their bytes.
     const fileIds = await this.branding.fileIds(tenantId);
-    const tenantFiles = fileIds.length
-      ? await db.tenantFile.findMany({ where: { tenantId, id: { in: fileIds } }, orderBy: byId })
+    // Product pictures (ADR 0027): the cover of each product and variant, what the POS and the
+    // kiosk show. Their rows travel here; the hub fetches their bytes itself (GET /sync/files),
+    // so a menu edit does not resend every picture.
+    const productImages = coversOf(
+      await db.productImage.findMany({
+        where: { tenantId },
+        orderBy: [{ productId: 'asc' }, { variantId: 'asc' }, { sortOrder: 'asc' }, byId],
+      }),
+    );
+    const allFileIds = [...new Set([...fileIds, ...productImages.map((i) => i.fileId)])];
+    const tenantFiles = allFileIds.length
+      ? await db.tenantFile.findMany({
+          where: { tenantId, id: { in: allFileIds } },
+          orderBy: byId,
+        })
       : [];
     const files: LocationSnapshot['files'] = [];
     for (const file of tenantFiles) {
+      if (!fileIds.includes(file.id)) continue;
       const bytes = await this.storage.get(tenantId, file.storageKey);
       if (bytes) files.push({ id: file.id, content: bytes.toString('base64') });
     }
@@ -159,6 +193,7 @@ export class SnapshotService {
       // storage are simply not served by the hub either.
       tenantFiles,
       tenantBranding: await db.tenantBranding.findMany({ where: { tenantId } }),
+      productImages,
       // Orders taken through the cloud before the hub was paired keep their numbers (ADR 0012).
       orderCounters: await db.orderCounter.findMany({
         where: { locationId, businessDate: { gte: new Date(Date.now() - 2 * 24 * 60 * 60_000) } },
@@ -174,7 +209,7 @@ export class SnapshotService {
       .digest('hex')
       .slice(0, 32);
     return {
-      format: 7,
+      format: 8,
       tenantId,
       locationId,
       generatedAt: new Date().toISOString(),
@@ -183,4 +218,15 @@ export class SnapshotService {
       files,
     };
   }
+}
+
+/** The first picture of each product and of each variant (rows ordered by product, variant, sort). */
+function coversOf<T extends { productId: string; variantId: string | null }>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const key = `${row.productId}:${row.variantId ?? ''}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }

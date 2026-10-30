@@ -154,6 +154,8 @@ export const SNAPSHOT_TABLES = [
   /** Branding (ADR 0019): the files it shows, then the tenant's branding row. */
   'tenantFiles',
   'tenantBranding',
+  /** Product pictures (ADR 0027): the cover of each product and variant (their files above). */
+  'productImages',
   /** The cloud's order numbers of recent business days: a hub paired mid-day continues them. */
   'orderCounters',
 ] as const;
@@ -164,9 +166,9 @@ export const locationSnapshotSchema = z.object({
    * Bumped when the snapshot format changes incompatibly (2: the tenant rename, ADR 0017; 3: the
    * modules a hub must enforce, ADR 0018; 4: branding and its files, ADR 0019; 5: options and
    * barcodes, ADR 0021; 6: terminals waiting to pair, ADR 0022; 7: payment provider accounts,
-   * ADR 0024).
+   * ADR 0024; 8: product pictures, ADR 0027).
    */
-  format: z.literal(7),
+  format: z.literal(8),
   tenantId: idSchema,
   locationId: idSchema,
   generatedAt: isoDateTimeSchema,
@@ -176,8 +178,9 @@ export const locationSnapshotSchema = z.object({
     Object.fromEntries(SNAPSHOT_TABLES.map((t) => [t, rows])) as Record<SnapshotTable, typeof rows>,
   ),
   /**
-   * The bytes of every file in `tables.tenantFiles` (base64): the logos and favicons the hub
-   * serves offline. Checked against each row's SHA-256 before they are stored.
+   * The bytes of the branding files in `tables.tenantFiles` (base64): the logos and favicons the
+   * hub serves offline. Checked against each row's SHA-256 before they are stored. Product
+   * pictures come without bytes; the hub fetches them (`GET /sync/files/:fileId`, ADR 0027).
    */
   files: z.array(z.object({ id: idSchema, content: z.base64() })),
 });

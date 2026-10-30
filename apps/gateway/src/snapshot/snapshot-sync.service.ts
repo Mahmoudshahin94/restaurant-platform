@@ -14,8 +14,9 @@ import {
 import { locationSnapshotSchema } from '@pos/validation';
 import { HUB_CONFIG, type HubConfig } from '../config';
 import { asHubTx } from '../database/hub-database';
-import { HubStateService } from '../hub-state.service';
+import { HubStateService, type Pairing } from '../hub-state.service';
 import { applySnapshot, belongsToTenant, storeSnapshotFiles } from './apply-snapshot';
+import { fetchProductPictures } from './product-pictures';
 import { hubHeaders, tenantRefusalOf, upgradeRefusalOf } from '../sync/cloud-client';
 
 export type SnapshotOutcome =
@@ -82,6 +83,8 @@ export class SnapshotSyncService implements OnApplicationBootstrap, OnModuleDest
 
     if (response.status === 304) {
       this.state.markCloud('ONLINE');
+      // Pictures a previous pull could not fetch are tried again.
+      void this.pictures(pairing, current?.version ?? null);
       return 'unchanged';
     }
     const upgrade = await upgradeRefusalOf(response);
@@ -145,6 +148,33 @@ export class SnapshotSyncService implements OnApplicationBootstrap, OnModuleDest
       ),
     ]);
     this.logger.log(`Applied location snapshot ${snapshot.version}`);
+    void this.pictures(pairing, snapshot.version);
     return 'applied';
+  }
+
+  /**
+   * Fetches the product pictures the menu names and the hub lacks (ADR 0027), after the snapshot
+   * so a slow download never holds the menu back; screens reload their menu when some arrived.
+   */
+  private async pictures(pairing: Pairing, version: string | null): Promise<void> {
+    try {
+      const stored = await fetchProductPictures(
+        asHubTx(this.prisma),
+        this.storage,
+        pairing,
+        this.config.cloudTimeoutMs,
+      );
+      if (stored === 0) return;
+      this.logger.log(`Stored ${String(stored)} product picture(s)`);
+      this.bus.publish([
+        this.bus.event(
+          'menu.updated',
+          { tenantId: pairing.tenantId, locationId: pairing.locationId },
+          { locationId: pairing.locationId, version: version ?? 'pictures' },
+        ),
+      ]);
+    } catch (error) {
+      this.logger.warn(`Product pictures not fetched: ${String(error)}`);
+    }
   }
 }

@@ -537,10 +537,14 @@ const publishedProductSchema = z.object({
       sku: z.string().nullable(),
       price: z.int(),
       barcodes: z.array(z.string()),
+      /** The variant's own cover picture, or null (show the product's). */
+      imageFileId: idSchema.nullable(),
     }),
   ),
   /** Codes of a product without variants (ADR 0021); none without the BARCODE module. */
   barcodes: z.array(z.string()),
+  /** The product's cover picture (a tenant file id; its first picture), or null. */
+  imageFileId: idSchema.nullable(),
   modifierGroups: z.array(
     z.object({
       id: idSchema,
