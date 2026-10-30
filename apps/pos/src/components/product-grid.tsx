@@ -13,10 +13,12 @@ interface ProductGridProps {
   onSelect: (product: PublishedMenuProduct) => void;
   /** Opens manual barcode entry; the button shows only where barcodes are on (ADR 0021). */
   onEnterCode?: () => void;
+  /** Where a product picture is served (ADR 0027); without it, tiles show text only. */
+  pictureUrl?: ((fileId: string) => string) | undefined;
 }
 
 /** Category tabs, quick search and large product tiles (touch-first). */
-export function ProductGrid({ menu, onSelect, onEnterCode }: ProductGridProps) {
+export function ProductGrid({ menu, onSelect, onEnterCode, pictureUrl }: ProductGridProps) {
   const { t } = useTranslation('pos');
   const locale = useCurrentLocale();
   const { format } = useMoneyFormat(menu.currencyCode);
@@ -127,8 +129,11 @@ export function ProductGrid({ menu, onSelect, onEnterCode }: ProductGridProps) {
                   onClick={() => {
                     onSelect(p);
                   }}
-                  className="flex h-full min-h-28 w-full flex-col justify-between gap-2 rounded-xl border-2 bg-card p-4 text-start shadow-sm transition-colors hover:border-primary active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex h-full min-h-28 w-full flex-col justify-between gap-2 overflow-hidden rounded-xl border-2 bg-card p-4 text-start shadow-sm transition-colors hover:border-primary active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
                 >
+                  {pictureUrl && p.imageFileId ? (
+                    <ProductPicture src={pictureUrl(p.imageFileId)} />
+                  ) : null}
                   <span className="text-lg font-semibold leading-snug">
                     {pickLocalized(p, 'name', locale)}
                   </span>
@@ -147,5 +152,26 @@ export function ProductGrid({ menu, onSelect, onEnterCode }: ProductGridProps) {
         </ul>
       )}
     </div>
+  );
+}
+
+/**
+ * The tile's picture, edge to edge above the name. Decorative: the name below says what it is. A
+ * picture the hub has not fetched yet (or cannot serve) simply disappears, leaving a text tile.
+ */
+function ProductPicture({ src }: { src: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return (
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      draggable={false}
+      className="-mx-4 -mt-4 aspect-[4/3] w-[calc(100%+2rem)] max-w-none object-cover"
+      onError={() => {
+        setFailed(true);
+      }}
+    />
   );
 }

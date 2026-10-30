@@ -3,8 +3,12 @@ import { pickLocalized } from '@pos/i18n';
 import type { PublishedMenuProduct } from '@pos/validation';
 import { cn } from '@pos/ui';
 import { useTranslation } from 'react-i18next';
+import { ProductPicture } from './product-picture';
 
-/** One item of the menu, as a large button: its name, price (or "from" price) and availability. */
+/**
+ * One item of the menu, as a large button: its picture (when it has one), name, price (or "from"
+ * price) and availability.
+ */
 export function ProductCard({
   product,
   currency,
@@ -31,10 +35,14 @@ export function ProductCard({
         if (product.isAvailable) onSelect(product);
       }}
       className={cn(
-        'surface flex min-h-40 flex-col justify-between gap-3 rounded-2xl border-2 p-5 text-start transition-transform outline-offset-2 focus-visible:outline-4 active:scale-[0.98]',
+        'surface flex min-h-40 flex-col justify-between gap-3 overflow-hidden rounded-2xl border-2 p-5 text-start transition-transform outline-offset-2 focus-visible:outline-4 active:scale-[0.98]',
         product.isAvailable ? 'border-border' : 'cursor-not-allowed opacity-60',
       )}
     >
+      <ProductPicture
+        fileId={product.imageFileId}
+        className="-mx-5 -mt-5 aspect-[4/3] w-[calc(100%+2.5rem)] max-w-none"
+      />
       <span className="grid gap-1">
         <span className="text-2xl leading-tight font-semibold">
           {pickLocalized(product, 'name', locale)}

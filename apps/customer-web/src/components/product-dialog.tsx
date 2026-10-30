@@ -16,6 +16,7 @@ import { Check } from 'lucide-react';
 import { useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { NewLine } from '../stores/cart';
+import { ProductPicture } from './product-picture';
 import { QuantityStepper } from './quantity-stepper';
 
 interface ProductDialogProps {
@@ -84,9 +85,13 @@ export function ProductDialog({ product, currency, initial, onConfirm }: Product
       selected ? 'border-primary bg-primary/10' : 'border-border bg-card hover:bg-muted',
     );
   const description = pickLocalized(product, 'description', locale);
+  // The chosen variant's own picture (a colour, a size), else the product's cover.
+  const picture =
+    product.variants.find((v) => v.id === variantId)?.imageFileId ?? product.imageFileId;
 
   return (
     <DialogContent closeLabel={t('common:actions.close')} className="max-w-xl">
+      <ProductPicture fileId={picture} className="aspect-[16/9] w-full rounded-lg" />
       <DialogHeader>
         <DialogTitle className="text-xl">{pickLocalized(product, 'name', locale)}</DialogTitle>
         {description ? <DialogDescription>{description}</DialogDescription> : null}

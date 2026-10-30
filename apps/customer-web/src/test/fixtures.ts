@@ -23,6 +23,7 @@ export const burger: PublishedMenuProduct = {
   taxIds: [id(90)],
   variants: [],
   barcodes: [],
+  imageFileId: null,
   modifierGroups: [
     {
       id: id(10),
@@ -58,10 +59,27 @@ export const cola: PublishedMenuProduct = {
   price: 600,
   modifierGroups: [],
   variants: [
-    { id: id(31), nameEn: 'Small', nameAr: 'صغير', sku: null, price: 600, barcodes: [] },
-    { id: id(32), nameEn: 'Large', nameAr: 'كبير', sku: null, price: 800, barcodes: [] },
+    {
+      id: id(31),
+      nameEn: 'Small',
+      nameAr: 'صغير',
+      sku: null,
+      price: 600,
+      barcodes: [],
+      imageFileId: null,
+    },
+    {
+      id: id(32),
+      nameEn: 'Large',
+      nameAr: 'كبير',
+      sku: null,
+      price: 800,
+      barcodes: [],
+      imageFileId: null,
+    },
   ],
   barcodes: [],
+  imageFileId: null,
 };
 
 export const menu: PublishedMenu = {

@@ -21,6 +21,7 @@ const burger: PublishedMenuProduct = {
   taxIds: [],
   variants: [],
   barcodes: [],
+  imageFileId: null,
   modifierGroups: [
     {
       id: id(10),

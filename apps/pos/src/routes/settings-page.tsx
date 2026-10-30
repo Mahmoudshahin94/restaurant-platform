@@ -9,7 +9,9 @@ import {
   Dialog,
   Field,
   Input,
+  Label,
   NativeSelect,
+  Switch,
 } from '@pos/ui';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,11 +19,11 @@ import { ReceiptPreview } from '../components/receipt-preview';
 import { isTauri } from '../lib/device';
 import { usePreferences } from '../stores/preferences';
 
-/** Terminal settings: the receipt printer used by this POS. */
+/** Terminal settings: theme, menu pictures and the receipt printer used by this POS. */
 export function SettingsPage() {
-  const { t, i18n } = useTranslation(['payments', 'receipt', 'common']);
+  const { t, i18n } = useTranslation(['payments', 'receipt', 'common', 'pos']);
   const locale = useCurrentLocale();
-  const { printer, setPrinter } = usePreferences();
+  const { printer, setPrinter, showPictures, setShowPictures } = usePreferences();
   const [testDoc, setTestDoc] = useState<ReceiptDocument | null>(null);
 
   const showTest = () => {
@@ -67,6 +69,18 @@ export function SettingsPage() {
         </CardHeader>
         <CardContent>
           <ThemeSwitcher className="h-12 w-full text-base" />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('pos:menu.settings.title')}</CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-start justify-between gap-4">
+          <div className="grid gap-1">
+            <Label htmlFor="show-pictures">{t('pos:menu.settings.pictures')}</Label>
+            <p className="text-sm text-muted-foreground">{t('pos:menu.settings.picturesHint')}</p>
+          </div>
+          <Switch id="show-pictures" checked={showPictures} onCheckedChange={setShowPictures} />
         </CardContent>
       </Card>
       <Card>

@@ -157,5 +157,18 @@
     "variantsNoOverride": "Priced by size",
     "saved": "Saved for {{name}}",
     "noLocation": "Choose a location to manage availability."
+  },
+  "images": {
+    "title": "Pictures",
+    "hint": "The first picture is the cover shown on the POS, the kiosk and the website. Pictures are made smaller before they are uploaded.",
+    "add": "Add pictures",
+    "uploading": "Uploading…",
+    "cover": "Cover",
+    "moveEarlier": "Move earlier",
+    "moveLater": "Move later",
+    "remove": "Remove picture",
+    "alt": "Picture {{position}}",
+    "limit": "A product can have up to {{count}} pictures.",
+    "tooLarge": "{{name}} is too large even after resizing (2 MB at most)."
   }
 }

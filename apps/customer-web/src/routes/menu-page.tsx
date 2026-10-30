@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router';
 import { OrderingBadge, OrderingNotice } from '../components/ordering-status';
 import { ProductDialog } from '../components/product-dialog';
+import { ProductPicture } from '../components/product-picture';
 import { useLocation, useMenu } from '../lib/queries';
 import { useCartQuote } from '../lib/quote';
 import { cartCount, useCart } from '../stores/cart';
@@ -32,6 +33,7 @@ function ProductCard({
   const description = pickLocalized(product, 'description', locale);
   return (
     <li className="flex gap-3 rounded-lg border bg-card p-4" data-testid="product-card">
+      <ProductPicture fileId={product.imageFileId} className="size-24 shrink-0 rounded-md" />
       <div className="grid min-w-0 flex-1 gap-1">
         <h3 className="font-semibold">{name}</h3>
         {description ? (

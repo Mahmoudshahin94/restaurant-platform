@@ -5,6 +5,7 @@ import { Badge, cn } from '@pos/ui';
 import type { PublicLocation, PublishedMenuProduct, WebsiteSectionOf } from '@pos/validation';
 import { ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { ProductPicture } from '../components/product-picture';
 import { Link } from 'react-router';
 import { useMenu } from '../lib/queries';
 import { SectionFrame, useLocalizedText, useSiteContext } from './section-kit';
@@ -47,9 +48,13 @@ function FeaturedProducts({
           <li key={product.id}>
             <Link
               to={`/l/${location.id}`}
-              className="grid h-full gap-1 rounded-lg border bg-card p-4 text-card-foreground hover:border-primary"
+              className="grid h-full content-start gap-1 overflow-hidden rounded-lg border bg-card p-4 text-card-foreground hover:border-primary"
               data-testid="featured-product"
             >
+              <ProductPicture
+                fileId={product.imageFileId}
+                className="-mx-4 -mt-4 mb-2 aspect-[4/3] w-[calc(100%+2rem)] max-w-none"
+              />
               <span className="font-semibold">{name}</span>
               {description ? (
                 <span className="line-clamp-2 text-sm text-muted-foreground">{description}</span>

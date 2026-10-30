@@ -13,6 +13,7 @@ import {
 } from '@pos/ui';
 import { Check, Minus, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { ProductPicture } from './product-picture';
 import { useTranslation } from 'react-i18next';
 
 export interface OptionsChoice {
@@ -84,12 +85,16 @@ export function OptionsDialog({
       selected ? 'border-primary bg-primary/10' : 'border-border bg-card',
     );
   const description = pickLocalized(product, 'description', locale);
+  // The chosen variant's own picture (a colour, a size), else the product's cover.
+  const picture =
+    product.variants.find((v) => v.id === variantId)?.imageFileId ?? product.imageFileId;
 
   return (
     <DialogContent
       closeLabel={t('common:actions.close')}
       className="max-h-[90vh] max-w-3xl overflow-y-auto"
     >
+      <ProductPicture fileId={picture} className="aspect-[16/9] w-full rounded-xl" />
       <DialogHeader>
         <DialogTitle className="text-3xl">{pickLocalized(product, 'name', locale)}</DialogTitle>
         {description ? (
