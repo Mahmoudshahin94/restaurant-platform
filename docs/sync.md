@@ -79,6 +79,14 @@ run providers that need no secret (the kiosk's reader, cash and external card). 
 carry `providerAccountId`; the cloud refuses an account of another tenant (`SYNC_SCOPE_MISMATCH`).
 Orders the hub fetches carry the account id of their online payments, never a secret.
 
+Since product pictures ([ADR 0027](adr/0027-product-pictures.md)) the snapshot is `format: 8`. It
+carries `productImages`, the cover picture of each product and variant, and their `tenantFiles`
+rows **without bytes**; `files` still carries only the branding files. After applying a snapshot
+the hub downloads each cover it lacks from `GET /sync/files/:fileId` (device credential, only
+pictures its tenant's products show), checks the SHA-256, size and image type, keeps it, and sends
+`menu.updated`. A failed download is tried again after the next snapshot. A trigger on
+`product_images` makes a picture-only change a `CONFIG` change.
+
 Format 6 came with self-service kiosks
 ([ADR 0022](adr/0022-self-service-kiosk.md)): a device row also carries `pairingCodeHash` and
 `pairingExpiresAt` while the terminal waits to pair, so the hub pairs it without the cloud. Devices

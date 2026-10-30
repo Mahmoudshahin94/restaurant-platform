@@ -772,6 +772,89 @@ describe('barcodes offline (ADR 0021)', () => {
   });
 });
 
+describe('product pictures (ADR 0027)', () => {
+  /** A real 1×1 PNG. */
+  const PNG = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNQTX4NAAIkAXSaGkHUAAAAAElFTkSuQmCC',
+    'base64',
+  );
+
+  /** A picture of the fries in the snapshot (its row only), and its bytes at the cloud. */
+  function withPicture(bytesAtCloud: Buffer = PNG): string {
+    const { tenantId, fries } = fixture.ids;
+    const fileId = newId();
+    fixture.tables.tenantFiles = [
+      {
+        id: fileId,
+        tenantId,
+        kind: 'PRODUCT_IMAGE',
+        storageKey: `tenants/${tenantId}/product_image/${fileId}.png`,
+        contentType: 'image/png',
+        sizeBytes: PNG.length,
+        sha256: createHash('sha256').update(PNG).digest('hex'),
+        createdAt: new Date().toISOString(),
+      },
+    ];
+    fixture.tables.productImages = [
+      {
+        id: newId(),
+        tenantId,
+        productId: fries,
+        variantId: null,
+        fileId,
+        sortOrder: 0,
+        createdAt: new Date().toISOString(),
+      },
+    ];
+    cloud.files.set(fileId, bytesAtCloud);
+    cloud.snapshot = withVersion(fixture.ids, fixture.tables);
+    return fileId;
+  }
+
+  const media = (fileId: string) =>
+    hub.app.inject({ method: 'GET', url: `${api}/hub/media/${fileId}` });
+
+  async function eventually(fileId: string, status: number) {
+    for (let i = 0; i < 50; i += 1) {
+      if ((await media(fileId)).statusCode === status) return;
+      await new Promise((done) => setTimeout(done, 100));
+    }
+    throw new Error(`picture ${fileId} never answered ${String(status)}`);
+  }
+
+  it('fetches the menu’s pictures after the snapshot and serves them offline', async () => {
+    const fileId = withPicture();
+    await provision();
+    await eventually(fileId, 200);
+    await cloud.stop();
+    const picture = await media(fileId);
+    expect(picture.headers['content-type']).toBe('image/png');
+    expect(picture.rawPayload.equals(PNG)).toBe(true);
+
+    const owner = await signIn('owner@hub.test');
+    const menu = (
+      await hub.app.inject({ method: 'GET', url: `${loc()}/menu`, headers: owner })
+    ).json<PublishedMenu>();
+    const fries = menu.categories.flatMap((c) => c.products).find((p) => p.nameEn === 'Fries');
+    expect(fries?.imageFileId).toBe(fileId);
+    // Only the menu's pictures are public on the location network.
+    expect((await media(newId())).statusCode).toBe(404);
+    await cloud.start();
+  });
+
+  it('keeps a picture whose bytes do not match its checksum out, and the menu still works', async () => {
+    const fileId = withPicture(Buffer.concat([PNG, Buffer.from([0])]));
+    await provision();
+    // Give the download its chance, then check nothing was stored.
+    await new Promise((done) => setTimeout(done, 500));
+    expect((await media(fileId)).statusCode).toBe(404);
+    const owner = await signIn('owner@hub.test');
+    expect(
+      (await hub.app.inject({ method: 'GET', url: `${loc()}/menu`, headers: owner })).statusCode,
+    ).toBe(200);
+  });
+});
+
 describe('branding offline (ADR 0019)', () => {
   /** A real 1×1 PNG, and the snapshot rows that show it as the tenant's logo on the KDS. */
   const PNG = Buffer.from(
