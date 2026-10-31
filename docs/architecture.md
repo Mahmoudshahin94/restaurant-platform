@@ -1210,6 +1210,20 @@ each still a full tenant:
 - **Demo:** "Demo Foods Group" with Burger House and Pizza Point; `SEED_DEMO_ORDERS=1` adds 30 days of
   orders.
 
+**Phase E1 verification (2026-11-01):** `pnpm typecheck`, `lint`, `test` (1,355 unit, integration and
+component tests: API 447, domain 302, gateway 98, admin 94, app-kit 68, validation 53, server 48, i18n
+46, ui 40, platform admin 35, database 30, customer-web 25, POS 24, api-client 17, kiosk 11, KDS 9,
+receipts 8), `pnpm test:tools` (21), `pnpm version:check`, `format:check` and all 48 Playwright E2E
+tests (POS 16, admin 13, customer-web 8, KDS 4, platform admin 4, kiosk 3) in one run, including the
+new scenarios 35 and 36. A manual browser check against a separate, freshly seeded database
+(`SEED_DEMO_ORDERS=1`), screenshots in [madar/e1-screenshots/](madar/e1-screenshots/): the
+organization owner signing in once, the organization dashboard and a report in light and dark, English
+and Arabic (RTL); members added and removed through the confirm dialog; switching to Pizza Point and
+back; a person with one brand getting "Page not found" on `/org/<id>`; the platform admin's
+Organizations list and detail. The check found one defect, fixed: the chart's date labels were
+scrambled in Arabic. A focused row action never slid under the data table's sticky header, tabbing
+forward and backward through a scrolled table.
+
 ## Architectural decisions and open questions
 
 Recorded as ADRs in [adr/](adr/):
