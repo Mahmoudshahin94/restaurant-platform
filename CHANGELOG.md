@@ -5,6 +5,15 @@ hub, and the admin, POS, KDS, kiosk, website and platform admin apps (ADR 0026).
 [semantic versioning](https://semver.org/); [docs/release.md](docs/release.md) describes how a
 release is cut and rolled out.
 
+## [Unreleased]
+
+### Added
+
+- **Enterprise design system (E0, ADR 0028).** A UI/UX audit of every app, with screenshots, and the approved
+  design system: three surface profiles (storefront, counter, console), a complete token set, the button spec,
+  the shared components to build and an accessibility bar
+  ([docs/madar/design-system.md](docs/madar/design-system.md)). No product code changes yet.
+
 ## [1.0.0] - 2026-10-29
 
 The first MADAR release: the offline-first restaurant POS/KDS/online-ordering platform (original
