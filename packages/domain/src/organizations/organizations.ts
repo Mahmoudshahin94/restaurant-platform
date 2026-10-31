@@ -31,17 +31,18 @@ export function assertOrganizationCurrency(
 
 /**
  * Rejects a member change that would leave the organization without an owner. `role: null` removes
- * the member; any other role replaces theirs. `members` is the organization's current membership.
+ * the member; any other role replaces theirs (a member not yet listed is added). Making someone an
+ * owner never throws. `members` is the organization's current membership.
  */
 export function assertOwnersRemain(
   members: readonly { id: string; role: OrganizationRole }[],
   change: { memberId: string; role: OrganizationRole | null },
 ): void {
-  const ownersAfter = members.filter((member) => {
-    const role = member.id === change.memberId ? change.role : member.role;
-    return role === 'OWNER';
-  });
-  if (ownersAfter.length === 0) {
+  if (change.role === 'OWNER') return;
+  const otherOwners = members.filter(
+    (member) => member.id !== change.memberId && member.role === 'OWNER',
+  );
+  if (otherOwners.length === 0) {
     throw new DomainError(
       'ORGANIZATION_LAST_OWNER',
       'An organization must keep at least one owner',

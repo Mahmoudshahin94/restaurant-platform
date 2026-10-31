@@ -103,6 +103,28 @@ describe('assertOwnersRemain', () => {
     ).toBeNull();
   });
 
+  it('adding an owner who is not yet a member never throws', () => {
+    const managers = [{ id: 'b', role: OrganizationRole.MANAGER }];
+    expect(
+      codeOf(() => {
+        assertOwnersRemain(managers, { memberId: 'z', role: OrganizationRole.OWNER });
+      }),
+    ).toBeNull();
+    expect(
+      codeOf(() => {
+        assertOwnersRemain([], { memberId: 'z', role: OrganizationRole.OWNER });
+      }),
+    ).toBeNull();
+  });
+
+  it('removing an unknown member leaves the owners untouched', () => {
+    expect(
+      codeOf(() => {
+        assertOwnersRemain(sole, { memberId: 'z', role: null });
+      }),
+    ).toBeNull();
+  });
+
   it('promoting a member to owner leaves an owner', () => {
     expect(
       codeOf(() => {
