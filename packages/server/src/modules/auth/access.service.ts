@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { DomainError, type RoleAssignment, assertTenantAccess } from '@pos/domain';
 import { isPermission } from '@pos/shared-types';
 import type { AuthUser } from '@pos/validation';
 import type { Principal } from '../../common/auth/principal';
 import { TenantContext } from '../../common/tenancy/tenant-context';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ACCOUNT_DIRECTORY, type AccountDirectory } from './account-directory';
 
 const userWithRolesInclude = {
   roles: { include: { role: { include: { permissions: true } } } },
@@ -18,7 +19,10 @@ const principalInclude = {
 /** Loads a user's effective role assignments. Always read from the database, never from the token. */
 @Injectable()
 export class AccessService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(ACCOUNT_DIRECTORY) private readonly directory: AccountDirectory,
+  ) {}
 
   /**
    * Loads the user inside the token's tenant, so a user of another tenant is simply unknown. A
@@ -44,13 +48,19 @@ export class AccessService {
     };
   }
 
+  /** The signed-in user, with the brands and organizations of their account (for the switcher). */
   async loadAuthUser(userId: string): Promise<AuthUser> {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
       include: userWithRolesInclude,
     });
+    const [tenants, organizations] = await Promise.all([
+      this.directory.brandsFor(user.accountId),
+      this.directory.organizationsFor(user.accountId),
+    ]);
     return {
       id: user.id,
+      accountId: user.accountId,
       email: user.email,
       displayName: user.displayName,
       preferredLocale: user.preferredLocale,
@@ -61,6 +71,8 @@ export class AccessService {
         locationId: ur.locationId,
         permissions: ur.role.permissions.map((p) => p.permissionKey).filter(isPermission),
       })),
+      tenants,
+      organizations,
     };
   }
 }

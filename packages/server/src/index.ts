@@ -27,6 +27,7 @@ export * from './common/validation/zod-validation.pipe';
 export * from './modules/audit/audit.service';
 export { redactForAudit } from './modules/audit/redact';
 export * from './modules/auth/access.service';
+export * from './modules/auth/account-directory';
 export * from './modules/auth/token.service';
 export * from './modules/auth/platform-token.service';
 export { TerminalAuthService } from './modules/auth/terminal-auth.service';

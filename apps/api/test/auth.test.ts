@@ -2,13 +2,14 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { PrismaClient } from '@pos/database';
 import type { ApiErrorBody } from '@pos/shared-types';
 import type { TokenResponse } from '@pos/validation';
-import { SignJWT } from 'jose';
+import { SignJWT, decodeJwt } from 'jose';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { testConfig } from './env';
 import {
   ORIGIN,
   PASSWORD,
   type TenantFixture,
+  addAccountUser,
   bearer,
   createTenant,
   login,
@@ -101,6 +102,206 @@ describe('POST /auth/login', () => {
     const body = res.json<ApiErrorBody>();
     expect(body.code).toBe('VALIDATION_FAILED');
     expect(body.details.issues).toBeInstanceOf(Array);
+  });
+});
+
+/** The tenant the access token of a sign-in response is for. */
+function tidOf(res: Awaited<ReturnType<typeof postLogin>>): unknown {
+  return decodeJwt(res.json<TokenResponse>().accessToken).tid;
+}
+
+describe('sign-in through accounts', () => {
+  let brandB: TenantFixture;
+  let ownerInB: string;
+
+  beforeEach(async () => {
+    brandB = await createTenant(prisma);
+    ownerInB = await addAccountUser(prisma, tenant.owner.email, brandB);
+  });
+
+  it("login returns the account's brands", async () => {
+    const res = await postLogin({ email: tenant.owner.email, password: PASSWORD });
+    expect(res.statusCode).toBe(200);
+    const { user } = res.json<TokenResponse>();
+    const account = await prisma.account.findUniqueOrThrow({
+      where: { email: tenant.owner.email },
+    });
+    expect(user.accountId).toBe(account.id);
+    expect(user.tenants.map((t) => t.id).sort()).toEqual([tenant.tenantId, brandB.tenantId].sort());
+    expect(user.tenants.find((t) => t.id === brandB.tenantId)).toEqual({
+      id: brandB.tenantId,
+      nameEn: 'Test Tenant',
+      nameAr: 'مطعم تجريبي',
+      logoFileId: null,
+      organizationId: null,
+    });
+    expect(user.organizations).toEqual([]);
+
+    // The same lists on /auth/me; a one-brand person gets one entry.
+    const me = await app.inject({
+      method: 'GET',
+      url: '/api/v1/auth/me',
+      headers: bearer(res.json<TokenResponse>().accessToken),
+    });
+    expect(me.json<TokenResponse['user']>().tenants).toHaveLength(2);
+    const refreshed = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/refresh',
+      cookies: { pos_rt: refreshCookie(res.headers['set-cookie']) },
+      headers: { origin: ORIGIN },
+    });
+    expect(refreshed.json<TokenResponse>().user.tenants).toHaveLength(2);
+    const cashier = await postLogin({ email: tenant.cashier.email, password: PASSWORD });
+    expect(cashier.json<TokenResponse>().user.tenants.map((t) => t.id)).toEqual([tenant.tenantId]);
+  });
+
+  it('login honours tenantId, then the last brand', async () => {
+    const chosen = await postLogin({
+      email: tenant.owner.email,
+      password: PASSWORD,
+      tenantId: brandB.tenantId,
+    });
+    expect(chosen.statusCode).toBe(200);
+    expect(tidOf(chosen)).toBe(brandB.tenantId);
+    expect(chosen.json<TokenResponse>().user.id).toBe(ownerInB);
+    const audit = await prisma.auditLog.findFirst({
+      where: { action: 'auth.login', tenantId: brandB.tenantId },
+    });
+    expect(audit?.actorId).toBe(ownerInB);
+
+    const again = await postLogin({ email: tenant.owner.email, password: PASSWORD });
+    expect(tidOf(again)).toBe(brandB.tenantId);
+    const account = await prisma.account.findUniqueOrThrow({
+      where: { email: tenant.owner.email },
+    });
+    expect(account.lastTenantId).toBe(brandB.tenantId);
+  });
+
+  it('a stale last brand falls back', async () => {
+    await postLogin({ email: tenant.owner.email, password: PASSWORD, tenantId: brandB.tenantId });
+    await prisma.user.update({ where: { id: ownerInB }, data: { isActive: false } });
+    const res = await postLogin({ email: tenant.owner.email, password: PASSWORD });
+    expect(res.statusCode).toBe(200);
+    expect(tidOf(res)).toBe(tenant.tenantId);
+    expect(res.json<TokenResponse>().user.tenants.map((t) => t.id)).toEqual([tenant.tenantId]);
+    // Asking for the brand of the deactivated user is ignored the same way.
+    const asked = await postLogin({
+      email: tenant.owner.email,
+      password: PASSWORD,
+      tenantId: brandB.tenantId,
+    });
+    expect(tidOf(asked)).toBe(tenant.tenantId);
+
+    // A suspended last brand too.
+    await prisma.user.update({ where: { id: ownerInB }, data: { isActive: true } });
+    await prisma.account.update({
+      where: { email: tenant.owner.email },
+      data: { lastTenantId: brandB.tenantId },
+    });
+    await prisma.tenant.update({ where: { id: brandB.tenantId }, data: { status: 'SUSPENDED' } });
+    const suspended = await postLogin({ email: tenant.owner.email, password: PASSWORD });
+    expect(tidOf(suspended)).toBe(tenant.tenantId);
+  });
+
+  it('no usable brand is ACCOUNT_DISABLED', async () => {
+    await prisma.user.updateMany({
+      where: { id: { in: [tenant.owner.id, ownerInB] } },
+      data: { isActive: false },
+    });
+    const disabled = await postLogin({ email: tenant.owner.email, password: PASSWORD });
+    expect(disabled.statusCode).toBe(403);
+    expect(disabled.json<ApiErrorBody>().code).toBe('ACCOUNT_DISABLED');
+    expect(disabled.body).not.toContain(tenant.tenantId);
+    expect(disabled.body).not.toContain(brandB.tenantId);
+
+    await prisma.user.updateMany({
+      where: { id: { in: [tenant.owner.id, ownerInB] } },
+      data: { isActive: true },
+    });
+    await prisma.tenant.updateMany({
+      where: { id: { in: [tenant.tenantId, brandB.tenantId] } },
+      data: { status: 'SUSPENDED' },
+    });
+    const suspended = await postLogin({ email: tenant.owner.email, password: PASSWORD });
+    expect(suspended.statusCode).toBe(403);
+    expect(suspended.json<ApiErrorBody>().code).toBe('TENANT_SUSPENDED');
+    expect(suspended.body).not.toContain(tenant.tenantId);
+    expect(suspended.body).not.toContain(brandB.tenantId);
+  });
+
+  it('e-mail is trimmed and case-insensitive', async () => {
+    const res = await postLogin({
+      email: `  ${tenant.owner.email.replace('owner', 'Owner').toUpperCase()} `,
+      password: PASSWORD,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<TokenResponse>().user.email).toBe(tenant.owner.email);
+  });
+
+  it('a login for another tenant id is ignored, not an error', async () => {
+    const foreign = await createTenant(prisma);
+    const res = await postLogin({
+      email: tenant.cashier.email,
+      password: PASSWORD,
+      tenantId: foreign.tenantId,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(tidOf(res)).toBe(tenant.tenantId);
+    expect(res.json<TokenResponse>().user.id).toBe(tenant.cashier.id);
+  });
+
+  it("a linked user counts only while the brand's organization is active", async () => {
+    const organization = await prisma.organization.create({
+      data: {
+        slug: `org-${brandB.tenantId.slice(-8)}`,
+        nameEn: 'Group',
+        nameAr: 'المجموعة',
+        currencyCode: 'SAR',
+      },
+    });
+    const account = await prisma.account.findUniqueOrThrow({
+      where: { email: tenant.owner.email },
+    });
+    const member = await prisma.organizationMember.create({
+      data: { organizationId: organization.id, accountId: account.id, role: 'FINANCE' },
+    });
+    await prisma.tenant.update({
+      where: { id: brandB.tenantId },
+      data: { organizationId: organization.id },
+    });
+    await prisma.user.update({
+      where: { id: ownerInB },
+      data: { organizationMemberId: member.id },
+    });
+
+    const active = await postLogin({
+      email: tenant.owner.email,
+      password: PASSWORD,
+      tenantId: brandB.tenantId,
+    });
+    expect(tidOf(active)).toBe(brandB.tenantId);
+    const { user } = active.json<TokenResponse>();
+    expect(user.tenants.find((t) => t.id === brandB.tenantId)?.organizationId).toBe(
+      organization.id,
+    );
+    expect(user.organizations).toEqual([
+      { id: organization.id, nameEn: 'Group', nameAr: 'المجموعة', role: 'FINANCE' },
+    ]);
+
+    await prisma.organization.update({
+      where: { id: organization.id },
+      data: { status: 'SUSPENDED' },
+    });
+    const suspended = await postLogin({
+      email: tenant.owner.email,
+      password: PASSWORD,
+      tenantId: brandB.tenantId,
+    });
+    expect(tidOf(suspended)).toBe(tenant.tenantId);
+    expect(suspended.json<TokenResponse>().user.tenants.map((t) => t.id)).toEqual([
+      tenant.tenantId,
+    ]);
+    expect(suspended.json<TokenResponse>().user.organizations).toEqual([]);
   });
 });
 

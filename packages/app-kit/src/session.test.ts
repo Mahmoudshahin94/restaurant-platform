@@ -3,11 +3,22 @@ import { createSessionClient } from './session';
 
 const user = {
   id: '01890a5d-ac96-774b-bcce-b302099a8057',
+  accountId: '01890a5d-ac96-774b-bcce-b302099a8059',
   email: 'a@b.co',
   displayName: 'A',
   preferredLocale: 'en',
   tenantId: '01890a5d-ac96-774b-bcce-b302099a8058',
   roles: [],
+  tenants: [
+    {
+      id: '01890a5d-ac96-774b-bcce-b302099a8058',
+      nameEn: 'A',
+      nameAr: 'أ',
+      logoFileId: null,
+      organizationId: null,
+    },
+  ],
+  organizations: [],
 };
 
 function respond(body: unknown, status = 200) {

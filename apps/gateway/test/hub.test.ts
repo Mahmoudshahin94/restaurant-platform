@@ -137,6 +137,36 @@ describe('signing in at the hub', () => {
     expect(body.refreshToken).toBeTruthy();
   });
 
+  it('e-mail sign-in uses the synced account', async () => {
+    const ownerAccount = fixture.tables.accounts.find((a) => a.email === 'owner@hub.test');
+    const accountId = ownerAccount?.id as string;
+    const res = await hub.app.inject({
+      method: 'POST',
+      url: `${api}/auth/login`,
+      // Trimmed and case-insensitive; a tenant id the hub does not hold is ignored.
+      payload: { email: ' Owner@Hub.Test', password: PASSWORD, tenantId: newId() },
+    });
+    expect(res.statusCode).toBe(200);
+    const { user } = res.json<TokenResponse>();
+    expect(user.id).toBe(fixture.ids.owner);
+    expect(user.accountId).toBe(accountId);
+    expect(user.tenants).toEqual([
+      {
+        id: fixture.ids.tenantId,
+        nameEn: 'Hub Test',
+        nameAr: expect.any(String) as string,
+        logoFileId: null,
+        organizationId: null,
+      },
+    ]);
+    expect(user.organizations).toEqual([]);
+    // The last brand never leaves the cloud, and the hub does not keep one either.
+    const db = asHubTx(hub.app.get(PrismaService));
+    expect((await db.account.findUniqueOrThrow({ where: { id: accountId } })).lastTenantId).toBe(
+      null,
+    );
+  });
+
   it('locks an employee code after five wrong PINs', async () => {
     for (let i = 0; i < 5; i += 1) {
       expect((await pinSignIn('0000')).json<ApiErrorBody>().code).toBe('INVALID_CREDENTIALS');

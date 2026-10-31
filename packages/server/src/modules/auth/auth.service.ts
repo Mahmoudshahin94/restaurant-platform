@@ -1,16 +1,34 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { hashSecret, verifySecret } from '@pos/database';
 import { DomainError, assertTenantAccess, newId } from '@pos/domain';
 import type { TokenResponse } from '@pos/validation';
+import { SERVER_MODE, type ServerMode } from '../../common/auth/managed-in-cloud';
 import { TenantContext } from '../../common/tenancy/tenant-context';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AccessService } from './access.service';
+import { ACCOUNT_DIRECTORY, type AccountDirectory } from './account-directory';
 import { TokenService } from './token.service';
 
 /** PIN guessing: this many wrong PINs for one employee code lock it for LOCK_MS. */
 const PIN_MAX_FAILURES = 5;
 const PIN_LOCK_MS = 5 * 60_000;
+
+/**
+ * Which of an account's users (oldest first) to sign in: the one in the requested brand, else the
+ * one in the last brand, else the oldest.
+ */
+function pickUser<T extends { tenantId: string }>(
+  users: readonly T[],
+  requested: string | undefined,
+  last: string | null,
+): T | undefined {
+  return (
+    users.find((u) => u.tenantId === requested) ??
+    users.find((u) => u.tenantId === last) ??
+    users[0]
+  );
+}
 
 export interface IssuedSession {
   response: Omit<TokenResponse, 'refreshToken'>;
@@ -29,51 +47,101 @@ export class AuthService {
     private readonly tokens: TokenService,
     private readonly access: AccessService,
     private readonly audit: AuditService,
+    @Inject(ACCOUNT_DIRECTORY) private readonly directory: AccountDirectory,
+    @Inject(SERVER_MODE) private readonly mode: ServerMode,
   ) {}
 
-  async login(email: string, password: string): Promise<IssuedSession> {
-    // Interim until sign-in goes through the shared Account: a person may now have a user in
-    // several brands, so take the oldest one; the rest of the sign-in runs inside its tenant.
-    const user = await TenantContext.runUnscoped('sign-in: find the account by e-mail', () =>
-      this.prisma.user.findFirst({
-        where: { email },
-        orderBy: { createdAt: 'asc' },
-        include: { account: { select: { passwordHash: true } } },
+  /**
+   * Signs a person in by e-mail and password. Their account may have a user in several brands:
+   * sign-in picks the requested brand, else the last one, else the oldest, among the usable ones
+   * (`AccountDirectory.brandsFor`). A brand the account cannot use is ignored, never reported.
+   */
+  async login(email: string, password: string, tenantId?: string): Promise<IssuedSession> {
+    const account = await TenantContext.runUnscoped('sign-in: find the account by e-mail', () =>
+      this.prisma.account.findUnique({
+        where: { email: email.trim().toLowerCase() },
+        select: {
+          id: true,
+          passwordHash: true,
+          lastTenantId: true,
+          users: {
+            orderBy: { createdAt: 'asc' },
+            select: {
+              id: true,
+              tenantId: true,
+              isActive: true,
+              tenant: { select: { status: true } },
+            },
+          },
+        },
       }),
     );
-    if (!user) {
+    if (!account) {
       this.timingDummyHash ??= hashSecret(newId());
       await verifySecret(await this.timingDummyHash, password);
       throw new DomainError('INVALID_CREDENTIALS', 'Invalid email or password');
     }
-    return TenantContext.runInTenant(user.tenantId, () => this.completeLogin(user, password));
-  }
-
-  private async completeLogin(
-    user: {
-      id: string;
-      tenantId: string;
-      isActive: boolean;
-      account: { passwordHash: string };
-    },
-    password: string,
-  ): Promise<IssuedSession> {
-    const valid = await verifySecret(user.account.passwordHash, password);
-    if (!valid) {
-      await this.audit.record({
-        action: 'auth.login_failed',
-        entityType: 'User',
-        entityId: user.id,
-        actorType: 'USER',
-        actorId: user.id,
-        tenantId: user.tenantId,
-        metadata: { reason: 'INVALID_CREDENTIALS' },
-      });
+    if (!(await verifySecret(account.passwordHash, password))) {
+      const user = pickUser(account.users, tenantId, account.lastTenantId);
+      if (user) {
+        await TenantContext.runInTenant(user.tenantId, () =>
+          this.audit.record({
+            action: 'auth.login_failed',
+            entityType: 'User',
+            entityId: user.id,
+            actorType: 'USER',
+            actorId: user.id,
+            tenantId: user.tenantId,
+            metadata: { reason: 'INVALID_CREDENTIALS' },
+          }),
+        );
+      }
       throw new DomainError('INVALID_CREDENTIALS', 'Invalid email or password');
     }
-    if (!user.isActive) throw new DomainError('ACCOUNT_DISABLED', 'Account is disabled');
-    await this.assertTenantOpen(user.tenantId);
 
+    const usable = new Set((await this.directory.brandsFor(account.id)).map((b) => b.id));
+    const user = pickUser(
+      account.users.filter((u) => usable.has(u.tenantId)),
+      tenantId,
+      account.lastTenantId,
+    );
+    if (!user) {
+      // As before accounts: a suspended business says so; otherwise the account is disabled.
+      // Neither names a brand.
+      if (account.users.some((u) => u.isActive && u.tenant.status === 'SUSPENDED')) {
+        assertTenantAccess('SUSPENDED', 'read');
+      }
+      throw new DomainError('ACCOUNT_DISABLED', 'Account is disabled');
+    }
+    // The cloud remembers the brand for the next sign-in; the hub has only one.
+    if (this.mode === 'cloud' && account.lastTenantId !== user.tenantId) {
+      await this.prisma.account.update({
+        where: { id: account.id },
+        data: { lastTenantId: user.tenantId },
+      });
+    }
+    return TenantContext.runInTenant(user.tenantId, () => this.completeLogin(user));
+  }
+
+  /**
+   * The account's user in `tenantId` when the account can use that brand (see `login`), else
+   * null — whether the account has no user there, or one that is deactivated or suspended.
+   */
+  async usableUserFor(
+    accountId: string,
+    tenantId: string,
+  ): Promise<{ id: string; tenantId: string } | null> {
+    const brands = await this.directory.brandsFor(accountId);
+    if (!brands.some((b) => b.id === tenantId)) return null;
+    return TenantContext.runUnscoped("sign-in: find the account's user in a brand", () =>
+      this.prisma.user.findUnique({
+        where: { tenantId_accountId: { tenantId, accountId } },
+        select: { id: true, tenantId: true },
+      }),
+    );
+  }
+
+  private async completeLogin(user: { id: string; tenantId: string }): Promise<IssuedSession> {
     const session = await this.issueSession(user.id, user.tenantId, newId());
     await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     await this.audit.record({

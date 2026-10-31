@@ -146,6 +146,31 @@ export async function createTenant(
   };
 }
 
+/**
+ * Gives the account of `email` a user in another tenant (the same person in a second brand), as
+ * a Cashier at that tenant's location A. Returns the new user's id.
+ */
+export async function addAccountUser(
+  prisma: PrismaClient,
+  email: string,
+  tenant: TenantFixture,
+): Promise<string> {
+  const account = await prisma.account.findUniqueOrThrow({ where: { email } });
+  const cashierRole = await prisma.role.findFirstOrThrow({
+    where: { tenantId: tenant.tenantId, name: 'Cashier' },
+  });
+  const user = await prisma.user.create({
+    data: {
+      tenantId: tenant.tenantId,
+      accountId: account.id,
+      email,
+      displayName: 'Second brand',
+      roles: { create: { roleId: cashierRole.id, locationId: tenant.locationA } },
+    },
+  });
+  return user.id;
+}
+
 export async function login(app: NestFastifyApplication, email: string): Promise<string> {
   const res = await app.inject({
     method: 'POST',

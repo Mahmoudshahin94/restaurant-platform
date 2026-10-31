@@ -1,15 +1,18 @@
-import { PERMISSIONS } from '@pos/shared-types';
+import { OrganizationRole, PERMISSIONS, enumValues } from '@pos/shared-types';
 import { z } from 'zod';
 import { idSchema, localeSchema } from './common';
 
 export const permissionSchema = z.enum(PERMISSIONS);
 
 export const loginRequestSchema = z.object({
-  email: z
-    .email()
-    .max(254)
-    .transform((e) => e.toLowerCase()),
+  /** Accounts store e-mails trimmed and lowercase, so ` Owner@Demo.Local` is the same person. */
+  email: z.string().trim().toLowerCase().pipe(z.email().max(254)),
   password: z.string().min(1).max(256),
+  /**
+   * The brand to sign into, for a person with users in several. Ignored when the account has no
+   * usable user there (sign-in then picks the last brand, else the oldest).
+   */
+  tenantId: idSchema.optional(),
   /**
    * Browser apps receive the refresh token only as an httpOnly cookie. Native clients (the Tauri
    * POS / location hub) cannot rely on cookies and ask for it in the body instead.
@@ -42,13 +45,36 @@ export const roleAssignmentDtoSchema = z.object({
 });
 export type RoleAssignmentDto = z.infer<typeof roleAssignmentDtoSchema>;
 
+/** A brand the signed-in person can work in (one entry per usable user of their account). */
+export const authBrandSchema = z.object({
+  id: idSchema,
+  nameEn: z.string(),
+  nameAr: z.string(),
+  logoFileId: idSchema.nullable(),
+  organizationId: idSchema.nullable(),
+});
+export type AuthBrand = z.infer<typeof authBrandSchema>;
+
+/** An organization the signed-in person is a member of, with their role in it. */
+export const authOrganizationSchema = z.object({
+  id: idSchema,
+  nameEn: z.string(),
+  nameAr: z.string(),
+  role: z.enum(enumValues(OrganizationRole)),
+});
+export type AuthOrganization = z.infer<typeof authOrganizationSchema>;
+
 export const authUserSchema = z.object({
   id: idSchema,
+  /** The person's login, shared by their users in every brand. */
+  accountId: idSchema,
   email: z.email(),
   displayName: z.string(),
   preferredLocale: localeSchema,
   tenantId: idSchema,
   roles: z.array(roleAssignmentDtoSchema),
+  tenants: z.array(authBrandSchema),
+  organizations: z.array(authOrganizationSchema),
 });
 export type AuthUser = z.infer<typeof authUserSchema>;
 

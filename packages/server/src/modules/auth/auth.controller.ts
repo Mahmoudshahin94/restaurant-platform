@@ -40,7 +40,7 @@ export class AuthController {
     @Body(new ZodValidationPipe(loginRequestSchema)) body: z.output<typeof loginRequestSchema>,
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<TokenResponse> {
-    const session = await this.auth.login(body.email, body.password);
+    const session = await this.auth.login(body.email, body.password, body.tenantId);
     return this.deliver(session, body.client, reply);
   }
 
