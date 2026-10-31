@@ -1,6 +1,11 @@
 import { platformPermissionsOf } from '@pos/shared-types';
 import type { PlatformRole } from '@pos/shared-types';
-import type { PlatformTenantSummary, PlatformUserDto } from '@pos/validation';
+import type {
+  PlatformOrganizationDetail,
+  PlatformOrganizationSummary,
+  PlatformTenantSummary,
+  PlatformUserDto,
+} from '@pos/validation';
 import { vi } from 'vitest';
 import { useSession } from '../lib/api';
 
@@ -21,6 +26,51 @@ export const tenantSummary: PlatformTenantSummary = {
   primaryDomain: 'demo-kitchen.madar.app',
   organization: null,
 };
+
+export const OID = '01a146e8-0000-7000-8000-0000000000b1';
+export const BRAND_ID = '01a146e8-0000-7000-8000-0000000000b2';
+export const MEMBER_ID = '01a146e8-0000-7000-8000-0000000000b3';
+
+export const organizationSummary: PlatformOrganizationSummary = {
+  id: OID,
+  slug: 'burger-house-group',
+  nameEn: 'Burger House Group',
+  nameAr: 'مجموعة بيت البرغر',
+  currencyCode: 'ILS',
+  status: 'ACTIVE',
+  createdAt: '2026-10-02T00:00:00.000Z',
+  brandCount: 1,
+  memberCount: 1,
+};
+
+export const organizationDetail: PlatformOrganizationDetail = {
+  ...organizationSummary,
+  brands: [
+    {
+      id: BRAND_ID,
+      slug: 'burger-house',
+      nameEn: 'Burger House',
+      nameAr: 'بيت البرغر',
+      status: 'ACTIVE',
+    },
+  ],
+  members: [
+    {
+      id: MEMBER_ID,
+      accountId: '01a146e8-0000-7000-8000-0000000000b4',
+      email: 'owner@burger.test',
+      displayName: 'Dana Owner',
+      role: 'OWNER',
+      createdAt: '2026-10-02T00:00:00.000Z',
+    },
+  ],
+};
+
+/** An API error body, as the server sends it. */
+export const apiError = (code: string, details: Record<string, unknown> = {}) => ({
+  status: 409,
+  body: { code, message: code, details },
+});
 
 /** Signs an operator of the given role in for component tests. */
 export function signIn(role: PlatformRole = 'OPERATOR'): PlatformUserDto {

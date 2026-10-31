@@ -16,6 +16,7 @@ import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Navigate, useLocation, useNavigate } from 'react-router';
 import { z } from 'zod';
+import { BrandLogo } from '../components/brand-logo';
 import { LanguageSwitcher } from '../components/language-switcher';
 import { session, useSession } from '../lib/api';
 
@@ -60,12 +61,7 @@ export function LoginPage() {
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <img src="/madar-logo.svg" alt="" className="size-8" />
-            <p className="text-lg font-semibold tracking-tight" dir="ltr">
-              {t('common:platform.products.platform')}
-            </p>
-          </div>
+          <BrandLogo className="h-8" />
           <CardTitle>{t('platform:signIn.title')}</CardTitle>
           <CardDescription>{t('platform:signIn.subtitle')}</CardDescription>
         </CardHeader>

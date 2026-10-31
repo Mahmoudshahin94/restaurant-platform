@@ -9,6 +9,8 @@ import { RequirePermission } from './components/require-permission';
 import { AuditPage } from './routes/audit-page';
 import { HealthBoardPage } from './routes/health-board-page';
 import { LoginPage } from './routes/login-page';
+import { OrganizationDetailPage } from './routes/organization/organization-detail-page';
+import { OrganizationsPage } from './routes/organizations-page';
 import { ReleasesPage } from './routes/releases-page';
 import { SupportPage } from './routes/support-page';
 import { TenantDetailPage } from './routes/tenant/tenant-detail-page';
@@ -42,6 +44,12 @@ export function AppRoutes() {
           <Route index element={<Navigate to="/tenants" replace />} />
           {guarded('tenants', 'tenants.view', <TenantsPage />)}
           {guarded('tenants/:tenantId/:tab?', 'tenants.view', <TenantDetailPage />)}
+          {guarded('organizations', 'organizations.view', <OrganizationsPage />)}
+          {guarded(
+            'organizations/:organizationId/:tab?',
+            'organizations.view',
+            <OrganizationDetailPage />,
+          )}
           {guarded('health', 'health.view', <HealthBoardPage />)}
           {guarded('releases', 'releases.view', <ReleasesPage />)}
           {guarded('support', 'support.find', <SupportPage />)}

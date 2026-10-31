@@ -39,6 +39,7 @@ export function TenantsPage() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [businessType, setBusinessType] = useState('');
+  const [organizationId, setOrganizationId] = useState('');
   const [page, setPage] = useState(1);
   const [provisioning, setProvisioning] = useState(false);
 
@@ -48,11 +49,17 @@ export function TenantsPage() {
     ...(search.trim() ? { search: search.trim() } : {}),
     ...(status ? { status: status as TenantStatus } : {}),
     ...(businessType ? { businessType: businessType as BusinessType } : {}),
+    ...(organizationId ? { organizationId } : {}),
   };
   const tenants = useQuery({
     queryKey: ['tenants', query],
     queryFn: () => api.tenants.list(query),
     placeholderData: keepPreviousData,
+  });
+
+  const organizations = useQuery({
+    queryKey: ['organizations', 'options'],
+    queryFn: () => api.organizations.list({ pageSize: 100 }),
   });
 
   return (
@@ -73,7 +80,7 @@ export function TenantsPage() {
           ) : null
         }
       />
-      <Card className="mb-4 grid gap-3 p-4 sm:grid-cols-3">
+      <Card className="mb-4 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
         <Field label={t('common:actions.search')}>
           <Input
             type="search"
@@ -117,6 +124,22 @@ export function TenantsPage() {
             ))}
           </NativeSelect>
         </Field>
+        <Field label={t('platform:tenants.organization')}>
+          <NativeSelect
+            value={organizationId}
+            onChange={(e) => {
+              setOrganizationId(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="">{t('platform:shared.any')}</option>
+            {(organizations.data?.items ?? []).map((o) => (
+              <option key={o.id} value={o.id}>
+                {pickLocalized(o, 'name', locale)}
+              </option>
+            ))}
+          </NativeSelect>
+        </Field>
       </Card>
       <QueryState
         query={tenants}
@@ -132,6 +155,7 @@ export function TenantsPage() {
                     <TableHead>{t('platform:tenants.name')}</TableHead>
                     <TableHead>{t('platform:tenants.status')}</TableHead>
                     <TableHead>{t('platform:tenants.businessType')}</TableHead>
+                    <TableHead>{t('platform:tenants.organization')}</TableHead>
                     <TableHead>{t('platform:tenants.locations')}</TableHead>
                     <TableHead>{t('platform:tenants.users')}</TableHead>
                     <TableHead>{t('platform:tenants.domain')}</TableHead>
@@ -157,6 +181,18 @@ export function TenantsPage() {
                       </TableCell>
                       <TableCell>
                         {t(`admin:tenant.businessTypes.${tenant.businessType}`)}
+                      </TableCell>
+                      <TableCell>
+                        {tenant.organization ? (
+                          <Link
+                            className="underline-offset-4 hover:underline"
+                            to={`/organizations/${tenant.organization.id}`}
+                          >
+                            {pickLocalized(tenant.organization, 'name', locale)}
+                          </Link>
+                        ) : (
+                          '—'
+                        )}
                       </TableCell>
                       <TableCell className="ltr-nums">{tenant.locationCount}</TableCell>
                       <TableCell className="ltr-nums">{tenant.userCount}</TableCell>

@@ -1,13 +1,14 @@
 import { PlatformFooter, ThemeSwitcher } from '@pos/app-kit';
 import type { I18nResources } from '@pos/i18n';
 import type { PlatformPermission } from '@pos/shared-types';
-import { Button, cn } from '@pos/ui';
+import { Button, Toaster, cn } from '@pos/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
   Building2,
   LifeBuoy,
   LogOut,
+  Network,
   PackageCheck,
   ScrollText,
   type LucideIcon,
@@ -16,12 +17,19 @@ import { useTranslation } from 'react-i18next';
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import { session, useSession } from '../lib/api';
 import { usePlatformCan } from '../lib/permissions';
+import { BrandLogo } from './brand-logo';
 import { LanguageSwitcher } from './language-switcher';
 
 type NavKey = Exclude<keyof I18nResources['platform']['nav'], 'main'>;
 
 const NAV: { to: string; labelKey: NavKey; icon: LucideIcon; permission: PlatformPermission }[] = [
   { to: '/tenants', labelKey: 'tenants', icon: Building2, permission: 'tenants.view' },
+  {
+    to: '/organizations',
+    labelKey: 'organizations',
+    icon: Network,
+    permission: 'organizations.view',
+  },
   { to: '/health', labelKey: 'health', icon: Activity, permission: 'health.view' },
   { to: '/releases', labelKey: 'releases', icon: PackageCheck, permission: 'releases.view' },
   { to: '/support', labelKey: 'support', icon: LifeBuoy, permission: 'support.find' },
@@ -30,7 +38,7 @@ const NAV: { to: string; labelKey: NavKey; icon: LucideIcon; permission: Platfor
 
 /** The operators' console: navigation by role, language, theme and the signed-in operator. */
 export function AppShell() {
-  const { t } = useTranslation(['platform', 'common']);
+  const { t } = useTranslation(['platform', 'common', 'admin']);
   const user = useSession((s) => s.user);
   const can = usePlatformCan();
   const queryClient = useQueryClient();
@@ -49,10 +57,7 @@ export function AppShell() {
     <div className="flex min-h-screen flex-col md:flex-row">
       <aside className="surface border-b md:sticky md:top-0 md:flex md:h-screen md:w-60 md:shrink-0 md:flex-col md:border-e md:border-b-0">
         <div className="flex h-14 shrink-0 items-center gap-2 px-4">
-          <img src="/madar-logo.svg" alt="" className="size-7" />
-          <span className="font-semibold" dir="ltr">
-            {t('common:platform.products.platform')}
-          </span>
+          <BrandLogo />
         </div>
         <nav
           aria-label={t('platform:nav.main')}
@@ -98,6 +103,7 @@ export function AppShell() {
         <main className="flex-1 p-4 md:p-8">
           <Outlet />
         </main>
+        <Toaster closeLabel={t('common:actions.close')} label={t('admin:shared.notifications')} />
       </div>
     </div>
   );

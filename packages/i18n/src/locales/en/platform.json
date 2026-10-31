@@ -5,7 +5,8 @@
     "health": "Health board",
     "support": "Support tools",
     "audit": "Audit log",
-    "releases": "Releases"
+    "releases": "Releases",
+    "organizations": "Organizations"
   },
   "header": {
     "signedInAs": "{{name}} · {{role}}"
@@ -52,7 +53,8 @@
     "domain": "Primary domain",
     "created": "Created",
     "empty": "No tenants match",
-    "provision": "Provision tenant"
+    "provision": "Provision tenant",
+    "organization": "Organization"
   },
   "provision": {
     "title": "Provision a tenant",
@@ -87,7 +89,11 @@
     "doneDescription": "{{name}} is ready. Give the owner this temporary password through a safe channel.",
     "temporaryPassword": "Temporary password",
     "passwordWarning": "It is shown only now and never stored. Ask the owner to sign in with it soon; once in, the owner can reset the passwords of the business's staff.",
-    "openTenant": "Open tenant"
+    "openTenant": "Open tenant",
+    "organization": "Organization",
+    "organizationNone": "None (the brand has its own owner)",
+    "organizationHint": "A brand in an organization is owned by the organization's members, so no owner account is created. It uses the organization's currency.",
+    "organizationFixed": "The brand joins {{name}} and uses {{currency}}."
   },
   "tenant": {
     "back": "All tenants",
@@ -339,5 +345,61 @@
     "again": "Start another repair",
     "previewAgain": "Preview again",
     "noRepairs": "Your role can find records but not repair them."
+  },
+  "organizations": {
+    "title": "Organizations",
+    "description": "Groups of brands that share one currency, with the people who run them across every brand.",
+    "searchPlaceholder": "Name or web address name",
+    "status": "Status",
+    "name": "Organization",
+    "currency": "Currency",
+    "brands": "Brands",
+    "members": "Members",
+    "created": "Created",
+    "empty": "No organizations match",
+    "create": "Create organization",
+    "form": {
+      "title": "Create an organization",
+      "description": "An organization groups brands that share one currency. Its owners see every brand in it.",
+      "slugHint": "Lowercase letters, digits and dashes.",
+      "currencyHint": "Every brand in the organization uses it. Fixed for its lifetime.",
+      "owner": "First owner",
+      "ownerEmail": "Owner email",
+      "ownerName": "Owner name",
+      "ownerPassword": "Starting password",
+      "ownerPasswordHint": "Only for a person with no account yet; an existing account keeps its own password. At least 10 characters.",
+      "submit": "Create",
+      "submitting": "Creating…",
+      "created": "{{name}} was created."
+    }
+  },
+  "organization": {
+    "back": "All organizations",
+    "tabs": {
+      "brands": "Brands",
+      "members": "Members"
+    },
+    "currency": "Currency",
+    "edit": "Edit",
+    "editTitle": "Edit {{name}}",
+    "editDescription": "Suspending an organization keeps its brands but stops its members from signing in through it.",
+    "newStatus": "Status",
+    "save": "Save",
+    "saved": "Organization updated.",
+    "brands": {
+      "attach": "Attach a brand",
+      "provision": "New brand",
+      "detach": "Detach",
+      "empty": "No brands yet",
+      "attachTitle": "Attach a brand to {{name}}",
+      "attachDescription": "Pick a business that is not in an organization yet. It must use {{currency}}.",
+      "attachNone": "No unattached brands match",
+      "attachAction": "Attach",
+      "attached": "{{brand}} joined the organization.",
+      "skipped": "Some members have a deactivated user in {{brand}}, so they are not linked there yet.",
+      "detachTitle": "Detach {{brand}}?",
+      "detachBody": "Its organization members lose their access to this brand. The brand must have an active owner of its own first.",
+      "detached": "{{brand}} left the organization."
+    }
   }
 }
