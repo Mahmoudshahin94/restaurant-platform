@@ -36,3 +36,75 @@ export type MemberDto = z.infer<typeof memberSchema>;
  */
 export const linkedMemberSchema = memberSchema.extend({ skippedTenantIds: z.array(idSchema) });
 export type LinkedMemberDto = z.infer<typeof linkedMemberSchema>;
+
+// --- Overview and dashboard (E1 §4.2) ------------------------------------------------------------
+
+const int = z.int();
+
+/** An organization's brands with their branches (`GET /organizations/:id`). */
+export const organizationOverviewSchema = z.object({
+  organization: z.object({
+    id: idSchema,
+    slug: z.string(),
+    nameEn: z.string(),
+    nameAr: z.string(),
+    currencyCode: z.string(),
+    /** The caller's role in it. */
+    role: organizationRoleSchema,
+  }),
+  /** Oldest first. */
+  brands: z.array(
+    z.object({
+      id: idSchema,
+      nameEn: z.string(),
+      nameAr: z.string(),
+      logoFileId: idSchema.nullable(),
+      locations: z.array(
+        z.object({
+          id: idSchema,
+          code: z.string(),
+          nameEn: z.string(),
+          nameAr: z.string(),
+          timezone: z.string(),
+        }),
+      ),
+    }),
+  ),
+});
+export type OrganizationOverview = z.infer<typeof organizationOverviewSchema>;
+
+const periodFiguresSchema = z.object({
+  /** Σ total of completed orders, minor units of the organization's currency. */
+  salesTotal: int,
+  orderCount: int,
+  /** salesTotal / orderCount, rounded; 0 without orders. */
+  averageTicket: int,
+});
+export type OrgDashboardPeriod = z.infer<typeof periodFiguresSchema>;
+
+/**
+ * The organization's dashboard. Each branch's periods end on its own business day (ADR 0015):
+ * `today`, the last 7 and the last 30 days counting today. `byBrand`, `byLocation` and `daily`
+ * cover the last 30 days; `daily` has one entry per day with every brand's sales (0 where none).
+ */
+export const orgDashboardSchema = z.object({
+  currencyCode: z.string(),
+  periods: z.object({
+    today: periodFiguresSchema,
+    last7: periodFiguresSchema,
+    last30: periodFiguresSchema,
+  }),
+  byBrand: z.array(z.object({ tenantId: idSchema, salesTotal: int, orderCount: int })),
+  byLocation: z.array(
+    z.object({
+      tenantId: idSchema,
+      locationId: idSchema,
+      salesTotal: int,
+      orderCount: int,
+      /** An active hub of the branch reported within the heartbeat window. */
+      hubOnline: z.boolean(),
+    }),
+  ),
+  daily: z.array(z.object({ date: z.iso.date(), byTenant: z.record(z.string(), int) })),
+});
+export type OrgDashboard = z.infer<typeof orgDashboardSchema>;

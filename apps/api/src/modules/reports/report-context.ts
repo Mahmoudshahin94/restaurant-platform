@@ -12,7 +12,8 @@ export type Channel = OrderChannel;
 
 /** What a report covers, resolved against the caller's reach. */
 export interface ReportContext {
-  tenantId: string;
+  /** One brand's reports cover that brand; an organization's cover all or some of its brands. */
+  tenantIds: string[];
   locationIds: string[];
   from: string;
   to: string;
@@ -57,7 +58,7 @@ export class ReportContextResolver {
     });
     const channels = q.channels ? ALL_CHANNELS.filter((c) => q.channels?.includes(c)) : null;
     return {
-      tenantId: principal.tenantId,
+      tenantIds: [principal.tenantId],
       locationIds,
       from: q.from,
       to: q.to,
@@ -75,7 +76,7 @@ export class ReportContextResolver {
 }
 
 /**
- * The common filter of report views: the tenant, the locations, the business dates and (when
+ * The common filter of report views: the tenants, the locations, the business dates and (when
  * `withChannels`) the channels, on the view aliased `alias`.
  */
 export function reportFilter(ctx: ReportContext, alias: string, withChannels = true): Prisma.Sql {
@@ -84,7 +85,7 @@ export function reportFilter(ctx: ReportContext, alias: string, withChannels = t
     withChannels && ctx.channels
       ? Prisma.sql`AND ${a}.channel::text = ANY(${ctx.channels}::text[])`
       : Prisma.empty;
-  return Prisma.sql`${a}.tenant_id = ${ctx.tenantId}::uuid
+  return Prisma.sql`${a}.tenant_id = ANY(${ctx.tenantIds}::uuid[])
     AND ${a}.location_id = ANY(${ctx.locationIds}::uuid[])
     AND ${a}.business_date BETWEEN ${ctx.from}::date AND ${ctx.to}::date
     ${channels}`;

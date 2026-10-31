@@ -25,6 +25,8 @@ type Sum = bigint | null;
 interface Cell {
   date: string;
   channel: Channel;
+  tenantId: string;
+  locationId: string;
   orders: number;
   grossSales: number;
   discounts: number;
@@ -37,6 +39,8 @@ interface Cell {
 }
 
 interface RefundRow {
+  tenant_id: string;
+  location_id: string;
   business_date: string;
   channel: Channel;
   amount: number;
@@ -115,9 +119,35 @@ export class SalesReportsService {
     };
   }
 
+  /**
+   * The period's sales figures per brand or per branch (ids with no sales are absent) and in all.
+   * Sums of the same cells as the daily report, so they add up to its totals.
+   */
+  async figuresBy(
+    ctx: ReportContext,
+    dimension: 'tenantId' | 'locationId',
+  ): Promise<{ groups: Map<string, SalesFigures>; totals: SalesFigures }> {
+    const cells = await this.cells(ctx);
+    const groups = new Map<string, Cell[]>();
+    for (const cell of cells) {
+      const key = cell[dimension];
+      groups.set(key, [...(groups.get(key) ?? []), cell]);
+    }
+    return {
+      groups: new Map([...groups].map(([key, list]) => [key, figures(list)])),
+      totals: figures(cells),
+    };
+  }
+
+  /** Figures of nothing sold (brands and branches without sales still get a row). */
+  static noSales(): SalesFigures {
+    return figures([]);
+  }
+
   async products(ctx: ReportContext): Promise<ProductReport> {
     const rows = await this.prisma.$queryRaw<
       {
+        tenant_id: string;
         product_id: string;
         variant_id: string | null;
         name_en: string;
@@ -135,7 +165,7 @@ export class SalesReportsService {
         net: Sum;
       }[]
     >`
-      SELECT i.product_id, i.variant_id, c.id AS category_id,
+      SELECT s.tenant_id, i.product_id, i.variant_id, c.id AS category_id,
         c.name_en AS category_name_en, c.name_ar AS category_name_ar,
         (array_agg(i.name_en ORDER BY s.business_date DESC, i.created_at DESC))[1] AS name_en,
         (array_agg(i.name_ar ORDER BY s.business_date DESC, i.created_at DESC))[1] AS name_ar,
@@ -151,13 +181,14 @@ export class SalesReportsService {
       JOIN products p ON p.id = i.product_id
       JOIN categories c ON c.id = p.category_id
       WHERE ${reportFilter(ctx, 's')}
-      GROUP BY i.product_id, i.variant_id, c.id
+      GROUP BY s.tenant_id, i.product_id, i.variant_id, c.id
       ORDER BY net DESC, quantity DESC, name_en`;
     const [totals] = await this.lineTotals(ctx);
     const totalNet = int(totals?.net);
     return {
       ...ctx.header,
       rows: rows.map((r) => ({
+        tenantId: r.tenant_id,
         productId: r.product_id,
         variantId: r.variant_id,
         nameEn: r.name_en,
@@ -182,6 +213,7 @@ export class SalesReportsService {
   async categories(ctx: ReportContext): Promise<CategoryReport> {
     const rows = await this.prisma.$queryRaw<
       {
+        tenant_id: string;
         category_id: string;
         name_en: string;
         name_ar: string;
@@ -194,7 +226,7 @@ export class SalesReportsService {
         net: Sum;
       }[]
     >`
-      SELECT c.id AS category_id, c.name_en, c.name_ar,
+      SELECT s.tenant_id, c.id AS category_id, c.name_en, c.name_ar,
         COUNT(DISTINCT i.product_id)::bigint AS products,
         SUM(i.quantity)::bigint AS quantity, COUNT(DISTINCT i.order_id)::bigint AS orders,
         SUM(i.gross)::bigint AS gross, SUM(i.discount)::bigint AS discounts,
@@ -204,13 +236,14 @@ export class SalesReportsService {
       JOIN products p ON p.id = i.product_id
       JOIN categories c ON c.id = p.category_id
       WHERE ${reportFilter(ctx, 's')}
-      GROUP BY c.id
+      GROUP BY s.tenant_id, c.id
       ORDER BY net DESC, c.name_en`;
     const [totals] = await this.lineTotals(ctx);
     const totalNet = int(totals?.net);
     return {
       ...ctx.header,
       rows: rows.map((r) => ({
+        tenantId: r.tenant_id,
         categoryId: r.category_id,
         nameEn: r.name_en,
         nameAr: r.name_ar,
@@ -391,6 +424,8 @@ export class SalesReportsService {
     const [sales, cancelled, refunds] = await Promise.all([
       this.prisma.$queryRaw<
         {
+          tenant_id: string;
+          location_id: string;
           business_date: string;
           channel: Channel;
           orders: Sum;
@@ -402,31 +437,46 @@ export class SalesReportsService {
           total: Sum;
         }[]
       >`
-        SELECT s.business_date::text AS business_date, s.channel::text AS channel,
+        SELECT s.tenant_id, s.location_id, s.business_date::text AS business_date,
+          s.channel::text AS channel,
           COUNT(*)::bigint AS orders, SUM(s.subtotal)::bigint AS gross,
           SUM(s.discount_total)::bigint AS discounts, SUM(s.net_sales)::bigint AS net,
           SUM(s.tax_total)::bigint AS tax, SUM(s.fee_total)::bigint AS fees,
           SUM(s.total)::bigint AS total
         FROM report_sales_orders s
         WHERE ${reportFilter(ctx, 's')}
-        GROUP BY 1, 2`,
-      this.prisma.$queryRaw<{ business_date: string; channel: Channel; orders: Sum }[]>`
-        SELECT o.business_date::text AS business_date, o.channel::text AS channel,
-          COUNT(*)::bigint AS orders
+        GROUP BY 1, 2, 3, 4`,
+      this.prisma.$queryRaw<
+        {
+          tenant_id: string;
+          location_id: string;
+          business_date: string;
+          channel: Channel;
+          orders: Sum;
+        }[]
+      >`
+        SELECT o.tenant_id, o.location_id, o.business_date::text AS business_date,
+          o.channel::text AS channel, COUNT(*)::bigint AS orders
         FROM orders o
         WHERE ${reportFilter(ctx, 'o')} AND o.status = 'CANCELLED'
-        GROUP BY 1, 2`,
+        GROUP BY 1, 2, 3, 4`,
       this.refundRows(ctx),
     ]);
 
     const cells = new Map<string, Cell>();
-    const cell = (date: string, channel: Channel): Cell => {
-      const key = `${date}:${channel}`;
+    const cell = (
+      row: { tenant_id: string; location_id: string },
+      date: string,
+      channel: Channel,
+    ): Cell => {
+      const key = `${row.location_id}:${date}:${channel}`;
       let entry = cells.get(key);
       if (!entry) {
         entry = {
           date,
           channel,
+          tenantId: row.tenant_id,
+          locationId: row.location_id,
           orders: 0,
           grossSales: 0,
           discounts: 0,
@@ -442,7 +492,7 @@ export class SalesReportsService {
       return entry;
     };
     for (const s of sales) {
-      Object.assign(cell(s.business_date, s.channel), {
+      Object.assign(cell(s, s.business_date, s.channel), {
         orders: int(s.orders),
         grossSales: int(s.gross),
         discounts: int(s.discounts),
@@ -452,14 +502,18 @@ export class SalesReportsService {
         totalSales: int(s.total),
       });
     }
-    for (const c of cancelled) cell(c.business_date, c.channel).cancelledOrders = int(c.orders);
+    for (const c of cancelled) cell(c, c.business_date, c.channel).cancelledOrders = int(c.orders);
     for (const r of refunds) {
       const split = splitRefund(r.amount, {
         total: r.order_total,
         taxes: r.order_taxes.map((t) => t.amount),
         fees: r.order_fee_total,
       });
-      const entry = cell(r.business_date, r.channel);
+      const entry = cell(
+        { tenant_id: r.tenant_id, location_id: r.location_id },
+        r.business_date,
+        r.channel,
+      );
       entry.refunds = addRefunds(entry.refunds, {
         count: 1,
         amount: r.amount,
@@ -474,7 +528,8 @@ export class SalesReportsService {
   /** Refunds of sales made in the period (by the refund's business date). */
   private refundRows(ctx: ReportContext): Promise<RefundRow[]> {
     return this.prisma.$queryRaw<RefundRow[]>`
-      SELECT r.business_date::text AS business_date, r.channel::text AS channel, r.amount,
+      SELECT r.tenant_id, r.location_id, r.business_date::text AS business_date,
+        r.channel::text AS channel, r.amount,
         r.tax_inclusive, r.order_total, r.order_fee_total, r.order_taxes
       FROM report_refunds r
       WHERE ${reportFilter(ctx, 'r')}

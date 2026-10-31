@@ -11,5 +11,7 @@ import { SalesReportsService } from './sales-reports.service';
 @Module({
   controllers: [ReportsController],
   providers: [ReportContextResolver, SalesReportsService, OperationsReportsService],
+  // The organization's reports (E1) run the same SQL over several brands.
+  exports: [SalesReportsService, OperationsReportsService],
 })
 export class CloudReportsModule {}
