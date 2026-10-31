@@ -95,7 +95,11 @@ first format 9 snapshot replaces them by e-mail, moving their users over. A trig
 records a `CONFIG` change for every tenant where the account has a user, so a password reset in
 the cloud reaches the hubs of all those brands (sign-ins, which only move `last_tenant_id`, do not). Organizations and their members are
 cloud-only and never reach a hub (the hub holds one brand); `tenants.organization_id` and
-`users.organization_member_id` are plain columns there. A hub signs in by e-mail against its synced
+`users.organization_member_id` are plain columns there. While an organization is not active, its
+brands' snapshots leave out the role assignments it granted (`grantedByOrganization`), and so the
+users that have nothing else (the hub deactivates users missing from a snapshot); changing an
+organization's status records a `CONFIG` change for each of its brands, so their hubs refuse its
+members as the cloud does. A hub signs in by e-mail against its synced
 account and answers `404` to `/auth/switch`; the PIN sign-in is unchanged.
 
 Format 6 came with self-service kiosks

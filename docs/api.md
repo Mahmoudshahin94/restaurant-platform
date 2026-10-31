@@ -1074,18 +1074,18 @@ works inside that tenant only; a tenant's status does not restrict the platform.
 Every change is in the platform audit log (`organization.create`, `update`, `attach`, `detach`,
 `member_add`, `member_role`, `member_remove`).
 
-| Method | Path                                                        | Permission             | Notes                                                                                                                         |
-| ------ | ----------------------------------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/platform/organizations`                                   | `organizations.view`   | `?search=&status=&page=&pageSize=` → `{ id, slug, nameEn, nameAr, currencyCode, status, createdAt, brandCount, memberCount }` |
-| POST   | `/platform/organizations`                                   | `organizations.manage` | `{ slug, nameEn, nameAr, currencyCode, owner: { email, displayName, password? } }` → detail; `409 ORGANIZATION_SLUG_TAKEN`    |
-| GET    | `/platform/organizations/:organizationId`                   | `organizations.view`   | The summary plus `brands[]` (id, slug, names, status) and `members[]`                                                         |
-| PATCH  | `/platform/organizations/:organizationId`                   | `organizations.manage` | `{ nameEn?, nameAr?, status? }` (ACTIVE or SUSPENDED); slug and currency never change                                         |
-| POST   | `/platform/organizations/:organizationId/tenants`           | `organizations.manage` | `{ tenantId }` → detail + `skippedMemberIds`; `409 ORGANIZATION_CURRENCY_MISMATCH`, `409 CONFLICT` `TENANT_IN_ORGANIZATION`   |
-| DELETE | `/platform/organizations/:organizationId/tenants/:tenantId` | `organizations.manage` | 204; `409 CONFLICT` `LAST_OWNER` when the brand has no active Owner of its own                                                |
-| GET    | `/platform/organizations/:organizationId/members`           | `organizations.view`   | `MemberDto[]`                                                                                                                 |
-| POST   | `/platform/organizations/:organizationId/members`           | `organizations.manage` | As the owner's route                                                                                                          |
-| PATCH  | `/platform/organizations/:organizationId/members/:memberId` | `organizations.manage` | `{ role }`                                                                                                                    |
-| DELETE | `/platform/organizations/:organizationId/members/:memberId` | `organizations.manage` | 204                                                                                                                           |
+| Method | Path                                                        | Permission             | Notes                                                                                                                             |
+| ------ | ----------------------------------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/platform/organizations`                                   | `organizations.view`   | `?search=&status=&page=&pageSize=` → `{ id, slug, nameEn, nameAr, currencyCode, status, createdAt, brandCount, memberCount }`     |
+| POST   | `/platform/organizations`                                   | `organizations.manage` | `{ slug, nameEn, nameAr, currencyCode, owner: { email, displayName, password? } }` → detail; `409 ORGANIZATION_SLUG_TAKEN`        |
+| GET    | `/platform/organizations/:organizationId`                   | `organizations.view`   | The summary plus `brands[]` (id, slug, names, status) and `members[]`                                                             |
+| PATCH  | `/platform/organizations/:organizationId`                   | `organizations.manage` | `{ nameEn?, nameAr?, status? }` (ACTIVE or SUSPENDED; a status change reaches every brand's hubs); slug and currency never change |
+| POST   | `/platform/organizations/:organizationId/tenants`           | `organizations.manage` | `{ tenantId }` → detail + `skippedMemberIds`; `409 ORGANIZATION_CURRENCY_MISMATCH`, `409 CONFLICT` `TENANT_IN_ORGANIZATION`       |
+| DELETE | `/platform/organizations/:organizationId/tenants/:tenantId` | `organizations.manage` | 204; `409 CONFLICT` `LAST_OWNER` when the brand has no active Owner of its own                                                    |
+| GET    | `/platform/organizations/:organizationId/members`           | `organizations.view`   | `MemberDto[]`                                                                                                                     |
+| POST   | `/platform/organizations/:organizationId/members`           | `organizations.manage` | As the owner's route                                                                                                              |
+| PATCH  | `/platform/organizations/:organizationId/members/:memberId` | `organizations.manage` | `{ role }`                                                                                                                        |
+| DELETE | `/platform/organizations/:organizationId/members/:memberId` | `organizations.manage` | 204                                                                                                                               |
 
 - A new organization's owner is the first member, with the role `OWNER`. An e-mail that already has
   an account is that person; a new one needs a starting password.

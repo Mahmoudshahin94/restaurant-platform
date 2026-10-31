@@ -20,6 +20,7 @@ import {
   type OrganizationActor,
   OrganizationService,
 } from '../../organizations/organization.service';
+import { recordConfigChange } from '../../sync/config-change';
 import { PlatformAuditService } from '../platform-audit.service';
 
 type CreateInput = z.output<typeof createOrganizationSchema>;
@@ -205,19 +206,37 @@ export class PlatformOrganizationsService {
     return this.detail(created.id);
   }
 
+  /**
+   * Changes names and status. A status change is a configuration change of every brand (R16): the
+   * brands' snapshots leave out the organization's roles while it is not active, so their hubs
+   * refuse its members as the cloud does (R6).
+   */
   async update(organizationId: string, input: UpdateInput): Promise<PlatformOrganizationDetail> {
     await TenantContext.runUnscoped('platform: change an organization', async () => {
-      const before = await this.prisma.organization.findUnique({
-        where: { id: organizationId },
-        select: { nameEn: true, nameAr: true, status: true },
-      });
-      if (!before) throw notFound();
       const changes = {
         ...(input.nameEn !== undefined ? { nameEn: input.nameEn } : {}),
         ...(input.nameAr !== undefined ? { nameAr: input.nameAr } : {}),
         ...(input.status !== undefined ? { status: input.status } : {}),
       };
-      await this.prisma.organization.update({ where: { id: organizationId }, data: changes });
+      const before = await this.prisma.$transaction(async (tx) => {
+        const row = await tx.organization.findUnique({
+          where: { id: organizationId },
+          select: { nameEn: true, nameAr: true, status: true },
+        });
+        if (!row) throw notFound();
+        // The update locks the row, so the brands read next are final: attaching or detaching
+        // one locks it too.
+        await tx.organization.update({ where: { id: organizationId }, data: changes });
+        if (changes.status !== undefined && changes.status !== row.status) {
+          const tenants = await tx.tenant.findMany({
+            where: { organizationId },
+            select: { id: true },
+            orderBy: { id: 'asc' },
+          });
+          for (const tenant of tenants) await recordConfigChange(tx, tenant.id);
+        }
+        return row;
+      });
       const keys = Object.keys(changes) as (keyof typeof changes)[];
       await this.audit.record({
         action: 'organization.update',

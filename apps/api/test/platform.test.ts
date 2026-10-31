@@ -5,6 +5,7 @@ import { type RouteEntry, listRoutes } from '@pos/server';
 import type { ApiErrorBody, PlatformRole } from '@pos/shared-types';
 import type {
   AuditLogEntry,
+  LocationSnapshot,
   Order,
   Paginated,
   PairedDevice,
@@ -1561,5 +1562,99 @@ describe('organizations (E1)', () => {
       headers: owner,
     });
     expect(foreign.statusCode).toBe(404);
+  });
+
+  it("a suspended organization's roles leave its brands' hubs, and come back with it", async () => {
+    const org = await makeOrganization();
+    const brandA = await createTenant(prisma, undefined, { currencyCode: 'ILS' });
+    const brandB = await createTenant(prisma, undefined, { currencyCode: 'ILS' });
+    await attach(org.id, brandA.tenantId);
+    await attach(org.id, brandB.tenantId);
+    // A member with nothing but the organization's role, and a brand cashier who is also one.
+    const financeEmail = `fin${(counter += 1)}@group.test`;
+    for (const payload of [
+      { email: financeEmail, displayName: 'Fin', role: 'FINANCE', password: PASSWORD },
+      { email: brandA.cashier.email, displayName: 'Cashier', role: 'MANAGER' },
+    ]) {
+      const res = await app.inject({
+        method: 'POST',
+        url: `${O}/${org.id}/members`,
+        headers: owner,
+        payload,
+      });
+      expect(res.statusCode, res.body).toBe(201);
+    }
+    const finance = await prisma.user.findFirstOrThrow({
+      where: { tenantId: brandA.tenantId, account: { email: financeEmail } },
+    });
+
+    // Brand A's hub.
+    const paired = await app.inject({
+      method: 'POST',
+      url: `/api/v1/locations/${brandA.locationA}/devices`,
+      headers: bearer(await login(app, brandA.owner.email)),
+      payload: { name: 'Hub', type: 'GATEWAY' },
+    });
+    expect(paired.statusCode, paired.body).toBe(201);
+    const hub = { authorization: `Device ${paired.json<PairedDevice>().credential}` };
+    const snapshot = async () => {
+      const res = await app.inject({ method: 'GET', url: '/api/v1/sync/snapshot', headers: hub });
+      expect(res.statusCode, res.body).toBe(200);
+      return res.json<LocationSnapshot>();
+    };
+    const granted = (s: LocationSnapshot) =>
+      s.tables.userRoles.filter((r) => r.grantedByOrganization === true).map((r) => r.id);
+    const userIds = (s: LocationSnapshot) => s.tables.users.map((u) => String(u.id));
+    const head = async (tenantId: string) =>
+      (await prisma.changeLog.aggregate({ where: { tenantId }, _max: { seq: true } }))._max.seq ??
+      0n;
+    const configSince = async (tenantId: string, seq: bigint) =>
+      prisma.changeLog.count({ where: { tenantId, topic: 'CONFIG', seq: { gt: seq } } });
+    const setStatus = async (status: 'SUSPENDED' | 'ACTIVE') => {
+      const heads = [await head(brandA.tenantId), await head(brandB.tenantId)] as const;
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `${O}/${org.id}`,
+        headers: owner,
+        payload: { status },
+      });
+      expect(res.statusCode, res.body).toBe(200);
+      // Each brand's hubs hear of it through the change feed.
+      expect(await configSince(brandA.tenantId, heads[0])).toBe(1);
+      expect(await configSince(brandB.tenantId, heads[1])).toBe(1);
+    };
+
+    const active = await snapshot();
+    expect(granted(active).length).toBeGreaterThan(0);
+    expect(userIds(active)).toContain(finance.id);
+
+    await setStatus('SUSPENDED');
+    const suspended = await snapshot();
+    expect(granted(suspended)).toEqual([]);
+    // The member with only the organization's role is left out, with their login.
+    expect(userIds(suspended)).not.toContain(finance.id);
+    expect(suspended.tables.accounts.map((a) => a.id)).not.toContain(finance.accountId);
+    // The cashier keeps their own role.
+    expect(userIds(suspended)).toContain(brandA.cashier.id);
+    expect(
+      suspended.tables.userRoles
+        .filter((r) => r.userId === brandA.cashier.id)
+        .map((r) => r.grantedByOrganization),
+    ).toEqual([false]);
+    expect(suspended.version).not.toBe(active.version);
+
+    await setStatus('ACTIVE');
+    const again = await snapshot();
+    expect(granted(again).sort()).toEqual(granted(active).sort());
+    expect(userIds(again)).toContain(finance.id);
+    // A change that is not the status is not a configuration change of the brands.
+    const before = await head(brandA.tenantId);
+    await app.inject({
+      method: 'PATCH',
+      url: `${O}/${org.id}`,
+      headers: owner,
+      payload: { nameEn: 'Renamed' },
+    });
+    expect(await configSince(brandA.tenantId, before)).toBe(0);
   });
 });

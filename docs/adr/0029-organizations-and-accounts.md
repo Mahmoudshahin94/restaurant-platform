@@ -99,7 +99,10 @@ Decisions taken with the product owner, recorded in the
     `ORGANIZATION_LAST_OWNER`).
   - A suspended organization does not delete anything. Its organization pages answer not found,
     and users that exist only because of the organization are refused like inactive ones on sign-in,
-    on refresh and on every request. A normal brand user keeps their access.
+    on refresh and on every request. A normal brand user keeps their access. Hubs follow (R16): a
+    status change records a `CONFIG` change for each brand, and the snapshot of a brand whose
+    organization is not active leaves out the organization's role assignments, so users with
+    nothing else are deactivated at the hub until the organization is active again.
 
 - **Brand staff APIs** refuse to edit, deactivate or change the roles of a linked user
   (`USER_MANAGED_BY_ORGANIZATION`, 409); the staff list shows an "Organization" badge.

@@ -49,8 +49,19 @@ export class SnapshotService {
     const atLocation = { OR: [{ locationId: null }, { locationId }] };
     const byId = { id: 'asc' } as const;
 
+    // The organization's role assignments travel only while it is active (ADR 0029, R16): a
+    // suspended organization's members keep only the roles their brand gave them, and one with
+    // nothing else is left out, so the hub refuses them as the cloud does (R6).
+    const { organization } = await db.tenant.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: { organization: { select: { status: true } } },
+    });
+    const roleWhere =
+      organization === null || organization.status === 'ACTIVE'
+        ? atLocation
+        : { ...atLocation, grantedByOrganization: false };
     const users = await db.user.findMany({
-      where: { tenantId, roles: { some: atLocation } },
+      where: { tenantId, roles: { some: roleWhere } },
       orderBy: byId,
     });
     const userIds = users.map((u) => u.id);
@@ -114,7 +125,7 @@ export class SnapshotService {
       ).map((a) => ({ ...a, lastTenantId: null })),
       users,
       userRoles: await db.userRole.findMany({
-        where: { userId: { in: userIds }, ...atLocation },
+        where: { userId: { in: userIds }, ...roleWhere },
         orderBy: byId,
       }),
       employees: await db.employee.findMany({

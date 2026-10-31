@@ -39,7 +39,11 @@ export class HubAccountDirectory implements AccountDirectory {
     return Promise.resolve([]);
   }
 
-  /** No organizations here: a membership that ends deactivates the user, and that syncs down. */
+  /**
+   * No organizations here: a membership that ends deactivates the user, and that syncs down; while
+   * an organization is not active its brands' snapshots leave out its role assignments (R16), so a
+   * member with nothing else is no longer active here either.
+   */
   organizationLinkActive(): Promise<boolean> {
     return Promise.resolve(true);
   }
