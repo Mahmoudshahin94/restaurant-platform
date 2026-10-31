@@ -32,10 +32,14 @@ export class AuthService {
   ) {}
 
   async login(email: string, password: string): Promise<IssuedSession> {
-    // E-mail addresses are unique across tenants, so sign-in needs no tenant selector; the rest
-    // of the sign-in runs inside the account's tenant.
+    // Interim until sign-in goes through the shared Account: a person may now have a user in
+    // several brands, so take the oldest one; the rest of the sign-in runs inside its tenant.
     const user = await TenantContext.runUnscoped('sign-in: find the account by e-mail', () =>
-      this.prisma.user.findUnique({ where: { email } }),
+      this.prisma.user.findFirst({
+        where: { email },
+        orderBy: { createdAt: 'asc' },
+        include: { account: { select: { passwordHash: true } } },
+      }),
     );
     if (!user) {
       this.timingDummyHash ??= hashSecret(newId());
@@ -46,10 +50,15 @@ export class AuthService {
   }
 
   private async completeLogin(
-    user: { id: string; tenantId: string; passwordHash: string; isActive: boolean },
+    user: {
+      id: string;
+      tenantId: string;
+      isActive: boolean;
+      account: { passwordHash: string };
+    },
     password: string,
   ): Promise<IssuedSession> {
-    const valid = await verifySecret(user.passwordHash, password);
+    const valid = await verifySecret(user.account.passwordHash, password);
     if (!valid) {
       await this.audit.record({
         action: 'auth.login_failed',

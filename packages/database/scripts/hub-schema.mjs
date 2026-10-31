@@ -38,9 +38,15 @@ export function toHubSchema(schema, extra) {
   const cloudOnly = /\/\/\/ @cloud-only\n(?:\/\/\/.*\n)*(?:model|enum) (\w+) \{[\s\S]*?\n\}\n?/g;
   const removed = [...out.matchAll(cloudOnly)].map((match) => match[1]);
   out = out.replace(cloudOnly, '').replace(/\n{3,}/g, '\n\n');
-  // Relation fields of hub models that point at a removed model (`domains TenantDomain[]`).
+  // Relation fields of hub models that point at a removed model: back-relations
+  // (`domains TenantDomain[]`) and forward relations with their `@relation(...)` attribute
+  // (`organization Organization? @relation(fields: [organizationId], ...)`). The scalar column of
+  // a forward relation (`organizationId`) stays, as a plain column.
   for (const name of removed) {
-    out = out.replace(new RegExp(`\\n {2}\\w+ +${name}(\\[\\]|\\?)?(?= *\\n)`, 'g'), '');
+    out = out.replace(
+      new RegExp(`\\n {2}\\w+ +${name}(\\[\\]|\\?)?( +@relation\\([^)]*\\))?(?= *\\n)`, 'g'),
+      '',
+    );
   }
   // A relation in a block of its own leaves an empty block behind.
   out = out.replace(/\n{3,}/g, '\n\n');

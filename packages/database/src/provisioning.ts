@@ -51,7 +51,7 @@ export interface RoleSpec {
 
 /** The tenant's first account: an Owner (the system role), tenant-wide. */
 export interface OwnerSpec {
-  /** Lowercase; e-mail addresses are unique across tenants. */
+  /** Lowercase; one login (Account) per e-mail, shared by the person's users in every brand. */
   email: string;
   displayName: string;
   /** argon2id hash (`hashSecret`); the password itself never reaches provisioning. */
@@ -75,7 +75,7 @@ export interface ProvisionedTenant {
   ownerId: string | null;
 }
 
-/** An owner e-mail that already belongs to another tenant's account. */
+/** An owner e-mail that already belongs to another tenant's login. */
 export class OwnerEmailTakenError extends Error {
   override readonly name = 'OwnerEmailTakenError';
 }
@@ -86,6 +86,17 @@ export const OWNER_ROLE: RoleSpec = {
   description: 'Full access',
   isSystem: true,
   permissions: '*',
+};
+
+/**
+ * Every tenant also has Finance: a system role (the organization's Finance members hold it) that
+ * reads the reports and the brand dashboard and nothing else.
+ */
+export const FINANCE_ROLE: RoleSpec = {
+  name: 'Finance',
+  description: 'Reports and the brand dashboard',
+  isSystem: true,
+  permissions: ['reports.view', 'locations.view'],
 };
 
 /** A domain's verification token: 128 random bits, URL- and DNS-safe. */
@@ -166,8 +177,10 @@ export async function provisionTenant(
     locationIds.set(loc.code, location.id);
   }
 
-  const roles = input.roles ?? [OWNER_ROLE];
-  if (!roles.some((r) => r.isSystem)) throw new Error('A tenant needs a system (owner) role');
+  const given = input.roles ?? [OWNER_ROLE];
+  if (!given.some((r) => r.isSystem)) throw new Error('A tenant needs a system (owner) role');
+  // The first system role is the owner's; Finance follows it unless the caller defines its own.
+  const roles = given.some((r) => r.name === FINANCE_ROLE.name) ? given : [...given, FINANCE_ROLE];
   const roleIds = new Map<string, string>();
   for (const spec of roles) {
     const permissions = resolveRolePermissions(spec.permissions);
@@ -204,18 +217,23 @@ async function provisionOwner(
 ): Promise<string> {
   const email = owner.email.toLowerCase();
   const found = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true, tenantId: true },
+    where: { tenantId_email: { tenantId, email } },
+    select: { id: true },
   });
-  if (found && found.tenantId !== tenantId) {
+  if (found) return found.id;
+  // A login belongs to one person: an e-mail that already has one (another brand's user) is not
+  // reused here, so a tenant's owner cannot be attached to someone else's account.
+  if (await prisma.account.findUnique({ where: { email }, select: { id: true } })) {
     throw new OwnerEmailTakenError('This e-mail already belongs to another account');
   }
-  if (found) return found.id;
+  const account = await prisma.account.create({
+    data: { email, passwordHash: owner.passwordHash, lastTenantId: tenantId },
+  });
   const user = await prisma.user.create({
     data: {
       tenantId,
+      accountId: account.id,
       email,
-      passwordHash: owner.passwordHash,
       displayName: owner.displayName,
       ...(owner.preferredLocale ? { preferredLocale: owner.preferredLocale } : {}),
       roles: { create: { roleId, locationId: null } },

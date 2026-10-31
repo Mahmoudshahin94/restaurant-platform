@@ -68,11 +68,15 @@ beforeAll(async () => {
       permissions: { create: [{ permissionKey: 'orders.view' }] },
     },
   });
+  const waiterEmail = `waiter-${newId()}@test.local`;
+  const waiterAccount = await prisma.account.create({
+    data: { email: waiterEmail, passwordHash: await hashSecret(PASSWORD), lastTenantId: tid },
+  });
   const waiterUser = await prisma.user.create({
     data: {
       tenantId: tid,
-      email: `waiter-${newId()}@test.local`,
-      passwordHash: await hashSecret(PASSWORD),
+      accountId: waiterAccount.id,
+      email: waiterEmail,
       displayName: 'Waiter',
       roles: { create: { roleId: waiterRole.id, locationId: null } },
     },

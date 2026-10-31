@@ -109,20 +109,28 @@ export async function createTenant(
       permissions: { create: cashierPermissions.map((permissionKey) => ({ permissionKey })) },
     },
   });
+  const ownerEmail = `owner-${suffix}@test.local`;
+  const ownerAccount = await prisma.account.create({
+    data: { email: ownerEmail, passwordHash, lastTenantId: tenant.id },
+  });
   const owner = await prisma.user.create({
     data: {
       tenantId: tenant.id,
-      email: `owner-${suffix}@test.local`,
-      passwordHash,
+      accountId: ownerAccount.id,
+      email: ownerEmail,
       displayName: 'Owner',
       roles: { create: { roleId: ownerRole.id, locationId: null } },
     },
   });
+  const cashierEmail = `cashier-${suffix}@test.local`;
+  const cashierAccount = await prisma.account.create({
+    data: { email: cashierEmail, passwordHash, lastTenantId: tenant.id },
+  });
   const cashier = await prisma.user.create({
     data: {
       tenantId: tenant.id,
-      email: `cashier-${suffix}@test.local`,
-      passwordHash,
+      accountId: cashierAccount.id,
+      email: cashierEmail,
       displayName: 'Cashier',
       preferredLocale: 'ar',
       roles: { create: { roleId: cashierRole.id, locationId: locationA!.id } },

@@ -1,10 +1,11 @@
 import { PERMISSIONS } from '@pos/shared-types';
 import type { PrismaClient } from '@prisma/client';
+import { OWNER_ROLE } from './provisioning';
 
 /**
  * Upserts the code-defined permission catalog into the `permissions` table and grants every key
- * to system roles (the Owner role holds all permissions, including keys added after it was
- * created). Idempotent; run by the seed and at API start-up so new permission keys exist before
+ * to each tenant's Owner role (it holds all permissions, including keys added after it was
+ * created; other system roles, such as Finance, keep exactly the permissions they were given). Idempotent; run by the seed and at API start-up so new permission keys exist before
  * roles reference them.
  */
 export async function syncPermissionCatalog(prisma: PrismaClient): Promise<number> {
@@ -20,7 +21,7 @@ export async function syncPermissionCatalog(prisma: PrismaClient): Promise<numbe
       : (await prisma.permission.createMany({ data: missing.map((key) => ({ key })) })).count;
 
   const systemRoles = await prisma.role.findMany({
-    where: { isSystem: true },
+    where: { isSystem: true, name: OWNER_ROLE.name },
     select: { id: true, permissions: { select: { permissionKey: true } } },
   });
   const grants = systemRoles.flatMap((role) => {

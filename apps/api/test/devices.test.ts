@@ -108,11 +108,15 @@ describe('location snapshot', () => {
   });
 
   it('leaves out other locations and staff who only work there', async () => {
+    const otherEmail = `b-only-${Date.now()}@test.local`;
+    const otherAccount = await prisma.account.create({
+      data: { email: otherEmail, passwordHash: 'x', lastTenantId: tenant.tenantId },
+    });
     const other = await prisma.user.create({
       data: {
         tenantId: tenant.tenantId,
-        email: `b-only-${Date.now()}@test.local`,
-        passwordHash: 'x',
+        accountId: otherAccount.id,
+        email: otherEmail,
         displayName: 'B only',
         roles: {
           create: {

@@ -227,7 +227,11 @@ model Tenant {
   timezone             String
   createdAt            DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt            DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  /// The organization (several brands under one owner) the tenant belongs to; null = a standalone
+  /// business. The id is a plain column on the hub, which has no organizations.
+  organizationId       String?      @map("organization_id") @db.Uuid
 
+  organization     Organization?            @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   locations        Location[]
   users            User[]
   roles            Role[]
@@ -254,6 +258,7 @@ model Tenant {
   paymentSecrets   PaymentProviderSecret[]
   releaseChannel   TenantReleaseChannel?
 
+  @@index([organizationId])
   @@map("tenants")
 }
 
@@ -317,26 +322,54 @@ model Location {
 // ---------------------------------------------------------------------------
 
 model User {
-  id              String    @id @default(uuid(7)) @db.Uuid
-  tenantId        String    @map("tenant_id") @db.Uuid
-  /// Stored lowercase; globally unique so login needs no tenant selector.
-  email           String    @unique
-  /// argon2id hash. Never logged, never returned by the API.
-  passwordHash    String    @map("password_hash")
-  displayName     String    @map("display_name")
-  preferredLocale Locale    @default(en) @map("preferred_locale")
-  isActive        Boolean   @default(true) @map("is_active")
-  lastLoginAt     DateTime? @map("last_login_at") @db.Timestamptz(3)
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id                   String    @id @default(uuid(7)) @db.Uuid
+  tenantId             String    @map("tenant_id") @db.Uuid
+  /// The login this user belongs to (one person, one Account, one User per brand).
+  accountId            String    @map("account_id") @db.Uuid
+  /// Display copy of the account's e-mail; unique per tenant.
+  email                String
+  displayName          String    @map("display_name")
+  preferredLocale      Locale    @default(en) @map("preferred_locale")
+  isActive             Boolean   @default(true) @map("is_active")
+  /// Set on users the organization manages ("linked users"): the membership they stand for. A
+  /// plain column on the hub, which has no organization members.
+  organizationMemberId String?   @map("organization_member_id") @db.Uuid
+  lastLoginAt          DateTime? @map("last_login_at") @db.Timestamptz(3)
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  account       Account        @relation(fields: [accountId], references: [id], onDelete: Restrict)
   roles         UserRole[]
   refreshTokens RefreshToken[]
   employee      Employee?
 
+  @@unique([tenantId, email])
+  @@unique([tenantId, accountId])
   @@index([tenantId])
+  @@index([accountId])
   @@map("users")
+}
+
+/// The login: one per person. Synced to the hub with the brand's users. `memberships` is cloud
+/// only (the hub has no organizations) and sits in a block of its own, so the hub's formatting of
+/// the relations that remain matches the generated file.
+model Account {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  /// Stored lowercase; globally unique so sign-in needs no tenant selector.
+  email        String   @unique
+  /// argon2id hash. Never logged, never returned by the API.
+  passwordHash String   @map("password_hash")
+  /// The brand signed into last; sign-in returns to it.
+  lastTenantId String?  @map("last_tenant_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  users User[]
+
+  memberships OrganizationMember[]
+
+  @@map("accounts")
 }
 
 /// Permission keys are defined in code (@pos/shared-types PERMISSIONS) and upserted into this
@@ -1659,6 +1692,62 @@ model PlatformUser {
   refreshTokens PlatformRefreshToken[]
 
   @@map("platform_users")
+}
+
+/// @cloud-only
+/// Several brands under one owner (E1): each brand stays a full tenant; the organization groups
+/// them for sign-in, switching and cross-brand reports. Not owned by a tenant.
+model Organization {
+  id           String             @id @default(uuid(7)) @db.Uuid
+  slug         String             @unique
+  nameEn       String             @map("name_en")
+  nameAr       String             @map("name_ar")
+  /// Every brand of the organization uses this currency (ISO 4217).
+  currencyCode String             @map("currency_code")
+  status       OrganizationStatus @default(ACTIVE)
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenants Tenant[]
+  members OrganizationMember[]
+
+  @@map("organizations")
+}
+
+/// @cloud-only
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+
+  @@map("organization_status")
+}
+
+/// @cloud-only
+/// What an organization member may do across the brands: OWNER manages members, MANAGER manages
+/// the brands, FINANCE reads the reports. Each maps to a brand role of the same name.
+enum OrganizationRole {
+  OWNER
+  MANAGER
+  FINANCE
+
+  @@map("organization_role")
+}
+
+/// @cloud-only
+/// A login's role in an organization.
+model OrganizationMember {
+  id             String           @id @default(uuid(7)) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  accountId      String           @map("account_id") @db.Uuid
+  role           OrganizationRole
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  account      Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, accountId])
+  @@index([accountId])
+  @@map("organization_members")
 }
 
 /// @cloud-only

@@ -431,8 +431,18 @@ describe('provisioning', () => {
     });
     expect(tenant).toMatchObject({ businessType: 'RETAIL', currencyCode: 'ILS', status: 'ACTIVE' });
     expect(tenant.locations).toHaveLength(1);
-    expect(tenant.roles).toEqual([expect.objectContaining({ name: 'Owner', isSystem: true })]);
-    expect(tenant.roles[0]?.permissions).toHaveLength(PERMISSIONS.length);
+    const roles = new Map(tenant.roles.map((r) => [r.name, r]));
+    expect([...roles.keys()].sort()).toEqual(['Finance', 'Owner']);
+    expect(roles.get('Owner')).toMatchObject({ isSystem: true });
+    expect(roles.get('Owner')?.permissions).toHaveLength(PERMISSIONS.length);
+    // Finance is a system role with exactly its own permissions; the catalog sync must not widen it.
+    expect(roles.get('Finance')).toMatchObject({ isSystem: true });
+    expect(
+      roles
+        .get('Finance')
+        ?.permissions.map((p) => p.permissionKey)
+        .sort(),
+    ).toEqual(['locations.view', 'reports.view']);
   });
 
   it('does not let a new tenant’s staff see existing tenants', async () => {

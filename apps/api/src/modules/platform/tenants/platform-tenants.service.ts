@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
-import { type EntitlementSpec, type Prisma, hashSecret } from '@pos/database';
+import { type EntitlementSpec, OWNER_ROLE, type Prisma, hashSecret } from '@pos/database';
 import {
   DomainError,
   assertTenantAccess,
@@ -136,7 +136,9 @@ export class PlatformTenantsService {
         where: {
           tenantId,
           isActive: true,
-          roles: { some: { locationId: null, role: { isSystem: true } } },
+          roles: {
+            some: { locationId: null, role: { isSystem: true, name: OWNER_ROLE.name } },
+          },
         },
         orderBy: { createdAt: 'asc' },
       }),

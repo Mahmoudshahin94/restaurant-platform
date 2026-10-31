@@ -270,8 +270,11 @@ describe('users', () => {
       password: 'brand-new-password',
     });
     expect(reset.status).toBe(204);
-    const user = await prisma.user.findUniqueOrThrow({ where: { id: tenant.cashier.id } });
-    expect(await verifySecret(user.passwordHash, 'brand-new-password')).toBe(true);
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: tenant.cashier.id },
+      include: { account: true },
+    });
+    expect(await verifySecret(user.account.passwordHash, 'brand-new-password')).toBe(true);
     const entry = await prisma.auditLog.findFirstOrThrow({
       where: { action: 'user.password_reset' },
     });

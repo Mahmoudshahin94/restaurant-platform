@@ -448,13 +448,19 @@ export async function seed(prisma: PrismaClient, file: SeedFile): Promise<void> 
     const locationId = userSpec.location === null ? null : locationIds.get(userSpec.location);
     if (locationId === undefined) throw new Error(`Unknown location ${String(userSpec.location)}`);
 
-    const user = await prisma.user.upsert({
+    const passwordHash = await hashSecret(password);
+    const account = await prisma.account.upsert({
       where: { email },
-      update: { passwordHash: await hashSecret(password), displayName: userSpec.displayName },
+      update: { passwordHash },
+      create: { email, passwordHash, lastTenantId: tenant.id },
+    });
+    const user = await prisma.user.upsert({
+      where: { tenantId_accountId: { tenantId: tenant.id, accountId: account.id } },
+      update: { email, displayName: userSpec.displayName },
       create: {
         email,
         tenantId: tenant.id,
-        passwordHash: await hashSecret(password),
+        accountId: account.id,
         displayName: userSpec.displayName,
         preferredLocale: userSpec.preferredLocale,
       },

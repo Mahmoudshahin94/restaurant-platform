@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { hashSecret } from '@pos/database';
+import { OWNER_ROLE, hashSecret } from '@pos/database';
 import { DomainError, assertCanGrant } from '@pos/domain';
 import {
   AuditService,
@@ -76,13 +76,17 @@ export class UsersService {
     try {
       return await this.prisma.$transaction(async (tx) => {
         await this.checkAssignments(tx, principal, input.roles);
+        // The login: an e-mail that already has one is refused (EMAIL_TAKEN below).
+        const account = await tx.account.create({
+          data: { email: input.email, passwordHash, lastTenantId: principal.tenantId },
+        });
         const row = await tx.user.create({
           data: {
             tenantId: principal.tenantId,
+            accountId: account.id,
             email: input.email,
             displayName: input.displayName,
             preferredLocale: input.preferredLocale,
-            passwordHash,
             roles: { create: input.roles },
           },
           include: userInclude,
@@ -190,7 +194,10 @@ export class UsersService {
       const user = await this.load(tx, principal.tenantId, userId);
       // Taking over someone's account is as strong as holding their roles.
       if (userId !== principal.userId) await this.checkAssignments(tx, principal, user.roles);
-      await tx.user.update({ where: { id: userId }, data: { passwordHash } });
+      await tx.user.update({
+        where: { id: userId },
+        data: { account: { update: { passwordHash } } },
+      });
       await this.endSessions(tx, userId);
       await this.audit.record(
         {
@@ -246,8 +253,8 @@ export class UsersService {
   }
 
   /**
-   * The tenant must keep an active user holding a system role tenant-wide, or nobody
-   * could administer it any more. `nextRoles` are the user's assignments after the change.
+   * The tenant must keep an active user holding the Owner role tenant-wide (Finance is a system
+   * role too, but administers nothing), or nobody could administer it any more. `nextRoles` are the user's assignments after the change.
    */
   private async assertOwnerRemains(
     tx: PrismaTx,
@@ -256,7 +263,7 @@ export class UsersService {
     nextRoles: readonly RoleAssignmentInput[],
   ): Promise<void> {
     const systemRoles = await tx.role.findMany({
-      where: { tenantId, isSystem: true },
+      where: { tenantId, isSystem: true, name: OWNER_ROLE.name },
       select: { id: true },
     });
     const systemIds = new Set(systemRoles.map((r) => r.id));
