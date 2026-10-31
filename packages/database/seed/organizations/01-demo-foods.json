@@ -1,0 +1,407 @@
+{
+  "$comment": "Development/demo data only: the Demo Foods Group organization (E1) with two brands. Members come from SEED_ORG_OWNER_* (OWNER) and SEED_ORG_FINANCE_* (FINANCE); a member whose e-mail variable is unset is skipped. SEED_DEMO_ORDERS=1 adds 30 days of paid orders.",
+  "organization": {
+    "slug": "demo-foods",
+    "nameEn": "Demo Foods Group",
+    "nameAr": "مجموعة ديمو فودز",
+    "currencyCode": "ILS"
+  },
+  "brands": [
+    {
+      "tenant": {
+        "slug": "burger-house",
+        "nameEn": "Burger House",
+        "nameAr": "بيت البرغر",
+        "businessType": "RESTAURANT",
+        "currencyCode": "ILS",
+        "defaultLocale": "ar",
+        "supportedLocales": ["ar", "en"],
+        "timezone": "Asia/Hebron"
+      },
+      "locations": [
+        {
+          "code": "BH1",
+          "nameEn": "Ramallah",
+          "nameAr": "رام الله",
+          "timezone": "Asia/Hebron",
+          "taxInclusive": true,
+          "addressLine": "Main Street, Ramallah",
+          "phone": null
+        },
+        {
+          "code": "BH2",
+          "nameEn": "Nablus",
+          "nameAr": "نابلس",
+          "timezone": "Asia/Hebron",
+          "taxInclusive": true,
+          "addressLine": "Rafidia Street, Nablus",
+          "phone": null
+        },
+        {
+          "code": "BH3",
+          "nameEn": "Hebron",
+          "nameAr": "الخليل",
+          "timezone": "Asia/Hebron",
+          "taxInclusive": true,
+          "addressLine": "Ein Sara Street, Hebron",
+          "phone": null
+        }
+      ],
+      "roles": [
+        {
+          "name": "Owner",
+          "description": "Full access",
+          "isSystem": true,
+          "permissions": "*"
+        }
+      ],
+      "menu": {
+        "kitchenStations": [
+          {
+            "code": "GRILL",
+            "nameEn": "Grill",
+            "nameAr": "الشواية"
+          },
+          {
+            "code": "FRY",
+            "nameEn": "Fryer",
+            "nameAr": "القلاية"
+          }
+        ],
+        "modifierGroups": [
+          {
+            "key": "extras",
+            "nameEn": "Extras",
+            "nameAr": "إضافات",
+            "minSelect": 0,
+            "maxSelect": null,
+            "modifiers": [
+              {
+                "nameEn": "Extra cheese",
+                "nameAr": "جبنة إضافية",
+                "priceDelta": 300
+              },
+              {
+                "nameEn": "Bacon",
+                "nameAr": "لحم مقدد",
+                "priceDelta": 500
+              }
+            ]
+          }
+        ],
+        "categories": [
+          {
+            "nameEn": "Burgers",
+            "nameAr": "برغر",
+            "products": [
+              {
+                "sku": "CLS",
+                "nameEn": "Classic Burger",
+                "nameAr": "برغر كلاسيك",
+                "price": 3200,
+                "stations": ["GRILL"],
+                "groups": ["extras"]
+              },
+              {
+                "sku": "DBL",
+                "nameEn": "Double Burger",
+                "nameAr": "برغر دبل",
+                "price": 4500,
+                "stations": ["GRILL"],
+                "groups": ["extras"]
+              },
+              {
+                "sku": "CHK",
+                "nameEn": "Chicken Burger",
+                "nameAr": "برغر دجاج",
+                "price": 3400,
+                "stations": ["GRILL"],
+                "groups": ["extras"]
+              }
+            ]
+          },
+          {
+            "nameEn": "Sides",
+            "nameAr": "جانبي",
+            "products": [
+              {
+                "sku": "FRS",
+                "nameEn": "Fries",
+                "nameAr": "بطاطا مقلية",
+                "price": 1200,
+                "stations": ["FRY"],
+                "groups": []
+              },
+              {
+                "sku": "RNG",
+                "nameEn": "Onion Rings",
+                "nameAr": "حلقات البصل",
+                "price": 1400,
+                "stations": ["FRY"],
+                "groups": []
+              }
+            ]
+          },
+          {
+            "nameEn": "Drinks",
+            "nameAr": "مشروبات",
+            "products": [
+              {
+                "sku": "COL",
+                "nameEn": "Cola",
+                "nameAr": "كولا",
+                "price": 800,
+                "stations": [],
+                "groups": []
+              },
+              {
+                "sku": "LMN",
+                "nameEn": "Lemonade",
+                "nameAr": "ليمونادة",
+                "price": 1000,
+                "stations": [],
+                "groups": []
+              }
+            ]
+          }
+        ]
+      },
+      "taxes": [
+        {
+          "nameEn": "VAT",
+          "nameAr": "ضريبة القيمة المضافة",
+          "rateBps": 1600,
+          "isDefault": true
+        }
+      ],
+      "paymentMethods": [
+        {
+          "type": "CASH",
+          "nameEn": "Cash",
+          "nameAr": "نقدًا"
+        },
+        {
+          "type": "CARD",
+          "nameEn": "Card",
+          "nameAr": "بطاقة"
+        }
+      ],
+      "cashRegisters": {
+        "BH1": [
+          {
+            "nameEn": "Drawer 1",
+            "nameAr": "الدرج 1"
+          }
+        ],
+        "BH2": [
+          {
+            "nameEn": "Drawer 1",
+            "nameAr": "الدرج 1"
+          }
+        ],
+        "BH3": [
+          {
+            "nameEn": "Drawer 1",
+            "nameAr": "الدرج 1"
+          }
+        ]
+      },
+      "users": []
+    },
+    {
+      "tenant": {
+        "slug": "pizza-point",
+        "nameEn": "Pizza Point",
+        "nameAr": "نقطة البيتزا",
+        "businessType": "RESTAURANT",
+        "currencyCode": "ILS",
+        "defaultLocale": "ar",
+        "supportedLocales": ["ar", "en"],
+        "timezone": "Asia/Hebron"
+      },
+      "locations": [
+        {
+          "code": "PP1",
+          "nameEn": "Ramallah",
+          "nameAr": "رام الله",
+          "timezone": "Asia/Hebron",
+          "taxInclusive": true,
+          "addressLine": "Al-Irsal Street, Ramallah",
+          "phone": null
+        },
+        {
+          "code": "PP2",
+          "nameEn": "Bethlehem",
+          "nameAr": "بيت لحم",
+          "timezone": "Asia/Hebron",
+          "taxInclusive": true,
+          "addressLine": "Manger Square, Bethlehem",
+          "phone": null
+        }
+      ],
+      "roles": [
+        {
+          "name": "Owner",
+          "description": "Full access",
+          "isSystem": true,
+          "permissions": "*"
+        }
+      ],
+      "menu": {
+        "kitchenStations": [
+          {
+            "code": "OVEN",
+            "nameEn": "Oven",
+            "nameAr": "الفرن"
+          }
+        ],
+        "modifierGroups": [
+          {
+            "key": "toppings",
+            "nameEn": "Toppings",
+            "nameAr": "إضافات",
+            "minSelect": 0,
+            "maxSelect": null,
+            "modifiers": [
+              {
+                "nameEn": "Mushrooms",
+                "nameAr": "فطر",
+                "priceDelta": 300
+              },
+              {
+                "nameEn": "Olives",
+                "nameAr": "زيتون",
+                "priceDelta": 200
+              }
+            ]
+          }
+        ],
+        "categories": [
+          {
+            "nameEn": "Pizza",
+            "nameAr": "بيتزا",
+            "products": [
+              {
+                "sku": "MRG",
+                "nameEn": "Margherita",
+                "nameAr": "مارغريتا",
+                "price": 3800,
+                "stations": ["OVEN"],
+                "groups": ["toppings"]
+              },
+              {
+                "sku": "PEP",
+                "nameEn": "Pepperoni",
+                "nameAr": "بيبروني",
+                "price": 4600,
+                "stations": ["OVEN"],
+                "groups": ["toppings"]
+              },
+              {
+                "sku": "VEG",
+                "nameEn": "Garden Veggie",
+                "nameAr": "خضار",
+                "price": 4200,
+                "stations": ["OVEN"],
+                "groups": ["toppings"]
+              }
+            ]
+          },
+          {
+            "nameEn": "Starters",
+            "nameAr": "مقبلات",
+            "products": [
+              {
+                "sku": "GBR",
+                "nameEn": "Garlic Bread",
+                "nameAr": "خبز بالثوم",
+                "price": 1500,
+                "stations": ["OVEN"],
+                "groups": []
+              },
+              {
+                "sku": "SLD",
+                "nameEn": "Side Salad",
+                "nameAr": "سلطة",
+                "price": 1300,
+                "stations": [],
+                "groups": []
+              }
+            ]
+          },
+          {
+            "nameEn": "Drinks",
+            "nameAr": "مشروبات",
+            "products": [
+              {
+                "sku": "CLA",
+                "nameEn": "Cola",
+                "nameAr": "كولا",
+                "price": 800,
+                "stations": [],
+                "groups": []
+              },
+              {
+                "sku": "WTR",
+                "nameEn": "Water",
+                "nameAr": "مياه",
+                "price": 400,
+                "stations": [],
+                "groups": []
+              }
+            ]
+          }
+        ]
+      },
+      "taxes": [
+        {
+          "nameEn": "VAT",
+          "nameAr": "ضريبة القيمة المضافة",
+          "rateBps": 1600,
+          "isDefault": true
+        }
+      ],
+      "paymentMethods": [
+        {
+          "type": "CASH",
+          "nameEn": "Cash",
+          "nameAr": "نقدًا"
+        },
+        {
+          "type": "CARD",
+          "nameEn": "Card",
+          "nameAr": "بطاقة"
+        }
+      ],
+      "cashRegisters": {
+        "PP1": [
+          {
+            "nameEn": "Drawer 1",
+            "nameAr": "الدرج 1"
+          }
+        ],
+        "PP2": [
+          {
+            "nameEn": "Drawer 1",
+            "nameAr": "الدرج 1"
+          }
+        ]
+      },
+      "users": []
+    }
+  ],
+  "members": [
+    {
+      "envPrefix": "SEED_ORG_OWNER",
+      "displayName": "Group Owner",
+      "role": "OWNER",
+      "optional": true
+    },
+    {
+      "envPrefix": "SEED_ORG_FINANCE",
+      "displayName": "Group Finance",
+      "role": "FINANCE",
+      "optional": true
+    }
+  ]
+}

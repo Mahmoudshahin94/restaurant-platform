@@ -1,15 +1,19 @@
 /**
  * Development seed. Reads seed/demo.json, the extra demo tenants in seed/tenants/ (one per
- * business type, ADR 0017) and SEED_* environment variables; idempotent (re-running updates
- * instead of duplicating). Never run against production.
+ * business type, ADR 0017), the demo organizations in seed/organizations/ (E1) and SEED_*
+ * environment variables; idempotent (re-running updates instead of duplicating). Never run
+ * against production. `SEED_DEMO_ORDERS=1` adds 30 days of orders to the organizations' brands.
  */
 import { readFileSync, readdirSync } from 'node:fs';
-import { combinationName, detectSymbology } from '@pos/domain';
-import type { Feature } from '@pos/shared-types';
+import { fileURLToPath } from 'node:url';
+import { assertOrganizationCurrency, combinationName, detectSymbology } from '@pos/domain';
+import type { Feature, OrganizationRole } from '@pos/shared-types';
 import { type Prisma, PrismaClient, type Locale } from '@prisma/client';
 import { hashSecret } from './credentials';
 import { syncPermissionCatalog } from './permissions';
 import { type LocationSpec, type RoleSpec, type TenantSpec, provisionTenant } from './provisioning';
+import { type SeedMember, linkMember } from './seed-organizations';
+import { seedDemoOrders } from './seed-orders';
 
 interface SeedFile {
   tenant: TenantSpec;
@@ -49,6 +53,19 @@ interface SeedFile {
     /** POS sign-in at the location hub: employee code + PIN from `<envPrefix>_PIN`. */
     employeeCode?: string;
     /** Skipped (with a note) when its SEED_* variables are not set: extra demo tenants only. */
+    optional?: boolean;
+  }[];
+}
+
+/** A demo organization (E1): its brands as ordinary seed files, its members by env prefix. */
+export interface OrganizationSeedFile {
+  organization: { slug: string; nameEn: string; nameAr: string; currencyCode: string };
+  brands: SeedFile[];
+  members: {
+    envPrefix: string;
+    displayName: string;
+    role: OrganizationRole;
+    /** Skipped (with a note) when its SEED_* variables are not set. */
     optional?: boolean;
   }[];
 }
@@ -409,14 +426,22 @@ function requireEnv(name: string): string {
   return value;
 }
 
-export async function seed(prisma: PrismaClient, file: SeedFile): Promise<void> {
+export async function seed(
+  prisma: PrismaClient,
+  file: SeedFile,
+  options: { organizationId?: string } = {},
+): Promise<{ tenantId: string; locationIds: Map<string, string> }> {
   if (process.env.NODE_ENV === 'production') throw new Error('Refusing to seed in production');
 
   await syncPermissionCatalog(prisma);
 
   // Development websites answer on `<slug>.localhost` (ADR 0023).
   const webDomain = process.env.PLATFORM_WEB_DOMAIN ?? 'localhost';
-  const provisioned = await provisionTenant(prisma, { ...file, webDomain });
+  const provisioned = await provisionTenant(prisma, {
+    ...file,
+    webDomain,
+    ...(options.organizationId ? { organizationId: options.organizationId } : {}),
+  });
   const tenant = { id: provisioned.tenantId };
   const { locationIds, roleIds } = provisioned;
 
@@ -492,18 +517,95 @@ export async function seed(prisma: PrismaClient, file: SeedFile): Promise<void> 
       });
     }
   }
+  return { tenantId: tenant.id, locationIds };
+}
+
+/**
+ * Creates (or finds) a demo organization with its brands and members. A brand that exists
+ * already joins it; a brand of another organization is a broken seed. Each member gets an account
+ * (password from `<prefix>_PASSWORD`) and a linked user in every brand, as the API does.
+ */
+export async function seedOrganization(
+  prisma: PrismaClient,
+  file: OrganizationSeedFile,
+): Promise<{ organizationId: string; tenants: { id: string; slug: string }[] }> {
+  if (process.env.NODE_ENV === 'production') throw new Error('Refusing to seed in production');
+  const { slug, nameEn, nameAr, currencyCode } = file.organization;
+  // The currency is the organization's for good: only the names follow the seed file.
+  const organization = await prisma.organization.upsert({
+    where: { slug },
+    update: { nameEn, nameAr },
+    create: { slug, nameEn, nameAr, currencyCode },
+  });
+
+  const tenants: { id: string; slug: string }[] = [];
+  for (const brand of file.brands) {
+    assertOrganizationCurrency(organization.currencyCode, brand.tenant.currencyCode ?? 'ILS');
+    const { tenantId } = await seed(prisma, brand, { organizationId: organization.id });
+    const row = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
+    if (row.organizationId && row.organizationId !== organization.id) {
+      throw new Error(`Brand ${brand.tenant.slug} belongs to another organization`);
+    }
+    // A brand seeded before it had an organization joins it now.
+    if (!row.organizationId) {
+      await prisma.tenant.update({
+        where: { id: tenantId },
+        data: { organizationId: organization.id },
+      });
+    }
+    tenants.push({ id: tenantId, slug: brand.tenant.slug });
+  }
+
+  for (const spec of file.members) {
+    if (spec.optional && !process.env[`${spec.envPrefix}_EMAIL`]) {
+      console.info(`Skipped ${spec.envPrefix} (set ${spec.envPrefix}_EMAIL/_PASSWORD)`);
+      continue;
+    }
+    const email = requireEnv(`${spec.envPrefix}_EMAIL`).trim().toLowerCase();
+    const passwordHash = await hashSecret(requireEnv(`${spec.envPrefix}_PASSWORD`));
+    const account = await prisma.account.upsert({
+      where: { email },
+      update: { passwordHash },
+      create: { email, passwordHash },
+    });
+    const row = await prisma.organizationMember.upsert({
+      where: {
+        organizationId_accountId: { organizationId: organization.id, accountId: account.id },
+      },
+      update: { role: spec.role, displayName: spec.displayName },
+      create: {
+        organizationId: organization.id,
+        accountId: account.id,
+        role: spec.role,
+        displayName: spec.displayName,
+      },
+    });
+    const member: SeedMember = {
+      id: row.id,
+      accountId: account.id,
+      email,
+      displayName: row.displayName,
+      role: row.role,
+    };
+    for (const tenant of tenants) await linkMember(prisma, tenant.id, member);
+  }
+  return { organizationId: organization.id, tenants };
 }
 
 async function main(): Promise<void> {
-  const read = (url: URL) => JSON.parse(readFileSync(url, 'utf8')) as SeedFile;
-  const extras = new URL('../seed/tenants/', import.meta.url);
-  const files = [
-    read(new URL('../seed/demo.json', import.meta.url)),
-    ...readdirSync(extras)
+  const read = (url: URL): unknown => JSON.parse(readFileSync(url, 'utf8'));
+  const jsonFiles = (dir: URL) =>
+    readdirSync(dir)
       .filter((name) => name.endsWith('.json'))
       .sort()
-      .map((name) => read(new URL(name, extras))),
+      .map((name) => new URL(name, dir));
+  const files = [
+    read(new URL('../seed/demo.json', import.meta.url)) as SeedFile,
+    ...jsonFiles(new URL('../seed/tenants/', import.meta.url)).map((u) => read(u) as SeedFile),
   ];
+  const organizations = jsonFiles(new URL('../seed/organizations/', import.meta.url)).map(
+    (u) => read(u) as OrganizationSeedFile,
+  );
   const prisma = new PrismaClient();
   try {
     for (const file of files) {
@@ -512,12 +614,31 @@ async function main(): Promise<void> {
         `Seeded tenant "${file.tenant.slug}" (${file.tenant.businessType ?? 'RESTAURANT'})`,
       );
     }
+    for (const file of organizations) {
+      const { tenants } = await seedOrganization(prisma, file);
+      console.info(
+        `Seeded organization "${file.organization.slug}" with ${tenants.map((t) => t.slug).join(', ')}`,
+      );
+      if (process.env.SEED_DEMO_ORDERS === '1') {
+        for (const tenant of tenants) {
+          const result = await seedDemoOrders(prisma, tenant);
+          console.info(
+            result
+              ? `Demo orders for "${tenant.slug}": ${String(result.created)} added, ${String(result.skippedDays)} days already seeded`
+              : `Skipped demo orders for "${tenant.slug}" (it needs a user: set the organization member variables)`,
+          );
+        }
+      }
+    }
   } finally {
     await prisma.$disconnect();
   }
 }
 
-main().catch((error: unknown) => {
-  console.error(error);
-  process.exit(1);
-});
+// Run as a script (`pnpm seed`); importing the module (the seed test) runs nothing.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((error: unknown) => {
+    console.error(error);
+    process.exit(1);
+  });
+}
