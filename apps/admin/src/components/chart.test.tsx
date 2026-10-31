@@ -1,6 +1,51 @@
 import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { type ElementType, createElement } from 'react';
+import type * as Recharts from 'recharts';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Chart } from './chart';
+
+// Records the `isAnimationActive` every animated Recharts part is given, then renders the real one.
+const animation = vi.hoisted(() => ({ seen: [] as unknown[] }));
+vi.mock('recharts', async (importOriginal) => {
+  const actual = await importOriginal<typeof Recharts>();
+  const record = (Component: ElementType) =>
+    function Recorded(props: { isAnimationActive?: boolean }) {
+      animation.seen.push(props.isAnimationActive);
+      return createElement(Component, props);
+    };
+  return {
+    ...actual,
+    Bar: record(actual.Bar),
+    Line: record(actual.Line),
+    Tooltip: record(actual.Tooltip),
+  };
+});
+
+// jsdom has no layout, so Recharts' responsive container would measure 0 and draw nothing.
+class MeasuredResizeObserver {
+  constructor(private readonly callback: ResizeObserverCallback) {}
+  observe(target: Element) {
+    const contentRect = { width: 600, height: 280 } as DOMRectReadOnly;
+    this.callback([{ target, contentRect } as ResizeObserverEntry], this);
+  }
+  unobserve() {}
+  disconnect() {}
+}
+
+function mockReducedMotion(reduced: boolean) {
+  vi.stubGlobal('ResizeObserver', MeasuredResizeObserver);
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: reduced && query.includes('prefers-reduced-motion'),
+    media: query,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+  }));
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  animation.seen.length = 0;
+});
 
 const data = [
   { day: 'Mon', sales: 120, orders: 4 },
@@ -35,5 +80,22 @@ describe.each(['bar', 'line'] as const)('Chart (%s)', (kind) => {
       ['Tue', '340', '9'],
       ['Wed', '0', '0'],
     ]);
+  });
+});
+
+describe.each(['bar', 'line'] as const)('Chart animation (%s)', (kind) => {
+  it('turns every animation off under prefers-reduced-motion', () => {
+    mockReducedMotion(true);
+    render(<Chart data={data} series={series} x="day" kind={kind} ariaLabel="Sales by day" />);
+    // Tooltip plus one part per series.
+    expect(animation.seen.length).toBeGreaterThanOrEqual(1 + series.length);
+    expect(animation.seen.every((value) => value === false)).toBe(true);
+  });
+
+  it('animates otherwise', () => {
+    mockReducedMotion(false);
+    render(<Chart data={data} series={series} x="day" kind={kind} ariaLabel="Sales by day" />);
+    expect(animation.seen.length).toBeGreaterThanOrEqual(1 + series.length);
+    expect(animation.seen.every((value) => value === true)).toBe(true);
   });
 });

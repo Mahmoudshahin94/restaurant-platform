@@ -10,16 +10,34 @@ export interface DataTableColumn<T> {
   /** `end` right-aligns (left in RTL) and sets tabular numbers: use it for amounts and counts. */
   align?: 'start' | 'end';
   /** Makes the column sortable by this value. */
-  sortValue?: (row: T) => string | number;
+  sortValue?: (row: T) => string | number | null | undefined;
 }
 
 type SortState = { id: string; direction: 'asc' | 'desc' } | null;
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
+type SortKey = string | number | null | undefined;
+
+/** Nothing to sort by: no value, or a number that is not one. */
+function isMissing(value: SortKey): value is null | undefined {
+  return (
+    value === null || value === undefined || (typeof value === 'number' && Number.isNaN(value))
+  );
+}
+
+/** Numbers compare as numbers, everything else (and mixed) through the locale collator. */
 function compare(a: string | number, b: string | number): number {
   if (typeof a === 'number' && typeof b === 'number') return a - b;
   return collator.compare(String(a), String(b));
+}
+
+/** Missing values go last whichever way the column is sorted; `sign` is 1 (asc) or -1 (desc). */
+function compareKeys(a: SortKey, b: SortKey, sign: 1 | -1): number {
+  const aMissing = isMissing(a);
+  const bMissing = isMissing(b);
+  if (aMissing || bMissing) return aMissing === bMissing ? 0 : aMissing ? 1 : -1;
+  return sign * compare(a, b);
 }
 
 /**
@@ -50,7 +68,7 @@ export function DataTable<T>({
     if (!sort || !sortValue) return rows;
     const sign = sort.direction === 'asc' ? 1 : -1;
     // `Array.sort` is stable, so equal values keep the given order.
-    return [...rows].sort((a, b) => sign * compare(sortValue(a), sortValue(b)));
+    return [...rows].sort((a, b) => compareKeys(sortValue(a), sortValue(b), sign));
   }, [columns, rows, sort]);
 
   function toggle(id: string) {
@@ -60,11 +78,15 @@ export function DataTable<T>({
     });
   }
 
+  // The header is one row tall, and the scroll padding keeps a focused cell from sliding under it
+  // (WCAG 2.2 Focus Not Obscured).
   const rowHeight = density === 'compact' ? 'h-8' : 'h-10';
+  const scrollPadding = density === 'compact' ? 'scroll-pt-8' : 'scroll-pt-10';
   return (
     <div
       className={cn(
         'surface max-h-[70vh] w-full overflow-auto rounded-lg border shadow-1',
+        scrollPadding,
         className,
       )}
     >
@@ -90,7 +112,8 @@ export function DataTable<T>({
                       : undefined
                   }
                   className={cn(
-                    'h-10 font-semibold text-foreground',
+                    rowHeight,
+                    'font-semibold text-foreground',
                     column.align === 'end' && 'text-end',
                   )}
                 >

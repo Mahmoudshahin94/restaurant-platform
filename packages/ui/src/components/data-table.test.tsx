@@ -99,4 +99,60 @@ describe('DataTable', () => {
     render(<DataTable columns={columns} rows={rows} rowKey={(r) => r.id} density="compact" />);
     expect(screen.getAllByRole('cell', { name: 'Burger' })[0]).toHaveClass('h-8');
   });
+
+  it('pads the scroll area by the header height so a focused cell is not hidden under it', () => {
+    const { container, rerender } = render(
+      <DataTable columns={columns} rows={rows} rowKey={(r) => r.id} />,
+    );
+    expect(container.firstElementChild).toHaveClass('overflow-auto', 'scroll-pt-10');
+    expect(screen.getByRole('columnheader', { name: 'Name' })).toHaveClass('h-10');
+    rerender(<DataTable columns={columns} rows={rows} rowKey={(r) => r.id} density="compact" />);
+    expect(container.firstElementChild).toHaveClass('scroll-pt-8');
+    expect(screen.getByRole('columnheader', { name: 'Name' })).toHaveClass('h-8');
+  });
+
+  describe('sorting edge cases', () => {
+    interface Item {
+      id: string;
+      score: number | null | undefined;
+      label: string;
+    }
+    const items: Item[] = [
+      { id: '1', score: 5, label: 'a' },
+      { id: '2', score: Number.NaN, label: 'b' },
+      { id: '3', score: 5, label: 'c' },
+      { id: '4', score: null, label: 'd' },
+      { id: '5', score: 1, label: 'e' },
+      { id: '6', score: undefined, label: 'f' },
+      { id: '7', score: 5, label: 'g' },
+    ];
+    const itemColumns = [
+      { id: 'label', header: 'Label', cell: (r: Item) => r.label },
+      {
+        id: 'score',
+        header: 'Score',
+        cell: (r: Item) => String(r.score),
+        sortValue: (r: Item) => r.score,
+      },
+    ];
+    function labels() {
+      return within(screen.getAllByRole('rowgroup')[1]!)
+        .getAllByRole('row')
+        .map((row) => within(row).getAllByRole('cell')[0]!.textContent);
+    }
+
+    it('puts missing and NaN values last ascending, keeps ties in the given order', async () => {
+      render(<DataTable columns={itemColumns} rows={items} rowKey={(r) => r.id} />);
+      await userEvent.click(screen.getByRole('button', { name: 'Score' }));
+      expect(labels()).toEqual(['e', 'a', 'c', 'g', 'b', 'd', 'f']);
+    });
+
+    it('still puts missing and NaN values last descending', async () => {
+      render(<DataTable columns={itemColumns} rows={items} rowKey={(r) => r.id} />);
+      const button = screen.getByRole('button', { name: 'Score' });
+      await userEvent.click(button);
+      await userEvent.click(button);
+      expect(labels()).toEqual(['a', 'c', 'g', 'e', 'b', 'd', 'f']);
+    });
+  });
 });

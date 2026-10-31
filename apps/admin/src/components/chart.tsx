@@ -86,6 +86,7 @@ export function Chart({
       />
       <YAxis tickLine={false} axisLine={false} tick={axis} width={48} />
       <Tooltip
+        isAnimationActive={animate}
         contentStyle={{
           background: 'var(--color-surface-raised)',
           border: '1px solid var(--color-border)',
