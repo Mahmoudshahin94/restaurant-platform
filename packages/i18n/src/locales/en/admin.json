@@ -379,7 +379,9 @@
     "unreadable": {
       "FOREGROUND": "Text on this colour would be hard to read ({{ratio}}:1, needs {{required}}:1).",
       "DARK": "Too dark for dark screens ({{ratio}}:1 against the page, needs {{required}}:1). Choose a lighter shade.",
-      "LIGHT": "Too light for light screens ({{ratio}}:1 against the page, needs {{required}}:1). Choose a darker shade."
+      "LIGHT": "Too light for light screens ({{ratio}}:1 against the page, needs {{required}}:1). Choose a darker shade.",
+      "SUBTLE_DARK": "Its tint on selected rows in dark mode would make text hard to read ({{ratio}}:1, needs {{required}}:1). Choose a different shade.",
+      "SUBTLE_LIGHT": "Its tint on selected rows in light mode would make text hard to read ({{ratio}}:1, needs {{required}}:1). Choose a different shade."
     },
     "look": "Look",
     "themeMode": "Light or dark",

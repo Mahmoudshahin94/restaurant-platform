@@ -127,7 +127,7 @@ function StatusDialog({ detail }: { detail: PlatformTenantDetail }) {
             {t('common:actions.cancel')}
           </Button>
           <Button
-            variant={status === 'ACTIVE' ? 'default' : 'destructive'}
+            variant={status === 'ACTIVE' ? 'primary' : 'destructive'}
             disabled={reason.trim().length < MIN_REASON || change.isPending}
             onClick={() => void submit()}
           >

@@ -40,7 +40,7 @@ export function BarcodeDialog({ onSubmit }: { onSubmit: (code: string) => void }
           />
         </Field>
         <DialogFooter>
-          <Button type="submit" size="touch" disabled={!code.trim()}>
+          <Button type="submit" size="xl" disabled={!code.trim()}>
             {t('kiosk:scan.submit')}
           </Button>
         </DialogFooter>

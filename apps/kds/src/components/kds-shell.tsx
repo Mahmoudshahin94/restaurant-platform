@@ -77,7 +77,7 @@ export function KdsShell() {
         </nav>
         <div role="group" aria-label={t('kds:stations.label')} className="flex flex-wrap gap-1">
           <Button
-            variant={stationIds.length === 0 ? 'default' : 'outline'}
+            variant={stationIds.length === 0 ? 'primary' : 'outline'}
             className="h-12 text-base"
             aria-pressed={stationIds.length === 0}
             onClick={() => {
@@ -89,7 +89,7 @@ export function KdsShell() {
           {settings.data?.stations.map((station) => (
             <Button
               key={station.id}
-              variant={stationIds.includes(station.id) ? 'default' : 'outline'}
+              variant={stationIds.includes(station.id) ? 'primary' : 'outline'}
               className="h-12 text-base"
               aria-pressed={stationIds.includes(station.id)}
               onClick={() => {
@@ -124,7 +124,7 @@ export function KdsShell() {
           ) : (
             <Button
               variant="ghost"
-              size="icon"
+              size="icon-md"
               className="size-12"
               aria-pressed={sound}
               aria-label={sound ? t('kds:sound.on') : t('kds:sound.off')}

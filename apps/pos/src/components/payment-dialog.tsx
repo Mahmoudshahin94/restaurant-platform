@@ -286,7 +286,7 @@ export function PaymentDialog({
       <DialogFooter>
         {paidInFull ? null : (
           <Button
-            size="touch"
+            size="xl"
             className="w-full"
             disabled={!valid || charge.isPending}
             onClick={() => void submit()}

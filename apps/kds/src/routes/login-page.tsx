@@ -94,7 +94,7 @@ export function LoginPage() {
                 {...form.register('password')}
               />
             </Field>
-            <Button type="submit" size="touch" disabled={form.formState.isSubmitting}>
+            <Button type="submit" size="xl" disabled={form.formState.isSubmitting}>
               {form.formState.isSubmitting ? t('auth:signIn.submitting') : t('auth:signIn.submit')}
             </Button>
           </form>

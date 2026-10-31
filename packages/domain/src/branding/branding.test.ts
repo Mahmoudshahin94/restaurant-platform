@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { contrastRatio, normalizeHex, parseColour, relativeLuminance } from './colour';
-import { brandingContrastIssues, colourContrastIssues, readableForeground } from './contrast';
+import { contrastRatio, mixColours, normalizeHex, parseColour, relativeLuminance } from './colour';
+import {
+  brandingContrastIssues,
+  colourContrastIssues,
+  primarySubtle,
+  readableForeground,
+} from './contrast';
+import { THEME_FOREGROUNDS, THEME_SURFACES } from './theme-tokens';
 import { brandingFileIds, resolveBranding, withDeviceThemeMode } from './resolve-branding';
 import { BRAND_FOREGROUNDS, THEME_BACKGROUNDS } from './theme-tokens';
 
@@ -40,6 +46,23 @@ describe('readable foregrounds', () => {
     for (let v = 0; v <= 255; v += 15) {
       const hex = `#${v.toString(16).padStart(2, '0').repeat(3)}`;
       expect(contrastRatio(hex, readableForeground(hex))).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
+
+describe('primary-subtle', () => {
+  it('mixes colours by weight', () => {
+    expect(mixColours('#ffffff', '#000000', 1)).toBe('#ffffff');
+    expect(mixColours('#ffffff', '#000000', 0)).toBe('#000000');
+    expect(mixColours('#ff0000', '#ff0000', 0.3)).toBe('#ff0000');
+  });
+
+  it('tints the card of each theme with the primary and keeps the theme text readable on it', () => {
+    for (const mode of ['DARK', 'LIGHT'] as const) {
+      const subtle = primarySubtle('#2563eb', mode);
+      expect(contrastRatio(THEME_FOREGROUNDS[mode], subtle)).toBeGreaterThanOrEqual(4.5);
+      // The tint stands out from the plain card, so a selected row is visibly selected.
+      expect(contrastRatio(subtle, THEME_SURFACES[mode])).toBeGreaterThan(1.02);
     }
   });
 });

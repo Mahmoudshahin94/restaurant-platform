@@ -152,7 +152,7 @@ export function SettingsPage() {
               ))}
             </NativeSelect>
           </Field>
-          <Button size="touch" variant="outline" onClick={showTest}>
+          <Button size="xl" variant="outline" onClick={showTest}>
             {t('payments:printer.test')}
           </Button>
         </CardContent>

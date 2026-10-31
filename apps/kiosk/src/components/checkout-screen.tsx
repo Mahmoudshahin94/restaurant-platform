@@ -91,13 +91,13 @@ export function CheckoutScreen({
         </fieldset>
         {error ? <Alert variant="destructive">{errorText(error)}</Alert> : null}
         <div className="flex flex-wrap gap-4">
-          <Button type="button" variant="outline" size="touch" onClick={onBack}>
+          <Button type="button" variant="outline" size="xl" onClick={onBack}>
             <ArrowLeft aria-hidden className="size-5 rtl:rotate-180" />
             {t('checkout.back')}
           </Button>
           <Button
             type="button"
-            size="touch"
+            size="xl"
             className="h-16 min-w-72 text-xl"
             disabled={pending || !quote}
             onClick={onSubmit}

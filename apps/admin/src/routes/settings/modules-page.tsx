@@ -129,7 +129,7 @@ export function ModulesPage() {
                             role="radio"
                             size="sm"
                             aria-checked={current === choice}
-                            variant={current === choice ? 'default' : 'outline'}
+                            variant={current === choice ? 'primary' : 'outline'}
                             disabled={save.isPending}
                             onClick={() => {
                               if (choice !== current) choose(row.feature, choice);

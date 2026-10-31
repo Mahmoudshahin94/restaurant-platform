@@ -181,7 +181,7 @@ export function PosShell() {
           <LanguageSwitcher className="h-10 w-auto" onLocaleChange={setLocale} />
           <Button
             variant="ghost"
-            size="icon"
+            size="icon-md"
             aria-label={t('pos:nav.settings')}
             onClick={() => void navigate('/settings')}
           >

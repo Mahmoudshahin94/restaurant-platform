@@ -285,7 +285,7 @@ export function CartPanel({ locationId, menu, discounts, floor, onEditLine }: Ca
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
-                  size="icon"
+                  size="icon-md"
                   className="size-11"
                   aria-label={t('pos:cart.decrease', { name })}
                   onClick={() => {
@@ -302,7 +302,7 @@ export function CartPanel({ locationId, menu, discounts, floor, onEditLine }: Ca
                 </span>
                 <Button
                   variant="outline"
-                  size="icon"
+                  size="icon-md"
                   className="size-11"
                   aria-label={t('pos:cart.increase', { name })}
                   onClick={() => {
@@ -313,7 +313,7 @@ export function CartPanel({ locationId, menu, discounts, floor, onEditLine }: Ca
                 </Button>
                 <Button
                   variant="ghost"
-                  size="icon"
+                  size="icon-md"
                   className="ms-auto size-11"
                   aria-label={t('pos:cart.remove', { name })}
                   onClick={() => {
@@ -413,7 +413,7 @@ export function CartPanel({ locationId, menu, discounts, floor, onEditLine }: Ca
           </dd>
         </dl>
         <Button
-          size="touch"
+          size="xl"
           className="w-full text-xl"
           disabled={!canPlace}
           onClick={() => void place()}

@@ -48,7 +48,7 @@ export function DoneScreen({ order, onDone }: { order: Order; onDone: () => void
         <p className="text-2xl" data-testid="done-message">
           {next}
         </p>
-        <Button type="button" size="touch" className="h-16 min-w-64 text-xl" onClick={onDone}>
+        <Button type="button" size="xl" className="h-16 min-w-64 text-xl" onClick={onDone}>
           {t('done.newOrder')}
         </Button>
         <p className="text-muted-foreground" aria-live="off">

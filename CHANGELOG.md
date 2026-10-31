@@ -13,6 +13,12 @@ release is cut and rolled out.
   design system: three surface profiles (storefront, counter, console), a complete token set, the button spec,
   the shared components to build and an accessibility bar
   ([docs/madar/design-system.md](docs/madar/design-system.md)). No product code changes yet.
+- **Design-system foundations (E1, ADR 0028).** The new tokens (surfaces, `border-strong`,
+  `primary-hover`/`-subtle`, `info` and status `-subtle` fills, elevation, z-index, motion, type scale,
+  radii derived from the tenant radius, `data-profile` component tokens); the Button spec (`primary`
+  replaces `default`, `xl` replaces `touch`, new `md`/`2xl`/icon sizes, a `loading` state, a neutral
+  disabled style); and the shared `DropdownMenu`, `AlertDialog` (replaces the admin's confirm dialog)
+  and `Toast`/`Toaster`. A tenant's primary now also sets its hover and selected-row tints.
 
 ## [1.0.0] - 2026-10-29
 

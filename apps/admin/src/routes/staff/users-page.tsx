@@ -3,6 +3,7 @@ import { QueryState, tKey } from '@pos/app-kit';
 import type { Role, RoleAssignmentInput, StaffUser } from '@pos/validation';
 import {
   Alert,
+  AlertDialog,
   Badge,
   Button,
   Card,
@@ -29,7 +30,6 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
-import { ConfirmDialog } from '../../components/confirm-dialog';
 import { useAdminErrorText } from '../../lib/admin-errors';
 import { api } from '../../lib/api';
 import { useDateTime, useLocationLookup } from '../../lib/format';
@@ -99,7 +99,7 @@ function AssignmentsEditor({
           </Field>
           <Button
             variant="ghost"
-            size="icon"
+            size="icon-md"
             aria-label={t('common:actions.remove')}
             onClick={() => {
               onChange(value.filter((_, i) => i !== index));
@@ -547,13 +547,14 @@ export function UsersPage() {
           <PasswordDialog user={editing.user} onClose={close} />
         ) : null}
       </Dialog>
-      <ConfirmDialog
+      <AlertDialog
         open={editing?.kind === 'active'}
         title={t('admin:users.deactivateTitle', {
           name: editing && editing.kind !== 'new' ? editing.user.displayName : '',
         })}
-        body={t('admin:users.deactivateBody')}
+        description={t('admin:users.deactivateBody')}
         confirmLabel={t('admin:users.deactivate')}
+        cancelLabel={t('common:actions.cancel')}
         destructive
         onConfirm={() =>
           setActive.mutateAsync({
@@ -561,7 +562,10 @@ export function UsersPage() {
             isActive: false,
           })
         }
-        onClose={close}
+        errorText={errorText}
+        onOpenChange={(open) => {
+          if (!open) close();
+        }}
       />
     </>
   );

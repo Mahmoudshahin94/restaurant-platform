@@ -23,7 +23,7 @@ export function KioskHeader({
       <Button
         type="button"
         variant="outline"
-        size="touch"
+        size="xl"
         aria-pressed={largeText}
         onClick={toggleLargeText}
       >
@@ -31,7 +31,7 @@ export function KioskHeader({
         {largeText ? t('a11y.normalText') : t('a11y.largeText')}
       </Button>
       {onStartOver ? (
-        <Button type="button" variant="outline" size="touch" onClick={onStartOver}>
+        <Button type="button" variant="outline" size="xl" onClick={onStartOver}>
           <RotateCcw aria-hidden className="size-5" />
           {t('menu.startOver')}
         </Button>
@@ -39,7 +39,7 @@ export function KioskHeader({
       <Button
         type="button"
         variant="ghost"
-        size="touch"
+        size="xl"
         className="text-muted-foreground"
         onClick={onAttendant}
         aria-label={t('attendant.open')}

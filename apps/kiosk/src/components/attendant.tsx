@@ -75,7 +75,7 @@ export function AttendantPinDialog({ onOpen }: { onOpen: (attendant: KioskAttend
         <DialogFooter>
           <Button
             type="submit"
-            size="touch"
+            size="xl"
             disabled={check.isPending || !employeeCode.trim() || pin.length < 4}
           >
             {t('kiosk:attendant.submit')}
@@ -159,19 +159,14 @@ export function AttendantMenu({
         </Alert>
       ) : null}
       <div className="grid gap-3">
-        <Button type="button" size="touch" onClick={onResume}>
+        <Button type="button" size="xl" onClick={onResume}>
           {t('kiosk:attendant.resume')}
         </Button>
-        <Button type="button" variant="outline" size="touch" onClick={onReload}>
+        <Button type="button" variant="outline" size="xl" onClick={onReload}>
           <RefreshCw aria-hidden className="size-5" />
           {t('kiosk:attendant.reload')}
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="touch"
-          onClick={() => void toggleFullscreen()}
-        >
+        <Button type="button" variant="outline" size="xl" onClick={() => void toggleFullscreen()}>
           {fullscreen ? (
             <Minimize aria-hidden className="size-5" />
           ) : (
@@ -182,7 +177,7 @@ export function AttendantMenu({
         <Button
           type="button"
           variant="ghost"
-          size="touch"
+          size="xl"
           className="text-destructive"
           onClick={() => {
             setConfirming(true);

@@ -138,10 +138,21 @@ describe('tenant token application', () => {
       '--color-ring': '#1e3a8a',
       '--color-accent': '#facc15',
       '--color-accent-foreground': '#000000',
-      '--radius-sm': '9px',
+      '--radius': '12px',
+      '--radius-sm': '7px',
       '--radius-md': '12px',
-      '--radius-lg': '18px',
+      '--radius-lg': '17px',
+      '--radius-xl': '24px',
     });
+    expect(vars['--color-primary-hover']).toBe(
+      'color-mix(in oklch, #1e3a8a 85%, var(--color-foreground))',
+    );
+    expect(vars['--color-primary-subtle']).toBe(
+      'color-mix(in oklch, #1e3a8a 12%, var(--color-card))',
+    );
+    expect(vars['--color-primary-subtle-border']).toBe(
+      'color-mix(in oklch, #1e3a8a 30%, var(--color-card))',
+    );
     expect(vars['--font-sans']).toMatch(/^ui-serif/);
     // Unset colours keep the theme's own (they differ between light and dark).
     expect(vars).not.toHaveProperty('--color-secondary');

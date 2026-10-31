@@ -38,8 +38,8 @@ export function LocationPage() {
             {active.map((l) => (
               <Button
                 key={l.id}
-                size="touch"
-                variant={l.id === locationId ? 'default' : 'outline'}
+                size="xl"
+                variant={l.id === locationId ? 'primary' : 'outline'}
                 className="h-20 justify-start text-xl"
                 onClick={() => {
                   choose(l.id);

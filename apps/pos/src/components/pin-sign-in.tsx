@@ -144,7 +144,7 @@ export function PinSignIn({
           <Delete aria-hidden className="size-6" />
         </Button>
       </div>
-      <Button type="submit" size="touch" disabled={pending || !code || pin.length < 4}>
+      <Button type="submit" size="xl" disabled={pending || !code || pin.length < 4}>
         {pending ? t('signIn.submitting') : t('pin.submit')}
       </Button>
     </form>

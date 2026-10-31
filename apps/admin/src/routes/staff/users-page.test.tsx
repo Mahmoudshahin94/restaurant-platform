@@ -60,7 +60,7 @@ describe('users page', () => {
     await renderWithProviders(<UsersPage />);
     const row = await screen.findByRole('row', { name: /Sara/ });
     await userEvent.click(within(row).getByRole('button', { name: 'Deactivate' }));
-    const dialog = await screen.findByRole('dialog');
+    const dialog = await screen.findByRole('alertdialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Deactivate' }));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
       'The business needs at least one active owner.',

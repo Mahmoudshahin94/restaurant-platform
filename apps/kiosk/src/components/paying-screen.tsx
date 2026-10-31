@@ -45,13 +45,13 @@ export function PayingScreen({
         {error && !pending ? <Alert variant="destructive">{errorText(error)}</Alert> : null}
         {failed ? (
           <div className="grid w-full gap-3">
-            <Button type="button" size="touch" className="h-16 text-xl" onClick={onRetry}>
+            <Button type="button" size="xl" className="h-16 text-xl" onClick={onRetry}>
               {t('paying.retry')}
             </Button>
-            <Button type="button" variant="outline" size="touch" onClick={onCounter}>
+            <Button type="button" variant="outline" size="xl" onClick={onCounter}>
               {t('paying.payAtCounter')}
             </Button>
-            <Button type="button" variant="ghost" size="touch" onClick={onCancel}>
+            <Button type="button" variant="ghost" size="xl" onClick={onCancel}>
               {t('paying.cancel')}
             </Button>
           </div>

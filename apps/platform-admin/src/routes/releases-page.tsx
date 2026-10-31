@@ -134,8 +134,8 @@ function ReleaseDialog({ release }: { release?: ReleaseDto }) {
   return (
     <Dialog open={open} onOpenChange={show}>
       <Button
-        variant={release ? 'outline' : 'default'}
-        size={release ? 'sm' : 'default'}
+        variant={release ? 'outline' : 'primary'}
+        size={release ? 'sm' : 'md'}
         onClick={() => {
           show(true);
         }}

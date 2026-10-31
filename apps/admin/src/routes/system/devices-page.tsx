@@ -3,6 +3,7 @@ import { QueryState, tKey } from '@pos/app-kit';
 import type { AdminDevice, PairDeviceRequest, PairedDevice, PairingCode } from '@pos/validation';
 import {
   Alert,
+  AlertDialog,
   Badge,
   Button,
   Card,
@@ -32,7 +33,6 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
-import { ConfirmDialog } from '../../components/confirm-dialog';
 import { LocationRequired } from '../../components/location-required';
 import { useAdminErrorText } from '../../lib/admin-errors';
 import { api } from '../../lib/api';
@@ -227,6 +227,7 @@ function NewCodeDialog({ device, onClose }: { device: AdminDevice; onClose: () =
 
 function DeviceList({ locationId }: { locationId: string }) {
   const { t } = useTranslation(['admin', 'common']);
+  const errorText = useAdminErrorText();
   const formatDate = useDateTime();
   const { byId } = useLocationLookup();
   const user = useSession((s) => s.user);
@@ -415,15 +416,17 @@ function DeviceList({ locationId }: { locationId: string }) {
           />
         ) : null}
       </Dialog>
-      <ConfirmDialog
+      <AlertDialog
         open={disabling !== null}
         title={t('admin:devices.disableTitle', { name: disabling?.name ?? '' })}
-        body={t('admin:devices.disableBody')}
+        description={t('admin:devices.disableBody')}
         confirmLabel={t('admin:devices.disable')}
+        cancelLabel={t('common:actions.cancel')}
         destructive
         onConfirm={() => disable.mutateAsync(disabling?.id ?? '')}
-        onClose={() => {
-          setDisabling(null);
+        errorText={errorText}
+        onOpenChange={(open) => {
+          if (!open) setDisabling(null);
         }}
       />
     </div>

@@ -26,7 +26,7 @@ export function QuantityStepper({
       <Button
         type="button"
         variant="outline"
-        size="icon"
+        size="icon-md"
         aria-label={t('product.decrease')}
         disabled={value <= min}
         onClick={() => {
@@ -41,7 +41,7 @@ export function QuantityStepper({
       <Button
         type="button"
         variant="outline"
-        size="icon"
+        size="icon-md"
         aria-label={t('product.increase')}
         disabled={value >= max}
         onClick={() => {

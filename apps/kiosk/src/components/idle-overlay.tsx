@@ -23,13 +23,7 @@ export function IdleOverlay({ seconds, onContinue }: { seconds: number; onContin
         <p id="idle-body" className="text-2xl text-muted-foreground">
           {t('idle.body', { seconds })}
         </p>
-        <Button
-          ref={button}
-          type="button"
-          size="touch"
-          className="h-16 text-xl"
-          onClick={onContinue}
-        >
+        <Button ref={button} type="button" size="xl" className="h-16 text-xl" onClick={onContinue}>
           {t('idle.continue')}
         </Button>
       </div>

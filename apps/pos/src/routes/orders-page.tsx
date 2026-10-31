@@ -327,7 +327,7 @@ function OrderDetail({ order, timeZone }: { order: Order; timeZone: string }) {
         <div className="flex flex-wrap gap-2">
           {canPay ? (
             <Button
-              size="touch"
+              size="xl"
               onClick={() => {
                 setDialog('pay');
               }}
@@ -337,7 +337,7 @@ function OrderDetail({ order, timeZone }: { order: Order; timeZone: string }) {
           ) : null}
           {canComplete ? (
             <Button
-              size="touch"
+              size="xl"
               disabled={transition.isPending}
               onClick={() => void run({ to: 'COMPLETED' })}
             >
@@ -346,7 +346,7 @@ function OrderDetail({ order, timeZone }: { order: Order; timeZone: string }) {
           ) : null}
           {order.status !== 'DRAFT' ? (
             <Button
-              size="touch"
+              size="xl"
               variant="outline"
               onClick={() => {
                 setDialog('receipt');
@@ -357,7 +357,7 @@ function OrderDetail({ order, timeZone }: { order: Order; timeZone: string }) {
           ) : null}
           {canConfirm ? (
             <Button
-              size="touch"
+              size="xl"
               disabled={transition.isPending}
               onClick={() => void run({ to: 'CONFIRMED' })}
             >
@@ -366,7 +366,7 @@ function OrderDetail({ order, timeZone }: { order: Order; timeZone: string }) {
           ) : null}
           {canEdit ? (
             <Button
-              size="touch"
+              size="xl"
               variant="outline"
               onClick={() => {
                 loadOrder(order);
@@ -378,7 +378,7 @@ function OrderDetail({ order, timeZone }: { order: Order; timeZone: string }) {
           ) : null}
           {canCancel ? (
             <Button
-              size="touch"
+              size="xl"
               variant="destructive"
               className="ms-auto"
               onClick={() => {
