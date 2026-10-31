@@ -354,6 +354,43 @@ describe('provisioning', () => {
     );
   });
 
+  it('lists only Owner-role holders as owners, not the Finance system role', async () => {
+    const s = slug();
+    const res = await app.inject({
+      method: 'POST',
+      url: `${P}/tenants`,
+      headers: operator,
+      payload: request(s),
+    });
+    expect(res.statusCode, res.body).toBe(201);
+    const { id: tenantId } = res.json<ProvisionedTenantDto>().tenant.tenant;
+    const finance = await prisma.role.findFirstOrThrow({ where: { tenantId, name: 'Finance' } });
+    expect(finance.isSystem).toBe(true);
+    const email = `${s}@finance.test`;
+    const account = await prisma.account.create({
+      data: { email, passwordHash: 'x', lastTenantId: tenantId },
+    });
+    await prisma.user.create({
+      data: {
+        tenantId,
+        accountId: account.id,
+        email,
+        displayName: 'Finance',
+        roles: { create: { roleId: finance.id, locationId: null } },
+      },
+    });
+    const detail = await app.inject({
+      method: 'GET',
+      url: `${P}/tenants/${tenantId}`,
+      headers: operator,
+    });
+    expect(detail.statusCode, detail.body).toBe(200);
+    expect(detail.json<PlatformTenantDetail>().owners.map((o) => o.email)).toEqual([
+      `${s}@owner.test`,
+    ]);
+    expect(detail.json<PlatformTenantDetail>().counts.users).toBe(2);
+  });
+
   it('refuses a slug or an owner e-mail already in use', async () => {
     const s = slug();
     const first = await app.inject({

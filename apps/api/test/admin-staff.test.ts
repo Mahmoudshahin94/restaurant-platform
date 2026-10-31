@@ -225,6 +225,55 @@ describe('users', () => {
     ).toBe(200);
   });
 
+  it('does not count a tenant-wide Finance user as an owner', async () => {
+    // Finance is a system role too, but it administers nothing: the sole Owner stays protected.
+    const finance = await prisma.role.create({
+      data: {
+        tenantId: tenant.tenantId,
+        name: 'Finance',
+        isSystem: true,
+        permissions: {
+          create: ['reports.view', 'locations.view'].map((permissionKey) => ({ permissionKey })),
+        },
+      },
+    });
+    const account = await prisma.account.create({
+      data: {
+        email: 'finance@test.local',
+        passwordHash: 'x',
+        lastTenantId: tenant.tenantId,
+      },
+    });
+    await prisma.user.create({
+      data: {
+        tenantId: tenant.tenantId,
+        accountId: account.id,
+        email: 'finance@test.local',
+        displayName: 'Finance',
+        roles: { create: { roleId: finance.id, locationId: null } },
+      },
+    });
+    const everything = await call<Role>('POST', `${base}/roles`, owner, {
+      name: 'Everything',
+      permissions: (await call<Role[]>('GET', `${base}/roles`, owner)).body.find(
+        (r) => r.name === 'Owner',
+      )?.permissions,
+    });
+    await call<StaffUser>('POST', `${base}/users`, owner, {
+      email: 'deputy@test.local',
+      displayName: 'Deputy',
+      password: PASSWORD,
+      roles: [{ roleId: everything.body.id, locationId: null }],
+    });
+    const deputy = bearer(await login(app, 'deputy@test.local'));
+    expect(
+      await call('PUT', `${base}/users/${tenant.owner.id}/roles`, deputy, { roles: [] }),
+    ).toMatchObject({ status: 409, body: { details: { reason: 'LAST_OWNER' } } });
+    expect(
+      await call('PATCH', `${base}/users/${tenant.owner.id}`, deputy, { isActive: false }),
+    ).toMatchObject({ status: 409, body: { details: { reason: 'LAST_OWNER' } } });
+  });
+
   it('refuses privilege escalation: nobody grants a role holding permissions they lack', async () => {
     const admin = await staffAdmin();
     const ownerRole = await roleId('Owner');

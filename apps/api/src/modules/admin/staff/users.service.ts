@@ -262,15 +262,15 @@ export class UsersService {
     userId: string,
     nextRoles: readonly RoleAssignmentInput[],
   ): Promise<void> {
-    const systemRoles = await tx.role.findMany({
+    const ownerRoles = await tx.role.findMany({
       where: { tenantId, isSystem: true, name: OWNER_ROLE.name },
       select: { id: true },
     });
-    const systemIds = new Set(systemRoles.map((r) => r.id));
-    if (nextRoles.some((a) => a.locationId === null && systemIds.has(a.roleId))) return;
+    const ownerIds = new Set(ownerRoles.map((r) => r.id));
+    if (nextRoles.some((a) => a.locationId === null && ownerIds.has(a.roleId))) return;
     const others = await tx.userRole.count({
       where: {
-        roleId: { in: [...systemIds] },
+        roleId: { in: [...ownerIds] },
         locationId: null,
         userId: { not: userId },
         user: { isActive: true, tenantId },
