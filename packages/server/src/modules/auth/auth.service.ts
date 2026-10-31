@@ -144,10 +144,14 @@ export class AuthService {
 
   /**
    * Moves a signed-in person to another brand of their account (cloud only; the hub holds one
-   * brand). The caller's refresh-token family is revoked and a new session starts for the
-   * account's user in `tenantId`, which must be usable (`usableUserFor`); otherwise the brand is
-   * "not found", as for any foreign tenant. Switching to the current brand issues a new session
-   * too. Each brand's audit trail records the switch.
+   * brand). Like `refresh`, it needs the caller's own live refresh token: an access token alone
+   * never starts a long-lived session. The token's family is revoked and a new session starts for
+   * the account's user in `tenantId`, which must be usable (`usableUserFor`); otherwise the brand
+   * is "not found", as for any foreign tenant. Switching to the current brand issues a new
+   * session too. Each brand's audit trail records the switch.
+   *
+   * Order: validate the token, start the new session, end the old one (an atomic claim, so two
+   * concurrent switches with one token cannot both succeed), then write the audit entries.
    */
   async switchTenant(
     principal: Principal,
@@ -160,8 +164,26 @@ export class AuthService {
       where: { id: principal.userId },
       select: { id: true, accountId: true, tenantId: true },
     });
+    const family = await this.currentFamily(source, currentRefresh);
     const target = await this.usableUserFor(source.accountId, tenantId);
     if (!target) throw notFound();
+
+    // A request never works in two tenants: the target brand's side runs outside any tenant scope,
+    // naming its tenant explicitly.
+    const newFamily = newId();
+    const session = await TenantContext.runUnscoped(
+      'switching brands: start the session of the account’s user in the target brand',
+      () => this.issueSession(target.id, target.tenantId, newFamily),
+    );
+    const claimed = await this.prisma.refreshToken.updateMany({
+      where: { familyId: family, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    if (claimed.count === 0) {
+      // Lost a race with another switch or a logout using the same token: no second session.
+      await this.revokeFamily(newFamily);
+      throw new DomainError('UNAUTHENTICATED', 'Refresh token was just revoked');
+    }
 
     await this.audit.record({
       action: 'auth.switch',
@@ -172,12 +194,9 @@ export class AuthService {
       tenantId: source.tenantId,
       metadata: { toTenantId: target.tenantId },
     });
-    // A request never works in two tenants: the target brand's side runs outside any tenant scope,
-    // naming its tenant explicitly.
-    const session = await TenantContext.runUnscoped(
-      'switching brands: start the session of the account’s user in the target brand',
+    await TenantContext.runUnscoped(
+      'switching brands: record the sign-in in the target brand',
       async () => {
-        const issued = await this.issueSession(target.id, target.tenantId, newId());
         await this.prisma.user.update({
           where: { id: target.id },
           data: { lastLoginAt: new Date() },
@@ -191,18 +210,8 @@ export class AuthService {
           tenantId: target.tenantId,
           metadata: { fromTenantId: source.tenantId },
         });
-        return issued;
       },
     );
-    // The old session ends only once the new one exists. Only the caller's own token ends their session: someone else's is left alone.
-    if (currentRefresh) {
-      const stored = await this.prisma.refreshToken.findUnique({
-        where: { tokenHash: this.tokens.hashRefreshToken(currentRefresh) },
-        select: { familyId: true, userId: true },
-      });
-      if (stored?.userId === source.id) await this.revokeFamily(stored.familyId);
-    }
-
     // The cloud remembers the brand for the next sign-in, as `login` does.
     const account = await this.prisma.account.findUniqueOrThrow({
       where: { id: source.accountId },
@@ -215,6 +224,51 @@ export class AuthService {
       });
     }
     return session;
+  }
+
+  /**
+   * The family of the caller's own live refresh token, as `refresh` judges it: unknown, someone
+   * else's, expired or revoked tokens are refused (a replayed one revokes its family as theft).
+   */
+  private async currentFamily(
+    user: { id: string; tenantId: string },
+    rawToken: string | undefined,
+  ): Promise<string> {
+    if (!rawToken) throw new DomainError('UNAUTHENTICATED', 'No refresh token');
+    const stored = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash: this.tokens.hashRefreshToken(rawToken) },
+      select: {
+        userId: true,
+        familyId: true,
+        revokedAt: true,
+        replacedById: true,
+        expiresAt: true,
+      },
+    });
+    if (stored?.userId !== user.id)
+      throw new DomainError('UNAUTHENTICATED', 'Unknown refresh token');
+    if (stored.revokedAt !== null) {
+      if (stored.replacedById !== null && this.tokens.withinReuseGrace(stored.revokedAt)) {
+        throw new DomainError('UNAUTHENTICATED', 'Refresh token was just rotated', {
+          reason: 'ROTATED',
+        });
+      }
+      await this.revokeFamily(stored.familyId);
+      await this.audit.record({
+        action: 'auth.refresh_token_reuse_detected',
+        entityType: 'User',
+        entityId: user.id,
+        actorType: 'USER',
+        actorId: user.id,
+        tenantId: user.tenantId,
+        metadata: { familyId: stored.familyId },
+      });
+      throw new DomainError('TOKEN_REUSED', 'Refresh token was already used; session revoked');
+    }
+    if (stored.expiresAt.getTime() <= Date.now()) {
+      throw new DomainError('TOKEN_EXPIRED', 'Refresh token expired');
+    }
+    return stored.familyId;
   }
 
   private async completeLogin(user: { id: string; tenantId: string }): Promise<IssuedSession> {

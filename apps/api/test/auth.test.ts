@@ -357,7 +357,7 @@ describe('POST /auth/switch', () => {
       payload: { refreshToken: first.refreshToken },
     });
     expect(old.statusCode).toBe(401);
-    expect(['TOKEN_REUSED', 'UNAUTHENTICATED']).toContain(old.json<ApiErrorBody>().code);
+    expect(old.json<ApiErrorBody>().code).toBe('TOKEN_REUSED');
 
     // The new token works, in the new brand; the new refresh token starts a fresh family.
     const me = await app.inject({
@@ -431,7 +431,7 @@ describe('POST /auth/switch', () => {
     ).toBe(200);
   });
 
-  it("another person's refresh token is not revoked", async () => {
+  it("another person's refresh token is refused and left alone", async () => {
     const mine = await signIn();
     const other = await postLogin({
       email: tenant.cashier.email,
@@ -442,13 +442,73 @@ describe('POST /auth/switch', () => {
       tenantId: brandB.tenantId,
       refreshToken: other.json<TokenResponse>().refreshToken,
     });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(401);
+    expect(res.json<ApiErrorBody>().code).toBe('UNAUTHENTICATED');
     const stillGood = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/refresh',
       payload: { refreshToken: other.json<TokenResponse>().refreshToken },
     });
     expect(stillGood.statusCode).toBe(200);
+    // Nothing was issued for brand B.
+    expect(await prisma.refreshToken.count({ where: { userId: ownerInB } })).toBe(0);
+  });
+
+  it('no refresh token is 401: an access token alone starts no session', async () => {
+    const first = await signIn();
+    const before = await prisma.refreshToken.count();
+    for (const payload of [
+      { tenantId: brandB.tenantId },
+      { tenantId: brandB.tenantId, refreshToken: 'not-a-known-token' },
+    ]) {
+      const res = await postSwitch(first.accessToken, payload);
+      expect(res.statusCode).toBe(401);
+      expect(res.json<ApiErrorBody>().code).toBe('UNAUTHENTICATED');
+    }
+    expect(await prisma.refreshToken.count()).toBe(before);
+    expect(await prisma.auditLog.count({ where: { action: 'auth.switch' } })).toBe(0);
+  });
+
+  it('a revoked refresh token is 401, and a replayed one revokes its family', async () => {
+    const first = await signIn();
+    const switched = await postSwitch(first.accessToken, {
+      tenantId: brandB.tenantId,
+      refreshToken: first.refreshToken,
+    });
+    expect(switched.statusCode).toBe(200);
+    const again = await postSwitch(first.accessToken, {
+      tenantId: brandB.tenantId,
+      refreshToken: first.refreshToken,
+    });
+    expect(again.statusCode).toBe(401);
+    expect(again.json<ApiErrorBody>().code).toBe('TOKEN_REUSED');
+    expect(await prisma.refreshToken.count({ where: { userId: ownerInB } })).toBe(1);
+  });
+
+  it('an expired refresh token is 401', async () => {
+    const first = await signIn();
+    await prisma.refreshToken.updateMany({ data: { expiresAt: new Date(Date.now() - 1000) } });
+    const res = await postSwitch(first.accessToken, {
+      tenantId: brandB.tenantId,
+      refreshToken: first.refreshToken,
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json<ApiErrorBody>().code).toBe('TOKEN_EXPIRED');
+  });
+
+  it('two concurrent switches with one refresh token start one session', async () => {
+    const first = await signIn();
+    const payload = { tenantId: brandB.tenantId, refreshToken: first.refreshToken };
+    const results = await Promise.all([
+      postSwitch(first.accessToken, payload),
+      postSwitch(first.accessToken, payload),
+    ]);
+    expect(results.map((r) => r.statusCode).sort()).toEqual([200, 401]);
+    // The loser's session is revoked again: exactly one live token in brand B.
+    const live = await prisma.refreshToken.count({
+      where: { userId: ownerInB, revokedAt: null },
+    });
+    expect(live).toBe(1);
   });
 
   it('switching to the current brand issues a fresh session', async () => {
@@ -471,6 +531,11 @@ describe('POST /auth/switch', () => {
     });
     expect(res.statusCode).toBe(404);
     expect(res.json<ApiErrorBody>().code).toBe('TENANT_NOT_FOUND');
+    const unknown = await postSwitch(first.accessToken, {
+      tenantId: newId(),
+      refreshToken: first.refreshToken,
+    });
+    expect(unknown.json<ApiErrorBody>().code).toBe('TENANT_NOT_FOUND');
     // A refused switch keeps the session.
     const kept = await app.inject({
       method: 'POST',
@@ -478,19 +543,23 @@ describe('POST /auth/switch', () => {
       payload: { refreshToken: first.refreshToken },
     });
     expect(kept.statusCode).toBe(200);
-    const unknown = await postSwitch(first.accessToken, { tenantId: newId() });
-    expect(unknown.json<ApiErrorBody>().code).toBe('TENANT_NOT_FOUND');
   });
 
   it("switch to a deactivated user's brand is 404", async () => {
     const first = await signIn();
     await prisma.user.update({ where: { id: ownerInB }, data: { isActive: false } });
-    const res = await postSwitch(first.accessToken, { tenantId: brandB.tenantId });
+    const res = await postSwitch(first.accessToken, {
+      tenantId: brandB.tenantId,
+      refreshToken: first.refreshToken,
+    });
     expect(res.statusCode).toBe(404);
     expect(res.json<ApiErrorBody>().code).toBe('TENANT_NOT_FOUND');
     await prisma.user.update({ where: { id: ownerInB }, data: { isActive: true } });
     await prisma.tenant.update({ where: { id: brandB.tenantId }, data: { status: 'SUSPENDED' } });
-    const suspended = await postSwitch(first.accessToken, { tenantId: brandB.tenantId });
+    const suspended = await postSwitch(first.accessToken, {
+      tenantId: brandB.tenantId,
+      refreshToken: first.refreshToken,
+    });
     expect(suspended.statusCode).toBe(404);
   });
 
