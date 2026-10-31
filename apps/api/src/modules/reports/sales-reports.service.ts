@@ -131,7 +131,9 @@ export class SalesReportsService {
     const groups = new Map<string, Cell[]>();
     for (const cell of cells) {
       const key = cell[dimension];
-      groups.set(key, [...(groups.get(key) ?? []), cell]);
+      const list = groups.get(key);
+      if (list) list.push(cell);
+      else groups.set(key, [cell]);
     }
     return {
       groups: new Map([...groups].map(([key, list]) => [key, figures(list)])),
