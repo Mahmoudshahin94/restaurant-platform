@@ -363,8 +363,8 @@ describe('leaving the organization', () => {
     });
     for (const user of after) {
       expect(user.isActive).toBe(false);
-      // Kept as the mark that the organization, not the brand, deactivated it.
-      expect(user.organizationMemberId).not.toBeNull();
+      // The brand owns them again.
+      expect(user.organizationMemberId).toBeNull();
       expect(user.roles).toEqual([]);
     }
     expect(
@@ -379,6 +379,17 @@ describe('leaving the organization', () => {
     expect((await signIn(brandC.owner.email)).status).toBe(200);
     const financeNow = await signIn('finance@test.local');
     expect(financeNow.body.user.tenants.map((t) => t.id).sort()).toEqual([...brandIds()].sort());
+    // Its admin can reactivate the former linked user; the organization's role is gone.
+    const reactivated = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/tenants/${brandC.tenantId}/users/${inC.body.user.id}`,
+      headers: bearer(await login(app, brandC.owner.email)),
+      payload: { isActive: true },
+    });
+    expect(reactivated.statusCode).toBe(200);
+    expect(
+      reactivated.json<{ isActive: boolean; roles: unknown[]; managedByOrganization: boolean }>(),
+    ).toMatchObject({ isActive: true, roles: [], managedByOrganization: false });
     // Detaching a brand that is not the organization's is not found.
     await expect(
       service.detachTenant(org.organizationId, brandC.tenantId, operator),

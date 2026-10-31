@@ -102,7 +102,8 @@ const memberNotFound = () => new DomainError('NOT_FOUND', 'Member not found');
  * marked assignments are removed and `organizationMemberId` is cleared; a user left with no role
  * of their own — one the organization created — is deactivated and its sessions revoked; it keeps
  * its `organizationMemberId`, which marks it as deactivated by the organization (so a later link may
- * reactivate it).
+ * reactivate it) — until the brand leaves the organization, which clears every mark so the
+ * brand owns its users again.
  *
  * Linking never reactivates a user the brand deactivated (an inactive user with no
  * `organizationMemberId`): that brand is skipped, audited as `user.organization_link_skipped`, and
@@ -289,7 +290,10 @@ export class OrganizationService {
     );
   }
 
-  /** Takes a brand out of the organization: its linked users are unlinked (see the class). */
+  /**
+   * Takes a brand out of the organization: its linked users are unlinked (see the class), then no
+   * user of the brand stays marked as the organization's.
+   */
   async detachTenant(
     organizationId: string,
     tenantId: string,
@@ -311,6 +315,12 @@ export class OrganizationService {
           for (const user of users) {
             await this.unlink(tx, user, organizationId, user.organizationMemberId, actor);
           }
+          // The brand owns its users again, including those the organization deactivated: its
+          // admin may reactivate or edit them (a re-attach then skips them until it does).
+          await tx.user.updateMany({
+            where: { tenantId, organizationMemberId: { not: null } },
+            data: { organizationMemberId: null },
+          });
           await this.record(tx, actor, tenantId, {
             action: 'organization.brand_detached',
             entityType: 'Tenant',
