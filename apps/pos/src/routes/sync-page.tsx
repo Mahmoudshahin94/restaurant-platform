@@ -156,7 +156,7 @@ function Operations({ tab, onTab }: { tab: Tab; onTab: (tab: Tab) => void }) {
             key={name}
             role="tab"
             aria-selected={tab === name}
-            variant={tab === name ? 'default' : 'ghost'}
+            variant={tab === name ? 'primary' : 'ghost'}
             onClick={() => {
               onTab(name);
             }}

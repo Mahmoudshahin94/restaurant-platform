@@ -7,7 +7,7 @@ export function Spinner({ label, className }: { label: string; className?: strin
       role="status"
       className={cn('inline-flex items-center gap-2 text-muted-foreground', className)}
     >
-      <LoaderCircle aria-hidden className="size-4 animate-spin" />
+      <LoaderCircle aria-hidden className="size-4 motion-safe:animate-spin" />
       <span className="sr-only">{label}</span>
     </span>
   );

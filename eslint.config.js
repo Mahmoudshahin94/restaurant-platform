@@ -92,6 +92,12 @@ export default tseslint.config(
       'packages/server/src/modules/online-ordering/web-orders.service.ts',
       // The platform admin's directory: tenants, provisioning and the health board (ADR 0025).
       'apps/api/src/modules/platform/platform-directory.service.ts',
+      // The platform admin's organizations: brands and members across tenants (E1).
+      'apps/api/src/modules/platform/organizations/platform-organizations.service.ts',
+      // An account's users in every brand, for sign-in and the brand switcher.
+      'apps/api/src/modules/organizations/cloud-account-directory.ts',
+      // An organization's linked users in every brand it holds (E1).
+      'apps/api/src/modules/organizations/organization.service.ts',
       // Key rotation finds secrets sealed with an old key across tenants (ADR 0024).
       'packages/server/src/modules/payments/secrets/payment-secrets.service.ts',
       // The definition itself.

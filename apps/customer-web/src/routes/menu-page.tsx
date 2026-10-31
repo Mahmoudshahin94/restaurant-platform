@@ -47,7 +47,7 @@ function ProductCard({
       </div>
       <div className="flex flex-col items-end justify-between">
         {product.isAvailable ? (
-          <Button size="icon" aria-label={t('menu.add', { name })} onClick={onChoose}>
+          <Button size="icon-md" aria-label={t('menu.add', { name })} onClick={onChoose}>
             <Plus aria-hidden />
           </Button>
         ) : (

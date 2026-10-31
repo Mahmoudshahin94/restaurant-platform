@@ -47,27 +47,44 @@ const csvOf = <T extends z.ZodType>(item: T) =>
       return [...new Set(parsed.data)] as z.output<T>[];
     });
 
-export const reportQuerySchema = z
-  .object({
-    /** Business dates, inclusive. */
-    from: isoDate,
-    to: isoDate,
-    /** Defaults to every location where the caller holds `reports.view`. */
-    locationIds: csvOf(idSchema),
-    /** Defaults to every channel. Not used by the shift report. */
-    channels: csvOf(channelSchema),
-  })
-  .refine((q) => q.from <= q.to, { message: 'from must not be after to', path: ['to'] })
-  .refine((q) => businessDaysInRange(q.from, q.to) <= REPORT_MAX_DAYS, {
-    message: `At most ${String(REPORT_MAX_DAYS)} days`,
-    path: ['from'],
-  });
+const reportQueryShape = {
+  /** Business dates, inclusive. */
+  from: isoDate,
+  to: isoDate,
+  /** Defaults to every location where the caller holds `reports.view`. */
+  locationIds: csvOf(idSchema),
+  /** Defaults to every channel. Not used by the shift report. */
+  channels: csvOf(channelSchema),
+};
+
+/** The range every report query keeps to: `from` not after `to`, at most `REPORT_MAX_DAYS`. */
+const withinRange = <T extends z.ZodType<{ from: string; to: string }>>(schema: T) =>
+  schema
+    .refine((q) => q.from <= q.to, { message: 'from must not be after to', path: ['to'] })
+    .refine((q) => businessDaysInRange(q.from, q.to) <= REPORT_MAX_DAYS, {
+      message: `At most ${String(REPORT_MAX_DAYS)} days`,
+      path: ['from'],
+    });
+
+export const reportQuerySchema = withinRange(z.object(reportQueryShape));
+
+/**
+ * An organization's report query (E1): the same, over its brands. `tenantIds` narrows the brands
+ * (default: all of them); `locationIds` narrows the branches of those brands.
+ */
+export const orgReportQuerySchema = withinRange(
+  z.object({ ...reportQueryShape, tenantIds: csvOf(idSchema) }),
+);
 /** What clients send (lists as arrays; the client joins them). */
 export interface ReportQuery {
   from: string;
   to: string;
   locationIds?: readonly string[];
   channels?: readonly z.infer<typeof channelSchema>[];
+}
+/** What clients send to an organization's reports. */
+export interface OrgReportQuery extends ReportQuery {
+  tenantIds?: readonly string[];
 }
 
 /** Echoed by every report: what was asked and in which currency the amounts are. */
@@ -198,6 +215,8 @@ export const productReportSchema = z.object({
   rows: z.array(
     lineFiguresSchema.extend({
       productId: idSchema,
+      /** The brand that sells it (organization reports mix brands). */
+      tenantId: idSchema,
       variantId: idSchema.nullable(),
       nameEn: z.string(),
       nameAr: z.string(),
@@ -217,6 +236,7 @@ export const categoryReportSchema = z.object({
   ...reportHeader,
   rows: z.array(
     lineFiguresSchema.extend({
+      tenantId: idSchema,
       categoryId: idSchema,
       nameEn: z.string(),
       nameAr: z.string(),
@@ -381,3 +401,33 @@ export const prepTimeReportSchema = z.object({
 });
 export type PrepTimeReport = z.infer<typeof prepTimeReportSchema>;
 export type PrepTimeReportRow = PrepTimeReport['rows'][number];
+
+// --- Organization reports (E1) -------------------------------------------------------------------
+
+/** Sales per brand of an organization (every brand asked for, including those without sales). */
+export const brandReportSchema = z.object({
+  ...reportHeader,
+  rows: z.array(
+    salesFiguresSchema.extend({ tenantId: idSchema, nameEn: z.string(), nameAr: z.string() }),
+  ),
+  totals: salesFiguresSchema,
+});
+export type BrandReport = z.infer<typeof brandReportSchema>;
+export type BrandReportRow = BrandReport['rows'][number];
+
+/** Sales per branch of an organization, by brand, including branches without sales. */
+export const locationReportSchema = z.object({
+  ...reportHeader,
+  rows: z.array(
+    salesFiguresSchema.extend({
+      tenantId: idSchema,
+      locationId: idSchema,
+      code: z.string(),
+      nameEn: z.string(),
+      nameAr: z.string(),
+    }),
+  ),
+  totals: salesFiguresSchema,
+});
+export type LocationReport = z.infer<typeof locationReportSchema>;
+export type LocationReportRow = LocationReport['rows'][number];

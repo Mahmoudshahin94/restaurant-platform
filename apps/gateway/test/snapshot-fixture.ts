@@ -46,11 +46,18 @@ export async function buildSnapshot() {
   const passwordHash = await hashSecret(PASSWORD);
   const grants = (roleId: string, keys: readonly string[]) =>
     keys.map((permissionKey) => ({ roleId, permissionKey }));
-  const user = (id: string, name: string) => ({
-    id,
-    tenantId,
+  const accountIds = { Owner: newId(), Cashier: newId(), Kitchen: newId() };
+  const account = (name: keyof typeof accountIds) => ({
+    id: accountIds[name],
     email: `${name.toLowerCase()}@hub.test`,
     passwordHash,
+    lastTenantId: null,
+  });
+  const user = (id: string, name: keyof typeof accountIds) => ({
+    id,
+    tenantId,
+    accountId: accountIds[name],
+    email: `${name.toLowerCase()}@hub.test`,
     displayName: name,
     isActive: true,
   });
@@ -96,6 +103,7 @@ export async function buildSnapshot() {
       ]),
       ...grants(ids.kitchenRole, ['kitchen.view', 'kitchen.update', 'locations.view']),
     ],
+    accounts: [account('Owner'), account('Cashier'), account('Kitchen')],
     users: [user(ids.owner, 'Owner'), user(ids.cashier, 'Cashier'), user(ids.kitchen, 'Kitchen')],
     userRoles: [
       { id: newId(), userId: ids.owner, roleId: ids.ownerRole, locationId: null },
@@ -253,7 +261,7 @@ export function withVersion(
 ): LocationSnapshot {
   const json = JSON.parse(JSON.stringify(tables)) as LocationSnapshot['tables'];
   return {
-    format: 8,
+    format: 9,
     tenantId: ids.tenantId,
     locationId: ids.locationId,
     generatedAt: new Date().toISOString(),

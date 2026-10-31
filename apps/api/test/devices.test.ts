@@ -88,7 +88,7 @@ describe('location snapshot', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json<LocationSnapshot>();
     expect(body).toMatchObject({
-      format: 8,
+      format: 9,
       tenantId: tenant.tenantId,
       locationId: tenant.locationA,
     });
@@ -101,18 +101,23 @@ describe('location snapshot', () => {
     // Staff of this location (and tenant-wide) with their hashes, for offline sign-in.
     const emails = tables.users.map((u) => u.email).sort();
     expect(emails).toEqual([tenant.cashier.email, tenant.owner.email].sort());
-    expect(tables.users.every((u) => typeof u.passwordHash === 'string')).toBe(true);
+    expect(tables.accounts.map((a) => a.email).sort()).toEqual(emails);
+    expect(tables.accounts.every((a) => typeof a.passwordHash === 'string')).toBe(true);
     expect(
       tables.userRoles.every((r) => r.locationId === null || r.locationId === tenant.locationA),
     ).toBe(true);
   });
 
   it('leaves out other locations and staff who only work there', async () => {
+    const otherEmail = `b-only-${Date.now()}@test.local`;
+    const otherAccount = await prisma.account.create({
+      data: { email: otherEmail, passwordHash: 'x', lastTenantId: tenant.tenantId },
+    });
     const other = await prisma.user.create({
       data: {
         tenantId: tenant.tenantId,
-        email: `b-only-${Date.now()}@test.local`,
-        passwordHash: 'x',
+        accountId: otherAccount.id,
+        email: otherEmail,
         displayName: 'B only',
         roles: {
           create: {

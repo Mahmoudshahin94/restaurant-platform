@@ -120,7 +120,8 @@ test('owner creates a role and a user with it; the change is audited and enforce
 test('Arabic: branch settings, online ordering and payment setup in RTL', async ({ page }) => {
   const suffix = Date.now().toString(36);
   await signIn(page);
-  await page.getByRole('combobox', { name: 'Language' }).selectOption('ar');
+  await page.getByRole('button', { name: /Account/ }).click();
+  await page.getByRole('menuitemradio', { name: 'العربية' }).click();
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
 
   // Location: kitchen thresholds and cash rounding.
@@ -286,7 +287,8 @@ test('an administrator resolves a change the cloud refused from the hub', async 
 
   // The administrator compares both versions and applies the hub's, in Arabic.
   await signIn(page);
-  await page.getByRole('combobox', { name: 'Language' }).selectOption('ar');
+  await page.getByRole('button', { name: /Account/ }).click();
+  await page.getByRole('menuitemradio', { name: 'العربية' }).click();
   await page.getByRole('link', { name: 'المزامنة', exact: true }).click();
   const issue = page.getByRole('row', { name: new RegExp(order.orderNumber) });
   await expect(issue).toContainText('تعارض');
@@ -455,14 +457,20 @@ test('the owner offers one language and writes the currency their way', async ({
   });
   expect(refused.status()).toBe(400);
   await page.reload();
-  await expect(page.getByRole('combobox', { name: /^(Language|اللغة)$/ })).toBeVisible();
+  await page.getByRole('button', { name: /Account|الحساب/ }).click();
+  await expect(page.getByRole('menuitemradio', { name: 'English' })).toBeVisible();
+  await expect(page.getByRole('menuitemradio', { name: 'العربية' })).toBeVisible();
+  await page.keyboard.press('Escape');
 });
 
 /** Scenario 22 in the admin: Arabic only, in Arabic-Indic digits; the screens follow at once. */
 async function offerArabicOnly(page: Page): Promise<void> {
   await signIn(page);
   // The demo restaurant is in shekels: ₪ by default, two decimals, both languages offered.
-  await expect(page.getByRole('combobox', { name: 'Language', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /Account/ }).click();
+  await expect(page.getByRole('menuitemradio', { name: 'English' })).toBeVisible();
+  await expect(page.getByRole('menuitemradio', { name: 'العربية' })).toBeVisible();
+  await page.keyboard.press('Escape');
   await page.getByRole('link', { name: 'Language and currency' }).click();
   await expect(page.getByRole('heading', { name: 'Language and currency' })).toBeVisible();
   await expect(page.getByLabel('Currency', { exact: true })).toHaveValue('ILS');
@@ -478,7 +486,12 @@ async function offerArabicOnly(page: Page): Promise<void> {
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
   await expect(page.getByRole('heading', { name: 'اللغة والعملة' })).toBeVisible();
-  await expect(page.getByRole('combobox', { name: 'اللغة', exact: true })).toHaveCount(0);
+  // The user menu has no language group for a one-language business.
+  await page.getByRole('button', { name: /الحساب/ }).click();
+  await expect(page.getByRole('menuitem', { name: 'تسجيل الخروج' })).toBeVisible();
+  await expect(page.getByRole('menuitemradio', { name: 'English' })).toHaveCount(0);
+  await expect(page.getByRole('menuitemradio', { name: 'العربية' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
   await expect(page.getByTestId('preview-ar')).toContainText('١٬٢٣٤٫٥٦');
   await expect(page.getByTestId('preview-ar')).toContainText('₪');
   // Amounts elsewhere follow too: the dashboard's sales in Arabic-Indic digits and ₪.

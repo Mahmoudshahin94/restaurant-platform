@@ -83,7 +83,7 @@ export function CartLines({
                 {product && product.isAvailable ? (
                   <Button
                     variant="ghost"
-                    size="icon"
+                    size="icon-md"
                     aria-label={t('customer:cart.edit', { name })}
                     onClick={() => {
                       setEditing(line);
@@ -94,7 +94,7 @@ export function CartLines({
                 ) : null}
                 <Button
                   variant="ghost"
-                  size="icon"
+                  size="icon-md"
                   aria-label={t('customer:cart.remove', { name })}
                   onClick={() => {
                     removeLine(line.id);

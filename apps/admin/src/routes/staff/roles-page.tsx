@@ -5,6 +5,7 @@ import type { Permission } from '@pos/shared-types';
 import type { Role } from '@pos/validation';
 import {
   Alert,
+  AlertDialog,
   Badge,
   Button,
   Card,
@@ -31,7 +32,6 @@ import { useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
-import { ConfirmDialog } from '../../components/confirm-dialog';
 import { useAdminErrorText } from '../../lib/admin-errors';
 import { api } from '../../lib/api';
 import { PERMISSION_GROUPS, permissionsOf } from '../../lib/permission-groups';
@@ -218,6 +218,7 @@ function Matrix({ roles }: { roles: Role[] }) {
 
 export function RolesPage() {
   const { t } = useTranslation(['admin', 'common']);
+  const errorText = useAdminErrorText();
   const tid = useTenantId();
   const { can } = usePermissions();
   const canManage = can('roles.manage');
@@ -335,15 +336,17 @@ export function RolesPage() {
           />
         ) : null}
       </Dialog>
-      <ConfirmDialog
+      <AlertDialog
         open={deleting !== null}
         title={t('admin:roles.deleteTitle', { name: deleting?.name ?? '' })}
-        body={t('admin:roles.deleteBody')}
+        description={t('admin:roles.deleteBody')}
         confirmLabel={t('common:actions.delete')}
+        cancelLabel={t('common:actions.cancel')}
         destructive
         onConfirm={() => remove.mutateAsync(deleting?.id ?? '')}
-        onClose={() => {
-          setDeleting(null);
+        errorText={errorText}
+        onOpenChange={(open) => {
+          if (!open) setDeleting(null);
         }}
       />
     </>

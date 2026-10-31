@@ -221,7 +221,7 @@ function GroupDialog({
                 />
                 <Button
                   variant="ghost"
-                  size="icon"
+                  size="icon-md"
                   aria-label={t('common:actions.remove')}
                   disabled={modifiers.fields.length === 1}
                   onClick={() => {

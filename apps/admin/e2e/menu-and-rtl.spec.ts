@@ -63,7 +63,8 @@ test('Arabic switches the whole UI to RTL and back to LTR', async ({ page }) => 
   await page.getByRole('link', { name: 'Products' }).click();
   await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
 
-  await page.getByRole('combobox', { name: 'Language' }).selectOption('ar');
+  await page.getByRole('button', { name: /Account/ }).click();
+  await page.getByRole('menuitemradio', { name: 'العربية' }).click();
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
   await expect(page.getByRole('heading', { name: 'المنتجات' })).toBeVisible();
@@ -80,7 +81,8 @@ test('Arabic switches the whole UI to RTL and back to LTR', async ({ page }) => 
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
 
-  await page.getByRole('combobox', { name: 'اللغة' }).selectOption('en');
+  await page.getByRole('button', { name: /الحساب/ }).click();
+  await page.getByRole('menuitemradio', { name: 'English' }).click();
   await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
   const navLtr = await page.getByRole('navigation').boundingBox();
   const mainLtr = await page.getByRole('main').boundingBox();

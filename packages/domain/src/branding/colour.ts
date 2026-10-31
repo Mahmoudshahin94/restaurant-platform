@@ -73,3 +73,25 @@ export function normalizeHex(value: string): string {
   if (!hex) throw new Error(`Not a hex colour: ${value}`);
   return `#${(hex.length === 3 ? hex.replace(/./g, (d) => d + d) : hex).toLowerCase()}`;
 }
+
+function toSrgbHex(linear: LinearRgb): string {
+  const encode = (c: number) => (c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055);
+  return `#${linear
+    .map((c) =>
+      Math.round(clamp(encode(clamp(c))) * 255)
+        .toString(16)
+        .padStart(2, '0'),
+    )
+    .join('')}`;
+}
+
+/**
+ * `weight` of `a` mixed with the rest of `b`, as `#rrggbb` (a linear-light sRGB blend: close to
+ * the browser's `color-mix` for the small tints branding uses, which is all it is used for).
+ */
+export function mixColours(a: string, b: string, weight: number): string {
+  const [ar, ag, ab] = parseColour(a);
+  const [br, bg, bb] = parseColour(b);
+  const mix = (x: number, y: number) => x * weight + y * (1 - weight);
+  return toSrgbHex([mix(ar, br), mix(ag, bg), mix(ab, bb)]);
+}

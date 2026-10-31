@@ -71,6 +71,8 @@ export const platformTenantsQuerySchema = z.object({
   search: z.string().trim().max(120).optional(),
   status: tenantStatusSchema.optional(),
   businessType: businessTypeSchema.optional(),
+  /** Only the brands of this organization (E1). */
+  organizationId: idSchema.optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
 });
@@ -92,6 +94,8 @@ export const platformTenantSummarySchema = tenantSchema
     userCount: z.int(),
     /** The website's canonical address, if one is verified. */
     primaryDomain: z.string().nullable(),
+    /** The organization the brand belongs to, if any (E1). */
+    organization: z.object({ id: idSchema, nameEn: z.string(), nameAr: z.string() }).nullable(),
   });
 export type PlatformTenantSummary = z.infer<typeof platformTenantSummarySchema>;
 export const platformTenantPageSchema = paginated(platformTenantSummarySchema);
@@ -122,7 +126,9 @@ const entitlementInputSchema = z.object({
 
 /**
  * A new tenant: its profile (as `createTenantSchema`), its first location, its owner and the
- * modules it is entitled to. Without `entitlements` the business type's defaults decide.
+ * modules it is entitled to. Without `entitlements` the business type's defaults decide. A brand
+ * created into an organization (`organizationId`) has no owner of its own: the organization's
+ * members are its owners.
  */
 export const provisionTenantSchema = z
   .object({
@@ -139,27 +145,46 @@ export const provisionTenantSchema = z
       timezone: timezoneSchema.optional(),
       taxInclusive: z.boolean().default(true),
     }),
-    owner: z.object({
-      email: z
-        .email()
-        .max(254)
-        .transform((e) => e.toLowerCase()),
-      displayName: z.string().trim().min(1).max(120),
-      preferredLocale: localeSchema.optional(),
-    }),
+    owner: z
+      .object({
+        email: z
+          .email()
+          .max(254)
+          .transform((e) => e.toLowerCase()),
+        displayName: z.string().trim().min(1).max(120),
+        preferredLocale: localeSchema.optional(),
+      })
+      .optional(),
+    /** The organization the brand joins (E1); its currency must be the brand's. */
+    organizationId: idSchema.optional(),
     entitlements: z.partialRecord(featureSchema, entitlementInputSchema).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.organizationId === undefined && value.owner === undefined) {
+      ctx.addIssue({ code: 'custom', path: ['owner'], message: 'An owner is required' });
+    }
+    if (value.organizationId !== undefined && value.owner !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['owner'],
+        message: "A brand in an organization is owned by the organization's members",
+      });
+    }
+  });
 export type ProvisionTenantRequest = z.input<typeof provisionTenantSchema>;
 
 export const provisionedTenantSchema = z.object({
   tenant: platformTenantDetailSchema,
-  owner: z.object({
-    id: idSchema,
-    email: z.email(),
-    /** Shown once: the owner signs in with it, then an administrator can reset it. Never stored. */
-    temporaryPassword: z.string(),
-  }),
+  /** None for a brand created into an organization: its members are the owners. */
+  owner: z
+    .object({
+      id: idSchema,
+      email: z.email(),
+      /** Shown once: the owner signs in with it, then an administrator can reset it. Never stored. */
+      temporaryPassword: z.string(),
+    })
+    .nullable(),
 });
 export type ProvisionedTenantDto = z.infer<typeof provisionedTenantSchema>;
 

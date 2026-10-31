@@ -24,9 +24,9 @@ export function LanguageButtons({ className }: { className?: string }) {
         <Button
           key={l}
           type="button"
-          size="touch"
+          size="xl"
           lang={l}
-          variant={l === locale ? 'default' : 'outline'}
+          variant={l === locale ? 'primary' : 'outline'}
           aria-pressed={l === locale}
           onClick={() => {
             setLocale(l);

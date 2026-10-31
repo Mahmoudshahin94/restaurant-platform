@@ -375,7 +375,7 @@ function BrandingForm({
                   role="tab"
                   size="sm"
                   aria-selected={screen === surface}
-                  variant={screen === surface ? 'default' : 'outline'}
+                  variant={screen === surface ? 'primary' : 'outline'}
                   onClick={() => {
                     setScreen(surface);
                   }}

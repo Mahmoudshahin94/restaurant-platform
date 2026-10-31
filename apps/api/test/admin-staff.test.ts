@@ -1,11 +1,14 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { type PrismaClient, verifySecret } from '@pos/database';
-import type { Employee, Role, StaffUser } from '@pos/validation';
+import type { ApiErrorBody } from '@pos/shared-types';
+import type { AuthUser, Employee, Role, StaffUser } from '@pos/validation';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   PASSWORD,
   type TenantFixture,
+  addAccountUser,
   bearer,
+  createOrganization,
   createTenant,
   login,
   resetDatabase,
@@ -177,7 +180,12 @@ describe('users', () => {
       url: '/api/v1/auth/refresh',
       payload: { refreshToken },
     });
-    expect(refreshed.statusCode).toBe(401);
+    // The session was revoked; a disabled user hears why (E1).
+    expect(refreshed.statusCode).toBe(403);
+    expect(refreshed.json<{ code: string }>().code).toBe('ACCOUNT_DISABLED');
+    expect(
+      await prisma.refreshToken.count({ where: { userId: tenant.cashier.id, revokedAt: null } }),
+    ).toBe(0);
     expect(
       await prisma.auditLog.count({
         where: { action: 'user.deactivated', entityId: tenant.cashier.id },
@@ -225,6 +233,55 @@ describe('users', () => {
     ).toBe(200);
   });
 
+  it('does not count a tenant-wide Finance user as an owner', async () => {
+    // Finance is a system role too, but it administers nothing: the sole Owner stays protected.
+    const finance = await prisma.role.create({
+      data: {
+        tenantId: tenant.tenantId,
+        name: 'Finance',
+        isSystem: true,
+        permissions: {
+          create: ['reports.view', 'locations.view'].map((permissionKey) => ({ permissionKey })),
+        },
+      },
+    });
+    const account = await prisma.account.create({
+      data: {
+        email: 'finance@test.local',
+        passwordHash: 'x',
+        lastTenantId: tenant.tenantId,
+      },
+    });
+    await prisma.user.create({
+      data: {
+        tenantId: tenant.tenantId,
+        accountId: account.id,
+        email: 'finance@test.local',
+        displayName: 'Finance',
+        roles: { create: { roleId: finance.id, locationId: null } },
+      },
+    });
+    const everything = await call<Role>('POST', `${base}/roles`, owner, {
+      name: 'Everything',
+      permissions: (await call<Role[]>('GET', `${base}/roles`, owner)).body.find(
+        (r) => r.name === 'Owner',
+      )?.permissions,
+    });
+    await call<StaffUser>('POST', `${base}/users`, owner, {
+      email: 'deputy@test.local',
+      displayName: 'Deputy',
+      password: PASSWORD,
+      roles: [{ roleId: everything.body.id, locationId: null }],
+    });
+    const deputy = bearer(await login(app, 'deputy@test.local'));
+    expect(
+      await call('PUT', `${base}/users/${tenant.owner.id}/roles`, deputy, { roles: [] }),
+    ).toMatchObject({ status: 409, body: { details: { reason: 'LAST_OWNER' } } });
+    expect(
+      await call('PATCH', `${base}/users/${tenant.owner.id}`, deputy, { isActive: false }),
+    ).toMatchObject({ status: 409, body: { details: { reason: 'LAST_OWNER' } } });
+  });
+
   it('refuses privilege escalation: nobody grants a role holding permissions they lack', async () => {
     const admin = await staffAdmin();
     const ownerRole = await roleId('Owner');
@@ -270,8 +327,11 @@ describe('users', () => {
       password: 'brand-new-password',
     });
     expect(reset.status).toBe(204);
-    const user = await prisma.user.findUniqueOrThrow({ where: { id: tenant.cashier.id } });
-    expect(await verifySecret(user.passwordHash, 'brand-new-password')).toBe(true);
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: tenant.cashier.id },
+      include: { account: true },
+    });
+    expect(await verifySecret(user.account.passwordHash, 'brand-new-password')).toBe(true);
     const entry = await prisma.auditLog.findFirstOrThrow({
       where: { action: 'user.password_reset' },
     });
@@ -429,5 +489,183 @@ describe('employees', () => {
       pin: '2222',
     });
     expect(link).toMatchObject({ status: 403, body: { details: { reason: 'ESCALATION' } } });
+  });
+});
+
+describe('accounts and organizations (E1)', () => {
+  it('the staff API refuses to edit a user managed by the organization', async () => {
+    const org = await createOrganization(app, prisma, { brands: 2 });
+    const brandA = org.brands[0]!;
+    const headers = bearer(await login(app, org.owner.email));
+    const added = await app.inject({
+      method: 'POST',
+      url: `/api/v1/organizations/${org.organizationId}/members`,
+      headers,
+      payload: {
+        email: 'finance@test.local',
+        displayName: 'Finance',
+        role: 'FINANCE',
+        password: PASSWORD,
+      },
+    });
+    expect(added.statusCode).toBe(201);
+    const linked = await prisma.user.findFirstOrThrow({
+      where: { tenantId: brandA.tenantId, account: { email: 'finance@test.local' } },
+    });
+    const brandBase = `/api/v1/tenants/${brandA.tenantId}`;
+    const list = await call<StaffUser[]>('GET', `${brandBase}/users`, headers);
+    expect(list.body.find((u) => u.id === linked.id)?.managedByOrganization).toBe(true);
+    expect(list.body.find((u) => u.id === brandA.cashier.id)?.managedByOrganization).toBe(false);
+
+    const cashierRole = (
+      await prisma.role.findFirstOrThrow({ where: { tenantId: brandA.tenantId, name: 'Cashier' } })
+    ).id;
+    const attempts = [
+      call('PATCH', `${brandBase}/users/${linked.id}`, headers, { displayName: 'Renamed' }),
+      call('PATCH', `${brandBase}/users/${linked.id}`, headers, { isActive: false }),
+      call('PUT', `${brandBase}/users/${linked.id}/roles`, headers, {
+        roles: [{ roleId: cashierRole, locationId: null }],
+      }),
+      call('POST', `${brandBase}/users/${linked.id}/password`, headers, {
+        password: 'taken-over-password',
+      }),
+    ];
+    for (const result of await Promise.all(attempts)) {
+      expect(result).toMatchObject({
+        status: 409,
+        body: { code: 'USER_MANAGED_BY_ORGANIZATION' },
+      });
+    }
+    const after = await prisma.user.findUniqueOrThrow({
+      where: { id: linked.id },
+      include: { account: true, roles: true },
+    });
+    expect(after).toMatchObject({ displayName: 'Finance', isActive: true });
+    expect(after.roles).toHaveLength(1);
+    expect(await verifySecret(after.account.passwordHash, PASSWORD)).toBe(true);
+  });
+
+  it('refuses to reset the password of an account that signs into other brands', async () => {
+    const other = await createTenant(prisma);
+    await addAccountUser(prisma, tenant.cashier.email, other);
+    const reset = await call('POST', `${base}/users/${tenant.cashier.id}/password`, owner, {
+      password: 'brand-new-password',
+    });
+    expect(reset).toMatchObject({
+      status: 409,
+      body: { code: 'CONFLICT', details: { reason: 'ACCOUNT_SHARED' } },
+    });
+    const account = await prisma.account.findUniqueOrThrow({
+      where: { email: tenant.cashier.email },
+    });
+    expect(await verifySecret(account.passwordHash, PASSWORD)).toBe(true);
+  });
+
+  it('a brand cannot link an account that works elsewhere: the same answer as a taken e-mail', async () => {
+    const other = await createTenant(prisma);
+    const cashier = await roleId('Cashier');
+    const cashierAt = [{ roleId: cashier, locationId: tenant.locationA }];
+    const create = (email: string, headers = owner, url = `${base}/users`, roles = cashierAt) =>
+      call<ApiErrorBody>('POST', url, headers, {
+        email,
+        displayName: 'Their name here',
+        password: 'a-password-of-mine',
+        roles,
+      });
+    const shape = (b: ApiErrorBody) => ({ code: b.code, message: b.message, details: b.details });
+
+    // Someone with a user in another brand only, and someone already in this brand.
+    const elsewhere = await create(`  ${other.owner.email.toUpperCase()} `);
+    const taken = await create(tenant.cashier.email);
+    expect(taken).toMatchObject({
+      status: 409,
+      body: { code: 'CONFLICT', details: { reason: 'EMAIL_TAKEN' } },
+    });
+    expect(elsewhere.status).toBe(409);
+    expect(shape(elsewhere.body)).toEqual(shape(taken.body));
+    // Nothing changed: no user here, and the person keeps their own password.
+    expect(
+      await prisma.user.count({
+        where: { tenantId: tenant.tenantId, account: { email: other.owner.email } },
+      }),
+    ).toBe(0);
+    const account = await prisma.account.findUniqueOrThrow({ where: { email: other.owner.email } });
+    expect(await verifySecret(account.passwordHash, PASSWORD)).toBe(true);
+
+    // A brand of an organization: an account whose users are in another organization's brands,
+    // or in a brand outside any organization, is refused the same way.
+    const org = await createOrganization(app, prisma, { brands: 2 });
+    const stranger = await createOrganization(app, prisma, { brands: 1 });
+    const brandB = org.brands[1]!;
+    const ownerB = bearer(await login(app, brandB.owner.email));
+    const cashierB = await prisma.role.findFirstOrThrow({
+      where: { tenantId: brandB.tenantId, name: 'Cashier' },
+    });
+    const urlB = `/api/v1/tenants/${brandB.tenantId}/users`;
+    const rolesB = [{ roleId: cashierB.id, locationId: brandB.locationA }];
+    for (const email of [stranger.brands[0]!.cashier.email, other.owner.email]) {
+      const refused = await create(email, ownerB, urlB, rolesB);
+      expect(refused.status).toBe(409);
+      expect(shape(refused.body)).toEqual(shape(taken.body));
+    }
+    expect(
+      await prisma.user.count({
+        where: {
+          tenantId: brandB.tenantId,
+          account: { email: { in: [stranger.brands[0]!.cashier.email, other.owner.email] } },
+        },
+      }),
+    ).toBe(0);
+  });
+
+  it('a brand of an organization links an account that already works in a sibling brand', async () => {
+    const org = await createOrganization(app, prisma, { brands: 2 });
+    const [brandA, brandB] = org.brands as [TenantFixture, TenantFixture];
+    const ownerB = bearer(await login(app, brandB.owner.email));
+    const cashierB = await prisma.role.findFirstOrThrow({
+      where: { tenantId: brandB.tenantId, name: 'Cashier' },
+    });
+    const url = `/api/v1/tenants/${brandB.tenantId}/users`;
+    const roles = [{ roleId: cashierB.id, locationId: brandB.locationA }];
+    const linked = await call<StaffUser>('POST', url, ownerB, {
+      email: `  ${brandA.cashier.email.toUpperCase()} `,
+      displayName: 'Their name here',
+      password: 'a-password-ignored',
+      roles,
+    });
+    const fresh = await call<StaffUser>('POST', url, ownerB, {
+      email: 'brand-new@test.local',
+      displayName: 'Brand New',
+      password: 'a-long-password',
+      roles,
+    });
+    // The same answer either way.
+    expect(linked.status).toBe(201);
+    expect(fresh.status).toBe(201);
+    expect(Object.keys(linked.body).sort()).toEqual(Object.keys(fresh.body).sort());
+    expect(linked.body).toMatchObject({
+      email: brandA.cashier.email,
+      managedByOrganization: false,
+    });
+
+    const accounts = await prisma.account.findMany({ where: { email: brandA.cashier.email } });
+    expect(accounts).toHaveLength(1);
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: linked.body.id } });
+    expect(user.accountId).toBe(accounts[0]!.id);
+    // They keep their own password, and now see both brands.
+    expect(await verifySecret(accounts[0]!.passwordHash, PASSWORD)).toBe(true);
+    expect(await verifySecret(accounts[0]!.passwordHash, 'a-password-ignored')).toBe(false);
+    const session = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { email: brandA.cashier.email, password: PASSWORD, tenantId: brandB.tenantId },
+    });
+    expect(session.statusCode).toBe(200);
+    expect(
+      session
+        .json<{ user: AuthUser }>()
+        .user.tenants.map((t) => t.id)
+        .sort(),
+    ).toEqual([brandA.tenantId, brandB.tenantId].sort());
   });
 });

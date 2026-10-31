@@ -2,6 +2,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { PrismaClient, hashSecret, syncPermissionCatalog } from '@pos/database';
 import { PERMISSIONS, type Permission } from '@pos/shared-types';
 import { createApp } from '../src/bootstrap';
+import { OrganizationService } from '../src/modules/organizations/organization.service';
 import { testConfig } from './env';
 
 export const PASSWORD = 'Test-Password-1';
@@ -55,6 +56,7 @@ export async function createTenant(
     'locations.view',
     'products.view',
   ],
+  options: { currencyCode?: string } = {},
 ): Promise<TenantFixture> {
   counter += 1;
   const suffix = `${Date.now().toString(36)}${counter}`;
@@ -64,7 +66,7 @@ export async function createTenant(
       slug: `test-${suffix}`,
       nameEn: 'Test Tenant',
       nameAr: 'مطعم تجريبي',
-      currencyCode: 'SAR',
+      currencyCode: options.currencyCode ?? 'SAR',
       timezone: 'Asia/Riyadh',
     },
   });
@@ -109,20 +111,28 @@ export async function createTenant(
       permissions: { create: cashierPermissions.map((permissionKey) => ({ permissionKey })) },
     },
   });
+  const ownerEmail = `owner-${suffix}@test.local`;
+  const ownerAccount = await prisma.account.create({
+    data: { email: ownerEmail, passwordHash, lastTenantId: tenant.id },
+  });
   const owner = await prisma.user.create({
     data: {
       tenantId: tenant.id,
-      email: `owner-${suffix}@test.local`,
-      passwordHash,
+      accountId: ownerAccount.id,
+      email: ownerEmail,
       displayName: 'Owner',
       roles: { create: { roleId: ownerRole.id, locationId: null } },
     },
   });
+  const cashierEmail = `cashier-${suffix}@test.local`;
+  const cashierAccount = await prisma.account.create({
+    data: { email: cashierEmail, passwordHash, lastTenantId: tenant.id },
+  });
   const cashier = await prisma.user.create({
     data: {
       tenantId: tenant.id,
-      email: `cashier-${suffix}@test.local`,
-      passwordHash,
+      accountId: cashierAccount.id,
+      email: cashierEmail,
       displayName: 'Cashier',
       preferredLocale: 'ar',
       roles: { create: { roleId: cashierRole.id, locationId: locationA!.id } },
@@ -138,6 +148,31 @@ export async function createTenant(
   };
 }
 
+/**
+ * Gives the account of `email` a user in another tenant (the same person in a second brand), as
+ * a Cashier at that tenant's location A. Returns the new user's id.
+ */
+export async function addAccountUser(
+  prisma: PrismaClient,
+  email: string,
+  tenant: TenantFixture,
+): Promise<string> {
+  const account = await prisma.account.findUniqueOrThrow({ where: { email } });
+  const cashierRole = await prisma.role.findFirstOrThrow({
+    where: { tenantId: tenant.tenantId, name: 'Cashier' },
+  });
+  const user = await prisma.user.create({
+    data: {
+      tenantId: tenant.tenantId,
+      accountId: account.id,
+      email,
+      displayName: 'Second brand',
+      roles: { create: { roleId: cashierRole.id, locationId: tenant.locationA } },
+    },
+  });
+  return user.id;
+}
+
 export async function login(app: NestFastifyApplication, email: string): Promise<string> {
   const res = await app.inject({
     method: 'POST',
@@ -150,4 +185,57 @@ export async function login(app: NestFastifyApplication, email: string): Promise
 
 export function bearer(token: string): Record<string, string> {
   return { authorization: `Bearer ${token}` };
+}
+
+export interface OrganizationFixture {
+  organizationId: string;
+  /** The organization's brands (ILS tenants from `createTenant`). */
+  brands: TenantFixture[];
+  /** The first brand's owner, the organization's OWNER member. */
+  owner: { email: string; memberId: string; accountId: string };
+}
+
+/**
+ * An organization (ILS) with `brands` new tenants. The first brand's owner is its OWNER member,
+ * with linked users in every brand (`OrganizationService.syncLinkedUsers`): in the first brand
+ * their own Owner user is kept, in the others an Owner user is created.
+ */
+export async function createOrganization(
+  app: NestFastifyApplication,
+  prisma: PrismaClient,
+  { brands: count = 2, currencyCode = 'ILS' }: { brands?: number; currencyCode?: string } = {},
+): Promise<OrganizationFixture> {
+  counter += 1;
+  const brands: TenantFixture[] = [];
+  for (let i = 0; i < count; i += 1) {
+    brands.push(await createTenant(prisma, undefined, { currencyCode }));
+  }
+  const organization = await prisma.organization.create({
+    data: {
+      slug: `org-${Date.now().toString(36)}${counter}`,
+      nameEn: 'Test Group',
+      nameAr: 'مجموعة تجريبية',
+      currencyCode,
+    },
+  });
+  await prisma.tenant.updateMany({
+    where: { id: { in: brands.map((b) => b.tenantId) } },
+    data: { organizationId: organization.id },
+  });
+  const ownerEmail = brands[0]!.owner.email;
+  const account = await prisma.account.findUniqueOrThrow({ where: { email: ownerEmail } });
+  const member = await prisma.organizationMember.create({
+    data: {
+      organizationId: organization.id,
+      accountId: account.id,
+      role: 'OWNER',
+      displayName: 'Group Owner',
+    },
+  });
+  await app.get(OrganizationService).syncLinkedUsers(organization.id);
+  return {
+    organizationId: organization.id,
+    brands,
+    owner: { email: ownerEmail, memberId: member.id, accountId: account.id },
+  };
 }

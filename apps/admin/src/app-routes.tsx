@@ -1,12 +1,13 @@
-import { RequireAuth, TenantProvider } from '@pos/app-kit';
+import { RequireAuth } from '@pos/app-kit';
 import { Feature, type Permission } from '@pos/shared-types';
 import type { ReactNode } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router';
-import { api, session, useSession } from './lib/api';
+import { session } from './lib/api';
 import { AppShell } from './components/app-shell';
+import { AdminToaster } from './components/admin-toaster';
+import { TenantScope } from './components/tenant-scope';
 import { RequireModule } from './components/require-module';
 import { RequirePermission } from './components/require-permission';
-import { usePreferences } from './stores/preferences';
 import { DashboardPage } from './routes/dashboard-page';
 import { LoginPage } from './routes/login-page';
 import { AvailabilityPage } from './routes/menu/availability-page';
@@ -41,6 +42,10 @@ import { NotFoundPage } from './routes/not-found-page';
 import { DomainsPage } from './routes/website/domains-page';
 import { WebsiteEditorPage } from './routes/website/website-editor-page';
 import { ReportsIndex, ReportsPage } from './routes/reports/reports-page';
+import { OrgDashboardPage } from './routes/organization/org-dashboard-page';
+import { OrgMembersPage } from './routes/organization/org-members-page';
+import { OrgReportsIndex, OrgReportsPage } from './routes/organization/org-reports-page';
+import { OrgScope } from './routes/organization/org-scope';
 
 /** A page behind a permission (checked again by the API). */
 function guarded(path: string, permission: Permission, element: ReactNode, tenantWide = false) {
@@ -63,33 +68,27 @@ function moduleGuarded(features: readonly Feature[], route: ReactNode) {
   );
 }
 
-/**
- * The tenant's modules at the location chosen in the header (ADR 0018), in the language this
- * browser chose, else the user's, else the tenant's default (ADR 0020).
- */
-function TenantScope({ children }: { children: ReactNode }) {
-  const tenantId = useSession((s) => s.user?.tenantId);
-  const preferred = useSession((s) => s.user?.preferredLocale ?? null);
-  const locationId = usePreferences((s) => s.locationId);
-  const stored = usePreferences((s) => s.locale);
-  if (!tenantId) return null;
-  return (
-    <TenantProvider
-      api={api}
-      tenantId={tenantId}
-      locationId={locationId}
-      locale={{ stored, preferred }}
-    >
-      {children}
-    </TenantProvider>
-  );
-}
-
 export function AppRoutes() {
   return (
     <BrowserRouter>
+      <AdminToaster />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        {/* The organization's pages: outside TenantScope, so MADAR's neutral look (E1 §5). */}
+        <Route
+          path="org/:organizationId"
+          element={
+            <RequireAuth session={session}>
+              <OrgScope />
+            </RequireAuth>
+          }
+        >
+          <Route index element={<OrgDashboardPage />} />
+          <Route path="reports" element={<OrgReportsIndex />} />
+          <Route path="reports/:kind" element={<OrgReportsPage />} />
+          <Route path="members" element={<OrgMembersPage />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
         <Route
           element={
             <RequireAuth session={session}>

@@ -19,6 +19,7 @@ import {
 import { HUB_CONFIG, type HubConfig } from './config';
 import { asServerClient, configureSqlite, createHubClient } from './database/hub-database';
 import { migrateHubDatabase } from './database/migrator';
+import { HubAccountDirectoryModule } from './hub-account-directory';
 import { HubStateService } from './hub-state.service';
 import { HubController } from './hub.controller';
 import { ProvisionedGuard } from './provisioned.guard';
@@ -61,6 +62,8 @@ export class HubModule {
             changeRecorder: OutboxRecorder,
           },
         }),
+        // Sign-in here knows the one paired tenant and no organizations.
+        HubAccountDirectoryModule,
         TenantsModule,
         LocationsModule,
         MenuModule,

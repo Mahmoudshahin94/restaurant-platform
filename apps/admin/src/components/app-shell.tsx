@@ -1,7 +1,6 @@
 import { pickLocalized } from '@pos/i18n';
 import { Feature, type Permission } from '@pos/shared-types';
-import { Button, NativeSelect, cn } from '@pos/ui';
-import { useQueryClient } from '@tanstack/react-query';
+import { NativeSelect } from '@pos/ui';
 import {
   BadgePercent,
   Banknote,
@@ -19,7 +18,6 @@ import {
   Link2,
   MonitorSmartphone,
   ListChecks,
-  LogOut,
   MapPin,
   Palette,
   Puzzle,
@@ -39,20 +37,13 @@ import {
 import type { I18nResources } from '@pos/i18n';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { NavLink, Outlet, useNavigate } from 'react-router';
-import { session } from '../lib/api';
-import {
-  PlatformFooter,
-  TenantLogo,
-  ThemeSwitcher,
-  useCurrentLocale,
-  useFeatures,
-} from '@pos/app-kit';
+import { Outlet } from 'react-router';
+import { PageShell, PlatformFooter, useCurrentLocale, useFeatures } from '@pos/app-kit';
 import { usePermissions } from '../lib/permissions';
 import { useLocations } from '../lib/queries';
 import { usePreferences } from '../stores/preferences';
-import { useSession } from '../stores/session';
-import { LanguageSwitcher } from './language-switcher';
+import { BrandSwitcher } from './brand-switcher';
+import { UserMenu } from './user-menu';
 
 type NavKey = keyof I18nResources['admin']['nav'];
 
@@ -295,7 +286,7 @@ function LocationPicker() {
   return (
     <NativeSelect
       aria-label={t('header.location')}
-      className="h-9 w-auto max-w-56"
+      className="h-9 w-full"
       value={locationId ?? ''}
       onChange={(e) => {
         setLocationId(e.target.value);
@@ -311,86 +302,42 @@ function LocationPicker() {
 }
 
 export function AppShell() {
-  const { t } = useTranslation(['admin', 'common']);
-  const user = useSession((s) => s.user);
+  const { t } = useTranslation('admin');
   const { can, canAnywhere } = usePermissions();
   const features = useFeatures();
-  const queryClient = useQueryClient();
-  const navigate = useNavigate();
 
-  const signOut = async () => {
-    try {
-      await session.signOut();
-    } finally {
-      queryClient.clear();
-      void navigate('/login', { replace: true });
-    }
-  };
+  const nav = NAV.map((group) => ({
+    id: group.labelKey,
+    label: t(`nav.${group.labelKey}`),
+    items: group.items
+      .filter(
+        (item) =>
+          (!item.permission ||
+            (item.tenantWide ? can(item.permission) : canAnywhere(item.permission))) &&
+          (!item.features || item.features.some((f) => features[f].enabled)),
+      )
+      .map((item) => ({
+        to: item.to,
+        label: t(`nav.${item.labelKey}`),
+        icon: <item.icon aria-hidden className="size-4" />,
+      })),
+  })).filter((group) => group.items.length > 0);
 
   return (
-    <div className="flex min-h-screen flex-col md:flex-row">
-      <aside className="surface border-b md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:flex-col md:overflow-y-auto md:border-e md:border-b-0">
-        <div className="flex h-14 shrink-0 items-center px-4">
-          <TenantLogo fallback={<span className="font-semibold">{t('common:appName')}</span>} />
-        </div>
-        <nav
-          aria-label={t('admin:nav.mainNavigation')}
-          className="flex shrink-0 gap-4 overflow-x-auto px-2 pb-2 md:flex-col md:gap-3 md:pb-4"
-        >
-          {NAV.map((group) => {
-            const items = group.items.filter(
-              (item) =>
-                (!item.permission ||
-                  (item.tenantWide ? can(item.permission) : canAnywhere(item.permission))) &&
-                (!item.features || item.features.some((f) => features[f].enabled)),
-            );
-            if (items.length === 0) return null;
-            return (
-              <div key={group.labelKey} className="flex gap-1 md:flex-col">
-                <span className="hidden px-3 pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground md:block">
-                  {t(`admin:nav.${group.labelKey}`)}
-                </span>
-                {items.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end={item.to === '/'}
-                    className={({ isActive }) =>
-                      cn(
-                        'flex items-center gap-3 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                        isActive
-                          ? 'bg-primary text-primary-foreground'
-                          : 'text-foreground hover:bg-muted',
-                      )
-                    }
-                  >
-                    <item.icon aria-hidden className="size-4" />
-                    {t(`admin:nav.${item.labelKey}`)}
-                  </NavLink>
-                ))}
-              </div>
-            );
-          })}
-        </nav>
-        <PlatformFooter app="admin" className="mt-auto hidden px-4 py-3 md:block" />
-      </aside>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="surface flex h-14 flex-wrap items-center justify-end gap-3 border-b px-4">
+    <PageShell
+      brand={
+        <div className="grid gap-2">
+          <BrandSwitcher />
           <LocationPicker />
-          <LanguageSwitcher />
-          <ThemeSwitcher />
-          <span className="hidden text-sm text-muted-foreground sm:inline">
-            {t('admin:header.signedInAs', { name: user?.displayName ?? '' })}
-          </span>
-          <Button variant="ghost" size="sm" onClick={() => void signOut()}>
-            <LogOut aria-hidden className="rtl:-scale-x-100" />
-            {t('common:actions.signOut')}
-          </Button>
-        </header>
-        <main className="flex-1 p-4 md:p-8">
-          <Outlet />
-        </main>
-      </div>
-    </div>
+        </div>
+      }
+      nav={nav}
+      header={<UserMenu />}
+      skipLabel={t('nav.skipToContent')}
+      navLabel={t('nav.mainNavigation')}
+    >
+      <Outlet />
+      <PlatformFooter app="admin" className="mt-8" />
+    </PageShell>
   );
 }

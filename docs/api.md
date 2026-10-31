@@ -51,13 +51,33 @@ Validation failures (`400 VALIDATION_FAILED`) list
 
 ## Authentication
 
-| Method | Path            | Auth                 | Notes                                                                        |
-| ------ | --------------- | -------------------- | ---------------------------------------------------------------------------- |
-| POST   | `/auth/login`   | public, rate-limited | `{ email, password, client?: 'web' \| 'native' }` → `TokenResponse`          |
-| POST   | `/auth/refresh` | public, rate-limited | Native: `{ refreshToken }`. Web: httpOnly cookie `pos_rt` + allowed `Origin` |
-| POST   | `/auth/logout`  | public               | Revokes the refresh-token family; clears the cookie                          |
-| GET    | `/auth/me`      | bearer               | Current user with role assignments                                           |
+| Method | Path            | Auth                   | Notes                                                                                                  |
+| ------ | --------------- | ---------------------- | ------------------------------------------------------------------------------------------------------ |
+| POST   | `/auth/login`   | public, rate-limited   | `{ email, password, tenantId?, client?: 'web' \| 'native' }` → `TokenResponse`                         |
+| POST   | `/auth/refresh` | public, rate-limited   | Native: `{ refreshToken }`. Web: httpOnly cookie `pos_rt` + allowed `Origin`                           |
+| POST   | `/auth/switch`  | bearer + refresh token | `{ tenantId, refreshToken? }` → `TokenResponse` for the same account's user in that brand (cloud only) |
+| POST   | `/auth/logout`  | public                 | Revokes the refresh-token family; clears the cookie                                                    |
+| GET    | `/auth/me`      | bearer                 | Current user with role assignments, brands and organizations                                           |
 
+- **Accounts and brands** (E1, [ADR 0029](adr/0029-organizations-and-accounts.md)): the e-mail and
+  password belong to an account, which has one user per brand. `tenantId` on login names the brand to
+  sign into; without it, or when that brand is not usable for the account, sign-in uses the brand
+  signed into last, else the oldest, passing over archived brands (an archived brand is chosen only
+  when `tenantId` names it or the account has no other). The e-mail is trimmed and lower-cased (` Owner@Demo.Local` is
+  `owner@demo.local`). `TokenResponse.user` (also `GET /auth/me`) carries `accountId`, `tenantId` (the
+  brand of this session), `tenants` (`[{ id, nameEn, nameAr, logoFileId, organizationId }]`, one per
+  usable brand of the account) and `organizations` (`[{ id, nameEn, nameAr, role }]`, empty for a
+  person who is in none). A person with no usable brand gets `403 ACCOUNT_DISABLED` (or
+  `TENANT_SUSPENDED` when a suspended brand is the reason); neither names a brand.
+- **`POST /auth/switch`** moves a signed-in person to another brand of their account without a
+  password. It needs the caller's own live refresh token (cookie or body, as `/auth/refresh`; an
+  access token alone is not enough, `401 UNAUTHENTICATED`), revokes that token's session family and
+  starts a new one for the account's user in `tenantId`, returned as login does (the cookie for web,
+  `refreshToken` for native). A brand the account has no usable user in answers `404 TENANT_NOT_FOUND`,
+  as a foreign tenant does; the hub answers `404`. Switching to the current brand starts a new
+  session. `auth.switch` is audited in both brands. A person removed from an organization is
+  refused at once: `/auth/switch` into another brand answers `404` and `/auth/refresh`
+  `ACCOUNT_DISABLED`.
 - Access token: HS256 JWT (`iss=pos-kds-api`, `aud=pos-kds`, `sub=userId`, `tid=tenantId`),
   15 minutes by default. Expired tokens answer `401 TOKEN_EXPIRED`; clients refresh once and
   retry (built into `@pos/api-client`).
@@ -73,7 +93,8 @@ Validation failures (`400 VALIDATION_FAILED`) list
 - Login and refresh have their own per-IP rate-limit budget (`AUTH_RATE_LIMIT_PER_MINUTE`).
 - **Tenant status** (MADAR M9, ADR 0025): a suspended tenant's staff get `403 TENANT_SUSPENDED` on
   sign-in, refresh and every request (and the realtime socket); an archived tenant's may sign in
-  and read, and get `403 TENANT_ARCHIVED` on anything else. Platform tokens are refused here
+  and read, and get `403 TENANT_ARCHIVED` on anything else except `POST /auth/switch` (a session
+  operation, like refresh), so nobody is stuck in an archived brand. Platform tokens are refused here
   (`401`): they are for `/platform/*` only.
 
 ## Authorization
@@ -90,6 +111,12 @@ Validation failures (`400 VALIDATION_FAILED`) list
   A staff token there answers `401`, as does a device credential on any staff route. The route's
   `:locationId` must be the device's own (`404 LOCATION_NOT_FOUND`), and modules resolve with the
   device's layer. Requests may send `x-madar-client-version`, recorded as the device's version.
+- **Organization routes** (E1) take a staff token and name an `:organizationId`. The caller's
+  account must be a member of that `ACTIVE` organization, whichever brand they are signed into: a
+  stranger, a person with access to one brand only and a suspended organization all answer
+  `404 ORGANIZATION_NOT_FOUND`; a member whose organization role the route does not allow answers
+  `403 INSUFFICIENT_PERMISSION` (`details.role`). Handlers read the organization's brands and write
+  nothing. The route inventory lists these routes as `organization`.
 - Permissions are re-read from the database on every request, never trusted from the token, so
   revocations apply immediately.
 - `:tenantId` must be the caller's tenant, otherwise `404 TENANT_NOT_FOUND`.
@@ -754,7 +781,12 @@ total }`.
 
 - **Users:** create `{ email, displayName, preferredLocale, password (≥ 10), roles: [{ roleId,
 locationId | null }] }`; update `{ displayName?, preferredLocale?, isActive? }`; roles are
-  replaced with `PUT …/roles { roles }`. Passwords are argon2id hashes, never returned.
+  replaced with `PUT …/roles { roles }`. Passwords are argon2id hashes of the person's account, never
+  returned. Creating a user with an e-mail that already has an account links the user to it only
+  when the brand belongs to an organization and the account already has a user in one of its
+  brands (ADR 0029, R15): the password sent is ignored and the answer is the one a new e-mail
+  gets. Any other existing account answers `409 CONFLICT` `EMAIL_TAKEN`, exactly as an e-mail
+  already used in this brand.
   Deactivating a user or resetting their password revokes their refresh tokens.
 - **Roles:** `{ name, description, permissions[] }` from the catalog (`PERMISSIONS`); responses
   carry `isSystem` and `userCount`. Employees: `{ employeeCode, displayName, homeLocationId,
@@ -764,7 +796,9 @@ userId, pin? }`; the PIN (4–8 digits) is stored hashed; responses only say `ha
   linking a user, beyond what the caller holds at that scope); `409 CONFLICT` with `reason`
   `SELF` (own roles or deactivation), `LAST_OWNER` (the last active tenant-wide holder of a
   system role), `SYSTEM_ROLE`, `IN_USE` (deleting a role someone holds), `NAME_TAKEN`,
-  `EMAIL_TAKEN`, `CODE_TAKEN`, `USER_LINKED`; `404 USER_NOT_FOUND`, `ROLE_NOT_FOUND`,
+  `EMAIL_TAKEN`, `CODE_TAKEN`, `USER_LINKED`, `ACCOUNT_SHARED` (a password reset for a person
+  who also signs into other brands); `409 USER_MANAGED_BY_ORGANIZATION` (editing, deactivating or
+  changing the roles of a user their organization manages); `404 USER_NOT_FOUND`, `ROLE_NOT_FOUND`,
   `EMPLOYEE_NOT_FOUND`.
 - **Audit:** `user.created/updated/deactivated/reactivated/roles_changed/password_reset`,
   `role.created/updated/permissions_changed/deleted`,
@@ -927,6 +961,58 @@ locations where the caller holds it.
 - The hub keeps its shift-close `GET /locations/:lid/reports/daily-summary` (Phase 3,
   `shifts.manage`); it is not one of these reports.
 
+## Organizations (E1, cloud only)
+
+[ADR 0029](adr/0029-organizations-and-accounts.md). An organization's pages
+(`apps/api/src/modules/organizations`) for people with an organization role, in the access class
+`organization` (see Authorization). They need the caller's account to be a member of the
+organization; roles are `OWNER`, `MANAGER` and `FINANCE`.
+
+| Method | Path                                                 | Organization role | Notes                                                                                                         |
+| ------ | ---------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------- |
+| GET    | `/organizations/:organizationId`                     | any               | `{ organization: { id, slug, nameEn, nameAr, currencyCode, role }, brands[] }`: brands with logo and branches |
+| GET    | `/organizations/:organizationId/dashboard`           | any               | Today, last 7 and last 30 days, per brand, per branch, daily series                                           |
+| GET    | `/organizations/:organizationId/reports/daily-sales` | any               | `DailySalesReport` over the brands                                                                            |
+| GET    | `/organizations/:organizationId/reports/brands`      | any               | Sales per brand, including brands without sales                                                               |
+| GET    | `/organizations/:organizationId/reports/locations`   | any               | Sales per branch, with its brand, including branches without sales                                            |
+| GET    | `/organizations/:organizationId/reports/channels`    | any               | As the brand report                                                                                           |
+| GET    | `/organizations/:organizationId/reports/payments`    | any               | As the brand report                                                                                           |
+| GET    | `/organizations/:organizationId/reports/products`    | any               | Rows carry `tenantId`: a product is per brand                                                                 |
+| GET    | `/organizations/:organizationId/reports/categories`  | any               | Rows carry `tenantId`                                                                                         |
+| GET    | `/organizations/:organizationId/members`             | `OWNER`           | `MemberDto[]`: `{ id, accountId, email, displayName, role, createdAt }`                                       |
+| POST   | `/organizations/:organizationId/members`             | `OWNER`           | `{ email, displayName, role, password? }` → member + `skippedTenantIds`                                       |
+| PATCH  | `/organizations/:organizationId/members/:memberId`   | `OWNER`           | `{ role }` → member + `skippedTenantIds`                                                                      |
+| DELETE | `/organizations/:organizationId/members/:memberId`   | `OWNER`           | 204                                                                                                           |
+
+- **Dashboard:** `{ currencyCode, periods: { today, last7, last30 }, byBrand, byLocation, daily }`.
+  Each period is `{ salesTotal, orderCount, averageTicket }` in minor units of the organization's
+  currency; each branch's periods end on its own business day (ADR 0015), so `today` is not one
+  instant. `byBrand`, `byLocation` (with `hubOnline`) and `daily` (one entry per day, every brand's
+  sales, 0 where none) cover the **last 30 days**.
+- **Reports:** the same query as the brand reports (`from`, `to`, at most 366 days,
+  `locationIds`, `channels`) plus `tenantIds` (comma-separated; default every brand; another
+  organization's brand answers `404 TENANT_NOT_FOUND`, an unknown branch `404 LOCATION_NOT_FOUND`). Answers echo the filters like the brand reports and use the
+  brand reports' row shapes with a brand dimension. Every amount is in the organization's currency
+  (one per organization), so the totals add up and equal the sum of the brands' own reports.
+- **Members:** adding a member gives them a linked user in every brand, with the brand role of the
+  same name. An e-mail that already has an account is that person (the password is ignored and
+  they keep their own) when a platform operator adds them or they already have a user in one of
+  the organization's brands (ADR 0029, R15); a new e-mail needs `password` (`400
+VALIDATION_FAILED` otherwise). For an owner, any other existing account answers as a new e-mail:
+  `400 VALIDATION_FAILED` without `password`, `409 CONFLICT` `EMAIL_TAKEN` with one (adding a
+  person who works elsewhere needs a platform operator until E2 invites). A brand where the person's own user was deactivated is skipped and listed in
+  `skippedTenantIds` (audited as `user.organization_link_skipped`). Refusals: `409 CONFLICT`
+  `ALREADY_MEMBER`; `409 ORGANIZATION_LAST_OWNER` (removing or demoting the last owner);
+  `404 NOT_FOUND` for another organization's member. Removing a member takes the organization's
+  roles away and deactivates their linked users (tokens revoked); a user they had of their own in
+  a brand stays active with their own roles.
+- **Errors specific to organizations:** `404 ORGANIZATION_NOT_FOUND`, `409
+ORGANIZATION_CURRENCY_MISMATCH` (a brand in another currency cannot join),
+  `409 ORGANIZATION_LAST_OWNER`, `409 USER_MANAGED_BY_ORGANIZATION` (brand staff routes),
+  `409 ORGANIZATION_SLUG_TAKEN`.
+- **Audit:** `organization.member_add`, `member_role`, `member_remove`, `brand_attached`,
+  `brand_detached`, `user.organization_linked/unlinked/link_skipped` (a brand's own log).
+
 ## Platform admin (MADAR M9, cloud only)
 
 MADAR's operators, never a tenant's staff (ADR 0025). Every route below except sign-in needs a
@@ -936,34 +1022,34 @@ the platform catalog's, by role (OWNER and OPERATOR: everything; SUPPORT: read +
 VIEWER: read). A route naming `:tenantId` answers `404 TENANT_NOT_FOUND` for an unknown tenant and
 works inside that tenant only; a tenant's status does not restrict the platform.
 
-| Method | Path                                                   | Permission              | Notes                                                                                                                                         |
-| ------ | ------------------------------------------------------ | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| POST   | `/platform/auth/login`                                 | public, rate-limited    | `{ email, password }` → token + platform user; cookie `madar_prt` on `/api/v1/platform/auth`; 5 failures lock 15 min (`429 RATE_LIMITED`)     |
-| POST   | `/platform/auth/refresh`                               | public, rate-limited    | Cookie + allowed `Origin`; rotation and reuse detection as for staff                                                                          |
-| POST   | `/platform/auth/logout`                                | public                  | Revokes the family; clears the cookie                                                                                                         |
-| GET    | `/platform/auth/me`                                    | any platform user       | The operator with role and permissions                                                                                                        |
-| GET    | `/platform/tenants`                                    | `tenants.view`          | `?search=&status=&businessType=&page=&pageSize=` (name, slug or domain)                                                                       |
-| POST   | `/platform/tenants`                                    | `tenants.provision`     | `{ tenant, location, owner, entitlements? }` → detail + the owner's one-time password (shown once); `409 CONFLICT` `SLUG_TAKEN`/`EMAIL_TAKEN` |
-| GET    | `/platform/tenants/:tenantId`                          | `tenants.view`          | Profile, owners, counts, primary domain, last activity                                                                                        |
-| POST   | `/platform/tenants/:tenantId/status`                   | `tenants.status`        | `{ status, reason }`: ACTIVE ↔ SUSPENDED, → ARCHIVED, ARCHIVED → ACTIVE; both audit logs                                                      |
-| GET    | `/platform/tenants/:tenantId/locations`                | `tenants.view`          |                                                                                                                                               |
-| GET    | `/platform/tenants/:tenantId/users`                    | `tenants.view`          | Accounts and roles (no password hashes)                                                                                                       |
-| GET    | `/platform/tenants/:tenantId/devices`                  | `tenants.view`          | Hubs and terminals: online, version, reported outbox                                                                                          |
-| GET    | `/platform/tenants/:tenantId/modules`                  | `tenants.view`          | Entitlement, configurable, explicit, business-type default, enabled                                                                           |
-| PUT    | `/platform/tenants/:tenantId/entitlements`             | `tenants.configure`     | `{ entitlements: [{ feature, entitled, tenantConfigurable }], reason }`                                                                       |
-| GET    | `/platform/tenants/:tenantId/branding`                 | `tenants.view`          | The tenant's branding (read-only)                                                                                                             |
-| GET    | `/platform/tenants/:tenantId/domains`                  | `tenants.view`          |                                                                                                                                               |
-| POST   | `/platform/tenants/:tenantId/domains/:domainId/verify` | `tenants.configure`     | Looks the TXT record up again (ADR 0023)                                                                                                      |
-| GET    | `/platform/tenants/:tenantId/payment-accounts`         | `tenants.payments.view` | Accounts with `secret: { hasSecret, fingerprint, updatedAt }` only                                                                            |
-| GET    | `/platform/tenants/:tenantId/health`                   | `health.view`           | Per location: hubs, terminals online, outbox, open issues, last sync and activity; recent errors                                              |
-| GET    | `/platform/tenants/:tenantId/audit-logs`               | `audit.view`            | The tenant's audit log (`auditLogQuerySchema`), operators named                                                                               |
-| GET    | `/platform/health`                                     | `health.view`           | One row per tenant, plus recent server errors                                                                                                 |
-| GET    | `/platform/errors`                                     | `health.view`           | `?tenantId=&limit=` error events (5xx, redacted, sampled)                                                                                     |
-| GET    | `/platform/audit-logs`                                 | `audit.view`            | `?tenantId=&action=&actorId=&page=&pageSize=` the platform's own log                                                                          |
-| GET    | `/platform/support/operations`                         | `support.find`          | The repair catalog with the roles allowed for each                                                                                            |
-| GET    | `/platform/tenants/:tenantId/support/find`             | `support.find`          | `?kind=ORDER\|CUSTOMER\|PRODUCT\|PAYMENT\|SYNC_OPERATION&q=` (at most 20)                                                                     |
-| POST   | `/platform/tenants/:tenantId/support/preview`          | `support.repair`        | `{ operation, params }` → before, after, changes, `executable`, `blockedReason`, `confirmation`                                               |
-| POST   | `/platform/tenants/:tenantId/support/execute`          | `support.repair`        | `{ operation, params, confirmationToken, reason }` → before and after as executed                                                             |
+| Method | Path                                                   | Permission              | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------ | ------------------------------------------------------ | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/platform/auth/login`                                 | public, rate-limited    | `{ email, password }` → token + platform user; cookie `madar_prt` on `/api/v1/platform/auth`; 5 failures lock 15 min (`429 RATE_LIMITED`)                                                                                                                                                                                                                                                                                                               |
+| POST   | `/platform/auth/refresh`                               | public, rate-limited    | Cookie + allowed `Origin`; rotation and reuse detection as for staff                                                                                                                                                                                                                                                                                                                                                                                    |
+| POST   | `/platform/auth/logout`                                | public                  | Revokes the family; clears the cookie                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| GET    | `/platform/auth/me`                                    | any platform user       | The operator with role and permissions                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| GET    | `/platform/tenants`                                    | `tenants.view`          | `?search=&status=&businessType=&organizationId=&page=&pageSize=` (name, slug or domain); each row names its `organization` (or null)                                                                                                                                                                                                                                                                                                                    |
+| POST   | `/platform/tenants`                                    | `tenants.provision`     | `{ tenant, location, owner, entitlements? }` → detail + the owner's one-time password (shown once); `409 CONFLICT` `SLUG_TAKEN`/`EMAIL_TAKEN`. With `organizationId` instead of `owner` the brand joins that organization (same currency) and its members are the owners (`owner: null` in the answer); if linking the members fails the brand exists and the answer is `409 CONFLICT` `ORGANIZATION_LINK_FAILED` with its `tenantId` (attach it again) |
+| GET    | `/platform/tenants/:tenantId`                          | `tenants.view`          | Profile, owners, counts, primary domain, last activity                                                                                                                                                                                                                                                                                                                                                                                                  |
+| POST   | `/platform/tenants/:tenantId/status`                   | `tenants.status`        | `{ status, reason }`: ACTIVE ↔ SUSPENDED, → ARCHIVED, ARCHIVED → ACTIVE; both audit logs                                                                                                                                                                                                                                                                                                                                                                |
+| GET    | `/platform/tenants/:tenantId/locations`                | `tenants.view`          |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| GET    | `/platform/tenants/:tenantId/users`                    | `tenants.view`          | Accounts and roles (no password hashes)                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| GET    | `/platform/tenants/:tenantId/devices`                  | `tenants.view`          | Hubs and terminals: online, version, reported outbox                                                                                                                                                                                                                                                                                                                                                                                                    |
+| GET    | `/platform/tenants/:tenantId/modules`                  | `tenants.view`          | Entitlement, configurable, explicit, business-type default, enabled                                                                                                                                                                                                                                                                                                                                                                                     |
+| PUT    | `/platform/tenants/:tenantId/entitlements`             | `tenants.configure`     | `{ entitlements: [{ feature, entitled, tenantConfigurable }], reason }`                                                                                                                                                                                                                                                                                                                                                                                 |
+| GET    | `/platform/tenants/:tenantId/branding`                 | `tenants.view`          | The tenant's branding (read-only)                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| GET    | `/platform/tenants/:tenantId/domains`                  | `tenants.view`          |                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| POST   | `/platform/tenants/:tenantId/domains/:domainId/verify` | `tenants.configure`     | Looks the TXT record up again (ADR 0023)                                                                                                                                                                                                                                                                                                                                                                                                                |
+| GET    | `/platform/tenants/:tenantId/payment-accounts`         | `tenants.payments.view` | Accounts with `secret: { hasSecret, fingerprint, updatedAt }` only                                                                                                                                                                                                                                                                                                                                                                                      |
+| GET    | `/platform/tenants/:tenantId/health`                   | `health.view`           | Per location: hubs, terminals online, outbox, open issues, last sync and activity; recent errors                                                                                                                                                                                                                                                                                                                                                        |
+| GET    | `/platform/tenants/:tenantId/audit-logs`               | `audit.view`            | The tenant's audit log (`auditLogQuerySchema`), operators named                                                                                                                                                                                                                                                                                                                                                                                         |
+| GET    | `/platform/health`                                     | `health.view`           | One row per tenant, plus recent server errors                                                                                                                                                                                                                                                                                                                                                                                                           |
+| GET    | `/platform/errors`                                     | `health.view`           | `?tenantId=&limit=` error events (5xx, redacted, sampled)                                                                                                                                                                                                                                                                                                                                                                                               |
+| GET    | `/platform/audit-logs`                                 | `audit.view`            | `?tenantId=&action=&actorId=&page=&pageSize=` the platform's own log                                                                                                                                                                                                                                                                                                                                                                                    |
+| GET    | `/platform/support/operations`                         | `support.find`          | The repair catalog with the roles allowed for each                                                                                                                                                                                                                                                                                                                                                                                                      |
+| GET    | `/platform/tenants/:tenantId/support/find`             | `support.find`          | `?kind=ORDER\|CUSTOMER\|PRODUCT\|PAYMENT\|SYNC_OPERATION&q=` (at most 20)                                                                                                                                                                                                                                                                                                                                                                               |
+| POST   | `/platform/tenants/:tenantId/support/preview`          | `support.repair`        | `{ operation, params }` → before, after, changes, `executable`, `blockedReason`, `confirmation`                                                                                                                                                                                                                                                                                                                                                         |
+| POST   | `/platform/tenants/:tenantId/support/execute`          | `support.repair`        | `{ operation, params, confirmationToken, reason }` → before and after as executed                                                                                                                                                                                                                                                                                                                                                                       |
 
 - **Repairs** (`operation` → `params`): `sync.retry` and `sync.reprocess` → `{ operationId }`
   (ADR 0014's RESEND and APPLY_HUB); `order.correct_status` → `{ orderId, to }` (SYSTEM rules of
@@ -980,6 +1066,33 @@ works inside that tenant only; a tenant's status does not restrict the platform.
   An archived tenant is `403 TENANT_ARCHIVED`.
 - Hubs of a suspended tenant get `403 TENANT_SUSPENDED` on `/sync/*` (archived: reads only); its
   website gets `403 TENANT_SUSPENDED`.
+
+### Organizations (E1)
+
+[ADR 0029](adr/0029-organizations-and-accounts.md). `organizations.view` is every platform role's;
+`organizations.manage` is OWNER's and OPERATOR's. Staff tokens and anonymous callers get `401`.
+Every change is in the platform audit log (`organization.create`, `update`, `attach`, `detach`,
+`member_add`, `member_role`, `member_remove`).
+
+| Method | Path                                                        | Permission             | Notes                                                                                                                             |
+| ------ | ----------------------------------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/platform/organizations`                                   | `organizations.view`   | `?search=&status=&page=&pageSize=` → `{ id, slug, nameEn, nameAr, currencyCode, status, createdAt, brandCount, memberCount }`     |
+| POST   | `/platform/organizations`                                   | `organizations.manage` | `{ slug, nameEn, nameAr, currencyCode, owner: { email, displayName, password? } }` → detail; `409 ORGANIZATION_SLUG_TAKEN`        |
+| GET    | `/platform/organizations/:organizationId`                   | `organizations.view`   | The summary plus `brands[]` (id, slug, names, status) and `members[]`                                                             |
+| PATCH  | `/platform/organizations/:organizationId`                   | `organizations.manage` | `{ nameEn?, nameAr?, status? }` (ACTIVE or SUSPENDED; a status change reaches every brand's hubs); slug and currency never change |
+| POST   | `/platform/organizations/:organizationId/tenants`           | `organizations.manage` | `{ tenantId }` → detail + `skippedMemberIds`; `409 ORGANIZATION_CURRENCY_MISMATCH`, `409 CONFLICT` `TENANT_IN_ORGANIZATION`       |
+| DELETE | `/platform/organizations/:organizationId/tenants/:tenantId` | `organizations.manage` | 204; `409 CONFLICT` `LAST_OWNER` when the brand has no active Owner of its own                                                    |
+| GET    | `/platform/organizations/:organizationId/members`           | `organizations.view`   | `MemberDto[]`                                                                                                                     |
+| POST   | `/platform/organizations/:organizationId/members`           | `organizations.manage` | As the owner's route                                                                                                              |
+| PATCH  | `/platform/organizations/:organizationId/members/:memberId` | `organizations.manage` | `{ role }`                                                                                                                        |
+| DELETE | `/platform/organizations/:organizationId/members/:memberId` | `organizations.manage` | 204                                                                                                                               |
+
+- A new organization's owner is the first member, with the role `OWNER`. An e-mail that already has
+  an account is that person; a new one needs a starting password.
+- Attaching creates a linked user for every member in the brand; detaching deactivates them and
+  clears the brands' link marker.
+- A suspended organization is not blocked here: attaching, provisioning into it and member changes
+  still work (see Known gaps in the architecture notes).
 
 ### Releases (MADAR M10)
 

@@ -12,6 +12,7 @@ import {
   type ReleaseFacts,
   type RolloutSetting,
   type SupportedMinimums,
+  assertOrganizationCurrency,
   deviceVersionStatus,
   targetVersion,
 } from '@pos/domain';
@@ -68,6 +69,7 @@ export class PlatformDirectoryService {
       const where: Prisma.TenantWhereInput = {
         ...(q.status ? { status: q.status } : {}),
         ...(q.businessType ? { businessType: q.businessType } : {}),
+        ...(q.organizationId ? { organizationId: q.organizationId } : {}),
         ...(search
           ? {
               OR: [
@@ -87,6 +89,7 @@ export class PlatformDirectoryService {
           skip: (q.page - 1) * q.pageSize,
           take: q.pageSize,
           include: {
+            organization: { select: { id: true, nameEn: true, nameAr: true } },
             _count: { select: { locations: true, users: true } },
             domains: {
               where: { isPrimary: true, status: DomainStatus.VERIFIED },
@@ -109,6 +112,7 @@ export class PlatformDirectoryService {
           locationCount: row._count.locations,
           userCount: row._count.users,
           primaryDomain: row.domains[0]?.domain ?? null,
+          organization: row.organization,
         })),
         page: q.page,
         pageSize: q.pageSize,
@@ -120,17 +124,30 @@ export class PlatformDirectoryService {
   /**
    * Creates the tenant, its first location, its Owner, its entitlements and its MADAR subdomain
    * in one transaction, through `provisionTenant` (ADR 0017). A slug or owner e-mail in use is
-   * refused rather than merged into the existing tenant.
+   * refused rather than merged into the existing tenant. A brand created into an organization
+   * (`input.organizationId`, whose currency must be the brand's) has no owner of its own: the
+   * caller links the organization's members afterwards.
    */
   provision(
     input: ProvisionInput,
     options: {
-      ownerPasswordHash: string;
+      /** Not needed (and unused) for a brand in an organization. */
+      ownerPasswordHash?: string;
       entitlements: Record<string, EntitlementSpec>;
       webDomain: string;
     },
   ): Promise<ProvisionedTenant> {
     return TenantContext.runUnscoped('platform: provision a tenant', async () => {
+      if (input.organizationId) {
+        const organization = await this.prisma.organization.findUnique({
+          where: { id: input.organizationId },
+          select: { currencyCode: true },
+        });
+        if (!organization) {
+          throw new DomainError('ORGANIZATION_NOT_FOUND', 'Organization not found');
+        }
+        assertOrganizationCurrency(organization.currencyCode, input.tenant.currencyCode);
+      }
       const taken = await this.prisma.tenant.count({ where: { slug: input.tenant.slug } });
       if (taken > 0) {
         throw new DomainError('CONFLICT', 'This address is already in use', {
@@ -156,12 +173,17 @@ export class PlatformDirectoryService {
               ],
               webDomain: options.webDomain,
               entitlements: options.entitlements,
-              owner: {
-                email: input.owner.email,
-                displayName: input.owner.displayName,
-                passwordHash: options.ownerPasswordHash,
-                preferredLocale: input.owner.preferredLocale ?? input.tenant.defaultLocale,
-              },
+              ...(input.owner && options.ownerPasswordHash
+                ? {
+                    owner: {
+                      email: input.owner.email,
+                      displayName: input.owner.displayName,
+                      passwordHash: options.ownerPasswordHash,
+                      preferredLocale: input.owner.preferredLocale ?? input.tenant.defaultLocale,
+                    },
+                  }
+                : {}),
+              ...(input.organizationId ? { organizationId: input.organizationId } : {}),
             }),
           { timeout: 30_000, maxWait: 10_000 },
         );

@@ -81,7 +81,10 @@ beforeEach(async () => {
 });
 
 async function createKitchenUser(): Promise<string> {
-  const user = await prisma.user.findUniqueOrThrow({ where: { id: tenant.cashier.id } });
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: tenant.cashier.id },
+    include: { account: true },
+  });
   const role = await prisma.role.create({
     data: {
       tenantId: tenant.tenantId,
@@ -94,11 +97,14 @@ async function createKitchenUser(): Promise<string> {
     },
   });
   const email = `kitchen-${newId()}@test.local`;
+  const account = await prisma.account.create({
+    data: { email, passwordHash: user.account.passwordHash, lastTenantId: tenant.tenantId },
+  });
   await prisma.user.create({
     data: {
       tenantId: tenant.tenantId,
+      accountId: account.id,
       email,
-      passwordHash: user.passwordHash,
       displayName: 'Kitchen',
       roles: { create: { roleId: role.id, locationId: tenant.locationA } },
     },

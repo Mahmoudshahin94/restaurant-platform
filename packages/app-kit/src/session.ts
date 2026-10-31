@@ -1,6 +1,6 @@
 import { type ApiClient, createApiClient } from '@pos/api-client';
 import type { ActionSource } from '@pos/shared-types';
-import type { AuthUser } from '@pos/validation';
+import type { AuthUser, TokenResponse } from '@pos/validation';
 import { type StoreApi, type UseBoundStore, create } from 'zustand';
 import { reportUpgradeRequired } from './upgrade';
 
@@ -49,6 +49,11 @@ export interface SessionClient {
   /** Employee code + PIN (location hub only). */
   signInWithPin: (employeeCode: string, pin: string) => Promise<AuthUser>;
   signOut: () => Promise<void>;
+  /**
+   * Adopts a token response that replaces the current session without a sign-in, like the answer
+   * of `/auth/switch` into another brand (the old refresh token is revoked by the server).
+   */
+  replaceSession: (response: TokenResponse) => void;
 }
 
 function memoryTokenStore(): RefreshTokenStore {
@@ -124,6 +129,10 @@ export function createSessionClient(options: SessionClientOptions): SessionClien
       if (options.mode === 'native') tokens.set(session.refreshToken ?? null);
       useSession.getState().setSession(session.accessToken, session.user);
       return session.user;
+    },
+    replaceSession(response) {
+      if (options.mode === 'native') tokens.set(response.refreshToken ?? null);
+      useSession.getState().setSession(response.accessToken, response.user);
     },
     async signOut() {
       try {

@@ -174,7 +174,7 @@ export function OptionsDialog({
           <Button
             type="button"
             variant="outline"
-            size="touch"
+            size="xl"
             aria-label={t('kiosk:cart.decrease', { name: pickLocalized(product, 'name', locale) })}
             disabled={quantity <= 1}
             onClick={() => {
@@ -189,7 +189,7 @@ export function OptionsDialog({
           <Button
             type="button"
             variant="outline"
-            size="touch"
+            size="xl"
             aria-label={t('kiosk:cart.increase', { name: pickLocalized(product, 'name', locale) })}
             disabled={quantity >= 99}
             onClick={() => {
@@ -203,7 +203,7 @@ export function OptionsDialog({
       <DialogFooter>
         <Button
           type="button"
-          size="touch"
+          size="xl"
           className="h-16 w-full text-xl"
           disabled={!priced}
           onClick={() => {

@@ -31,6 +31,17 @@ execSync('pnpm exec prisma db execute --stdin --schema prisma/schema.prisma', {
 execSync('pnpm seed', {
   cwd,
   stdio: 'inherit',
-  // A disposable database: demo tenants follow the seed files even if seeded before they changed.
-  env: { ...process.env, SEED_ALIGN_TENANTS: '1' },
+  env: {
+    ...process.env,
+    // A disposable database: demo tenants follow the seed files even if seeded before they changed.
+    SEED_ALIGN_TENANTS: '1',
+    // The demo organization (E1) with its members and 30 days of orders, so its dashboard has data.
+    // The members default to the .env.example values, so the suite needs nothing from the .env.
+    SEED_DEMO_ORDERS: '1',
+    SEED_ORG_OWNER_EMAIL: process.env.SEED_ORG_OWNER_EMAIL || 'owner@group.local',
+    SEED_ORG_OWNER_PASSWORD: process.env.SEED_ORG_OWNER_PASSWORD || 'Dev-Only-Group-Owner-Pass-1',
+    SEED_ORG_FINANCE_EMAIL: process.env.SEED_ORG_FINANCE_EMAIL || 'finance@group.local',
+    SEED_ORG_FINANCE_PASSWORD:
+      process.env.SEED_ORG_FINANCE_PASSWORD || 'Dev-Only-Group-Finance-Pass-1',
+  },
 });

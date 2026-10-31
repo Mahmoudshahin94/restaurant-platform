@@ -130,7 +130,7 @@ function SyncOverview({ locationId }: { locationId: string }) {
                 role="tab"
                 aria-selected={state === s}
                 size="sm"
-                variant={state === s ? 'default' : 'outline'}
+                variant={state === s ? 'primary' : 'outline'}
                 onClick={() => {
                   setState(s);
                 }}

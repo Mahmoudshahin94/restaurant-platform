@@ -6,9 +6,17 @@ import type { Principal, RequestScope } from './principal';
 
 export const IS_PUBLIC_KEY = 'auth:isPublic';
 export const PERMISSIONS_KEY = 'auth:permissions';
+export const SESSION_ROUTE_KEY = 'auth:session';
 
 /** Marks a route (or controller) as reachable without an access token. */
 export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
+
+/**
+ * Marks a route that changes the caller's session, not the tenant's data (like `/auth/refresh`):
+ * an archived tenant, which allows reading only, does not refuse it (ADR 0025), so nobody gets
+ * stuck in an archived brand.
+ */
+export const SessionRoute = () => SetMetadata(SESSION_ROUTE_KEY, true);
 
 export interface PermissionRequirement {
   permissions: readonly Permission[];

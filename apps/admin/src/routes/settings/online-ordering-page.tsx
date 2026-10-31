@@ -163,7 +163,7 @@ function OnlineForm({ locationId, data }: { locationId: string; data: OnlineOrde
                       key={state}
                       role="radio"
                       aria-checked={field.value === state}
-                      variant={field.value === state ? 'default' : 'outline'}
+                      variant={field.value === state ? 'primary' : 'outline'}
                       onClick={() => {
                         field.onChange(state);
                       }}
@@ -215,7 +215,7 @@ function OnlineForm({ locationId, data }: { locationId: string; data: OnlineOrde
                 </Field>
                 <Button
                   variant="ghost"
-                  size="icon"
+                  size="icon-md"
                   aria-label={t('common:actions.remove')}
                   onClick={() => {
                     hours.remove(index);

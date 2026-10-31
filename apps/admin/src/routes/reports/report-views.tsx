@@ -29,20 +29,23 @@ import {
   useCellFormat,
 } from './report-table';
 
-interface Summary {
+export interface Summary {
   label: string;
   kind: CellKind;
   value: CellValue;
 }
 
-interface Header {
+export interface Header {
   from: string;
   to: string;
   currencyCode: string;
 }
 
+/** The reports of an organization that no brand has (E1): sales per brand and per branch. */
+export type OrgOnlyReportKind = 'brands' | 'locations';
+
 /** Headline figures, an optional chart, the table and its CSV export. */
-function ReportBody<R>({
+export function ReportBody<R>({
   kind,
   header,
   note,
@@ -53,7 +56,7 @@ function ReportBody<R>({
   rowKey,
   extra,
 }: {
-  kind: ReportKind;
+  kind: ReportKind | OrgOnlyReportKind;
   header: Header;
   note: string;
   summary: readonly Summary[];
@@ -103,7 +106,7 @@ function ReportBody<R>({
 }
 
 /** The columns every sales report shares (daily, channel). */
-function useSalesColumns() {
+export function useSalesColumns() {
   const { t } = useTranslation('admin');
   return <R extends SalesFigures>(totals: SalesFigures): Column<R>[] => {
     const col = (
@@ -138,7 +141,7 @@ function useSalesColumns() {
   };
 }
 
-function salesSummary(t: TFunction<'admin'>, totals: SalesFigures): Summary[] {
+export function salesSummary(t: TFunction<'admin'>, totals: SalesFigures): Summary[] {
   return [
     { label: t('reports.columns.orders'), kind: 'count', value: totals.orders },
     { label: t('reports.columns.netSales'), kind: 'money', value: totals.netSales },

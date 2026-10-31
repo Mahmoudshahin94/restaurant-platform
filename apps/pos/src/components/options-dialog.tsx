@@ -183,7 +183,7 @@ export function OptionsDialog({
       </div>
       <DialogFooter>
         <Button
-          size="touch"
+          size="xl"
           className="w-full sm:w-auto"
           disabled={!priced.ok}
           onClick={() => {

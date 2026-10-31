@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { hashSecret } from '@pos/database';
 import { newId } from '@pos/domain';
 import type { ApiErrorBody, ResolvedBranding, ResolvedLocales } from '@pos/shared-types';
 import type {
@@ -134,6 +135,48 @@ describe('signing in at the hub', () => {
     const body = res.json<TokenResponse>();
     expect(body.user.email).toBe('cashier@hub.test');
     expect(body.refreshToken).toBeTruthy();
+  });
+
+  it('the hub holds one brand: switching brands is not found', async () => {
+    const headers = await signIn('owner@hub.test');
+    const res = await hub.app.inject({
+      method: 'POST',
+      url: `${api}/auth/switch`,
+      headers,
+      payload: { tenantId: fixture.ids.tenantId },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json<ApiErrorBody>().code).toBe('TENANT_NOT_FOUND');
+  });
+
+  it('e-mail sign-in uses the synced account', async () => {
+    const ownerAccount = fixture.tables.accounts.find((a) => a.email === 'owner@hub.test');
+    const accountId = ownerAccount?.id as string;
+    const res = await hub.app.inject({
+      method: 'POST',
+      url: `${api}/auth/login`,
+      // Trimmed and case-insensitive; a tenant id the hub does not hold is ignored.
+      payload: { email: ' Owner@Hub.Test', password: PASSWORD, tenantId: newId() },
+    });
+    expect(res.statusCode).toBe(200);
+    const { user } = res.json<TokenResponse>();
+    expect(user.id).toBe(fixture.ids.owner);
+    expect(user.accountId).toBe(accountId);
+    expect(user.tenants).toEqual([
+      {
+        id: fixture.ids.tenantId,
+        nameEn: 'Hub Test',
+        nameAr: expect.any(String) as string,
+        logoFileId: null,
+        organizationId: null,
+      },
+    ]);
+    expect(user.organizations).toEqual([]);
+    // The last brand never leaves the cloud, and the hub does not keep one either.
+    const db = asHubTx(hub.app.get(PrismaService));
+    expect((await db.account.findUniqueOrThrow({ where: { id: accountId } })).lastTenantId).toBe(
+      null,
+    );
   });
 
   it('locks an employee code after five wrong PINs', async () => {
@@ -486,6 +529,57 @@ describe('configuration from the cloud', () => {
     });
     expect(login.json<ApiErrorBody>().code).toBe('ACCOUNT_DISABLED');
     expect((await pinSignIn()).json<ApiErrorBody>().code).toBe('INVALID_CREDENTIALS');
+  });
+
+  it('a password change in the cloud reaches the hub', async () => {
+    const changed = 'A-brand-new-password-2';
+    const account = fixture.tables.accounts.find((a) => a.email === 'cashier@hub.test');
+    if (account) account.passwordHash = await hashSecret(changed);
+    cloud.snapshot = withVersion(fixture.ids, fixture.tables);
+    expect(await hub.snapshots.syncNow()).toBe('applied');
+    const attempt = (password: string) =>
+      hub.app.inject({
+        method: 'POST',
+        url: `${api}/auth/login`,
+        payload: { email: 'cashier@hub.test', password, client: 'native' },
+      });
+    expect((await attempt(changed)).statusCode).toBe(200);
+    expect((await attempt(PASSWORD)).json<ApiErrorBody>().code).toBe('INVALID_CREDENTIALS');
+  });
+
+  it('replaces the accounts its migration backfilled with the cloud’s, keeping every user', async () => {
+    // A hub paired before accounts existed: one account per user under a random id, which the
+    // first format 9 snapshot meets (same e-mails, different ids).
+    const db = asHubTx(hub.app.get(PrismaService));
+    for (const account of await db.account.findMany()) {
+      await db.$executeRawUnsafe(
+        `UPDATE accounts SET id = '${newId()}' WHERE id = '${account.id}'`,
+      );
+    }
+    const stale = await db.account.findMany({ select: { id: true } });
+    expect(stale).toHaveLength(3);
+    const changed = 'Another-new-password-3';
+    const kitchen = fixture.tables.accounts.find((a) => a.email === 'kitchen@hub.test');
+    if (kitchen) kitchen.passwordHash = await hashSecret(changed);
+    cloud.snapshot = withVersion(fixture.ids, fixture.tables);
+
+    expect(await hub.snapshots.syncNow()).toBe('applied');
+    expect((await db.account.findMany()).map((a) => a.id).sort()).toEqual(
+      fixture.tables.accounts.map((a) => a.id as string).sort(),
+    );
+    const users = await db.user.findMany({ include: { account: true } });
+    expect(users).toHaveLength(3);
+    expect(users.every((u) => u.isActive && u.account.email === u.email)).toBe(true);
+    expect(users.find((u) => u.id === fixture.ids.owner)?.accountId).toBe(
+      fixture.tables.accounts.find((a) => a.email === 'owner@hub.test')?.id,
+    );
+    const login = await hub.app.inject({
+      method: 'POST',
+      url: `${api}/auth/login`,
+      payload: { email: 'kitchen@hub.test', password: changed, client: 'native' },
+    });
+    expect(login.statusCode).toBe(200);
+    expect((await signIn('owner@hub.test')).authorization).toBeTruthy();
   });
 
   it('keeps serving its last copy when the cloud rejects its credential', async () => {

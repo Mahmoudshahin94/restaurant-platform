@@ -6,6 +6,7 @@ import {
   loginRequestSchema,
   pinLoginRequestSchema,
   refreshRequestSchema,
+  switchSchema,
 } from '@pos/validation';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { z } from 'zod';
@@ -14,6 +15,7 @@ import {
   type Principal,
   Public,
   RequirePermissions,
+  SessionRoute,
 } from '../../common/auth/decorators';
 import { ZodValidationPipe } from '../../common/validation/zod-validation.pipe';
 import { SERVER_MODE, type ServerMode } from '../../common/auth/managed-in-cloud';
@@ -40,7 +42,7 @@ export class AuthController {
     @Body(new ZodValidationPipe(loginRequestSchema)) body: z.output<typeof loginRequestSchema>,
     @Res({ passthrough: true }) reply: FastifyReply,
   ): Promise<TokenResponse> {
-    const session = await this.auth.login(body.email, body.password);
+    const session = await this.auth.login(body.email, body.password, body.tenantId);
     return this.deliver(session, body.client, reply);
   }
 
@@ -91,6 +93,28 @@ export class AuthController {
   @Get('me')
   me(@CurrentPrincipal() principal: Principal): Promise<AuthUser> {
     return this.access.loadAuthUser(principal.userId);
+  }
+
+  /**
+   * Moves the signed-in person to another brand of their account: a new session for their user
+   * there, the current one revoked. The refresh token comes as for `/auth/refresh` (cookie for a
+   * browser, body for a native client) and goes back the same way. Allowed from an archived
+   * brand (`@SessionRoute`): moving out of it is not a write there.
+   */
+  @RequirePermissions([])
+  @SessionRoute()
+  @Post('switch')
+  @HttpCode(200)
+  async switchTenant(
+    @CurrentPrincipal() principal: Principal,
+    @Body(new ZodValidationPipe(switchSchema)) body: z.output<typeof switchSchema>,
+    @Req() request: FastifyRequest,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<TokenResponse> {
+    const native = body.refreshToken !== undefined;
+    const current = body.refreshToken ?? this.cookieToken(request);
+    const session = await this.auth.switchTenant(principal, body.tenantId, current);
+    return this.deliver(session, native ? 'native' : 'web', reply);
   }
 
   /**

@@ -1,16 +1,38 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { hashSecret, verifySecret } from '@pos/database';
 import { DomainError, assertTenantAccess, newId } from '@pos/domain';
 import type { TokenResponse } from '@pos/validation';
+import { SERVER_MODE, type ServerMode } from '../../common/auth/managed-in-cloud';
+import type { Principal } from '../../common/auth/principal';
 import { TenantContext } from '../../common/tenancy/tenant-context';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AccessService } from './access.service';
+import { ACCOUNT_DIRECTORY, type AccountDirectory } from './account-directory';
 import { TokenService } from './token.service';
 
 /** PIN guessing: this many wrong PINs for one employee code lock it for LOCK_MS. */
 const PIN_MAX_FAILURES = 5;
 const PIN_LOCK_MS = 5 * 60_000;
+
+/**
+ * Which of an account's users (oldest first) to sign in: the one in the requested brand, else the
+ * one in the last brand, else the oldest. An archived brand (reading only) is chosen only when it
+ * is requested or the account has nothing else, so nobody lands in one by default.
+ */
+function pickUser<T extends { tenantId: string; tenant: { status: string } }>(
+  users: readonly T[],
+  requested: string | undefined,
+  last: string | null,
+): T | undefined {
+  const open = users.filter((u) => u.tenant.status !== 'ARCHIVED');
+  return (
+    users.find((u) => u.tenantId === requested) ??
+    open.find((u) => u.tenantId === last) ??
+    open[0] ??
+    users[0]
+  );
+}
 
 export interface IssuedSession {
   response: Omit<TokenResponse, 'refreshToken'>;
@@ -29,42 +51,231 @@ export class AuthService {
     private readonly tokens: TokenService,
     private readonly access: AccessService,
     private readonly audit: AuditService,
+    @Inject(ACCOUNT_DIRECTORY) private readonly directory: AccountDirectory,
+    @Inject(SERVER_MODE) private readonly mode: ServerMode,
   ) {}
 
-  async login(email: string, password: string): Promise<IssuedSession> {
-    // E-mail addresses are unique across tenants, so sign-in needs no tenant selector; the rest
-    // of the sign-in runs inside the account's tenant.
-    const user = await TenantContext.runUnscoped('sign-in: find the account by e-mail', () =>
-      this.prisma.user.findUnique({ where: { email } }),
+  /**
+   * Signs a person in by e-mail and password. Their account may have a user in several brands:
+   * sign-in picks the requested brand, else the last one, else the oldest, among the usable ones
+   * (`AccountDirectory.brandsFor`), passing over archived brands unless requested or the only
+   * ones (`pickUser`). A brand the account cannot use is ignored, never reported.
+   */
+  async login(email: string, password: string, tenantId?: string): Promise<IssuedSession> {
+    const account = await TenantContext.runUnscoped('sign-in: find the account by e-mail', () =>
+      this.prisma.account.findUnique({
+        where: { email: email.trim().toLowerCase() },
+        select: {
+          id: true,
+          passwordHash: true,
+          lastTenantId: true,
+          users: {
+            orderBy: { createdAt: 'asc' },
+            select: {
+              id: true,
+              tenantId: true,
+              isActive: true,
+              tenant: { select: { status: true } },
+            },
+          },
+        },
+      }),
     );
-    if (!user) {
+    if (!account) {
       this.timingDummyHash ??= hashSecret(newId());
       await verifySecret(await this.timingDummyHash, password);
       throw new DomainError('INVALID_CREDENTIALS', 'Invalid email or password');
     }
-    return TenantContext.runInTenant(user.tenantId, () => this.completeLogin(user, password));
+    if (!(await verifySecret(account.passwordHash, password))) {
+      const user = pickUser(account.users, tenantId, account.lastTenantId);
+      if (user) {
+        await TenantContext.runInTenant(user.tenantId, () =>
+          this.audit.record({
+            action: 'auth.login_failed',
+            entityType: 'User',
+            entityId: user.id,
+            actorType: 'USER',
+            actorId: user.id,
+            tenantId: user.tenantId,
+            metadata: { reason: 'INVALID_CREDENTIALS' },
+          }),
+        );
+      }
+      throw new DomainError('INVALID_CREDENTIALS', 'Invalid email or password');
+    }
+
+    const usable = new Set((await this.directory.brandsFor(account.id)).map((b) => b.id));
+    const user = pickUser(
+      account.users.filter((u) => usable.has(u.tenantId)),
+      tenantId,
+      account.lastTenantId,
+    );
+    if (!user) {
+      // As before accounts: a suspended business says so; otherwise the account is disabled.
+      // Neither names a brand.
+      if (account.users.some((u) => u.isActive && u.tenant.status === 'SUSPENDED')) {
+        assertTenantAccess('SUSPENDED', 'read');
+      }
+      throw new DomainError('ACCOUNT_DISABLED', 'Account is disabled');
+    }
+    // The cloud remembers the brand for the next sign-in; the hub has only one.
+    if (this.mode === 'cloud' && account.lastTenantId !== user.tenantId) {
+      await this.prisma.account.update({
+        where: { id: account.id },
+        data: { lastTenantId: user.tenantId },
+      });
+    }
+    return TenantContext.runInTenant(user.tenantId, () => this.completeLogin(user));
   }
 
-  private async completeLogin(
-    user: { id: string; tenantId: string; passwordHash: string; isActive: boolean },
-    password: string,
+  /**
+   * The account's user in `tenantId` when the account can use that brand (see `login`), else
+   * null — whether the account has no user there, or one that is deactivated or suspended.
+   */
+  async usableUserFor(
+    accountId: string,
+    tenantId: string,
+  ): Promise<{ id: string; tenantId: string } | null> {
+    const brands = await this.directory.brandsFor(accountId);
+    if (!brands.some((b) => b.id === tenantId)) return null;
+    return TenantContext.runUnscoped("sign-in: find the account's user in a brand", () =>
+      this.prisma.user.findUnique({
+        where: { tenantId_accountId: { tenantId, accountId } },
+        select: { id: true, tenantId: true },
+      }),
+    );
+  }
+
+  /**
+   * Moves a signed-in person to another brand of their account (cloud only; the hub holds one
+   * brand). Like `refresh`, it needs the caller's own live refresh token: an access token alone
+   * never starts a long-lived session. The token's family is revoked and a new session starts for
+   * the account's user in `tenantId`, which must be usable (`usableUserFor`); otherwise the brand
+   * is "not found", as for any foreign tenant. Switching to the current brand issues a new
+   * session too. Each brand's audit trail records the switch.
+   *
+   * Order: validate the token, start the new session, end the old one (an atomic claim, so two
+   * concurrent switches with one token cannot both succeed), then write the audit entries.
+   */
+  async switchTenant(
+    principal: Principal,
+    tenantId: string,
+    currentRefresh: string | undefined,
   ): Promise<IssuedSession> {
-    const valid = await verifySecret(user.passwordHash, password);
-    if (!valid) {
+    const notFound = () => new DomainError('TENANT_NOT_FOUND', 'Tenant not found');
+    if (this.mode !== 'cloud') throw notFound();
+    const source = await this.prisma.user.findUniqueOrThrow({
+      where: { id: principal.userId },
+      select: { id: true, accountId: true, tenantId: true },
+    });
+    const family = await this.currentFamily(source, currentRefresh);
+    const target = await this.usableUserFor(source.accountId, tenantId);
+    if (!target) throw notFound();
+
+    // A request never works in two tenants: the target brand's side runs outside any tenant scope,
+    // naming its tenant explicitly.
+    const newFamily = newId();
+    const session = await TenantContext.runUnscoped(
+      'switching brands: start the session of the account’s user in the target brand',
+      () => this.issueSession(target.id, target.tenantId, newFamily),
+    );
+    const claimed = await this.prisma.refreshToken.updateMany({
+      where: { familyId: family, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    if (claimed.count === 0) {
+      // Lost a race with another switch or a logout using the same token: no second session.
+      await this.revokeFamily(newFamily);
+      throw new DomainError('UNAUTHENTICATED', 'Refresh token was just revoked');
+    }
+
+    await this.audit.record({
+      action: 'auth.switch',
+      entityType: 'User',
+      entityId: source.id,
+      actorType: 'USER',
+      actorId: source.id,
+      tenantId: source.tenantId,
+      metadata: { toTenantId: target.tenantId },
+    });
+    await TenantContext.runUnscoped(
+      'switching brands: record the sign-in in the target brand',
+      async () => {
+        await this.prisma.user.update({
+          where: { id: target.id },
+          data: { lastLoginAt: new Date() },
+        });
+        await this.audit.record({
+          action: 'auth.switch',
+          entityType: 'User',
+          entityId: target.id,
+          actorType: 'USER',
+          actorId: target.id,
+          tenantId: target.tenantId,
+          metadata: { fromTenantId: source.tenantId },
+        });
+      },
+    );
+    // The cloud remembers the brand for the next sign-in, as `login` does.
+    const account = await this.prisma.account.findUniqueOrThrow({
+      where: { id: source.accountId },
+      select: { lastTenantId: true },
+    });
+    if (account.lastTenantId !== target.tenantId) {
+      await this.prisma.account.update({
+        where: { id: source.accountId },
+        data: { lastTenantId: target.tenantId },
+      });
+    }
+    return session;
+  }
+
+  /**
+   * The family of the caller's own live refresh token, as `refresh` judges it: unknown, someone
+   * else's, expired or revoked tokens are refused (a replayed one revokes its family as theft).
+   */
+  private async currentFamily(
+    user: { id: string; tenantId: string },
+    rawToken: string | undefined,
+  ): Promise<string> {
+    if (!rawToken) throw new DomainError('UNAUTHENTICATED', 'No refresh token');
+    const stored = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash: this.tokens.hashRefreshToken(rawToken) },
+      select: {
+        userId: true,
+        familyId: true,
+        revokedAt: true,
+        replacedById: true,
+        expiresAt: true,
+      },
+    });
+    if (stored?.userId !== user.id)
+      throw new DomainError('UNAUTHENTICATED', 'Unknown refresh token');
+    if (stored.revokedAt !== null) {
+      if (stored.replacedById !== null && this.tokens.withinReuseGrace(stored.revokedAt)) {
+        throw new DomainError('UNAUTHENTICATED', 'Refresh token was just rotated', {
+          reason: 'ROTATED',
+        });
+      }
+      await this.revokeFamily(stored.familyId);
       await this.audit.record({
-        action: 'auth.login_failed',
+        action: 'auth.refresh_token_reuse_detected',
         entityType: 'User',
         entityId: user.id,
         actorType: 'USER',
         actorId: user.id,
         tenantId: user.tenantId,
-        metadata: { reason: 'INVALID_CREDENTIALS' },
+        metadata: { familyId: stored.familyId },
       });
-      throw new DomainError('INVALID_CREDENTIALS', 'Invalid email or password');
+      throw new DomainError('TOKEN_REUSED', 'Refresh token was already used; session revoked');
     }
-    if (!user.isActive) throw new DomainError('ACCOUNT_DISABLED', 'Account is disabled');
-    await this.assertTenantOpen(user.tenantId);
+    if (stored.expiresAt.getTime() <= Date.now()) {
+      throw new DomainError('TOKEN_EXPIRED', 'Refresh token expired');
+    }
+    return stored.familyId;
+  }
 
+  private async completeLogin(user: { id: string; tenantId: string }): Promise<IssuedSession> {
     const session = await this.issueSession(user.id, user.tenantId, newId());
     await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     await this.audit.record({
@@ -180,8 +391,15 @@ export class AuthService {
     revokedAt: Date | null;
     replacedById: string | null;
     expiresAt: Date;
-    user: { tenantId: string; isActive: boolean };
+    user: { tenantId: string };
   }): Promise<IssuedSession> {
+    // A disabled user hears so first, even with a token their deactivation already revoked (an
+    // organization revokes its removed members' sessions, E1). That covers a user holding only
+    // the roles of an organization that is no longer active (`AccessService.isUsable`).
+    if (!(await this.access.isUsable(stored.userId))) {
+      await this.revokeFamily(stored.familyId);
+      throw new DomainError('ACCOUNT_DISABLED', 'Account is disabled');
+    }
     if (stored.revokedAt !== null) {
       // Just rotated by a concurrent request from the same client: fail this one, keep the session.
       if (stored.replacedById !== null && this.tokens.withinReuseGrace(stored.revokedAt)) {
@@ -203,10 +421,6 @@ export class AuthService {
     }
     if (stored.expiresAt.getTime() <= Date.now()) {
       throw new DomainError('TOKEN_EXPIRED', 'Refresh token expired');
-    }
-    if (!stored.user.isActive) {
-      await this.revokeFamily(stored.familyId);
-      throw new DomainError('ACCOUNT_DISABLED', 'Account is disabled');
     }
     // The session survives a suspension: it continues once the platform reactivates the tenant.
     await this.assertTenantOpen(stored.user.tenantId);

@@ -48,6 +48,11 @@ export const keys = {
     ['sync-issue', locationId, operationId] as const,
   auditLogs: (tid: string, query: AuditLogQuery) => ['audit-logs', tid, query] as const,
   report: (tid: string, kind: string, query: object) => ['report', tid, kind, query] as const,
+  organization: (oid: string) => ['organization', oid] as const,
+  orgDashboard: (oid: string) => ['org-dashboard', oid] as const,
+  orgReport: (oid: string, kind: string, query: object) =>
+    ['org-report', oid, kind, query] as const,
+  orgMembers: (oid: string) => ['org-members', oid] as const,
 };
 
 export function useTenantId(): string {

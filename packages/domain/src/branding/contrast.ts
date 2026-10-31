@@ -4,12 +4,15 @@ import {
   type BrandingValues,
   type SurfaceOverrides,
 } from '@pos/shared-types';
-import { contrastRatio } from './colour';
+import { contrastRatio, mixColours } from './colour';
 import {
   BRAND_FOREGROUNDS,
   MIN_SURFACE_CONTRAST,
   MIN_TEXT_CONTRAST,
+  PRIMARY_SUBTLE_WEIGHT,
   THEME_BACKGROUNDS,
+  THEME_FOREGROUNDS,
+  THEME_SURFACES,
 } from './theme-tokens';
 
 type ColourKey = 'primaryColor' | 'secondaryColor' | 'accentColor';
@@ -25,12 +28,23 @@ export function readableForeground(colour: string): string {
     : BRAND_FOREGROUNDS.dark;
 }
 
+/**
+ * The `primary-subtle` fill a primary colour makes in a theme (a tint over the card), as the
+ * contrast check sees it. The screen derives it with `color-mix` and the same weight.
+ */
+export function primarySubtle(primary: string, mode: 'DARK' | 'LIGHT'): string {
+  return mixColours(primary, THEME_SURFACES[mode], PRIMARY_SUBTLE_WEIGHT);
+}
+
 export interface ContrastIssue {
   /** Where the colour is set: `['primaryColor']` or `['surfaces', 'kds', 'primaryColor']`. */
   path: string[];
   colour: string;
-  /** What it was checked against: its own text, or the page of the dark or light theme. */
-  against: 'FOREGROUND' | 'DARK' | 'LIGHT';
+  /**
+   * What it was checked against: its own text, the page of the dark or light theme, or (for the
+   * primary) the theme's text on the `primary-subtle` fill of that theme.
+   */
+  against: 'FOREGROUND' | 'DARK' | 'LIGHT' | 'SUBTLE_DARK' | 'SUBTLE_LIGHT';
   ratio: number;
   required: number;
 }
@@ -38,7 +52,8 @@ export interface ContrastIssue {
 /**
  * Whether brand colours stay readable (ADR 0019): text on each colour reaches WCAG AA, and the
  * colours drawn on the page (primary, accent) stand out from the page of both themes, since a
- * device may always choose light or dark. Unset colours use the theme's own, which pass.
+ * device may always choose light or dark, and the primary's `primary-subtle` tint (selected rows
+ * and tabs) keeps the theme's text readable. Unset colours use the theme's own, which pass.
  */
 export function colourContrastIssues(
   colours: Partial<Pick<BrandingValues, ColourKey>>,
@@ -69,6 +84,19 @@ export function colourContrastIssues(
           against: mode,
           ratio: round(ratio),
           required: MIN_SURFACE_CONTRAST,
+        });
+      }
+    }
+    if (key !== 'primaryColor') continue;
+    for (const mode of ['DARK', 'LIGHT'] as const) {
+      const ratio = contrastRatio(THEME_FOREGROUNDS[mode], primarySubtle(colour, mode));
+      if (ratio < MIN_TEXT_CONTRAST) {
+        issues.push({
+          path: [...path, key],
+          colour,
+          against: `SUBTLE_${mode}`,
+          ratio: round(ratio),
+          required: MIN_TEXT_CONTRAST,
         });
       }
     }

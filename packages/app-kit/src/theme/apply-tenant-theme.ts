@@ -1,4 +1,9 @@
-import { readableForeground } from '@pos/domain';
+import {
+  PRIMARY_HOVER_WEIGHT,
+  PRIMARY_SUBTLE_BORDER_WEIGHT,
+  PRIMARY_SUBTLE_WEIGHT,
+  readableForeground,
+} from '@pos/domain';
 import type { FontFamily, ResolvedBranding, ThemeMode } from '@pos/shared-types';
 
 /** Type stacks for each choice; Arabic text always falls back to the bundled Arabic face. */
@@ -14,9 +19,12 @@ type ThemeBranding = Pick<
   'primaryColor' | 'secondaryColor' | 'accentColor' | 'borderRadius' | 'fontFamily' | 'surfaceStyle'
 >;
 
+const percent = (weight: number) => `${String(Math.round(weight * 100))}%`;
+
 /**
- * The CSS variables a tenant's branding sets (ADR 0019): each brand colour with a readable
- * foreground computed for it, the focus ring, the corner radii and the typeface. A colour the
+ * The CSS variables a tenant's branding sets (ADR 0019, 0028): each brand colour with a readable
+ * foreground computed for it, the focus ring, the primary's hover and subtle (selected) fills,
+ * the corner radii and the typeface. A colour the
  * tenant left unset keeps the theme's own (light and dark differ), so it is not written.
  */
 export function brandingVariables(branding: ThemeBranding): Record<string, string> {
@@ -29,11 +37,26 @@ export function brandingVariables(branding: ThemeBranding): Record<string, strin
   colour('primary', branding.primaryColor);
   colour('secondary', branding.secondaryColor);
   colour('accent', branding.accentColor);
-  if (branding.primaryColor) vars['--color-ring'] = branding.primaryColor;
+  if (branding.primaryColor) {
+    const primary = branding.primaryColor;
+    vars['--color-ring'] = primary;
+    // Mixed on screen, so each follows the theme: hover darkens in light mode and lightens in
+    // dark mode (towards the text colour), and the subtle fills are tints over the card.
+    vars['--color-primary-hover'] =
+      `color-mix(in oklch, ${primary} ${percent(PRIMARY_HOVER_WEIGHT)}, var(--color-foreground))`;
+    vars['--color-primary-subtle'] =
+      `color-mix(in oklch, ${primary} ${percent(PRIMARY_SUBTLE_WEIGHT)}, var(--color-card))`;
+    vars['--color-primary-subtle-border'] =
+      `color-mix(in oklch, ${primary} ${percent(PRIMARY_SUBTLE_BORDER_WEIGHT)}, var(--color-card))`;
+  }
+  // Every radius derives from the tenant's r: sm .6r, md r, lg 1.4r, xl 2r.
   const r = branding.borderRadius;
-  vars['--radius-sm'] = `${String(Math.round(r * 0.75))}px`;
-  vars['--radius-md'] = `${String(r)}px`;
-  vars['--radius-lg'] = `${String(Math.round(r * 1.5))}px`;
+  const px = (n: number) => `${String(Math.round(n))}px`;
+  vars['--radius'] = px(r);
+  vars['--radius-sm'] = px(r * 0.6);
+  vars['--radius-md'] = px(r);
+  vars['--radius-lg'] = px(r * 1.4);
+  vars['--radius-xl'] = px(r * 2);
   vars['--font-sans'] = FONT_STACKS[branding.fontFamily];
   return vars;
 }

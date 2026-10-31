@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
-import { Inject, Injectable } from '@nestjs/common';
-import { type EntitlementSpec, type Prisma, hashSecret } from '@pos/database';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { type EntitlementSpec, OWNER_ROLE, type Prisma, hashSecret } from '@pos/database';
 import {
   DomainError,
   assertTenantAccess,
@@ -13,6 +13,7 @@ import {
   AuditService,
   BrandingService,
   FeatureService,
+  type PlatformActor,
   PrismaService,
   TenantContext,
   TenantDomainsService,
@@ -41,6 +42,7 @@ import type {
 import type { z } from 'zod';
 import { PaymentProvidersService } from '../../admin/payment-setup/payment-providers.service';
 import { toAdminDevice } from '../../devices/devices.service';
+import { OrganizationService } from '../../organizations/organization.service';
 import { PlatformAuditService } from '../platform-audit.service';
 import { PlatformDirectoryService } from '../platform-directory.service';
 
@@ -61,6 +63,8 @@ const temporaryPassword = () => randomBytes(12).toString('base64url');
  */
 @Injectable()
 export class PlatformTenantsService {
+  private readonly logger = new Logger(PlatformTenantsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly directory: PlatformDirectoryService,
@@ -70,10 +74,19 @@ export class PlatformTenantsService {
     private readonly brandingService: BrandingService,
     private readonly domains: TenantDomainsService,
     private readonly paymentProviders: PaymentProvidersService,
+    private readonly organizations: OrganizationService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
-  async provision(input: z.output<typeof provisionTenantSchema>): Promise<ProvisionedTenantDto> {
+  /**
+   * Creates the tenant. Without an organization the owner gets a temporary password (in the answer
+   * only). With one, the organization's members become the owners: their linked users are created
+   * in the new brand and no owner or password exists.
+   */
+  async provision(
+    input: z.output<typeof provisionTenantSchema>,
+    actor: PlatformActor,
+  ): Promise<ProvisionedTenantDto> {
     const defaults = businessTypeDefaults(input.tenant.businessType);
     const entitlements = Object.fromEntries(
       FEATURES.map((feature): [Feature, EntitlementSpec] => [
@@ -84,9 +97,9 @@ export class PlatformTenantsService {
         },
       ]),
     );
-    const password = temporaryPassword();
+    const password = input.organizationId ? null : temporaryPassword();
     const provisioned = await this.directory.provision(input, {
-      ownerPasswordHash: await hashSecret(password),
+      ...(password ? { ownerPasswordHash: await hashSecret(password) } : {}),
       entitlements,
       webDomain: this.config.PLATFORM_WEB_DOMAIN,
     });
@@ -96,11 +109,13 @@ export class PlatformTenantsService {
       businessType: input.tenant.businessType,
       currencyCode: input.tenant.currencyCode,
       location: input.location.code,
-      owner: input.owner.email,
+      owner: input.owner?.email ?? null,
+      organizationId: input.organizationId ?? null,
       entitled: Object.entries(entitlements)
         .filter(([, spec]) => spec.entitled)
         .map(([feature]) => feature),
     };
+    // The tenant exists from here on: record it before anything else can fail.
     await this.platformAudit.record({
       action: 'tenant.provisioned',
       entityType: 'Tenant',
@@ -108,19 +123,51 @@ export class PlatformTenantsService {
       tenantId,
       metadata: summary,
     });
-    return TenantContext.runInTenant(tenantId, async () => {
-      await this.audit.record({
+    await TenantContext.runInTenant(tenantId, () =>
+      this.audit.record({
         action: 'tenant.provisioned',
         entityType: 'Tenant',
         entityId: tenantId,
         tenantId,
         metadata: summary,
+      }),
+    );
+    if (input.organizationId) {
+      // The brand already belongs to the organization; its members' users follow. If that fails
+      // the operator learns the tenant id and repairs it by attaching the brand again (idempotent).
+      let linked: { skippedMemberIds: string[] };
+      try {
+        linked = await this.organizations.attachTenant(input.organizationId, tenantId, {
+          kind: 'platform',
+          platformUserId: actor.id,
+        });
+      } catch (error) {
+        // The operator's answer only says that linking failed; the cause stays in the server log.
+        this.logger.error(
+          `Linking the members of organization ${input.organizationId} into new tenant ${tenantId} failed`,
+          error instanceof Error ? error.stack : String(error),
+        );
+        throw new DomainError(
+          'CONFLICT',
+          'The brand was created but its organization members could not be linked',
+          { tenantId, reason: 'ORGANIZATION_LINK_FAILED' },
+        );
+      }
+      await this.platformAudit.record({
+        action: 'organization.attach',
+        entityType: 'Organization',
+        entityId: input.organizationId,
+        tenantId,
+        metadata: { tenantId, provisioned: true, skippedMemberIds: linked.skippedMemberIds },
       });
-      return {
-        tenant: await this.detail(tenantId),
-        owner: { id: ownerId ?? '', email: input.owner.email, temporaryPassword: password },
-      };
-    });
+    }
+    return TenantContext.runInTenant(tenantId, async () => ({
+      tenant: await this.detail(tenantId),
+      owner:
+        input.owner && password
+          ? { id: ownerId ?? '', email: input.owner.email, temporaryPassword: password }
+          : null,
+    }));
   }
 
   async detail(tenantId: string): Promise<PlatformTenantDetail> {
@@ -136,7 +183,9 @@ export class PlatformTenantsService {
         where: {
           tenantId,
           isActive: true,
-          roles: { some: { locationId: null, role: { isSystem: true } } },
+          roles: {
+            some: { locationId: null, role: { isSystem: true, name: OWNER_ROLE.name } },
+          },
         },
         orderBy: { createdAt: 'asc' },
       }),

@@ -5,6 +5,8 @@ import { SyncModule } from '../sync/sync.module';
 import { PlatformAuthController } from './auth/platform-auth.controller';
 import { PlatformAuthService } from './auth/platform-auth.service';
 import { PlatformGuard } from './auth/platform.guard';
+import { PlatformOrganizationsController } from './organizations/platform-organizations.controller';
+import { PlatformOrganizationsService } from './organizations/platform-organizations.service';
 import { PlatformErrorEventsService } from './health/platform-error-events.service';
 import { PlatformHealthService } from './health/platform-health.service';
 import { PlatformAuditService } from './platform-audit.service';
@@ -32,6 +34,7 @@ import { PlatformTenantsService } from './tenants/platform-tenants.service';
   controllers: [
     PlatformAuthController,
     PlatformTenantsController,
+    PlatformOrganizationsController,
     PlatformOverviewController,
     SupportController,
     PlatformReleasesController,
@@ -43,6 +46,7 @@ import { PlatformTenantsService } from './tenants/platform-tenants.service';
     PlatformAuditService,
     PlatformDirectoryService,
     PlatformTenantsService,
+    PlatformOrganizationsService,
     PlatformErrorEventsService,
     PlatformHealthService,
     SupportConfirmations,

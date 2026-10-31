@@ -47,6 +47,10 @@ export const PLATFORM_PERMISSIONS = [
   'releases.publish',
   /** Put a tenant on a release channel, or pin it to a version. */
   'releases.rollout',
+  /** Organizations (E1): their brands and members. */
+  'organizations.view',
+  /** Create an organization, change it, and bring brands and members in or out. */
+  'organizations.manage',
 ] as const;
 export type PlatformPermission = (typeof PLATFORM_PERMISSIONS)[number];
 
@@ -60,6 +64,7 @@ const READ: readonly PlatformPermission[] = [
   'health.view',
   'audit.view',
   'releases.view',
+  'organizations.view',
 ];
 
 /** What each role may do. Roles are fixed in code (there is no role editor for the platform). */

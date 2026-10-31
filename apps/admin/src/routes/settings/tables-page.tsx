@@ -242,7 +242,7 @@ export function TablesPage() {
                             {canManage && !occupied ? (
                               <Button
                                 variant="ghost"
-                                size="icon"
+                                size="icon-md"
                                 aria-label={t('common:actions.archive')}
                                 onClick={() => void archiveTable.mutateAsync(table.id)}
                               >

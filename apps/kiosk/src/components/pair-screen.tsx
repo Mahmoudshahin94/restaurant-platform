@@ -80,7 +80,7 @@ export function PairScreen() {
             }}
           />
         </Field>
-        <Button type="submit" size="touch" disabled={pair.isPending || code.trim().length < 8}>
+        <Button type="submit" size="xl" disabled={pair.isPending || code.trim().length < 8}>
           {t('kiosk:pair.submit')}
         </Button>
         <PlatformFooter app="kiosk" className="text-center" />

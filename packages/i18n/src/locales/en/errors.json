@@ -85,5 +85,10 @@
   "SYNC_ISSUE_NOT_FOUND": "Synchronization issue not found.",
   "SUPPORT_CONFIRMATION_INVALID": "This confirmation does not match the preview. Preview the repair again.",
   "SUPPORT_PREVIEW_STALE": "The record changed or the preview expired. Preview the repair again.",
-  "SUPPORT_NOT_EXECUTABLE": "This repair cannot be applied to this record."
+  "SUPPORT_NOT_EXECUTABLE": "This repair cannot be applied to this record.",
+  "ORGANIZATION_NOT_FOUND": "Organization not found.",
+  "ORGANIZATION_CURRENCY_MISMATCH": "This brand uses a different currency from the organization. All brands in an organization share one currency.",
+  "ORGANIZATION_LAST_OWNER": "An organization must keep at least one owner.",
+  "USER_MANAGED_BY_ORGANIZATION": "This account is managed by the organization. Change it from the organization instead.",
+  "ORGANIZATION_SLUG_TAKEN": "This organization address is already taken."
 }

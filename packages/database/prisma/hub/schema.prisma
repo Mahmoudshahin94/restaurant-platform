@@ -230,6 +230,9 @@ model Tenant {
   timezone             String
   createdAt            DateTime     @default(now()) @map("created_at")
   updatedAt            DateTime     @updatedAt @map("updated_at")
+  /// The organization (several brands under one owner) the tenant belongs to; null = a standalone
+  /// business. The id is a plain column on the hub, which has no organizations.
+  organizationId       String?      @map("organization_id")
 
   locations        Location[]
   users            User[]
@@ -253,6 +256,7 @@ model Tenant {
   productImages    ProductImage[]
   paymentProviders PaymentProviderAccount[]
 
+  @@index([organizationId])
   @@map("tenants")
 }
 
@@ -316,26 +320,52 @@ model Location {
 // ---------------------------------------------------------------------------
 
 model User {
-  id              String    @id @default(uuid(7))
-  tenantId        String    @map("tenant_id")
-  /// Stored lowercase; globally unique so login needs no tenant selector.
-  email           String    @unique
-  /// argon2id hash. Never logged, never returned by the API.
-  passwordHash    String    @map("password_hash")
-  displayName     String    @map("display_name")
-  preferredLocale Locale    @default(en) @map("preferred_locale")
-  isActive        Boolean   @default(true) @map("is_active")
-  lastLoginAt     DateTime? @map("last_login_at")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  id                   String    @id @default(uuid(7))
+  tenantId             String    @map("tenant_id")
+  /// The login this user belongs to (one person, one Account, one User per brand).
+  accountId            String    @map("account_id")
+  /// Display copy of the account's e-mail; unique per tenant.
+  email                String
+  displayName          String    @map("display_name")
+  preferredLocale      Locale    @default(en) @map("preferred_locale")
+  isActive             Boolean   @default(true) @map("is_active")
+  /// Set on users the organization manages ("linked users"): the membership they stand for. A
+  /// plain column on the hub, which has no organization members.
+  organizationMemberId String?   @map("organization_member_id")
+  lastLoginAt          DateTime? @map("last_login_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
 
   tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  account       Account        @relation(fields: [accountId], references: [id], onDelete: Restrict)
   roles         UserRole[]
   refreshTokens RefreshToken[]
   employee      Employee?
 
+  @@unique([tenantId, email])
+  @@unique([tenantId, accountId])
   @@index([tenantId])
+  @@index([accountId])
   @@map("users")
+}
+
+/// The login: one per person. Synced to the hub with the brand's users. `memberships` is cloud
+/// only (the hub has no organizations) and sits in a block of its own, so the hub's formatting of
+/// the relations that remain matches the generated file.
+model Account {
+  id           String   @id @default(uuid(7))
+  /// Stored lowercase; globally unique so sign-in needs no tenant selector.
+  email        String   @unique
+  /// argon2id hash. Never logged, never returned by the API.
+  passwordHash String   @map("password_hash")
+  /// The brand signed into last; sign-in returns to it.
+  lastTenantId String?  @map("last_tenant_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  users User[]
+
+  @@map("accounts")
 }
 
 /// Permission keys are defined in code (@pos/shared-types PERMISSIONS) and upserted into this
@@ -381,11 +411,14 @@ model RolePermission {
 /// Uniqueness of (user, role, location) is enforced by the application service because
 /// PostgreSQL treats NULL location ids as distinct.
 model UserRole {
-  id         String   @id @default(uuid(7))
-  userId     String   @map("user_id")
-  roleId     String   @map("role_id")
-  locationId String?  @map("location_id")
-  createdAt  DateTime @default(now()) @map("created_at")
+  id                    String   @id @default(uuid(7))
+  userId                String   @map("user_id")
+  roleId                String   @map("role_id")
+  locationId            String?  @map("location_id")
+  /// Added by the user's organization (E1): removed when the membership ends, while the user's
+  /// own assignments stay. Only the organization service sets it.
+  grantedByOrganization Boolean  @default(false) @map("granted_by_organization")
+  createdAt             DateTime @default(now()) @map("created_at")
 
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   role     Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)

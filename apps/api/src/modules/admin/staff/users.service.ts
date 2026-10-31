@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { hashSecret } from '@pos/database';
+import { OWNER_ROLE, hashSecret } from '@pos/database';
 import { DomainError, assertCanGrant } from '@pos/domain';
 import {
   AuditService,
@@ -16,6 +16,7 @@ import type {
   createUserSchema,
 } from '@pos/validation';
 import type { z } from 'zod';
+import { OrganizationService } from '../../organizations/organization.service';
 
 const userInclude = {
   roles: { include: { role: { select: { name: true } } }, orderBy: { createdAt: 'asc' } },
@@ -41,11 +42,15 @@ const toDto = (row: NonNullable<UserRow>): StaffUser => ({
     locationId: r.locationId,
   })),
   employee: row.employee,
+  managedByOrganization: row.organizationMemberId !== null,
   createdAt: row.createdAt.toISOString(),
   updatedAt: row.updatedAt.toISOString(),
 });
 
 const key = (a: RoleAssignmentInput) => `${a.roleId}:${a.locationId ?? '*'}`;
+
+const emailTaken = () =>
+  new DomainError('CONFLICT', 'This email is already in use', { reason: 'EMAIL_TAKEN' });
 
 /**
  * Back-office users (`users.manage`, tenant-wide). Every change of what someone may do is a
@@ -54,12 +59,23 @@ const key = (a: RoleAssignmentInput) => `${a.roleId}:${a.locationId ?? '*'}`;
  * changes their own roles or deactivates themselves; the tenant always keeps an active
  * tenant-wide holder of a system role (Owner). Deactivation and password resets end the
  * user's sessions at once. Passwords are hashed with argon2id and never logged or returned.
+ *
+ * Accounts (E1): a user's login is an `Account`, possibly shared with the person's users in other
+ * brands. A new e-mail gets a new account with the given password. An e-mail that already has an
+ * account is linked only when the brand belongs to an organization in one of whose brands the
+ * account already has a user (ADR 0029, R15; the given password is ignored: the person keeps
+ * theirs, and the answer is the one a new e-mail gets). Any other existing account answers exactly
+ * as an e-mail already taken in this brand (`CONFLICT`, `EMAIL_TAKEN`), so a brand can neither take
+ * over nor detect an account that works elsewhere. A user its organization manages (`organizationMemberId`) is
+ * changed only through the organization (`USER_MANAGED_BY_ORGANIZATION`), and a brand cannot reset
+ * the password of an account that also signs into other brands (`CONFLICT`, `ACCOUNT_SHARED`).
  */
 @Injectable()
 export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly organizations: OrganizationService,
   ) {}
 
   async list(tenantId: string): Promise<StaffUser[]> {
@@ -76,13 +92,28 @@ export class UsersService {
     try {
       return await this.prisma.$transaction(async (tx) => {
         await this.checkAssignments(tx, principal, input.roles);
+        // The login: a new account, or an existing one this brand may link (see the class). A
+        // second user of the same account in this tenant is refused (EMAIL_TAKEN below).
+        const existing = await tx.account.findUnique({
+          where: { email: input.email },
+          select: { id: true },
+        });
+        if (existing && !(await this.mayLink(tx, principal.tenantId, existing.id))) {
+          throw emailTaken();
+        }
+        const account =
+          existing ??
+          (await tx.account.create({
+            data: { email: input.email, passwordHash, lastTenantId: principal.tenantId },
+            select: { id: true },
+          }));
         const row = await tx.user.create({
           data: {
             tenantId: principal.tenantId,
+            accountId: account.id,
             email: input.email,
             displayName: input.displayName,
             preferredLocale: input.preferredLocale,
-            passwordHash,
             roles: { create: input.roles },
           },
           include: userInclude,
@@ -103,18 +134,27 @@ export class UsersService {
         return toDto(row);
       });
     } catch (error) {
-      if (isUniqueViolation(error)) {
-        throw new DomainError('CONFLICT', 'This email is already in use', {
-          reason: 'EMAIL_TAKEN',
-        });
-      }
+      if (isUniqueViolation(error)) throw emailTaken();
       throw error;
     }
   }
 
+  /**
+   * Whether the brand may link an existing account (R15): only when the brand belongs to an
+   * organization and the account already has a user in one of its brands.
+   */
+  private async mayLink(tx: PrismaTx, tenantId: string, accountId: string): Promise<boolean> {
+    const tenant = await tx.tenant.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: { organizationId: true },
+    });
+    if (tenant.organizationId === null) return false;
+    return this.organizations.worksInOrganization(accountId, tenant.organizationId);
+  }
+
   async update(principal: Principal, userId: string, input: UpdateUserRequest): Promise<StaffUser> {
     return this.prisma.$transaction(async (tx) => {
-      const before = await this.load(tx, principal.tenantId, userId);
+      const before = await this.loadEditable(tx, principal.tenantId, userId);
       if (input.isActive === false && before.isActive) {
         if (userId === principal.userId) {
           throw new DomainError('CONFLICT', 'You cannot deactivate yourself', { reason: 'SELF' });
@@ -158,7 +198,7 @@ export class UsersService {
     roles: RoleAssignmentInput[],
   ): Promise<StaffUser> {
     return this.prisma.$transaction(async (tx) => {
-      const before = await this.load(tx, principal.tenantId, userId);
+      const before = await this.loadEditable(tx, principal.tenantId, userId);
       if (userId === principal.userId) {
         throw new DomainError('CONFLICT', 'You cannot change your own roles', { reason: 'SELF' });
       }
@@ -187,10 +227,23 @@ export class UsersService {
   async resetPassword(principal: Principal, userId: string, password: string): Promise<void> {
     const passwordHash = await hashSecret(password);
     await this.prisma.$transaction(async (tx) => {
-      const user = await this.load(tx, principal.tenantId, userId);
+      const user = await this.loadEditable(tx, principal.tenantId, userId);
+      // The password is the account's: one brand cannot change how someone signs into others.
+      const account = await tx.account.findUniqueOrThrow({
+        where: { id: user.accountId },
+        select: { _count: { select: { users: true } } },
+      });
+      if (account._count.users > 1) {
+        throw new DomainError('CONFLICT', 'This person also signs into other brands', {
+          reason: 'ACCOUNT_SHARED',
+        });
+      }
       // Taking over someone's account is as strong as holding their roles.
       if (userId !== principal.userId) await this.checkAssignments(tx, principal, user.roles);
-      await tx.user.update({ where: { id: userId }, data: { passwordHash } });
+      await tx.user.update({
+        where: { id: userId },
+        data: { account: { update: { passwordHash } } },
+      });
       await this.endSessions(tx, userId);
       await this.audit.record(
         {
@@ -208,6 +261,19 @@ export class UsersService {
   private async load(tx: PrismaTx, tenantId: string, userId: string) {
     const row = await loadUser(tx, tenantId, userId);
     if (!row) throw new DomainError('USER_NOT_FOUND', 'User not found', { userId });
+    return row;
+  }
+
+  /** A user the brand may change: not one its organization manages (E1). */
+  private async loadEditable(tx: PrismaTx, tenantId: string, userId: string) {
+    const row = await this.load(tx, tenantId, userId);
+    if (row.organizationMemberId !== null) {
+      throw new DomainError(
+        'USER_MANAGED_BY_ORGANIZATION',
+        'This user is managed by the organization',
+        { userId },
+      );
+    }
     return row;
   }
 
@@ -246,8 +312,8 @@ export class UsersService {
   }
 
   /**
-   * The tenant must keep an active user holding a system role tenant-wide, or nobody
-   * could administer it any more. `nextRoles` are the user's assignments after the change.
+   * The tenant must keep an active user holding the Owner role tenant-wide (Finance is a system
+   * role too, but administers nothing), or nobody could administer it any more. `nextRoles` are the user's assignments after the change.
    */
   private async assertOwnerRemains(
     tx: PrismaTx,
@@ -255,15 +321,15 @@ export class UsersService {
     userId: string,
     nextRoles: readonly RoleAssignmentInput[],
   ): Promise<void> {
-    const systemRoles = await tx.role.findMany({
-      where: { tenantId, isSystem: true },
+    const ownerRoles = await tx.role.findMany({
+      where: { tenantId, isSystem: true, name: OWNER_ROLE.name },
       select: { id: true },
     });
-    const systemIds = new Set(systemRoles.map((r) => r.id));
-    if (nextRoles.some((a) => a.locationId === null && systemIds.has(a.roleId))) return;
+    const ownerIds = new Set(ownerRoles.map((r) => r.id));
+    if (nextRoles.some((a) => a.locationId === null && ownerIds.has(a.roleId))) return;
     const others = await tx.userRole.count({
       where: {
-        roleId: { in: [...systemIds] },
+        roleId: { in: [...ownerIds] },
         locationId: null,
         userId: { not: userId },
         user: { isActive: true, tenantId },

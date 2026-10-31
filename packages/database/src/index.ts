@@ -3,8 +3,12 @@ export type * from '@prisma/client';
 export { hashSecret, verifySecret } from './credentials';
 export { syncPermissionCatalog } from './permissions';
 export {
+  BRAND_ROLE_SPECS,
+  FINANCE_ROLE,
+  MANAGER_ROLE,
   OWNER_ROLE,
   OwnerEmailTakenError,
+  ensureRole,
   newDomainVerificationToken,
   provisionTenant,
   type EntitlementSpec,

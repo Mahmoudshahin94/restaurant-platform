@@ -75,7 +75,7 @@ import {
 } from '@pos/validation';
 import type { BrandSurface, Feature, OrderStatus, TenantFileKind } from '@pos/shared-types';
 import { z } from 'zod';
-import { adminApi } from './admin';
+import { adminApi, organizationsApi } from './admin';
 import { HttpClient, type HttpClientOptions } from './http';
 
 const API = '/api/v1';
@@ -106,6 +106,8 @@ export function createApiClient(options: HttpClientOptions) {
     http,
     /** Admin portal (cloud only, Phase 8). */
     admin: adminApi(http),
+    /** An organization's start page, reports and members (E1). */
+    organizations: organizationsApi(http),
     auth: {
       login: (body: LoginRequest) =>
         http.request('POST', `${API}/auth/login`, {
@@ -123,6 +125,17 @@ export function createApiClient(options: HttpClientOptions) {
       logout: (refreshToken?: string) =>
         http.request('POST', `${API}/auth/logout`, {
           body: refreshToken ? { refreshToken } : {},
+          noRetry: true,
+        }),
+      /**
+       * Moves to another brand of the signed-in account (E1): a new session there, the current one
+       * revoked. Web clients rely on the httpOnly cookie; native clients pass their stored refresh
+       * token and receive the new one in the answer.
+       */
+      switch: (tenantId: string, refreshToken?: string) =>
+        http.request('POST', `${API}/auth/switch`, {
+          body: refreshToken ? { tenantId, refreshToken } : { tenantId },
+          schema: tokenResponseSchema,
           noRetry: true,
         }),
       me: () => http.request('GET', `${API}/auth/me`, { schema: authUserSchema }),

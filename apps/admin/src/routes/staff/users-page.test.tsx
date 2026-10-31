@@ -26,6 +26,7 @@ const sara: StaffUser = {
   lastLoginAt: null,
   roles: [{ roleId: cashierRole.id, roleName: 'Cashier', locationId: LOC }],
   employee: { id: '01a146e8-0000-7000-8000-0000000000a3', employeeCode: '1001' },
+  managedByOrganization: false,
   createdAt: at,
   updatedAt: at,
 };
@@ -35,6 +36,30 @@ afterEach(() => {
 });
 
 describe('users page', () => {
+  it('marks a user managed by the organization and offers no edit actions for them', async () => {
+    signIn();
+    stubApi()
+      .on('GET', /\/users$/, [
+        { ...sara, managedByOrganization: true },
+        {
+          ...sara,
+          id: '01a146e8-0000-7000-8000-0000000000a9',
+          displayName: 'Omar',
+          managedByOrganization: false,
+          email: 'omar@test.local',
+        },
+      ])
+      .on('GET', /\/roles$/, [cashierRole]);
+    await renderWithProviders(<UsersPage />);
+    const linked = await screen.findByRole('row', { name: /Sara/ });
+    expect(within(linked).getByText('Organization')).toBeInTheDocument();
+    expect(within(linked).getByText('Managed by the organization')).toBeInTheDocument();
+    expect(within(linked).queryByRole('button')).toBeNull();
+    const own = screen.getByRole('row', { name: /Omar/ });
+    expect(within(own).queryByText('Organization')).toBeNull();
+    expect(within(own).getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+  });
+
   it('lists users with their roles per location', async () => {
     signIn();
     stubApi()
@@ -59,7 +84,7 @@ describe('users page', () => {
     await renderWithProviders(<UsersPage />);
     const row = await screen.findByRole('row', { name: /Sara/ });
     await userEvent.click(within(row).getByRole('button', { name: 'Deactivate' }));
-    const dialog = await screen.findByRole('dialog');
+    const dialog = await screen.findByRole('alertdialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Deactivate' }));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
       'The business needs at least one active owner.',

@@ -14,6 +14,7 @@ import { TenantContext } from '../tenancy/tenant-context';
 import { IS_PUBLIC_KEY, PERMISSIONS_KEY, type PermissionRequirement } from './decorators';
 import { type AuthenticatedTerminal, DEVICE_ROUTE_KEY } from './device-route';
 import { HOST_ROUTE_KEY } from './host-route';
+import { ORGANIZATION_ROUTE_KEY } from './organization-route';
 import { PLATFORM_PERMISSIONS_KEY } from './platform-route';
 import type { Principal, RequestScope } from './principal';
 
@@ -44,6 +45,11 @@ export class PermissionsGuard implements CanActivate {
     if (this.reflector.getAllAndOverride<unknown>(PLATFORM_PERMISSIONS_KEY, targets)) return true;
 
     const request = context.switchToHttp().getRequest<FastifyRequest>();
+    // Organization routes: the cloud's OrganizationGuard checks the membership and its role (E1).
+    if (this.reflector.getAllAndOverride<unknown>(ORGANIZATION_ROUTE_KEY, targets)) {
+      if (!request.principal) throw new DomainError('UNAUTHENTICATED', 'Authentication required');
+      return true;
+    }
     if (this.reflector.getAllAndOverride<unknown>(DEVICE_ROUTE_KEY, targets)) {
       const terminal = request.terminal;
       if (!terminal) throw new DomainError('UNAUTHENTICATED', 'Device authentication required');

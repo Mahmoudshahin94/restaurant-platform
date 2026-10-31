@@ -6,6 +6,8 @@ import { useSession } from '../stores/session';
 
 export const RID = '01a146e8-0000-7000-8000-000000000001';
 export const LOC = '01a146e8-0000-7000-8000-000000000002';
+export const ORG = '01a146e8-0000-7000-8000-0000000000c1';
+export const PIZZA = '01a146e8-0000-7000-8000-000000000003';
 
 export const tenant = {
   id: RID,
@@ -46,9 +48,11 @@ export const location = {
 export function signIn(
   permissions: readonly Permission[] = PERMISSIONS,
   locationId: string | null = null,
+  extra: Partial<Pick<AuthUser, 'tenants' | 'organizations' | 'tenantId'>> = {},
 ) {
   const user: AuthUser = {
     id: '01a146e8-0000-7000-8000-0000000000aa',
+    accountId: '01a146e8-0000-7000-8000-0000000000ac',
     email: 'owner@test.local',
     displayName: 'Test Owner',
     preferredLocale: 'en',
@@ -61,6 +65,17 @@ export function signIn(
         permissions: [...permissions],
       },
     ],
+    tenants: [
+      {
+        id: RID,
+        nameEn: tenant.nameEn,
+        nameAr: tenant.nameAr,
+        logoFileId: null,
+        organizationId: null,
+      },
+    ],
+    organizations: [],
+    ...extra,
   };
   useSession.setState({ status: 'authenticated', accessToken: 'token', user });
   return user;

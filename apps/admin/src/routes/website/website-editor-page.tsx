@@ -259,7 +259,7 @@ function Editor({
                     </button>
                     <Button
                       variant="ghost"
-                      size="icon"
+                      size="icon-md"
                       disabled={index === 0}
                       aria-label={t('admin:website.actions.moveUp', { section: label })}
                       onClick={() => {
@@ -270,7 +270,7 @@ function Editor({
                     </Button>
                     <Button
                       variant="ghost"
-                      size="icon"
+                      size="icon-md"
                       disabled={index === sections.length - 1}
                       aria-label={t('admin:website.actions.moveDown', { section: label })}
                       onClick={() => {
@@ -456,7 +456,7 @@ function SiteSettings({
               </Field>
               <Button
                 variant="ghost"
-                size="icon"
+                size="icon-md"
                 aria-label={t('admin:website.site.removeSocial')}
                 onClick={() => {
                   onChange({ ...draft, social: draft.social.filter((_, i) => i !== index) });

@@ -51,7 +51,7 @@ export interface RoleSpec {
 
 /** The tenant's first account: an Owner (the system role), tenant-wide. */
 export interface OwnerSpec {
-  /** Lowercase; e-mail addresses are unique across tenants. */
+  /** Lowercase; one login (Account) per e-mail, shared by the person's users in every brand. */
   email: string;
   displayName: string;
   /** argon2id hash (`hashSecret`); the password itself never reaches provisioning. */
@@ -75,7 +75,7 @@ export interface ProvisionedTenant {
   ownerId: string | null;
 }
 
-/** An owner e-mail that already belongs to another tenant's account. */
+/** An owner e-mail that already belongs to another tenant's login. */
 export class OwnerEmailTakenError extends Error {
   override readonly name = 'OwnerEmailTakenError';
 }
@@ -87,6 +87,91 @@ export const OWNER_ROLE: RoleSpec = {
   isSystem: true,
   permissions: '*',
 };
+
+/**
+ * Every tenant also has Finance: a system role (the organization's Finance members hold it) that
+ * reads the reports and the brand dashboard and nothing else.
+ */
+export const FINANCE_ROLE: RoleSpec = {
+  name: 'Finance',
+  description: 'Reports and the brand dashboard',
+  isSystem: true,
+  permissions: ['reports.view', 'locations.view'],
+};
+
+/**
+ * The brand role of an organization's managers when the brand has none of its own (E1): the demo
+ * Manager's permissions. Not a system role, so the brand can adapt it.
+ */
+export const MANAGER_ROLE: RoleSpec = {
+  name: 'Manager',
+  description: 'Runs a branch',
+  isSystem: false,
+  permissions: [
+    'orders.view',
+    'orders.create',
+    'orders.update',
+    'orders.cancel',
+    'orders.refund',
+    'orders.discount',
+    'products.view',
+    'products.create',
+    'products.update',
+    'payments.view',
+    'payments.refund',
+    'shifts.manage',
+    'cash.manage',
+    'tables.manage',
+    'kitchen.view',
+    'kitchen.update',
+    'customers.view',
+    'reports.view',
+    'locations.view',
+    'online_ordering.manage',
+    'devices.manage',
+    'kiosk.attend',
+    'sync.view',
+    'audit.view',
+    'payments.create',
+  ],
+};
+
+/** The brand roles an organization grants, by name (`brandRoleFor`). */
+export const BRAND_ROLE_SPECS: Readonly<Record<'Owner' | 'Manager' | 'Finance', RoleSpec>> = {
+  Owner: OWNER_ROLE,
+  Manager: MANAGER_ROLE,
+  Finance: FINANCE_ROLE,
+};
+
+/**
+ * The id of the tenant's role named like `spec`, created from `spec` when the tenant has none.
+ * An existing role is used as it is: the tenant's own definition wins.
+ */
+export async function ensureRole(
+  prisma: PrismaClient | Prisma.TransactionClient,
+  tenantId: string,
+  spec: RoleSpec,
+): Promise<string> {
+  const found = await prisma.role.findUnique({
+    where: { tenantId_name: { tenantId, name: spec.name } },
+    select: { id: true },
+  });
+  if (found) return found.id;
+  const role = await prisma.role.create({
+    data: {
+      tenantId,
+      name: spec.name,
+      description: spec.description,
+      isSystem: spec.isSystem,
+      permissions: {
+        create: resolveRolePermissions(spec.permissions).map((permissionKey) => ({
+          permissionKey,
+        })),
+      },
+    },
+  });
+  return role.id;
+}
 
 /** A domain's verification token: 128 random bits, URL- and DNS-safe. */
 export function newDomainVerificationToken(): string {
@@ -118,6 +203,12 @@ export async function provisionTenant(
     entitlements?: Partial<Record<string, EntitlementSpec>>;
     /** The first account, an Owner tenant-wide; kept as it is when the e-mail is the tenant's. */
     owner?: OwnerSpec;
+    /**
+     * The organization a new tenant belongs to (E1), set at creation only: an existing tenant
+     * keeps its own. The caller checks the currency and links the organization's members
+     * (`OrganizationService.attachTenant`); no owner is given, the members are the owners.
+     */
+    organizationId?: string;
   },
 ): Promise<ProvisionedTenant> {
   const {
@@ -133,7 +224,12 @@ export async function provisionTenant(
     where: { slug: input.tenant.slug },
     update: {},
     // Without a choice the tenant offers every locale (the column default).
-    create: { ...tenantFields, currencyCode, ...(supportedLocales ? { supportedLocales } : {}) },
+    create: {
+      ...tenantFields,
+      currencyCode,
+      ...(supportedLocales ? { supportedLocales } : {}),
+      ...(input.organizationId ? { organizationId: input.organizationId } : {}),
+    },
   });
   if (!existing && input.entitlements) {
     const rows = Object.entries(input.entitlements).flatMap(([feature, spec]) =>
@@ -166,8 +262,10 @@ export async function provisionTenant(
     locationIds.set(loc.code, location.id);
   }
 
-  const roles = input.roles ?? [OWNER_ROLE];
-  if (!roles.some((r) => r.isSystem)) throw new Error('A tenant needs a system (owner) role');
+  const given = input.roles ?? [OWNER_ROLE];
+  if (!given.some((r) => r.isSystem)) throw new Error('A tenant needs a system (owner) role');
+  // The first system role is the owner's; Finance follows it unless the caller defines its own.
+  const roles = given.some((r) => r.name === FINANCE_ROLE.name) ? given : [...given, FINANCE_ROLE];
   const roleIds = new Map<string, string>();
   for (const spec of roles) {
     const permissions = resolveRolePermissions(spec.permissions);
@@ -204,18 +302,23 @@ async function provisionOwner(
 ): Promise<string> {
   const email = owner.email.toLowerCase();
   const found = await prisma.user.findUnique({
-    where: { email },
-    select: { id: true, tenantId: true },
+    where: { tenantId_email: { tenantId, email } },
+    select: { id: true },
   });
-  if (found && found.tenantId !== tenantId) {
+  if (found) return found.id;
+  // A login belongs to one person: an e-mail that already has one (another brand's user) is not
+  // reused here, so a tenant's owner cannot be attached to someone else's account.
+  if (await prisma.account.findUnique({ where: { email }, select: { id: true } })) {
     throw new OwnerEmailTakenError('This e-mail already belongs to another account');
   }
-  if (found) return found.id;
+  const account = await prisma.account.create({
+    data: { email, passwordHash: owner.passwordHash, lastTenantId: tenantId },
+  });
   const user = await prisma.user.create({
     data: {
       tenantId,
+      accountId: account.id,
       email,
-      passwordHash: owner.passwordHash,
       displayName: owner.displayName,
       ...(owner.preferredLocale ? { preferredLocale: owner.preferredLocale } : {}),
       roles: { create: { roleId, locationId: null } },

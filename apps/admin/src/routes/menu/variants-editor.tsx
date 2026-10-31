@@ -144,7 +144,7 @@ export function VariantsEditor({
                   </Field>
                   <Button
                     variant="ghost"
-                    size="icon"
+                    size="icon-md"
                     aria-label={t('menu:options.remove', { name: option.nameEn || index + 1 })}
                     onClick={() => {
                       setOptions(options.filter((_, i) => i !== index));
@@ -200,7 +200,7 @@ export function VariantsEditor({
                         />
                         <Button
                           variant="ghost"
-                          size="icon"
+                          size="icon-md"
                           aria-label={t('menu:options.removeValue', {
                             name: v.nameEn || valueIndex + 1,
                           })}
@@ -428,7 +428,7 @@ export function VariantsEditor({
                         <TableCell>
                           <Button
                             variant="ghost"
-                            size="icon"
+                            size="icon-md"
                             aria-label={t('common:actions.remove')}
                             onClick={() => {
                               onChange({

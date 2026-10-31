@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { THEME_BACKGROUNDS, contrastRatio } from '@pos/domain';
+import { THEME_BACKGROUNDS, THEME_FOREGROUNDS, THEME_SURFACES, contrastRatio } from '@pos/domain';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -24,7 +24,7 @@ function tokensAfter(selector: string): Record<string, string> {
   );
 }
 
-const dark = tokensAfter('@theme {');
+const dark = tokensAfter('@theme static {');
 const darkAttribute = tokensAfter("[data-theme='dark'] {");
 const light = tokensAfter("[data-theme='light'] {");
 const systemLight = tokensAfter(
@@ -42,6 +42,13 @@ const PAIRS: [fg: string, bgs: string[]][] = [
   ['destructive-foreground', ['destructive']],
   ['success-foreground', ['success']],
   ['warning-foreground', ['warning']],
+  ['info-foreground', ['info']],
+  ['foreground', ['surface-raised', 'surface-sunken']],
+  ['muted-foreground', ['surface-raised']],
+  [
+    'foreground',
+    ['primary-subtle', 'success-subtle', 'warning-subtle', 'destructive-subtle', 'info-subtle'],
+  ],
 ];
 
 describe('design tokens', () => {
@@ -60,6 +67,46 @@ describe('design tokens', () => {
     expect(light.background).toBe(THEME_BACKGROUNDS.LIGHT);
   });
 
+  it('uses the card and text colours the primary-subtle check is made with', () => {
+    expect(dark.card).toBe(THEME_SURFACES.DARK);
+    expect(light.card).toBe(THEME_SURFACES.LIGHT);
+    expect(dark.foreground).toBe(THEME_FOREGROUNDS.DARK);
+    expect(light.foreground).toBe(THEME_FOREGROUNDS.LIGHT);
+  });
+
+  it('declares the enterprise tokens (ADR 0028)', () => {
+    const names = [
+      'surface',
+      'surface-raised',
+      'surface-sunken',
+      'border-strong',
+      'primary-hover',
+      'primary-subtle',
+      'primary-subtle-border',
+      'info',
+      'info-foreground',
+      'info-subtle',
+      'success-subtle',
+      'warning-subtle',
+      'destructive-subtle',
+    ];
+    for (const name of names) {
+      expect(dark, name).toHaveProperty(name);
+      expect(light, name).toHaveProperty(name);
+    }
+    for (const token of ['--shadow-1', '--shadow-4', '--ease-standard', '--text-caption']) {
+      expect(css).toContain(`${token}:`);
+    }
+    for (const profile of ['storefront', 'counter', 'console']) {
+      expect(css).toContain(`[data-profile='${profile}']`);
+    }
+    // Every radius derives from the tenant radius.
+    expect(css).toContain('--radius-sm: calc(var(--radius) * 0.6);');
+    expect(css).toContain('--radius-xl: calc(var(--radius) * 2);');
+    // The unbranded default is the tenant branding default (8px), so loading branding changes nothing.
+    expect(css).toContain('--radius: 0.5rem;');
+  });
+
   it.each([
     ['dark', dark],
     ['light', light],
@@ -75,6 +122,13 @@ describe('design tokens', () => {
     // Brand-coloured controls stand out from the page (non-text contrast, 3:1).
     for (const colour of ['primary', 'ring']) {
       expect(contrastRatio(tokens[colour]!, tokens.background!)).toBeGreaterThanOrEqual(3);
+    }
+    // Control outlines stand out from every surface they sit on (3:1).
+    for (const surface of ['background', 'card', 'surface-raised']) {
+      expect(
+        contrastRatio(tokens['border-strong']!, tokens[surface]!),
+        surface,
+      ).toBeGreaterThanOrEqual(3);
     }
   });
 

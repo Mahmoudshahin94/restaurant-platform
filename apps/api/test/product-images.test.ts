@@ -192,7 +192,7 @@ describe('product pictures reach the location hubs', () => {
         locationId: tenant.locationA,
       }),
     );
-    expect(snapshot.format).toBe(8);
+    expect(snapshot.format).toBe(9);
     expect(snapshot.tables.productImages).toEqual([
       expect.objectContaining({ productId: menu.burger.id, variantId: null, fileId: cover.id }),
     ]);

@@ -101,7 +101,7 @@ export function RefundDialog({
       <DialogFooter>
         <Button
           variant="destructive"
-          size="touch"
+          size="xl"
           disabled={!valid || refund.isPending}
           onClick={() => void submit()}
         >

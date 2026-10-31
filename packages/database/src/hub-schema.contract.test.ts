@@ -32,6 +32,9 @@ const CLOUD_ONLY_MODELS = new Set([
   // Releases and each tenant's release channel (ADR 0026).
   'Release',
   'TenantReleaseChannel',
+  // Organizations above tenants and their members (E1): the hub serves one brand.
+  'Organization',
+  'OrganizationMember',
 ]);
 const CLOUD_ONLY_ENUMS = new Set([
   'ProcessedOperationStatus',
@@ -39,6 +42,8 @@ const CLOUD_ONLY_ENUMS = new Set([
   'SyncIssueResolution',
   'PlatformRole',
   'ReleaseChannel',
+  'OrganizationStatus',
+  'OrganizationRole',
 ]);
 
 type Datamodel = typeof Prisma.dmmf.datamodel;
@@ -97,6 +102,18 @@ describe('hub (SQLite) schema', () => {
     expect(shape(HubPrisma.dmmf.datamodel, HUB_ONLY_MODELS, HUB_ONLY_ENUMS)).toEqual(
       shape(Prisma.dmmf.datamodel, CLOUD_ONLY_MODELS, CLOUD_ONLY_ENUMS),
     );
+  });
+
+  it('has accounts and tenants without organization relations', () => {
+    const models = new Map(HubPrisma.dmmf.datamodel.models.map((m) => [m.name, m]));
+    const names = (model: string) => models.get(model)?.fields.map((f) => f.name) ?? [];
+    expect(names('Account')).toEqual(
+      expect.arrayContaining(['email', 'passwordHash', 'lastTenantId']),
+    );
+    expect(names('Account')).not.toContain('memberships');
+    expect(names('Tenant')).toContain('organizationId');
+    expect(names('Tenant')).not.toContain('organization');
+    expect(names('User')).toContain('organizationMemberId');
   });
 
   it('mirrors the shared outbox status enum', () => {

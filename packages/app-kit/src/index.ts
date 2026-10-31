@@ -1,4 +1,5 @@
 export * from './components/language-switcher';
+export * from './components/page-shell';
 export * from './components/query-state';
 export * from './components/require-auth';
 export * from './errors';

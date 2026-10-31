@@ -145,7 +145,7 @@ function OpenShiftForm({ locationId, currency }: { locationId: string; currency:
             </Field>
             {error ? <Alert variant="destructive">{error}</Alert> : null}
             <Button
-              size="touch"
+              size="xl"
               disabled={!registerId || toMinor(float, currency) === null || open.isPending}
               onClick={() => void submit()}
             >
@@ -214,7 +214,7 @@ function CashMovementDialog({
       {error ? <Alert variant="destructive">{error}</Alert> : null}
       <DialogFooter>
         <Button
-          size="touch"
+          size="xl"
           disabled={!minor || !reason.trim() || save.isPending}
           onClick={() =>
             void save.mutateAsync(undefined).then(onDone, (e: unknown) => {
@@ -294,7 +294,7 @@ function CloseShiftDialog({
       {error ? <Alert variant="destructive">{error}</Alert> : null}
       <DialogFooter>
         <Button
-          size="touch"
+          size="xl"
           variant="destructive"
           disabled={countedMinor === null || close.isPending}
           onClick={() =>

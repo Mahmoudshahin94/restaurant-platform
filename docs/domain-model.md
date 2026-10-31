@@ -10,6 +10,8 @@ mirrors the operational subset.
 | --------- | --------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
 | Tenancy   | Tenant, Location                                                                                                                  | ✅ 0001                            |
 | Identity  | User, Role, Permission, RolePermission, UserRole, RefreshToken, Employee                                                          | ✅ 0001                            |
+| Identity  | Account (the login; synced to hubs)                                                                                               | ✅ Phase E1                        |
+| Tenancy   | Organization, OrganizationMember (cloud)                                                                                          | ✅ Phase E1                        |
 | Modules   | TenantEntitlement, FeatureOverride                                                                                                | ✅ Phase M2                        |
 | Branding  | TenantBranding, TenantFile                                                                                                        | ✅ Phase M3                        |
 | Devices   | Device                                                                                                                            | ✅ 0001                            |
@@ -38,6 +40,10 @@ mirrors the operational subset.
 erDiagram
   Tenant ||--o{ Location : has
   Tenant ||--o{ User : employs
+  Organization |o--o{ Tenant : "groups brands"
+  Organization ||--o{ OrganizationMember : "has members"
+  Account ||--o{ OrganizationMember : "is member"
+  Account ||--o{ User : "signs in as (one per brand)"
   Tenant ||--o{ Role : defines
   Tenant ||--o{ Employee : has
   Tenant ||--o{ Category : owns
@@ -126,13 +132,39 @@ to the platform operator. `currencyCode` is immutable after provisioning, becaus
 amount is in its minor units; new tenants are in `ILS`. `defaultLocale` is one of
 `supportedLocales` (JSON array). How amounts are shown and the digit style are tenant settings
 (see **Currency and languages** below).
-`timezone` is used for tenant-level reports. Tenants are created by `provisionTenant`
-(`@pos/database`), always with a system Owner role.
+`timezone` is used for tenant-level reports. `organizationId` (E1) names the organization the tenant is a
+brand of, if any. Tenants are created by `provisionTenant` (`@pos/database`), always with a system Owner
+role.
 
 **Tenant isolation**: services use a Prisma client scoped to the tenant in scope
 (`TenantContext`). It adds the tenant to every filter on a model holding a `tenantId` (and on
 `Tenant` by `id`) and refuses writes for another tenant. Child rows without a `tenantId` are reached
 through their scoped parent. See ADR 0017.
+
+**Account and Organization** ([ADR 0029](adr/0029-organizations-and-accounts.md), E1):
+
+- `Account` is the login: `email` (stored lowercase, globally unique), the argon2id `passwordHash` and
+  `lastTenantId`, the brand signed into last (cloud only; sent to hubs as `null`). One account has at
+  most one `User` per tenant (`@@unique([tenantId, accountId])`), so one person signs in once and uses
+  every brand they have a user in. `User.email` is a display copy kept equal to the account's, unique
+  per tenant; `User` no longer has a password. An account has no `tenantId` and is read only by the
+  sign-in and organization services (allowlisted `runUnscoped`). It is synced to hubs with the brand's
+  users (snapshot format 9).
+- `Organization` (cloud only): `slug` (unique), `nameEn`, `nameAr`, `currencyCode` (every brand of the
+  organization uses it; fixed for its lifetime) and `status` (`ACTIVE`/`SUSPENDED`). `Tenant.organizationId`
+  is null for a standalone business; on the hub it is a plain column.
+- `OrganizationMember` (cloud only; unique per organization and account): the account's `role`
+  (`OWNER`, `MANAGER`, `FINANCE`) and the `displayName` its users get in brands that join later. Roles
+  map to brand roles of the same name: Owner, Manager and Finance (a built-in role in every tenant with
+  `reports.view` and `locations.view`).
+- **Linked users:** the users an organization manages, one per member per brand, tenant-wide. They carry
+  `User.organizationMemberId`, and the role assignments the organization added carry
+  `UserRole.grantedByOrganization`, so ending the membership removes only those. Only
+  `OrganizationService` writes them; the brand's staff APIs refuse to change them
+  (`USER_MANAGED_BY_ORGANIZATION`). A person's own user in a brand is kept and the organization's role is
+  added to it.
+- The **organization scope** (`TenantContext` kind `organization`) reads tenant-keyed models across the
+  organization's brands and refuses every write; see the ADR.
 
 **Modules** ([ADR 0018](adr/0018-feature-modules.md)): `Feature` (`@pos/shared-types`) lists
 the modules; resolution goes platform defaults → business-type defaults → tenant → location →

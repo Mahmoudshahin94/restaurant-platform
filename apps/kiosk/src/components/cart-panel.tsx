@@ -92,7 +92,7 @@ export function CartPanel({
                   <Button
                     type="button"
                     variant="outline"
-                    size="touch"
+                    size="xl"
                     aria-label={t('cart.decrease', { name })}
                     onClick={() => {
                       actions.setQuantity(line.id, line.quantity - 1);
@@ -106,7 +106,7 @@ export function CartPanel({
                   <Button
                     type="button"
                     variant="outline"
-                    size="touch"
+                    size="xl"
                     aria-label={t('cart.increase', { name })}
                     onClick={() => {
                       actions.setQuantity(line.id, line.quantity + 1);
@@ -117,7 +117,7 @@ export function CartPanel({
                   <Button
                     type="button"
                     variant="ghost"
-                    size="touch"
+                    size="xl"
                     className="ms-auto"
                     aria-label={t('cart.remove', { name })}
                     onClick={() => {
@@ -151,7 +151,7 @@ export function CartPanel({
         {onCheckout ? (
           <Button
             type="button"
-            size="touch"
+            size="xl"
             className="h-16 text-xl"
             disabled={lines.length === 0 || problem || !quote}
             onClick={onCheckout}

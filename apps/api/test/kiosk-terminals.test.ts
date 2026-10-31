@@ -164,7 +164,7 @@ describe('terminals waiting for their hub', () => {
     const created = await kiosk();
     const res = await app.inject({ method: 'GET', url: '/api/v1/sync/snapshot', headers: hub });
     const body = res.json<LocationSnapshot>();
-    expect(body.format).toBe(8);
+    expect(body.format).toBe(9);
     const row = body.tables.devices.find((d) => d.id === created.device.id);
     expect(row).toMatchObject({ status: 'PENDING', type: 'KIOSK' });
     expect(row?.pairingCodeHash).toMatch(/^[0-9a-f]{64}$/);

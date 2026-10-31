@@ -1,20 +1,19 @@
 import { QueryState } from '@pos/app-kit';
-import { businessDateFor, businessDaysInRange } from '@pos/domain';
+import { businessDateFor } from '@pos/domain';
 import { OrderChannel, enumValues } from '@pos/shared-types';
 import {
   type ChannelReport,
   type DailySalesReport,
   type PrepTimeReport,
   REPORT_KINDS,
-  REPORT_MAX_DAYS,
   type ReportKind,
   type ReportQuery,
 } from '@pos/validation';
-import { Alert, Field, Input, NativeSelect, PageHeader, cn } from '@pos/ui';
+import { Alert, Field, NativeSelect, PageHeader, cn } from '@pos/ui';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Navigate, NavLink, useLocation, useParams, useSearchParams } from 'react-router';
+import { Navigate, NavLink, useLocation, useParams } from 'react-router';
 import { api } from '../../lib/api';
 import { useLocationLookup } from '../../lib/format';
 import { usePermissions } from '../../lib/permissions';
@@ -30,34 +29,12 @@ import {
   ShiftsView,
   TaxesView,
 } from './report-views';
+import { PeriodFields, periodRange, useReportFilters } from './report-filters';
 
-const PERIODS = ['today', 'yesterday', 'last7', 'thisMonth', 'lastMonth'] as const;
-type Period = (typeof PERIODS)[number];
+export { periodRange };
 
 /** Shifts belong to drawers, not channels. */
 const WITHOUT_CHANNELS: readonly ReportKind[] = ['shifts'];
-
-const addDays = (date: string, days: number) =>
-  new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
-
-/** A preset's business dates, relative to today in the tenant's time zone. */
-export function periodRange(period: Period, today: string): { from: string; to: string } {
-  const monthStart = `${today.slice(0, 8)}01`;
-  switch (period) {
-    case 'today':
-      return { from: today, to: today };
-    case 'yesterday':
-      return { from: addDays(today, -1), to: addDays(today, -1) };
-    case 'last7':
-      return { from: addDays(today, -6), to: today };
-    case 'thisMonth':
-      return { from: monthStart, to: today };
-    case 'lastMonth': {
-      const lastDay = addDays(monthStart, -1);
-      return { from: `${lastDay.slice(0, 8)}01`, to: lastDay };
-    }
-  }
-}
 
 function isKind(value: string | undefined): value is ReportKind {
   return (REPORT_KINDS as readonly string[]).includes(value ?? '');
@@ -73,47 +50,16 @@ export function ReportsPage() {
   const { t } = useTranslation(['admin', 'orders']);
   const { kind } = useParams();
   const { search } = useLocation();
-  const [params, setParams] = useSearchParams();
   const tenant = useTenant();
   const { list, name } = useLocationLookup();
   const { canAt } = usePermissions();
 
   const today = businessDateFor(new Date(), tenant.data?.timezone ?? 'UTC');
-  const fallback = periodRange('last7', today);
-  const from = params.get('from') ?? fallback.from;
-  const to = params.get('to') ?? fallback.to;
+  const { params, from, to, period, rangeError, set } = useReportFilters(today);
   const locationId = params.get('location') ?? '';
   const channel = params.get('channel') ?? '';
-  const period = PERIODS.find((p) => {
-    const r = periodRange(p, today);
-    return r.from === from && r.to === to;
-  });
 
   const reportable = list.filter((l) => canAt(l.id, 'reports.view'));
-  const rangeError =
-    !from || !to
-      ? t('admin:reports.filters.invalidRange')
-      : from > to
-        ? t('admin:reports.filters.invalidRange')
-        : businessDaysInRange(from, to) > REPORT_MAX_DAYS
-          ? t('admin:reports.filters.rangeTooLong', { days: REPORT_MAX_DAYS })
-          : null;
-
-  const set = (patch: Record<string, string>) => {
-    setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        if (!next.has('from')) next.set('from', from);
-        if (!next.has('to')) next.set('to', to);
-        for (const [key, value] of Object.entries(patch)) {
-          if (value) next.set(key, value);
-          else next.delete(key);
-        }
-        return next;
-      },
-      { replace: true },
-    );
-  };
 
   if (!isKind(kind)) return <Navigate to={`/reports/daily-sales${search}`} replace />;
   const usesChannels = !WITHOUT_CHANNELS.includes(kind);
@@ -146,46 +92,7 @@ export function ReportsPage() {
         ))}
       </nav>
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        <Field label={t('admin:reports.filters.period')}>
-          <NativeSelect
-            value={period ?? 'custom'}
-            onChange={(e) => {
-              const value = e.target.value as Period | 'custom';
-              if (value !== 'custom') set(periodRange(value, today));
-            }}
-          >
-            {PERIODS.map((p) => (
-              <option key={p} value={p}>
-                {t(`admin:reports.filters.periods.${p}`)}
-              </option>
-            ))}
-            <option value="custom" disabled={period !== undefined}>
-              {t('admin:reports.filters.periods.custom')}
-            </option>
-          </NativeSelect>
-        </Field>
-        <Field label={t('admin:shared.from')}>
-          <Input
-            type="date"
-            dir="ltr"
-            value={from}
-            max={to}
-            onChange={(e) => {
-              set({ from: e.target.value });
-            }}
-          />
-        </Field>
-        <Field label={t('admin:shared.to')}>
-          <Input
-            type="date"
-            dir="ltr"
-            value={to}
-            min={from}
-            onChange={(e) => {
-              set({ to: e.target.value });
-            }}
-          />
-        </Field>
+        <PeriodFields from={from} to={to} period={period} today={today} set={set} />
         <Field label={t('admin:reports.filters.location')}>
           <NativeSelect
             value={locationId}

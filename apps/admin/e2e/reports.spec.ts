@@ -167,7 +167,8 @@ test('the owner reads today’s sales, channels and kitchen times in English and
   await expect(prep.getByRole('row', { name: /^Total/ })).toContainText(/^Total\s*[1-9]/);
 
   // Arabic, right to left, keeping the filters.
-  await page.getByRole('combobox', { name: 'Language' }).selectOption('ar');
+  await page.getByRole('button', { name: /Account/ }).click();
+  await page.getByRole('menuitemradio', { name: 'العربية' }).click();
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await page.getByRole('link', { name: 'المبيعات اليومية' }).click();
   await expect(page.getByRole('heading', { name: 'التقارير' })).toBeVisible();

@@ -31,13 +31,21 @@ import {
   type ProvisionedTenantDto,
   provisionTenantSchema,
 } from '@pos/validation';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, KeyRound } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { api } from '../lib/api';
 import { usePlatformErrorText } from '../lib/errors';
+
+/** The organization a brand is created into when the dialog is opened from one. */
+export interface FixedOrganization {
+  id: string;
+  nameEn: string;
+  nameAr: string;
+  currencyCode: string;
+}
 
 type Entitlements = Record<Feature, { entitled: boolean; tenantConfigurable: boolean }>;
 
@@ -56,6 +64,8 @@ export function defaultEntitlements(businessType: string): Entitlements {
 }
 
 interface FormState {
+  /** The organization the brand joins; empty for a brand with its own owner. */
+  organizationId: string;
   slug: string;
   nameEn: string;
   nameAr: string;
@@ -75,13 +85,14 @@ interface FormState {
   entitlements: Entitlements;
 }
 
-const initial = (): FormState => ({
+const initial = (organization?: FixedOrganization): FormState => ({
+  organizationId: organization?.id ?? '',
   slug: '',
   nameEn: '',
   nameAr: '',
   legalName: '',
   businessType: 'RESTAURANT',
-  currencyCode: DEFAULT_TENANT_CURRENCY,
+  currencyCode: organization?.currencyCode ?? DEFAULT_TENANT_CURRENCY,
   defaultLocale: 'ar',
   supportedLocales: ['ar', 'en'],
   timezone: 'Asia/Hebron',
@@ -114,11 +125,16 @@ function toRequest(form: FormState): ProvisionTenantRequest {
       nameAr: form.locationNameAr,
       taxInclusive: form.taxInclusive,
     },
-    owner: {
-      email: form.ownerEmail,
-      displayName: form.ownerName,
-      preferredLocale: form.ownerLocale,
-    },
+    // A brand in an organization is owned by the organization's members: no owner of its own.
+    ...(form.organizationId
+      ? { organizationId: form.organizationId }
+      : {
+          owner: {
+            email: form.ownerEmail,
+            displayName: form.ownerName,
+            preferredLocale: form.ownerLocale,
+          },
+        }),
     entitlements: form.entitlements,
   };
 }
@@ -129,6 +145,8 @@ function ProvisionResult({ result }: { result: ProvisionedTenantDto }) {
   const locale = useCurrentLocale();
   const [copied, setCopied] = useState(false);
   const tenant = result.tenant.tenant;
+  // A brand created into an organization has no owner of its own (its members are the owners).
+  const owner = result.owner;
   return (
     <div className="grid gap-4">
       <DialogHeader>
@@ -137,35 +155,39 @@ function ProvisionResult({ result }: { result: ProvisionedTenantDto }) {
           {t('provision.doneDescription', { name: pickLocalized(tenant, 'name', locale) })}
         </DialogDescription>
       </DialogHeader>
-      <Field label={t('provision.ownerEmail')}>
-        <Input readOnly dir="ltr" value={result.owner.email} />
-      </Field>
-      <Field label={t('provision.temporaryPassword')}>
-        <div className="flex gap-2">
-          <Input
-            readOnly
-            dir="ltr"
-            className="font-mono"
-            data-testid="temporary-password"
-            value={result.owner.temporaryPassword}
-          />
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              void navigator.clipboard.writeText(result.owner.temporaryPassword);
-              setCopied(true);
-            }}
-          >
-            <Copy aria-hidden />
-            {copied ? t('shared.copied') : t('shared.copy')}
-          </Button>
-        </div>
-      </Field>
-      <Alert variant="destructive">
-        <KeyRound aria-hidden className="me-1 inline size-4" />
-        {t('provision.passwordWarning')}
-      </Alert>
+      {owner ? (
+        <>
+          <Field label={t('provision.ownerEmail')}>
+            <Input readOnly dir="ltr" value={owner.email} />
+          </Field>
+          <Field label={t('provision.temporaryPassword')}>
+            <div className="flex gap-2">
+              <Input
+                readOnly
+                dir="ltr"
+                className="font-mono"
+                data-testid="temporary-password"
+                value={owner.temporaryPassword}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  void navigator.clipboard.writeText(owner.temporaryPassword);
+                  setCopied(true);
+                }}
+              >
+                <Copy aria-hidden />
+                {copied ? t('shared.copied') : t('shared.copy')}
+              </Button>
+            </div>
+          </Field>
+          <Alert variant="destructive">
+            <KeyRound aria-hidden className="me-1 inline size-4" />
+            {t('provision.passwordWarning')}
+          </Alert>
+        </>
+      ) : null}
       <DialogFooter>
         <Button asChild>
           <Link to={`/tenants/${tenant.id}`}>{t('provision.openTenant')}</Link>
@@ -179,17 +201,28 @@ function ProvisionResult({ result }: { result: ProvisionedTenantDto }) {
 export function ProvisionDialog({
   open,
   onOpenChange,
+  organization,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Creates the brand inside this organization (no choice, its currency applies). */
+  organization?: FixedOrganization;
 }) {
   const { t } = useTranslation(['platform', 'admin', 'common']);
   const errorText = usePlatformErrorText();
   const queryClient = useQueryClient();
-  const [form, setForm] = useState<FormState>(initial);
+  const locale = useCurrentLocale();
+  const [form, setForm] = useState<FormState>(() => initial(organization));
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ProvisionedTenantDto | null>(null);
   const provision = useMutation({ mutationFn: api.tenants.provision });
+  const organizations = useQuery({
+    queryKey: ['organizations', 'options'],
+    queryFn: () => api.organizations.list({ pageSize: 100 }),
+    enabled: open && !organization,
+  });
+  const selectedOrganization =
+    organization ?? organizations.data?.items.find((o) => o.id === form.organizationId);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
@@ -197,11 +230,19 @@ export function ProvisionDialog({
 
   const close = (next: boolean) => {
     if (!next) {
-      setForm(initial());
+      setForm(initial(organization));
       setError(null);
       setResult(null);
     }
     onOpenChange(next);
+  };
+
+  const refresh = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['tenants'] }),
+      queryClient.invalidateQueries({ queryKey: ['organizations'] }),
+      queryClient.invalidateQueries({ queryKey: ['organization'] }),
+    ]);
   };
 
   const submit = async () => {
@@ -214,9 +255,11 @@ export function ProvisionDialog({
     try {
       const created = await provision.mutateAsync(request);
       setResult(created);
-      await queryClient.invalidateQueries({ queryKey: ['tenants'] });
+      await refresh();
     } catch (e) {
       setError(errorText(e));
+      // The brand may exist even when linking its members failed.
+      await refresh();
     }
   };
 
@@ -256,6 +299,40 @@ export function ProvisionDialog({
             </DialogHeader>
             {error ? <Alert variant="destructive">{error}</Alert> : null}
 
+            {organization ? (
+              <p className="text-sm text-muted-foreground">
+                {t('platform:provision.organizationFixed', {
+                  name: pickLocalized(organization, 'name', locale),
+                  currency: organization.currencyCode,
+                })}
+              </p>
+            ) : (
+              <Field
+                label={t('platform:provision.organization')}
+                hint={t('platform:provision.organizationHint')}
+              >
+                <NativeSelect
+                  value={form.organizationId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    const chosen = organizations.data?.items.find((o) => o.id === id);
+                    setForm((f) => ({
+                      ...f,
+                      organizationId: id,
+                      currencyCode: chosen?.currencyCode ?? f.currencyCode,
+                    }));
+                  }}
+                >
+                  <option value="">{t('platform:provision.organizationNone')}</option>
+                  {(organizations.data?.items ?? []).map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {pickLocalized(o, 'name', locale)} ({o.currencyCode})
+                    </option>
+                  ))}
+                </NativeSelect>
+              </Field>
+            )}
+
             <fieldset className="grid gap-3 sm:grid-cols-2">
               <legend className="mb-2 font-medium">{t('platform:provision.business')}</legend>
               {text('slug', t('platform:provision.slug'), {
@@ -290,6 +367,7 @@ export function ProvisionDialog({
               >
                 <NativeSelect
                   value={form.currencyCode}
+                  disabled={selectedOrganization !== undefined}
                   onChange={(e) => {
                     set('currencyCode', e.target.value);
                   }}
@@ -365,25 +443,27 @@ export function ProvisionDialog({
               {text('locationNameAr', t('platform:provision.nameAr'), { dir: 'rtl' })}
             </fieldset>
 
-            <fieldset className="grid gap-3 sm:grid-cols-2">
-              <legend className="mb-2 font-medium">{t('platform:provision.owner')}</legend>
-              {text('ownerEmail', t('platform:provision.ownerEmail'), { dir: 'ltr' })}
-              {text('ownerName', t('platform:provision.ownerName'))}
-              <Field label={t('platform:provision.ownerLocale')}>
-                <NativeSelect
-                  value={form.ownerLocale}
-                  onChange={(e) => {
-                    set('ownerLocale', e.target.value as Locale);
-                  }}
-                >
-                  {LOCALES.map((l) => (
-                    <option key={l} value={l}>
-                      {t(`common:language.${l}`)}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </Field>
-            </fieldset>
+            {form.organizationId ? null : (
+              <fieldset className="grid gap-3 sm:grid-cols-2">
+                <legend className="mb-2 font-medium">{t('platform:provision.owner')}</legend>
+                {text('ownerEmail', t('platform:provision.ownerEmail'), { dir: 'ltr' })}
+                {text('ownerName', t('platform:provision.ownerName'))}
+                <Field label={t('platform:provision.ownerLocale')}>
+                  <NativeSelect
+                    value={form.ownerLocale}
+                    onChange={(e) => {
+                      set('ownerLocale', e.target.value as Locale);
+                    }}
+                  >
+                    {LOCALES.map((l) => (
+                      <option key={l} value={l}>
+                        {t(`common:language.${l}`)}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </Field>
+              </fieldset>
+            )}
 
             <fieldset className="grid gap-2">
               <legend className="mb-1 font-medium">{t('platform:provision.modules')}</legend>

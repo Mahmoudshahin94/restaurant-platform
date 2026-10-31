@@ -94,7 +94,7 @@ export function ReceiptPreview({ doc }: { doc: ReceiptDocument }) {
       ) : null}
       <DialogFooter>
         <Button
-          size="touch"
+          size="xl"
           disabled={busy || (printer.kind === 'network' && !isTauri())}
           onClick={() => void print()}
         >
