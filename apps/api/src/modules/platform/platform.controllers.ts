@@ -91,14 +91,15 @@ export class PlatformTenantsController {
     return this.directory.listTenants(query);
   }
 
-  /** The owner's temporary password is in this answer only. */
+  /** The owner's temporary password is in this answer only (none for a brand in an organization). */
   @RequirePlatformPermissions(['tenants.provision'])
   @Post()
   provision(
+    @CurrentPlatformUser() actor: PlatformActor,
     @Body(new ZodValidationPipe(provisionTenantSchema))
     body: z.output<typeof provisionTenantSchema>,
   ): Promise<ProvisionedTenantDto> {
-    return this.tenants.provision(body);
+    return this.tenants.provision(body, actor);
   }
 
   @RequirePlatformPermissions(['tenants.view'])

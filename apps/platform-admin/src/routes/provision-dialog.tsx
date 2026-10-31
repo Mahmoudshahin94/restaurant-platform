@@ -129,6 +129,8 @@ function ProvisionResult({ result }: { result: ProvisionedTenantDto }) {
   const locale = useCurrentLocale();
   const [copied, setCopied] = useState(false);
   const tenant = result.tenant.tenant;
+  // A brand created into an organization has no owner of its own (its members are the owners).
+  const owner = result.owner;
   return (
     <div className="grid gap-4">
       <DialogHeader>
@@ -137,35 +139,39 @@ function ProvisionResult({ result }: { result: ProvisionedTenantDto }) {
           {t('provision.doneDescription', { name: pickLocalized(tenant, 'name', locale) })}
         </DialogDescription>
       </DialogHeader>
-      <Field label={t('provision.ownerEmail')}>
-        <Input readOnly dir="ltr" value={result.owner.email} />
-      </Field>
-      <Field label={t('provision.temporaryPassword')}>
-        <div className="flex gap-2">
-          <Input
-            readOnly
-            dir="ltr"
-            className="font-mono"
-            data-testid="temporary-password"
-            value={result.owner.temporaryPassword}
-          />
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              void navigator.clipboard.writeText(result.owner.temporaryPassword);
-              setCopied(true);
-            }}
-          >
-            <Copy aria-hidden />
-            {copied ? t('shared.copied') : t('shared.copy')}
-          </Button>
-        </div>
-      </Field>
-      <Alert variant="destructive">
-        <KeyRound aria-hidden className="me-1 inline size-4" />
-        {t('provision.passwordWarning')}
-      </Alert>
+      {owner ? (
+        <>
+          <Field label={t('provision.ownerEmail')}>
+            <Input readOnly dir="ltr" value={owner.email} />
+          </Field>
+          <Field label={t('provision.temporaryPassword')}>
+            <div className="flex gap-2">
+              <Input
+                readOnly
+                dir="ltr"
+                className="font-mono"
+                data-testid="temporary-password"
+                value={owner.temporaryPassword}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  void navigator.clipboard.writeText(owner.temporaryPassword);
+                  setCopied(true);
+                }}
+              >
+                <Copy aria-hidden />
+                {copied ? t('shared.copied') : t('shared.copy')}
+              </Button>
+            </div>
+          </Field>
+          <Alert variant="destructive">
+            <KeyRound aria-hidden className="me-1 inline size-4" />
+            {t('provision.passwordWarning')}
+          </Alert>
+        </>
+      ) : null}
       <DialogFooter>
         <Button asChild>
           <Link to={`/tenants/${tenant.id}`}>{t('provision.openTenant')}</Link>

@@ -13,6 +13,7 @@ import {
   AuditService,
   BrandingService,
   FeatureService,
+  type PlatformActor,
   PrismaService,
   TenantContext,
   TenantDomainsService,
@@ -41,6 +42,7 @@ import type {
 import type { z } from 'zod';
 import { PaymentProvidersService } from '../../admin/payment-setup/payment-providers.service';
 import { toAdminDevice } from '../../devices/devices.service';
+import { OrganizationService } from '../../organizations/organization.service';
 import { PlatformAuditService } from '../platform-audit.service';
 import { PlatformDirectoryService } from '../platform-directory.service';
 
@@ -70,10 +72,19 @@ export class PlatformTenantsService {
     private readonly brandingService: BrandingService,
     private readonly domains: TenantDomainsService,
     private readonly paymentProviders: PaymentProvidersService,
+    private readonly organizations: OrganizationService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
-  async provision(input: z.output<typeof provisionTenantSchema>): Promise<ProvisionedTenantDto> {
+  /**
+   * Creates the tenant. Without an organization the owner gets a temporary password (in the answer
+   * only). With one, the organization's members become the owners: their linked users are created
+   * in the new brand and no owner or password exists.
+   */
+  async provision(
+    input: z.output<typeof provisionTenantSchema>,
+    actor: PlatformActor,
+  ): Promise<ProvisionedTenantDto> {
     const defaults = businessTypeDefaults(input.tenant.businessType);
     const entitlements = Object.fromEntries(
       FEATURES.map((feature): [Feature, EntitlementSpec] => [
@@ -84,19 +95,26 @@ export class PlatformTenantsService {
         },
       ]),
     );
-    const password = temporaryPassword();
+    const password = input.organizationId ? null : temporaryPassword();
     const provisioned = await this.directory.provision(input, {
-      ownerPasswordHash: await hashSecret(password),
+      ...(password ? { ownerPasswordHash: await hashSecret(password) } : {}),
       entitlements,
       webDomain: this.config.PLATFORM_WEB_DOMAIN,
     });
     const { tenantId, ownerId } = provisioned;
+    const platformActor = { kind: 'platform', platformUserId: actor.id } as const;
+    // The brand exists and belongs to the organization; its members' users follow. Should this
+    // fail, attaching the brand again (or a sync) repairs it.
+    const linked = input.organizationId
+      ? await this.organizations.attachTenant(input.organizationId, tenantId, platformActor)
+      : null;
     const summary = {
       slug: input.tenant.slug,
       businessType: input.tenant.businessType,
       currencyCode: input.tenant.currencyCode,
       location: input.location.code,
-      owner: input.owner.email,
+      owner: input.owner?.email ?? null,
+      organizationId: input.organizationId ?? null,
       entitled: Object.entries(entitlements)
         .filter(([, spec]) => spec.entitled)
         .map(([feature]) => feature),
@@ -108,6 +126,15 @@ export class PlatformTenantsService {
       tenantId,
       metadata: summary,
     });
+    if (input.organizationId) {
+      await this.platformAudit.record({
+        action: 'organization.attach',
+        entityType: 'Organization',
+        entityId: input.organizationId,
+        tenantId,
+        metadata: { tenantId, provisioned: true, skippedMemberIds: linked?.skippedMemberIds ?? [] },
+      });
+    }
     return TenantContext.runInTenant(tenantId, async () => {
       await this.audit.record({
         action: 'tenant.provisioned',
@@ -118,7 +145,10 @@ export class PlatformTenantsService {
       });
       return {
         tenant: await this.detail(tenantId),
-        owner: { id: ownerId ?? '', email: input.owner.email, temporaryPassword: password },
+        owner:
+          input.owner && password
+            ? { id: ownerId ?? '', email: input.owner.email, temporaryPassword: password }
+            : null,
       };
     });
   }

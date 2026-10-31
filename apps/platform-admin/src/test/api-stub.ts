@@ -19,6 +19,7 @@ export const tenantSummary: PlatformTenantSummary = {
   locationCount: 1,
   userCount: 2,
   primaryDomain: 'demo-kitchen.madar.app',
+  organization: null,
 };
 
 /** Signs an operator of the given role in for component tests. */

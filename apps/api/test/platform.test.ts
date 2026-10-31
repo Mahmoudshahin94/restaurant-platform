@@ -10,6 +10,10 @@ import type {
   PairedDevice,
   PlatformAuditEntry,
   PlatformModule,
+  PlatformOrganizationAttached,
+  PlatformOrganizationDetail,
+  PlatformOrganizationSummary,
+  PlatformTenantSummary,
   PlatformTenantDetail,
   PlatformTokenResponse,
   ProvisionedTenantDto,
@@ -319,12 +323,12 @@ describe('provisioning', () => {
     });
     expect(created.tenant.primaryDomain).toBe(`${s}.localhost`);
     expect(created.tenant.owners.map((o) => o.email)).toEqual([`${s}@owner.test`]);
-    expect(created.owner.temporaryPassword).toMatch(/^[\w-]{16}$/);
+    expect(created.owner!.temporaryPassword).toMatch(/^[\w-]{16}$/);
 
     const ownerLogin = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
-      payload: { email: `${s}@owner.test`, password: created.owner.temporaryPassword },
+      payload: { email: `${s}@owner.test`, password: created.owner!.temporaryPassword },
     });
     expect(ownerLogin.statusCode).toBe(200);
 
@@ -350,7 +354,7 @@ describe('provisioning', () => {
     });
     expect(platformAudit.map((e) => e.action)).toContain('tenant.provisioned');
     expect(JSON.stringify([tenantAudit, platformAudit])).not.toContain(
-      created.owner.temporaryPassword,
+      created.owner!.temporaryPassword,
     );
   });
 
@@ -1024,5 +1028,498 @@ describe('views, secrets and health', () => {
     const page = res.json<Paginated<PlatformAuditEntry>>();
     expect(page.items.length).toBeGreaterThan(0);
     expect(page.items[0]?.actorName).toBe('Platform VIEWER');
+  });
+});
+
+describe('organizations (E1)', () => {
+  let owner: Record<string, string>;
+  let ownerId: string;
+  let viewer: Record<string, string>;
+  const O = `${P}/organizations`;
+  const slug = () => `group-${Date.now().toString(36)}${(counter += 1)}`;
+  const NEW_OWNER = { email: 'founder@group.test', displayName: 'Founder', password: PASSWORD };
+  const create = (overrides: Record<string, unknown> = {}, headers = owner) =>
+    app.inject({
+      method: 'POST',
+      url: O,
+      headers,
+      payload: {
+        slug: slug(),
+        nameEn: 'Group',
+        nameAr: 'مجموعة',
+        currencyCode: 'ILS',
+        owner: NEW_OWNER,
+        ...overrides,
+      },
+    });
+  const makeOrganization = async (overrides: Record<string, unknown> = {}) => {
+    const res = await create({
+      owner: { ...NEW_OWNER, email: `o${(counter += 1)}@group.test` },
+      ...overrides,
+    });
+    expect(res.statusCode, res.body).toBe(201);
+    return res.json<PlatformOrganizationDetail>();
+  };
+  const attach = (organizationId: string, tenantId: string, headers = owner) =>
+    app.inject({
+      method: 'POST',
+      url: `${O}/${organizationId}/tenants`,
+      headers,
+      payload: { tenantId },
+    });
+  const platformAudit = (action: string) =>
+    prisma.platformAuditLog.findMany({ where: { action }, orderBy: { createdAt: 'asc' } });
+  const provisionRequest = (s: string, extra: Record<string, unknown> = {}) => ({
+    tenant: {
+      slug: s,
+      nameEn: 'Branch Brand',
+      nameAr: 'علامة',
+      businessType: 'COFFEE_SHOP',
+      defaultLocale: 'ar',
+      timezone: 'Asia/Hebron',
+    },
+    location: { code: 'MAIN', nameEn: 'Main', nameAr: 'الرئيسي' },
+    ...extra,
+  });
+
+  beforeAll(async () => {
+    await resetDatabase(prisma);
+    const operator = await platformUser('OPERATOR');
+    ownerId = operator.id;
+    owner = bearer((await platformLogin(operator.email)).json<PlatformTokenResponse>().accessToken);
+    viewer = await tokenOf('VIEWER');
+  });
+
+  it('creates an organization with its first owner as an OWNER member, audited', async () => {
+    const res = await create({ owner: { ...NEW_OWNER, email: ' Founder@Group.Test ' } });
+    expect(res.statusCode, res.body).toBe(201);
+    const created = res.json<PlatformOrganizationDetail>();
+    expect(created).toMatchObject({
+      currencyCode: 'ILS',
+      status: 'ACTIVE',
+      brandCount: 0,
+      memberCount: 1,
+      brands: [],
+    });
+    expect(created.members).toMatchObject([
+      { email: 'founder@group.test', role: 'OWNER', displayName: 'Founder' },
+    ]);
+    const account = await prisma.account.findUniqueOrThrow({
+      where: { email: 'founder@group.test' },
+    });
+    expect(created.members[0]?.accountId).toBe(account.id);
+
+    const entries = (await platformAudit('organization.create')).filter(
+      (e) => e.entityId === created.id,
+    );
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ actorId: ownerId, entityType: 'Organization' });
+    expect(JSON.stringify(entries)).not.toContain(PASSWORD);
+    const memberAudit = (await platformAudit('organization.member_add')).filter(
+      (e) => e.entityId === created.members[0]?.id,
+    );
+    expect(memberAudit).toHaveLength(1);
+  });
+
+  it('makes an existing account the owner without a password; a new one needs it', async () => {
+    const tenant = await createTenant(prisma);
+    const existing = await create({
+      owner: { email: tenant.owner.email, displayName: 'Existing Owner' },
+    });
+    expect(existing.statusCode, existing.body).toBe(201);
+    expect(existing.json<PlatformOrganizationDetail>().members[0]?.email).toBe(tenant.owner.email);
+    // Their password is untouched.
+    expect(await login(app, tenant.owner.email)).toBeTruthy();
+
+    const before = await prisma.organization.count();
+    const missing = await create({ owner: { email: 'new@group.test', displayName: 'New' } });
+    expect(missing.statusCode).toBe(400);
+    expect(missing.json<ApiErrorBody>().code).toBe('VALIDATION_FAILED');
+    expect(await prisma.organization.count()).toBe(before);
+    expect(await prisma.account.count({ where: { email: 'new@group.test' } })).toBe(0);
+  });
+
+  it('refuses a slug already in use', async () => {
+    const first = await makeOrganization();
+    const again = await create({
+      slug: first.slug,
+      owner: { ...NEW_OWNER, email: 'other@group.test' },
+    });
+    expect(again.statusCode).toBe(409);
+    expect(again.json<ApiErrorBody>().code).toBe('ORGANIZATION_SLUG_TAKEN');
+    expect(await prisma.account.count({ where: { email: 'other@group.test' } })).toBe(0);
+  });
+
+  it('lets a viewer read but not write; support reads too', async () => {
+    const org = await makeOrganization();
+    const support = await tokenOf('SUPPORT');
+    for (const headers of [viewer, support]) {
+      const list = await app.inject({ method: 'GET', url: O, headers });
+      expect(list.statusCode, list.body).toBe(200);
+      const detail = await app.inject({ method: 'GET', url: `${O}/${org.id}`, headers });
+      expect(detail.statusCode, detail.body).toBe(200);
+      const members = await app.inject({ method: 'GET', url: `${O}/${org.id}/members`, headers });
+      expect(members.statusCode, members.body).toBe(200);
+    }
+    const tenant = await createTenant(prisma, undefined, { currencyCode: 'ILS' });
+    const before = await prisma.organization.count();
+    const writes = [
+      { method: 'POST', url: O, payload: {} },
+      { method: 'PATCH', url: `${O}/${org.id}`, payload: { nameEn: 'X' } },
+      { method: 'POST', url: `${O}/${org.id}/tenants`, payload: { tenantId: tenant.tenantId } },
+      { method: 'DELETE', url: `${O}/${org.id}/tenants/${tenant.tenantId}`, payload: undefined },
+      { method: 'POST', url: `${O}/${org.id}/members`, payload: {} },
+      { method: 'PATCH', url: `${O}/${org.id}/members/${newId()}`, payload: { role: 'OWNER' } },
+      { method: 'DELETE', url: `${O}/${org.id}/members/${newId()}`, payload: undefined },
+    ] as const;
+    for (const w of writes) {
+      for (const headers of [viewer, support]) {
+        const res = await app.inject({ ...w, headers });
+        expect(res.statusCode, `${w.method} ${w.url}`).toBe(403);
+        expect(res.json<ApiErrorBody>().details.missing).toEqual(['organizations.manage']);
+      }
+    }
+    expect(await prisma.organization.count()).toBe(before);
+  });
+
+  it('lists and searches organizations, and answers 404 for an unknown one', async () => {
+    const org = await makeOrganization({ nameEn: 'Zebra Holdings Unique' });
+    await makeOrganization();
+    const found = await app.inject({
+      method: 'GET',
+      url: `${O}?search=zebra holdings&status=ACTIVE`,
+      headers: viewer,
+    });
+    const page = found.json<Paginated<PlatformOrganizationSummary>>();
+    expect(page.items.map((i) => i.id)).toEqual([org.id]);
+    expect(page.items[0]).toMatchObject({ brandCount: 0, memberCount: 1 });
+    const suspended = await app.inject({
+      method: 'GET',
+      url: `${O}?status=SUSPENDED`,
+      headers: viewer,
+    });
+    expect(suspended.json<Paginated<PlatformOrganizationSummary>>().total).toBe(0);
+    const missing = await app.inject({ method: 'GET', url: `${O}/${newId()}`, headers: viewer });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.json<ApiErrorBody>().code).toBe('ORGANIZATION_NOT_FOUND');
+  });
+
+  it('changes names and status, audited with before and after', async () => {
+    const org = await makeOrganization();
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `${O}/${org.id}`,
+      headers: owner,
+      payload: { nameEn: 'Renamed Group', status: 'SUSPENDED' },
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json<PlatformOrganizationDetail>()).toMatchObject({
+      nameEn: 'Renamed Group',
+      nameAr: org.nameAr,
+      status: 'SUSPENDED',
+    });
+    const entry = (await platformAudit('organization.update')).find((e) => e.entityId === org.id);
+    expect(entry?.actorId).toBe(ownerId);
+    expect(entry?.metadata).toMatchObject({
+      before: { nameEn: 'Group', status: 'ACTIVE' },
+      after: { nameEn: 'Renamed Group', status: 'SUSPENDED' },
+    });
+    const empty = await app.inject({
+      method: 'PATCH',
+      url: `${O}/${org.id}`,
+      headers: owner,
+      payload: {},
+    });
+    expect(empty.statusCode).toBe(400);
+    const unknown = await app.inject({
+      method: 'PATCH',
+      url: `${O}/${newId()}`,
+      headers: owner,
+      payload: { nameEn: 'X' },
+    });
+    expect(unknown.json<ApiErrorBody>().code).toBe('ORGANIZATION_NOT_FOUND');
+  });
+
+  it('attaches a brand: members get linked users there; another currency is refused', async () => {
+    const org = await makeOrganization();
+    const brand = await createTenant(prisma, undefined, { currencyCode: 'ILS' });
+    const res = await attach(org.id, brand.tenantId);
+    expect(res.statusCode, res.body).toBe(200);
+    const attached = res.json<PlatformOrganizationAttached>();
+    expect(attached.skippedMemberIds).toEqual([]);
+    expect(attached.brands.map((b) => b.id)).toEqual([brand.tenantId]);
+    expect(attached.brandCount).toBe(1);
+    const linked = await prisma.user.findFirstOrThrow({
+      where: { tenantId: brand.tenantId, organizationMemberId: org.members[0]?.id },
+    });
+    expect(linked.isActive).toBe(true);
+    const brandAudit = await prisma.auditLog.findFirstOrThrow({
+      where: { tenantId: brand.tenantId, action: 'user.organization_linked' },
+    });
+    expect(brandAudit).toMatchObject({ actorType: 'PLATFORM', actorId: ownerId });
+    const entry = (await platformAudit('organization.attach')).find((e) => e.entityId === org.id);
+    expect(entry).toMatchObject({ actorId: ownerId, subjectTenantId: brand.tenantId });
+
+    const sar = await createTenant(prisma);
+    const mismatch = await attach(org.id, sar.tenantId);
+    expect(mismatch.statusCode).toBe(409);
+    expect(mismatch.json<ApiErrorBody>().code).toBe('ORGANIZATION_CURRENCY_MISMATCH');
+
+    const other = await makeOrganization();
+    const taken = await attach(other.id, brand.tenantId);
+    expect(taken.statusCode).toBe(409);
+    expect(taken.json<ApiErrorBody>()).toMatchObject({
+      code: 'CONFLICT',
+      details: { reason: 'TENANT_IN_ORGANIZATION' },
+    });
+    const unknown = await attach(org.id, newId());
+    expect(unknown.json<ApiErrorBody>().code).toBe('TENANT_NOT_FOUND');
+  });
+
+  it('provisions a brand into an organization: members are its owners, no owner e-mail', async () => {
+    const org = await makeOrganization();
+    const s = slug();
+    const res = await app.inject({
+      method: 'POST',
+      url: `${P}/tenants`,
+      headers: owner,
+      payload: provisionRequest(s, { organizationId: org.id }),
+    });
+    expect(res.statusCode, res.body).toBe(201);
+    const created = res.json<ProvisionedTenantDto>();
+    expect(created.owner).toBeNull();
+    const tenantId = created.tenant.tenant.id;
+    expect(created.tenant.owners.map((o) => o.email)).toEqual([org.members[0]?.email]);
+    const row = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } });
+    expect(row.organizationId).toBe(org.id);
+    // Nobody was created from an owner e-mail: the only user is the member's linked user.
+    const users = await prisma.user.findMany({ where: { tenantId } });
+    expect(users.map((u) => u.organizationMemberId)).toEqual([org.members[0]?.id]);
+    const signedIn = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { email: org.members[0]?.email, password: PASSWORD, tenantId },
+    });
+    expect(signedIn.statusCode, signedIn.body).toBe(200);
+    const audit = await platformAudit('tenant.provisioned');
+    expect(audit.find((e) => e.subjectTenantId === tenantId)?.metadata).toMatchObject({
+      organizationId: org.id,
+    });
+    expect(
+      (await platformAudit('organization.attach')).some((e) => e.subjectTenantId === tenantId),
+    ).toBe(true);
+  });
+
+  it('refuses an owner with an organization, an organization without an owner otherwise, a currency mismatch', async () => {
+    const org = await makeOrganization();
+    const both = await app.inject({
+      method: 'POST',
+      url: `${P}/tenants`,
+      headers: owner,
+      payload: provisionRequest(slug(), {
+        organizationId: org.id,
+        owner: { email: 'x@owner.test', displayName: 'X' },
+      }),
+    });
+    expect(both.statusCode).toBe(400);
+    const neither = await app.inject({
+      method: 'POST',
+      url: `${P}/tenants`,
+      headers: owner,
+      payload: provisionRequest(slug()),
+    });
+    expect(neither.statusCode).toBe(400);
+    const s = slug();
+    const sar = await app.inject({
+      method: 'POST',
+      url: `${P}/tenants`,
+      headers: owner,
+      payload: provisionRequest(s, {
+        organizationId: org.id,
+        tenant: { ...provisionRequest(s).tenant, currencyCode: 'SAR' },
+      }),
+    });
+    expect(sar.statusCode).toBe(409);
+    expect(sar.json<ApiErrorBody>().code).toBe('ORGANIZATION_CURRENCY_MISMATCH');
+    expect(await prisma.tenant.count({ where: { slug: s } })).toBe(0);
+    const unknown = await app.inject({
+      method: 'POST',
+      url: `${P}/tenants`,
+      headers: owner,
+      payload: provisionRequest(slug(), { organizationId: newId() }),
+    });
+    expect(unknown.json<ApiErrorBody>().code).toBe('ORGANIZATION_NOT_FOUND');
+  });
+
+  it('filters the tenant list by organization and shows its name in the rows', async () => {
+    const org = await makeOrganization({ nameEn: 'Filter Group' });
+    const inside = await createTenant(prisma, undefined, { currencyCode: 'ILS' });
+    const outside = await createTenant(prisma, undefined, { currencyCode: 'ILS' });
+    expect((await attach(org.id, inside.tenantId)).statusCode).toBe(200);
+    const res = await app.inject({
+      method: 'GET',
+      url: `${P}/tenants?organizationId=${org.id}`,
+      headers: viewer,
+    });
+    const page = res.json<Paginated<PlatformTenantSummary>>();
+    expect(page.items.map((t) => t.id)).toEqual([inside.tenantId]);
+    expect(page.items[0]?.organization).toEqual({
+      id: org.id,
+      nameEn: 'Filter Group',
+      nameAr: org.nameAr,
+    });
+    const all = await app.inject({
+      method: 'GET',
+      url: `${P}/tenants?pageSize=100`,
+      headers: viewer,
+    });
+    const rows = all.json<Paginated<PlatformTenantSummary>>().items;
+    expect(rows.find((t) => t.id === outside.tenantId)?.organization).toBeNull();
+  });
+
+  it('refuses to detach a brand left without an owner of its own, then detaches', async () => {
+    const org = await makeOrganization();
+    const s = slug();
+    const provisioned = await app.inject({
+      method: 'POST',
+      url: `${P}/tenants`,
+      headers: owner,
+      payload: provisionRequest(s, { organizationId: org.id }),
+    });
+    const tenantId = provisioned.json<ProvisionedTenantDto>().tenant.tenant.id;
+    const detach = () =>
+      app.inject({ method: 'DELETE', url: `${O}/${org.id}/tenants/${tenantId}`, headers: owner });
+
+    const refused = await detach();
+    expect(refused.statusCode, refused.body).toBe(409);
+    expect(refused.json<ApiErrorBody>()).toMatchObject({
+      code: 'CONFLICT',
+      details: { reason: 'LAST_OWNER' },
+    });
+    expect(
+      (await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } })).organizationId,
+    ).toBe(org.id);
+
+    // A brand Owner of its own: an inactive one does not count.
+    const ownerRole = await prisma.role.findFirstOrThrow({ where: { tenantId, name: 'Owner' } });
+    const account = await prisma.account.create({
+      data: { email: `own-${s}@brand.test`, passwordHash: 'x', lastTenantId: tenantId },
+    });
+    const brandOwner = await prisma.user.create({
+      data: {
+        tenantId,
+        accountId: account.id,
+        email: account.email,
+        displayName: 'Brand Owner',
+        isActive: false,
+        roles: { create: { roleId: ownerRole.id, locationId: null } },
+      },
+    });
+    expect((await detach()).statusCode).toBe(409);
+    await prisma.user.update({ where: { id: brandOwner.id }, data: { isActive: true } });
+
+    const done = await detach();
+    expect(done.statusCode, done.body).toBe(204);
+    expect(
+      (await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } })).organizationId,
+    ).toBeNull();
+    const entry = (await platformAudit('organization.detach')).find(
+      (e) => e.subjectTenantId === tenantId,
+    );
+    expect(entry).toMatchObject({ actorId: ownerId, entityId: org.id });
+    // The member's linked user is gone from the brand; the brand owner stays active.
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: brandOwner.id } })).isActive).toBe(
+      true,
+    );
+    const gone = await detach();
+    expect(gone.json<ApiErrorBody>().code).toBe('TENANT_NOT_FOUND');
+  });
+
+  it('manages members like the organization does, audited, with the last-owner rule', async () => {
+    const org = await makeOrganization();
+    const brand = await createTenant(prisma, undefined, { currencyCode: 'ILS' });
+    await attach(org.id, brand.tenantId);
+    const members = `${O}/${org.id}/members`;
+    const first = org.members[0]!;
+
+    const added = await app.inject({
+      method: 'POST',
+      url: members,
+      headers: owner,
+      payload: {
+        email: 'finance@group.test',
+        displayName: 'Fin',
+        role: 'FINANCE',
+        password: PASSWORD,
+      },
+    });
+    expect(added.statusCode, added.body).toBe(201);
+    const member = added.json<PlatformOrganizationDetail['members'][number]>();
+    expect(member).toMatchObject({ role: 'FINANCE', email: 'finance@group.test' });
+    const brandUser = await prisma.user.findFirstOrThrow({
+      where: { tenantId: brand.tenantId, organizationMemberId: member.id },
+      include: { roles: { include: { role: true } } },
+    });
+    expect(brandUser.roles.map((r) => r.role.name)).toEqual(['Finance']);
+    expect(
+      (
+        await prisma.auditLog.findMany({
+          where: { tenantId: brand.tenantId, entityId: brandUser.id },
+        })
+      )[0],
+    ).toMatchObject({ actorType: 'PLATFORM', actorId: ownerId });
+
+    const list = await app.inject({ method: 'GET', url: members, headers: viewer });
+    expect(list.json<unknown[]>()).toHaveLength(2);
+
+    const changed = await app.inject({
+      method: 'PATCH',
+      url: `${members}/${member.id}`,
+      headers: owner,
+      payload: { role: 'MANAGER' },
+    });
+    expect(changed.statusCode, changed.body).toBe(200);
+    expect(changed.json<{ role: string }>().role).toBe('MANAGER');
+
+    const demote = await app.inject({
+      method: 'PATCH',
+      url: `${members}/${first.id}`,
+      headers: owner,
+      payload: { role: 'FINANCE' },
+    });
+    expect(demote.statusCode).toBe(409);
+    expect(demote.json<ApiErrorBody>().code).toBe('ORGANIZATION_LAST_OWNER');
+    const removeLast = await app.inject({
+      method: 'DELETE',
+      url: `${members}/${first.id}`,
+      headers: owner,
+    });
+    expect(removeLast.json<ApiErrorBody>().code).toBe('ORGANIZATION_LAST_OWNER');
+
+    const removed = await app.inject({
+      method: 'DELETE',
+      url: `${members}/${member.id}`,
+      headers: owner,
+    });
+    expect(removed.statusCode, removed.body).toBe(204);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: brandUser.id } })).isActive).toBe(
+      false,
+    );
+
+    for (const action of ['member_add', 'member_role', 'member_remove']) {
+      const entries = (await platformAudit(`organization.${action}`)).filter(
+        (e) => e.entityId === member.id,
+      );
+      expect(entries, action).toHaveLength(1);
+      expect(entries[0]?.actorId).toBe(ownerId);
+    }
+    // Another organization's member is not found through this one.
+    const other = await makeOrganization();
+    const foreign = await app.inject({
+      method: 'DELETE',
+      url: `${O}/${other.id}/members/${member.id}`,
+      headers: owner,
+    });
+    expect(foreign.statusCode).toBe(404);
   });
 });

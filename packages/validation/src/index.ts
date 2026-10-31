@@ -22,3 +22,4 @@ export * from './website-defaults';
 export * from './platform';
 export * from './release';
 export * from './organizations';
+export * from './platform-organizations';

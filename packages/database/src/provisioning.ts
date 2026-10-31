@@ -203,6 +203,12 @@ export async function provisionTenant(
     entitlements?: Partial<Record<string, EntitlementSpec>>;
     /** The first account, an Owner tenant-wide; kept as it is when the e-mail is the tenant's. */
     owner?: OwnerSpec;
+    /**
+     * The organization a new tenant belongs to (E1), set at creation only: an existing tenant
+     * keeps its own. The caller checks the currency and links the organization's members
+     * (`OrganizationService.attachTenant`); no owner is given, the members are the owners.
+     */
+    organizationId?: string;
   },
 ): Promise<ProvisionedTenant> {
   const {
@@ -218,7 +224,12 @@ export async function provisionTenant(
     where: { slug: input.tenant.slug },
     update: {},
     // Without a choice the tenant offers every locale (the column default).
-    create: { ...tenantFields, currencyCode, ...(supportedLocales ? { supportedLocales } : {}) },
+    create: {
+      ...tenantFields,
+      currencyCode,
+      ...(supportedLocales ? { supportedLocales } : {}),
+      ...(input.organizationId ? { organizationId: input.organizationId } : {}),
+    },
   });
   if (!existing && input.entitlements) {
     const rows = Object.entries(input.entitlements).flatMap(([feature, spec]) =>
