@@ -2,6 +2,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Prisma, type PrismaClient } from '@pos/database';
 import { newId } from '@pos/domain';
 import type {
+  LocationSnapshot,
   PairedDevice,
   SyncIssue,
   SyncKitchenTicket,
@@ -573,6 +574,81 @@ describe('GET /sync/pull', () => {
 });
 
 // --- Contract: payload schemas mirror the database rows -----------------------------------------
+
+describe('accounts at the hub (E1)', () => {
+  const snapshot = async (): Promise<LocationSnapshot> => {
+    const res = await app.inject({ method: 'GET', url: '/api/v1/sync/snapshot', headers: hub });
+    expect(res.statusCode).toBe(200);
+    return res.json<LocationSnapshot>();
+  };
+
+  it("the snapshot carries the users' accounts", async () => {
+    // Someone else's brand, and a member of this brand who works at the other location only.
+    const elsewhere = await createTenant(prisma);
+    const body = await snapshot();
+    expect(body.format).toBe(9);
+    const users = await prisma.user.findMany({
+      where: { id: { in: body.tables.users.map((u) => String(u.id)) } },
+    });
+    const accounts = body.tables.accounts;
+    expect(accounts.map((a) => a.id).sort()).toEqual(users.map((u) => u.accountId).sort());
+    expect(accounts.map((a) => a.id)).not.toContain(
+      (await prisma.user.findUniqueOrThrow({ where: { id: elsewhere.owner.id } })).accountId,
+    );
+    // The hash travels (offline sign-in); the last brand signed into never leaves the cloud.
+    expect(accounts.every((a) => typeof a.passwordHash === 'string')).toBe(true);
+    expect(accounts.every((a) => a.lastTenantId === null)).toBe(true);
+    expect(users.every((u) => !('passwordHash' in u))).toBe(true);
+  });
+
+  it('a password reset in the cloud reaches the hub through the change feed', async () => {
+    const before = await snapshot();
+    const { cursor } = await pull('');
+    const reset = await app.inject({
+      method: 'POST',
+      url: `/api/v1/tenants/${tenant.tenantId}/users/${tenant.cashier.id}/password`,
+      headers: owner,
+      payload: { password: 'A-brand-new-password-1' },
+    });
+    expect(reset.statusCode).toBeLessThan(300);
+
+    const changes = (await pull(`cursor=${cursor}`)).changes;
+    expect(changes).toEqual([expect.objectContaining({ topic: 'CONFIG' })]);
+    const after = await snapshot();
+    const hashOf = (s: LocationSnapshot) =>
+      s.tables.accounts.find((a) => a.email === tenant.cashier.email)?.passwordHash;
+    expect(hashOf(after)).toBeTruthy();
+    expect(hashOf(after)).not.toBe(hashOf(before));
+    expect(after.version).not.toBe(before.version);
+  });
+
+  it('signing in is not a configuration change', async () => {
+    const { cursor } = await pull('');
+    await login(app, tenant.cashier.email); // moves lastTenantId, not what a hub keeps
+    expect((await pull(`cursor=${cursor}`)).changes).toEqual([]);
+  });
+
+  it('an account shared by two brands notifies both hubs when its password changes', async () => {
+    const other = await createTenant(prisma);
+    const account = await prisma.user.findUniqueOrThrow({ where: { id: tenant.owner.id } });
+    const role = await prisma.role.findFirstOrThrow({ where: { tenantId: other.tenantId } });
+    await prisma.user.create({
+      data: {
+        tenantId: other.tenantId,
+        accountId: account.accountId,
+        email: tenant.owner.email,
+        displayName: 'Shared',
+        roles: { create: { roleId: role.id } },
+      },
+    });
+    const head = async (tenantId: string) =>
+      (await prisma.changeLog.aggregate({ where: { tenantId }, _max: { seq: true } }))._max.seq;
+    const [a, b] = [await head(tenant.tenantId), await head(other.tenantId)];
+    await prisma.account.update({ where: { id: account.accountId }, data: { passwordHash: 'x' } });
+    expect(await head(tenant.tenantId)).not.toBe(a);
+    expect(await head(other.tenantId)).not.toBe(b);
+  });
+});
 
 describe('sync payload schemas', () => {
   const fieldsOf = (model: string, relations: string[] = []) => {

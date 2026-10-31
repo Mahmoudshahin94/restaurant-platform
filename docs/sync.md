@@ -87,6 +87,13 @@ pictures its tenant's products show), checks the SHA-256, size and image type, k
 `menu.updated`. A failed download is tried again after the next snapshot. A trigger on
 `product_images` makes a picture-only change a `CONFIG` change.
 
+Format 9 (E1, organizations) added `accounts`: the logins of the snapshot's users, with their
+password hash, applied before the users that name them (`lastTenantId` never leaves the cloud, it is
+sent as `null`). A hub paired earlier holds accounts its migration backfilled under random ids; the
+first format 9 snapshot replaces them by e-mail, moving their users over. A trigger on `accounts`
+records a `CONFIG` change for every tenant where the account has a user, so a password reset in
+the cloud reaches the hubs of all those brands (sign-ins, which only move `last_tenant_id`, do not).
+
 Format 6 came with self-service kiosks
 ([ADR 0022](adr/0022-self-service-kiosk.md)): a device row also carries `pairingCodeHash` and
 `pairingExpiresAt` while the terminal waits to pair, so the hub pairs it without the cloud. Devices

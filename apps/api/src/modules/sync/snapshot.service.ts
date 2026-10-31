@@ -14,7 +14,7 @@ import type { AuthenticatedDevice } from '../devices/device.guard';
 /**
  * Builds the configuration snapshot a location hub needs to run offline. Only rows of the hub's
  * own tenant and location are included, and only rows whose references the hub can satisfy
- * (e.g. role grants at other locations are left out). Staff credential hashes are included so
+ * (e.g. role grants at other locations are left out). Staff credential hashes (their accounts') are included so
  * staff can sign in at the hub without the cloud: the hub is a trusted device of the tenant.
  */
 @Injectable()
@@ -54,6 +54,7 @@ export class SnapshotService {
       orderBy: byId,
     });
     const userIds = users.map((u) => u.id);
+    const accountIds = [...new Set(users.map((u) => u.accountId))];
     const productWhere = { product: { tenantId } };
 
     // Branding (ADR 0019): only the files it shows travel, with their bytes.
@@ -106,6 +107,11 @@ export class SnapshotService {
         where: { role: { tenantId } },
         orderBy: [{ roleId: 'asc' }, { permissionKey: 'asc' }],
       }),
+      // The logins of those users (E1), for offline sign-in: the hash travels, the last brand
+      // signed into stays in the cloud.
+      accounts: (
+        await db.account.findMany({ where: { id: { in: accountIds } }, orderBy: byId })
+      ).map((a) => ({ ...a, lastTenantId: null })),
       users,
       userRoles: await db.userRole.findMany({
         where: { userId: { in: userIds }, ...atLocation },
@@ -209,7 +215,7 @@ export class SnapshotService {
       .digest('hex')
       .slice(0, 32);
     return {
-      format: 8,
+      format: 9,
       tenantId,
       locationId,
       generatedAt: new Date().toISOString(),

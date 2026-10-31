@@ -34,6 +34,7 @@ const DELEGATE: Record<SnapshotTable, string> = {
   devices: 'device',
   roles: 'role',
   rolePermissions: 'rolePermission',
+  accounts: 'account',
   users: 'user',
   userRoles: 'userRole',
   employees: 'employee',
@@ -128,7 +129,7 @@ export async function storeSnapshotFiles(
 /**
  * Writes a cloud snapshot into the hub database (inside the caller's transaction). Rows are
  * upserted in dependency order, so local orders keep referencing the same products, tables and
- * staff. Nothing the cloud owns is ever deleted outright (orders reference it); staff missing from
+ * staff and their logins. Nothing the cloud owns is ever deleted outright (orders reference it); staff missing from
  * the snapshot are deactivated instead.
  */
 export async function applySnapshot(tx: HubTx, snapshot: LocationSnapshot): Promise<number> {
@@ -142,7 +143,9 @@ export async function applySnapshot(tx: HubTx, snapshot: LocationSnapshot): Prom
     const delegate = delegates[DELEGATE[table]];
     if (!delegate) throw new Error(`No hub model for snapshot table ${table}`);
     const rows = snapshot.tables[table] as Row[];
-    if (MERGED.has(table)) {
+    if (table === 'accounts') {
+      await applyAccounts(tx, rows);
+    } else if (MERGED.has(table)) {
       await (table === 'devices' ? mergeDevices(tx, rows) : mergeOrderCounters(tx, rows));
     } else if (REPLACED.has(table)) {
       if (rows.length > 0) await delegate.createMany({ data: rows });
@@ -162,7 +165,47 @@ export async function applySnapshot(tx: HubTx, snapshot: LocationSnapshot): Prom
     where: { id: { notIn: keep('employees') } },
     data: { isActive: false },
   });
+  // Logins nobody uses any more (a user of another location's staff is deactivated, not deleted,
+  // and keeps its account).
+  await tx.account.deleteMany({
+    where: {
+      id: { notIn: snapshot.tables.accounts.map((r) => r.id as string) },
+      users: { none: {} },
+    },
+  });
   return written;
+}
+
+/**
+ * The users' logins (E1), upserted by id before the users that name them. A hub paired before
+ * accounts existed holds accounts its own migration backfilled, one per user, under random ids and
+ * with the same e-mail the cloud's account has: that e-mail is unique, and the users reference the
+ * account (RESTRICT), so such an account is parked under a throwaway e-mail, its users move to the
+ * cloud's account, and it is deleted. Nothing is ever signed out by this: users keep their id.
+ */
+async function applyAccounts(tx: HubTx, rows: Row[]): Promise<void> {
+  for (const row of rows) {
+    const id = String(row.id);
+    const backfilled = await tx.account.findFirst({
+      where: { email: String(row.email), id: { not: id } },
+      select: { id: true },
+    });
+    if (backfilled) {
+      await tx.account.update({
+        where: { id: backfilled.id },
+        data: { email: `replaced:${backfilled.id}` },
+      });
+    }
+    await tx.account.upsert({
+      where: { id },
+      create: row as never,
+      update: row as never,
+    });
+    if (backfilled) {
+      await tx.user.updateMany({ where: { accountId: backfilled.id }, data: { accountId: id } });
+      await tx.account.delete({ where: { id: backfilled.id } });
+    }
+  }
 }
 
 /**

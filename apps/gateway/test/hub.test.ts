@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { hashSecret } from '@pos/database';
 import { newId } from '@pos/domain';
 import type { ApiErrorBody, ResolvedBranding, ResolvedLocales } from '@pos/shared-types';
 import type {
@@ -486,6 +487,57 @@ describe('configuration from the cloud', () => {
     });
     expect(login.json<ApiErrorBody>().code).toBe('ACCOUNT_DISABLED');
     expect((await pinSignIn()).json<ApiErrorBody>().code).toBe('INVALID_CREDENTIALS');
+  });
+
+  it('a password change in the cloud reaches the hub', async () => {
+    const changed = 'A-brand-new-password-2';
+    const account = fixture.tables.accounts.find((a) => a.email === 'cashier@hub.test');
+    if (account) account.passwordHash = await hashSecret(changed);
+    cloud.snapshot = withVersion(fixture.ids, fixture.tables);
+    expect(await hub.snapshots.syncNow()).toBe('applied');
+    const attempt = (password: string) =>
+      hub.app.inject({
+        method: 'POST',
+        url: `${api}/auth/login`,
+        payload: { email: 'cashier@hub.test', password, client: 'native' },
+      });
+    expect((await attempt(changed)).statusCode).toBe(200);
+    expect((await attempt(PASSWORD)).json<ApiErrorBody>().code).toBe('INVALID_CREDENTIALS');
+  });
+
+  it('replaces the accounts its migration backfilled with the cloud’s, keeping every user', async () => {
+    // A hub paired before accounts existed: one account per user under a random id, which the
+    // first format 9 snapshot meets (same e-mails, different ids).
+    const db = asHubTx(hub.app.get(PrismaService));
+    for (const account of await db.account.findMany()) {
+      await db.$executeRawUnsafe(
+        `UPDATE accounts SET id = '${newId()}' WHERE id = '${account.id}'`,
+      );
+    }
+    const stale = await db.account.findMany({ select: { id: true } });
+    expect(stale).toHaveLength(3);
+    const changed = 'Another-new-password-3';
+    const kitchen = fixture.tables.accounts.find((a) => a.email === 'kitchen@hub.test');
+    if (kitchen) kitchen.passwordHash = await hashSecret(changed);
+    cloud.snapshot = withVersion(fixture.ids, fixture.tables);
+
+    expect(await hub.snapshots.syncNow()).toBe('applied');
+    expect((await db.account.findMany()).map((a) => a.id).sort()).toEqual(
+      fixture.tables.accounts.map((a) => a.id as string).sort(),
+    );
+    const users = await db.user.findMany({ include: { account: true } });
+    expect(users).toHaveLength(3);
+    expect(users.every((u) => u.isActive && u.account.email === u.email)).toBe(true);
+    expect(users.find((u) => u.id === fixture.ids.owner)?.accountId).toBe(
+      fixture.tables.accounts.find((a) => a.email === 'owner@hub.test')?.id,
+    );
+    const login = await hub.app.inject({
+      method: 'POST',
+      url: `${api}/auth/login`,
+      payload: { email: 'kitchen@hub.test', password: changed, client: 'native' },
+    });
+    expect(login.statusCode).toBe(200);
+    expect((await signIn('owner@hub.test')).authorization).toBeTruthy();
   });
 
   it('keeps serving its last copy when the cloud rejects its credential', async () => {
