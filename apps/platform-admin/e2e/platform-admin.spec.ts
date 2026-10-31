@@ -146,3 +146,66 @@ test('an operator provisions, suspends and reactivates a tenant, then repairs an
   await entry.getByRole('button').click();
   await expect(page.getByText('"CANCELLED"').first()).toBeVisible();
 });
+
+/**
+ * Organizations (E1): an operator creates an organization with its first owner, attaches an
+ * existing brand and finds the organization in the tenants list. The database keeps its rows
+ * between runs, so the brand is detached again at the end, and before the start if an earlier run
+ * died halfway.
+ */
+test('an operator creates an organization and attaches a brand', async ({ page }) => {
+  test.setTimeout(120_000);
+  const suffix = Date.now().toString(36);
+  const orgName = `E2E Group ${suffix}`;
+  const brandSlug = 'ramallah-roasters';
+  const brandName = 'Ramallah Roasters';
+  await signIn(page);
+
+  const tenantRow = async () => {
+    await page.getByRole('link', { name: 'Tenants', exact: true }).click();
+    await page.getByRole('searchbox').fill(brandSlug);
+    const row = page.getByRole('row', { name: new RegExp(brandName) });
+    await expect(row).toBeVisible();
+    return row;
+  };
+  const detachBrand = async (organization: string) => {
+    await page.getByRole('link', { name: 'Organizations' }).click();
+    await page.getByRole('link', { name: organization, exact: true }).click();
+    await page.getByRole('button', { name: `Detach: ${brandName}` }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Detach' }).click();
+    await expect(page.getByRole('row', { name: new RegExp(brandName) })).toHaveCount(0);
+  };
+
+  // An earlier run that died after attaching leaves the brand in its organization.
+  const before = await tenantRow();
+  const previous = (await before.getByRole('cell').nth(3).innerText()).trim();
+  if (previous !== '—') await detachBrand(previous);
+
+  // Create the organization: ILS (the default currency) with its first owner.
+  await page.getByRole('link', { name: 'Organizations' }).click();
+  await page.getByRole('button', { name: 'Create organization' }).click();
+  const create = page.getByRole('dialog');
+  await create.getByLabel('Web address name').fill(`e2e-group-${suffix}`);
+  await create.getByLabel('Currency').selectOption('ILS');
+  await create.getByLabel('Name (English)').fill(orgName);
+  await create.getByLabel('Name (Arabic)').fill(`مجموعة الاختبار ${suffix}`);
+  await create.getByLabel('Owner email').fill(`group-owner-${suffix}@e2e.test`);
+  await create.getByLabel('Owner name').fill('Group Owner');
+  await create.getByLabel('Starting password').fill(`E2E-Group-Owner-${suffix}`);
+  await create.getByRole('button', { name: 'Create', exact: true }).click();
+  await expect(page.getByRole('heading', { name: orgName })).toBeVisible();
+
+  // Attach the brand from the Brands tab.
+  await page.getByRole('button', { name: 'Attach a brand' }).click();
+  const attach = page.getByRole('dialog');
+  await attach.getByRole('searchbox').fill(brandSlug);
+  await attach.getByRole('button', { name: `Attach: ${brandName}` }).click();
+  await expect(attach).toBeHidden();
+  await expect(page.getByRole('row', { name: new RegExp(brandName) })).toBeVisible();
+
+  // The tenants list names the organization next to the brand.
+  const after = await tenantRow();
+  await expect(after.getByRole('link', { name: orgName })).toBeVisible();
+
+  await detachBrand(orgName);
+});
