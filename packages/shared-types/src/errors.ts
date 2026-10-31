@@ -134,6 +134,15 @@ export const ERROR_CODES = [
   'SUPPORT_PREVIEW_STALE',
   /** The preview shows what is wrong, but this operation may not change it (details.reason). */
   'SUPPORT_NOT_EXECUTABLE',
+  // organizations (E1)
+  'ORGANIZATION_NOT_FOUND',
+  /** A brand's currency differs from its organization's: one currency per organization. */
+  'ORGANIZATION_CURRENCY_MISMATCH',
+  /** The change would leave an organization without an owner. */
+  'ORGANIZATION_LAST_OWNER',
+  /** The user belongs to an organization, which manages their access instead of the brand. */
+  'USER_MANAGED_BY_ORGANIZATION',
+  'ORGANIZATION_SLUG_TAKEN',
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];

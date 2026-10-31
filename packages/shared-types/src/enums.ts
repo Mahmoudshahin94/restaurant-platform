@@ -32,6 +32,21 @@ export const TenantStatus = {
 } as const;
 export type TenantStatus = ValueOf<typeof TenantStatus>;
 
+/** A member's role in an organization (E1). Cloud-only: the organization layer never reaches a hub. */
+export const OrganizationRole = {
+  OWNER: 'OWNER',
+  MANAGER: 'MANAGER',
+  FINANCE: 'FINANCE',
+} as const;
+export type OrganizationRole = ValueOf<typeof OrganizationRole>;
+
+/** Lifecycle of an organization, set by the platform operator. */
+export const OrganizationStatus = {
+  ACTIVE: 'ACTIVE',
+  SUSPENDED: 'SUSPENDED',
+} as const;
+export type OrganizationStatus = ValueOf<typeof OrganizationStatus>;
+
 /**
  * How the customer ordered. Third-party marketplaces (UBER_EATS, DOORDASH, TALABAT, CAREEM, ...)
  * are added here as new values plus a Postgres enum migration; there is never a separate order

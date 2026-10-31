@@ -14,6 +14,7 @@ export * from './payments';
 export * from './platform';
 export * from './kitchen';
 export * from './online';
+export * from './organizations/organizations';
 export * from './release';
 export * from './reports';
 export * from './sync/resolution';

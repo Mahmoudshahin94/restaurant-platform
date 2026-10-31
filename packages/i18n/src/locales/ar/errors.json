@@ -85,5 +85,10 @@
   "SYNC_ISSUE_NOT_FOUND": "مشكلة المزامنة غير موجودة.",
   "SUPPORT_CONFIRMATION_INVALID": "هذا التأكيد لا يطابق المعاينة. عاين الإصلاح مرة أخرى.",
   "SUPPORT_PREVIEW_STALE": "تغيّر السجل أو انتهت صلاحية المعاينة. عاين الإصلاح مرة أخرى.",
-  "SUPPORT_NOT_EXECUTABLE": "لا يمكن تطبيق هذا الإصلاح على هذا السجل."
+  "SUPPORT_NOT_EXECUTABLE": "لا يمكن تطبيق هذا الإصلاح على هذا السجل.",
+  "ORGANIZATION_NOT_FOUND": "المؤسسة غير موجودة.",
+  "ORGANIZATION_CURRENCY_MISMATCH": "عملة هذه العلامة التجارية تختلف عن عملة المؤسسة. تشترك جميع العلامات التجارية في المؤسسة بعملة واحدة.",
+  "ORGANIZATION_LAST_OWNER": "يجب أن تحتفظ المؤسسة بمالك واحد على الأقل.",
+  "USER_MANAGED_BY_ORGANIZATION": "هذا الحساب تديره المؤسسة. عدّله من المؤسسة بدلاً من ذلك.",
+  "ORGANIZATION_SLUG_TAKEN": "عنوان المؤسسة هذا مستخدم بالفعل."
 }
