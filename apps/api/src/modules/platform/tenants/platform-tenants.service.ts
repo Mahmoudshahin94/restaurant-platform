@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type EntitlementSpec, OWNER_ROLE, type Prisma, hashSecret } from '@pos/database';
 import {
   DomainError,
@@ -63,6 +63,8 @@ const temporaryPassword = () => randomBytes(12).toString('base64url');
  */
 @Injectable()
 export class PlatformTenantsService {
+  private readonly logger = new Logger(PlatformTenantsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly directory: PlatformDirectoryService,
@@ -139,7 +141,12 @@ export class PlatformTenantsService {
           kind: 'platform',
           platformUserId: actor.id,
         });
-      } catch {
+      } catch (error) {
+        // The operator's answer only says that linking failed; the cause stays in the server log.
+        this.logger.error(
+          `Linking the members of organization ${input.organizationId} into new tenant ${tenantId} failed`,
+          error instanceof Error ? error.stack : String(error),
+        );
         throw new DomainError(
           'CONFLICT',
           'The brand was created but its organization members could not be linked',
