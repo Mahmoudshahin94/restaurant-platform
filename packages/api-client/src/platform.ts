@@ -1,9 +1,13 @@
 import {
+  type AddMemberRequest,
   type AuditLogQuery,
+  type ChangeMemberRoleRequest,
+  type CreateOrganizationRequest,
   type ChangeTenantStatusRequest,
   type DeviceVersionsQuery,
   type PlatformAuditQuery,
   type PlatformErrorsQuery,
+  type PlatformOrganizationsQuery,
   type PlatformLoginRequest,
   type PlatformTenantsQuery,
   type ProvisionTenantRequest,
@@ -13,14 +17,20 @@ import {
   type SupportExecuteRequest,
   type SupportFindQuery,
   type SupportRequest,
+  type UpdateOrganizationRequest,
   type UpdateReleaseRequest,
   deviceVersionsSchema,
   healthBoardSchema,
+  linkedMemberSchema,
   locationSchema,
+  memberSchema,
   paymentProvidersOverviewSchema,
   platformAuditPageSchema,
   platformDeviceSchema,
   platformErrorEventSchema,
+  platformOrganizationAttachedSchema,
+  platformOrganizationDetailSchema,
+  platformOrganizationPageSchema,
   platformModuleSchema,
   platformTenantAuditPageSchema,
   platformTenantDetailSchema,
@@ -54,6 +64,7 @@ type Query = Record<string, string | number | boolean | undefined>;
 export function createPlatformApiClient(options: HttpClientOptions) {
   const http = new HttpClient(options);
   const tenant = (tid: string) => `${API}/tenants/${tid}`;
+  const organization = (oid: string) => `${API}/organizations/${oid}`;
 
   return {
     http,
@@ -126,6 +137,52 @@ export function createPlatformApiClient(options: HttpClientOptions) {
           query: query as Query,
           schema: platformTenantAuditPageSchema,
         }),
+    },
+
+    /** Organizations (E1): brands that belong together, with their members. */
+    organizations: {
+      list: (query: PlatformOrganizationsQuery = {}) =>
+        http.request('GET', `${API}/organizations`, {
+          query: query as Query,
+          schema: platformOrganizationPageSchema,
+        }),
+      create: (body: CreateOrganizationRequest) =>
+        http.request('POST', `${API}/organizations`, {
+          body,
+          schema: platformOrganizationDetailSchema,
+        }),
+      get: (oid: string) =>
+        http.request('GET', organization(oid), { schema: platformOrganizationDetailSchema }),
+      update: (oid: string, body: UpdateOrganizationRequest) =>
+        http.request('PATCH', organization(oid), {
+          body,
+          schema: platformOrganizationDetailSchema,
+        }),
+      /** `skippedMemberIds` are members the brand had deactivated. */
+      attach: (oid: string, tenantId: string) =>
+        http.request('POST', `${organization(oid)}/tenants`, {
+          body: { tenantId },
+          schema: platformOrganizationAttachedSchema,
+        }),
+      /** `409 ORGANIZATION_LAST_OWNER` when the brand has no active owner of its own. */
+      detach: (oid: string, tid: string) =>
+        http.request('DELETE', `${organization(oid)}/tenants/${tid}`),
+      members: {
+        list: (oid: string) =>
+          http.request('GET', `${organization(oid)}/members`, { schema: z.array(memberSchema) }),
+        add: (oid: string, body: AddMemberRequest) =>
+          http.request('POST', `${organization(oid)}/members`, {
+            body,
+            schema: linkedMemberSchema,
+          }),
+        changeRole: (oid: string, memberId: string, body: ChangeMemberRoleRequest) =>
+          http.request('PATCH', `${organization(oid)}/members/${memberId}`, {
+            body,
+            schema: linkedMemberSchema,
+          }),
+        remove: (oid: string, memberId: string) =>
+          http.request('DELETE', `${organization(oid)}/members/${memberId}`),
+      },
     },
 
     health: {

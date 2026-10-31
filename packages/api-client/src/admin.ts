@@ -1,5 +1,7 @@
 import {
+  type AddMemberRequest,
   type AdminRefundRequest,
+  type ChangeMemberRoleRequest,
   type AuditLogQuery,
   type CreateCashRegisterRequest,
   type CreateEmployeeRequest,
@@ -9,6 +11,7 @@ import {
   type CreateUserRequest,
   type CustomerQuery,
   type OrderSearchQuery,
+  type OrgReportQuery,
   type PairDeviceRequest,
   type PaymentSearchQuery,
   type ReportQuery,
@@ -23,6 +26,12 @@ import {
   type UpdateUserRequest,
   type WebsiteConfig,
   adminDeviceSchema,
+  brandReportSchema,
+  linkedMemberSchema,
+  locationReportSchema,
+  memberSchema,
+  orgDashboardSchema,
+  organizationOverviewSchema,
   paymentProviderAccountSchema,
   paymentProvidersOverviewSchema,
   tenantDomainSchema,
@@ -332,6 +341,52 @@ export function adminApi(http: HttpClient) {
           body,
           schema: syncIssueDetailSchema,
         }),
+    },
+  };
+}
+
+/**
+ * An organization's endpoints (E1): its start page, dashboard, brand reports and members. The
+ * caller signs in to one of the organization's brands; the server checks the membership.
+ */
+export function organizationsApi(http: HttpClient) {
+  const organization = (oid: string) => `${API}/organizations/${oid}`;
+  const report =
+    <T extends z.ZodType>(name: string, schema: T) =>
+    (oid: string, q: OrgReportQuery) =>
+      http.request('GET', `${organization(oid)}/reports/${name}`, {
+        query: { ...reportQuery(q), tenantIds: list(q.tenantIds) },
+        schema,
+      });
+  return {
+    /** The organization's brands with their branches, and the caller's role. */
+    get: (oid: string) =>
+      http.request('GET', organization(oid), { schema: organizationOverviewSchema }),
+    dashboard: (oid: string) =>
+      http.request('GET', `${organization(oid)}/dashboard`, { schema: orgDashboardSchema }),
+    /** The brand reports over all (or the chosen) brands, in the organization's currency. */
+    reports: {
+      dailySales: report('daily-sales', dailySalesReportSchema),
+      brands: report('brands', brandReportSchema),
+      locations: report('locations', locationReportSchema),
+      channels: report('channels', channelReportSchema),
+      payments: report('payments', paymentReportSchema),
+      products: report('products', productReportSchema),
+      categories: report('categories', categoryReportSchema),
+    },
+    /** Owners only. */
+    members: {
+      list: (oid: string) =>
+        http.request('GET', `${organization(oid)}/members`, { schema: z.array(memberSchema) }),
+      add: (oid: string, body: AddMemberRequest) =>
+        http.request('POST', `${organization(oid)}/members`, { body, schema: linkedMemberSchema }),
+      changeRole: (oid: string, memberId: string, body: ChangeMemberRoleRequest) =>
+        http.request('PATCH', `${organization(oid)}/members/${memberId}`, {
+          body,
+          schema: linkedMemberSchema,
+        }),
+      remove: (oid: string, memberId: string) =>
+        http.request('DELETE', `${organization(oid)}/members/${memberId}`),
     },
   };
 }
