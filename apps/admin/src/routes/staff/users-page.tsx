@@ -437,6 +437,9 @@ export function UsersPage() {
                         <div className="font-medium">
                           {user.displayName}{' '}
                           {self ? <Badge variant="outline">{t('admin:users.you')}</Badge> : null}
+                          {user.managedByOrganization ? (
+                            <Badge variant="secondary">{t('admin:users.organization')}</Badge>
+                          ) : null}
                         </div>
                         <div className="text-xs text-muted-foreground" dir="ltr">
                           {user.email}
@@ -464,65 +467,72 @@ export function UsersPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="flex flex-wrap justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setEditing({ kind: 'edit', user });
-                            }}
-                          >
-                            <Pencil aria-hidden />
-                            {t('common:actions.edit')}
-                          </Button>
-                          {self ? null : (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setEditing({ kind: 'roles', user });
-                                }}
-                              >
-                                <ShieldCheck aria-hidden />
-                                {t('admin:users.editRoles')}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setEditing({ kind: 'password', user });
-                                }}
-                              >
-                                <KeyRound aria-hidden />
-                                {t('admin:users.resetPassword')}
-                              </Button>
-                              {user.isActive ? (
+                        {user.managedByOrganization ? (
+                          // Edited from the organization instead (the API refuses it here).
+                          <p className="text-end text-xs text-muted-foreground">
+                            {t('admin:users.managedByOrganization')}
+                          </p>
+                        ) : (
+                          <div className="flex flex-wrap justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setEditing({ kind: 'edit', user });
+                              }}
+                            >
+                              <Pencil aria-hidden />
+                              {t('common:actions.edit')}
+                            </Button>
+                            {self ? null : (
+                              <>
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => {
-                                    setEditing({ kind: 'active', user });
+                                    setEditing({ kind: 'roles', user });
                                   }}
                                 >
-                                  <UserX aria-hidden />
-                                  {t('admin:users.deactivate')}
+                                  <ShieldCheck aria-hidden />
+                                  {t('admin:users.editRoles')}
                                 </Button>
-                              ) : (
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => {
-                                    setActive.mutate({ id: user.id, isActive: true });
+                                    setEditing({ kind: 'password', user });
                                   }}
                                 >
-                                  <UserCheck aria-hidden />
-                                  {t('admin:users.reactivate')}
+                                  <KeyRound aria-hidden />
+                                  {t('admin:users.resetPassword')}
                                 </Button>
-                              )}
-                            </>
-                          )}
-                        </div>
+                                {user.isActive ? (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setEditing({ kind: 'active', user });
+                                    }}
+                                  >
+                                    <UserX aria-hidden />
+                                    {t('admin:users.deactivate')}
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setActive.mutate({ id: user.id, isActive: true });
+                                    }}
+                                  >
+                                    <UserCheck aria-hidden />
+                                    {t('admin:users.reactivate')}
+                                  </Button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   );

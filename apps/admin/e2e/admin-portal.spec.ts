@@ -120,7 +120,8 @@ test('owner creates a role and a user with it; the change is audited and enforce
 test('Arabic: branch settings, online ordering and payment setup in RTL', async ({ page }) => {
   const suffix = Date.now().toString(36);
   await signIn(page);
-  await page.getByRole('combobox', { name: 'Language' }).selectOption('ar');
+  await page.getByRole('button', { name: /Account/ }).click();
+  await page.getByRole('menuitemradio', { name: 'العربية' }).click();
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
 
   // Location: kitchen thresholds and cash rounding.
@@ -286,7 +287,8 @@ test('an administrator resolves a change the cloud refused from the hub', async 
 
   // The administrator compares both versions and applies the hub's, in Arabic.
   await signIn(page);
-  await page.getByRole('combobox', { name: 'Language' }).selectOption('ar');
+  await page.getByRole('button', { name: /Account/ }).click();
+  await page.getByRole('menuitemradio', { name: 'العربية' }).click();
   await page.getByRole('link', { name: 'المزامنة', exact: true }).click();
   const issue = page.getByRole('row', { name: new RegExp(order.orderNumber) });
   await expect(issue).toContainText('تعارض');

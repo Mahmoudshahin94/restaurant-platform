@@ -36,6 +36,30 @@ afterEach(() => {
 });
 
 describe('users page', () => {
+  it('marks a user managed by the organization and offers no edit actions for them', async () => {
+    signIn();
+    stubApi()
+      .on('GET', /\/users$/, [
+        { ...sara, managedByOrganization: true },
+        {
+          ...sara,
+          id: '01a146e8-0000-7000-8000-0000000000a9',
+          displayName: 'Omar',
+          managedByOrganization: false,
+          email: 'omar@test.local',
+        },
+      ])
+      .on('GET', /\/roles$/, [cashierRole]);
+    await renderWithProviders(<UsersPage />);
+    const linked = await screen.findByRole('row', { name: /Sara/ });
+    expect(within(linked).getByText('Organization')).toBeInTheDocument();
+    expect(within(linked).getByText('Managed by the organization')).toBeInTheDocument();
+    expect(within(linked).queryByRole('button')).toBeNull();
+    const own = screen.getByRole('row', { name: /Omar/ });
+    expect(within(own).queryByText('Organization')).toBeNull();
+    expect(within(own).getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+  });
+
   it('lists users with their roles per location', async () => {
     signIn();
     stubApi()

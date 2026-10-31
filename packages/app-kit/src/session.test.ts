@@ -75,3 +75,42 @@ describe('createSessionClient (native mode)', () => {
     expect(session.useSession.getState().status).toBe('anonymous');
   });
 });
+
+describe('replaceSession', () => {
+  const switched = { ...user, preferredLocale: 'en' as const };
+  it('swaps the session for a switch response and keeps the native refresh token', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    const session = createSessionClient({ source: 'POS', mode: 'native' });
+    session.replaceSession({
+      accessToken: 'b1',
+      expiresIn: 900,
+      refreshToken: 'rb1',
+      user: switched,
+    });
+    expect(session.useSession.getState()).toMatchObject({
+      status: 'authenticated',
+      accessToken: 'b1',
+    });
+    // The new refresh token is what the next refresh presents.
+    fetchSpy.mockResolvedValue(
+      new Response(
+        JSON.stringify({ accessToken: 'b2', expiresIn: 900, refreshToken: 'rb2', user: switched }),
+      ),
+    );
+    await session.refreshSession();
+    expect(JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string)).toEqual({
+      refreshToken: 'rb1',
+    });
+  });
+
+  it('only swaps the access token and user in a browser (the cookie carries the refresh token)', () => {
+    const session = createSessionClient({ source: 'ADMIN', mode: 'web' });
+    session.replaceSession({ accessToken: 'w1', expiresIn: 900, user: switched });
+    expect(session.useSession.getState()).toMatchObject({
+      status: 'authenticated',
+      accessToken: 'w1',
+      user: { tenantId: user.tenantId },
+    });
+  });
+});

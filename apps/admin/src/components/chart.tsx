@@ -58,6 +58,7 @@ export function Chart({
   kind,
   ariaLabel,
   height = 280,
+  formatValue,
 }: {
   data: Datum[];
   series: ChartSeries[];
@@ -68,7 +69,13 @@ export function Chart({
   kind: 'bar' | 'line';
   ariaLabel: string;
   height?: number;
+  /** Shows a value in the tooltip and the data table (money, percentages); default: as is. */
+  formatValue?: (value: number) => string;
 }) {
+  const show = (value: unknown): string => {
+    if (typeof value === 'number') return formatValue ? formatValue(value) : String(value);
+    return typeof value === 'string' ? value : '';
+  };
   const reduced = useSyncExternalStore(subscribeReducedMotion, prefersReducedMotion, () => false);
   const animate = !reduced;
   const axis = { stroke: 'var(--color-muted-foreground)', fontSize: 12 };
@@ -94,6 +101,7 @@ export function Chart({
           color: 'var(--color-foreground)',
         }}
         cursor={{ fill: 'var(--color-muted)', opacity: 0.4 }}
+        formatter={(value) => show(value)}
       />
       <Legend />
     </>
@@ -153,7 +161,7 @@ export function Chart({
             <tr key={`${String(datum[x])}-${row}`}>
               <th scope="row">{String(datum[x])}</th>
               {series.map((s) => (
-                <td key={s.key}>{String(datum[s.key] ?? '')}</td>
+                <td key={s.key}>{show(datum[s.key])}</td>
               ))}
             </tr>
           ))}

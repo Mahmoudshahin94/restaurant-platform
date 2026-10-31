@@ -60,6 +60,36 @@ describe('PageShell', () => {
     expect(screen.getByTestId('icon-dashboard')).toBeInTheDocument();
   });
 
+  it('marks a parent item active below it, unless the item is `end`', () => {
+    const withParent = (end: boolean) => (
+      <MemoryRouter initialEntries={['/org/1/reports']}>
+        <PageShell
+          brand={null}
+          nav={[
+            {
+              label: 'Org',
+              items: [
+                { to: '/org/1', label: 'Overview', icon: <svg />, end },
+                { to: '/org/1/reports', label: 'Reports', icon: <svg /> },
+              ],
+            },
+          ]}
+          header={null}
+          skipLabel="Skip"
+          navLabel="Main"
+        >
+          <p>Body</p>
+        </PageShell>
+      </MemoryRouter>
+    );
+    const first = render(withParent(false));
+    expect(screen.getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page');
+    first.unmount();
+    render(withParent(true));
+    expect(screen.getByRole('link', { name: 'Overview' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: 'Reports' })).toHaveAttribute('aria-current', 'page');
+  });
+
   it('collapses a group and remembers it', async () => {
     const view = shell();
     const toggle = screen.getByRole('button', { name: 'Catalog' });

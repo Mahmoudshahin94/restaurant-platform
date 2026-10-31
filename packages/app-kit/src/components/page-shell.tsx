@@ -6,6 +6,8 @@ export interface PageShellNavItem {
   to: string;
   label: string;
   icon: ReactNode;
+  /** Active only on exactly `to`, not on pages below it (default: only for `/`). */
+  end?: boolean;
 }
 
 export interface PageShellNavGroup {
@@ -127,7 +129,7 @@ export function PageShell({
                     <li key={item.to}>
                       <NavLink
                         to={item.to}
-                        end={item.to === '/'}
+                        end={item.end ?? item.to === '/'}
                         className={({ isActive }) =>
                           cn(
                             'flex h-9 items-center gap-2 rounded-md px-2 text-body-sm font-medium',

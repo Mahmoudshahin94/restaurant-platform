@@ -38,7 +38,12 @@
     "reports": "Reports",
     "website": "Website",
     "websiteEditor": "Website editor",
-    "domains": "Domains"
+    "domains": "Domains",
+    "organization": "Organization",
+    "organizationOverview": "Organization overview",
+    "orgReports": "Reports",
+    "orgMembers": "Members",
+    "skipToContent": "Skip to content"
   },
   "header": {
     "location": "Location",
@@ -80,12 +85,13 @@
     "back": "Back",
     "note": "Note",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "notifications": "Notifications"
   },
   "dashboard": {
     "title": "Dashboard",
     "welcome": "Welcome, {{name}}",
-    "subtitle": "Today at each location. Full reports come later.",
+    "subtitle": "Today at each location.",
     "businessDay": "Business day {{date}}",
     "orders": "Orders",
     "open": "Open",
@@ -121,7 +127,9 @@
       "taxes": "Tax summary",
       "discounts": "Discount summary",
       "shifts": "Shift summary",
-      "prep-times": "Kitchen prep times"
+      "prep-times": "Kitchen prep times",
+      "brands": "Sales by brand",
+      "locations": "Sales by branch"
     },
     "notes": {
       "sales": "Sales are completed orders on their business day, also when refunded later. Refunds count on the day they were made and are split into tax, fees and net sales in proportion to the order. Net sales exclude tax and fees.",
@@ -221,7 +229,9 @@
       "maxPrep": "Longest",
       "averageWait": "Avg. wait to start",
       "lateTickets": "Late",
-      "lateShare": "Late share"
+      "lateShare": "Late share",
+      "brand": "Brand",
+      "branch": "Branch"
     }
   },
   "onlineState": {
@@ -651,7 +661,9 @@
     "rolesTitle": "Roles of {{name}}",
     "employee": "Employee code",
     "you": "You",
-    "empty": "No users"
+    "empty": "No users",
+    "organization": "Organization",
+    "managedByOrganization": "Managed by the organization"
   },
   "roles": {
     "title": "Roles",
@@ -1260,5 +1272,88 @@
     "disable": "Disable",
     "open": "Open site",
     "placeholder": "www.example.com"
+  },
+  "switcher": {
+    "label": "Switch brand or organization",
+    "overview": "Organization overview",
+    "brands": "Brands",
+    "failed": "Could not switch brand"
+  },
+  "userMenu": {
+    "label": "Account"
+  },
+  "org": {
+    "dashboard": {
+      "description": "All brands, in {{currency}}. Each branch counts its own business day.",
+      "salesToday": "Sales today",
+      "sales7": "Sales, last 7 days",
+      "sales30": "Sales, last 30 days",
+      "figures": "Orders: {{orders}} · Avg. ticket {{average}}",
+      "hubs": "Branch hubs online",
+      "hubsValue": "{{online}} of {{total}}",
+      "hubsHint": "Hubs that reported recently.",
+      "trendTitle": "Sales by brand, last 30 days",
+      "trendLabel": "Sales per day for each brand over the last 30 days",
+      "day": "Day",
+      "byBrand": "By brand",
+      "byBranch": "By branch",
+      "brand": "Brand",
+      "branch": "Branch",
+      "sales": "Sales",
+      "orders": "Orders",
+      "average": "Avg. ticket",
+      "share": "Share",
+      "hub": "Hub",
+      "online": "Online",
+      "offline": "Offline",
+      "noBrands": "No brands yet",
+      "noBranches": "No branches yet"
+    },
+    "reports": {
+      "title": "Organization reports",
+      "description": "The same reports as in each brand, added up across the brands you choose.",
+      "brand": "Brand",
+      "allBrands": "All brands",
+      "branch": "Branch",
+      "allBranches": "All branches"
+    },
+    "members": {
+      "title": "Members",
+      "description": "People who can see this organization across all its brands. Owners also manage members.",
+      "add": "Add member",
+      "name": "Name",
+      "email": "Email",
+      "role": "Role",
+      "roleOf": "Role of {{name}}",
+      "added": "Added",
+      "empty": "No members",
+      "you": "You",
+      "remove": "Remove",
+      "removeTitle": "Remove {{name}}?",
+      "removeBody": "They lose access to the organization and to the brand accounts it linked for them. Roles they held in a brand on their own stay.",
+      "addTitle": "Add a member",
+      "addBody": "Someone who already has an account keeps their own password.",
+      "password": "Starting password",
+      "passwordHint": "Only for a person with no account yet. At least 10 characters; share it privately.",
+      "passwordInvalid": "Use at least 10 characters.",
+      "emailInvalid": "Enter a valid email address.",
+      "addedToast": "{{name}} was added.",
+      "roleChanged": "{{name}} is now {{role}}.",
+      "removed": "{{name}} was removed.",
+      "skipped": "Some brands had deactivated this person, so they are not linked there yet.",
+      "addFailed": "Could not add the member",
+      "roleFailed": "Could not change the role",
+      "removeFailed": "Could not remove the member"
+    },
+    "roles": {
+      "OWNER": "Owner",
+      "MANAGER": "Manager",
+      "FINANCE": "Finance"
+    },
+    "roleHints": {
+      "OWNER": "Everything, including members.",
+      "MANAGER": "Manages every brand.",
+      "FINANCE": "Reports and locations only."
+    }
   }
 }

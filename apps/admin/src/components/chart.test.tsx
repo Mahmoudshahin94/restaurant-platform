@@ -83,6 +83,27 @@ describe.each(['bar', 'line'] as const)('Chart (%s)', (kind) => {
   });
 });
 
+describe('Chart value formatting', () => {
+  it('shows values through formatValue in the data table', () => {
+    render(
+      <Chart
+        data={data}
+        series={[{ key: 'sales', label: 'Sales' }]}
+        x="day"
+        kind="line"
+        ariaLabel="Sales by day"
+        formatValue={(v) => `SAR ${v.toFixed(2)}`}
+      />,
+    );
+    const table = screen.getByRole('table', { name: 'Sales by day' });
+    expect(
+      within(table)
+        .getAllByRole('cell')
+        .map((c) => c.textContent),
+    ).toEqual(['SAR 120.00', 'SAR 340.00', 'SAR 0.00']);
+  });
+});
+
 describe.each(['bar', 'line'] as const)('Chart animation (%s)', (kind) => {
   it('turns every animation off under prefers-reduced-motion', () => {
     mockReducedMotion(true);
