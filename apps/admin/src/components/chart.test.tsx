@@ -120,3 +120,21 @@ describe.each(['bar', 'line'] as const)('Chart animation (%s)', (kind) => {
     expect(animation.seen.every((value) => value === true)).toBe(true);
   });
 });
+
+describe('Chart axis labels', () => {
+  it('lets each tick decide its direction, so an Arabic date is not scrambled', () => {
+    mockReducedMotion(false);
+    const { container } = render(
+      <Chart
+        data={[{ day: '02‏/10‏/2026', sales: 10 }]}
+        series={[{ key: 'sales', label: 'Sales' }]}
+        x="day"
+        kind="line"
+        ariaLabel="Sales by day"
+      />,
+    );
+    const ticks = [...container.querySelectorAll('.recharts-cartesian-axis-tick-value')];
+    expect(ticks.length).toBeGreaterThan(0);
+    for (const tick of ticks) expect((tick as SVGElement).style.unicodeBidi).toBe('plaintext');
+  });
+});

@@ -78,7 +78,13 @@ export function Chart({
   };
   const reduced = useSyncExternalStore(subscribeReducedMotion, prefersReducedMotion, () => false);
   const animate = !reduced;
-  const axis = { stroke: 'var(--color-muted-foreground)', fontSize: 12 };
+  // The graphic stays left to right, but each tick decides its own direction: an Arabic date comes
+  // with right-to-left marks and would otherwise show its day, month and year scrambled.
+  const axis = {
+    stroke: 'var(--color-muted-foreground)',
+    fontSize: 12,
+    style: { unicodeBidi: 'plaintext' as const },
+  };
   const grid = (
     <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" vertical={false} />
   );
