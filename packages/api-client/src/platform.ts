@@ -164,7 +164,10 @@ export function createPlatformApiClient(options: HttpClientOptions) {
           body: { tenantId },
           schema: platformOrganizationAttachedSchema,
         }),
-      /** `409 ORGANIZATION_LAST_OWNER` when the brand has no active owner of its own. */
+      /**
+       * `409 CONFLICT` with `details.reason` `LAST_OWNER` when the brand has no active owner of its
+       * own (the brand's last-owner rule, not the organization's `ORGANIZATION_LAST_OWNER`).
+       */
       detach: (oid: string, tid: string) =>
         http.request('DELETE', `${organization(oid)}/tenants/${tid}`),
       members: {
