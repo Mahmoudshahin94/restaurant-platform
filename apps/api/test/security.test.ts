@@ -147,6 +147,16 @@ describe('route inventory', () => {
     }
   });
 
+  it('treats switching brands like reading the profile: any signed-in user, no permission', () => {
+    const me = routes.find((r) => key(r) === 'GET /auth/me');
+    const switchRoute = routes.find((r) => key(r) === 'POST /auth/switch');
+    expect(switchRoute).toBeDefined();
+    expect(switchRoute?.access).toBe(me?.access);
+    expect(switchRoute?.access).toBe('permissions');
+    expect(switchRoute?.permissions).toEqual(me?.permissions);
+    expect(switchRoute?.guards).toEqual(me?.guards);
+  });
+
   it('serves the website on host routes only, each resolved by HostTenantGuard', () => {
     const host = routes.filter((r) => r.access === 'host');
     expect(host.map(key).sort()).toEqual(HOST_ROUTES);

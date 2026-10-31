@@ -2,6 +2,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { PrismaClient } from '@pos/database';
 import type { ApiErrorBody } from '@pos/shared-types';
 import type { TokenResponse } from '@pos/validation';
+import { newId } from '@pos/domain';
 import { SignJWT, decodeJwt } from 'jose';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { testConfig } from './env';
@@ -302,6 +303,209 @@ describe('sign-in through accounts', () => {
       tenant.tenantId,
     ]);
     expect(suspended.json<TokenResponse>().user.organizations).toEqual([]);
+  });
+});
+
+describe('POST /auth/switch', () => {
+  let brandB: TenantFixture;
+  let ownerInB: string;
+
+  beforeEach(async () => {
+    brandB = await createTenant(prisma);
+    ownerInB = await addAccountUser(prisma, tenant.owner.email, brandB);
+  });
+
+  const signIn = async (client: 'web' | 'native' = 'native') =>
+    (
+      await postLogin({ email: tenant.owner.email, password: PASSWORD, client })
+    ).json<TokenResponse>();
+
+  const postSwitch = (
+    accessToken: string,
+    payload: Record<string, unknown>,
+    extra: { cookies?: Record<string, string>; headers?: Record<string, string> } = {},
+  ) =>
+    app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/switch',
+      payload,
+      headers: { ...bearer(accessToken), ...extra.headers },
+      cookies: extra.cookies,
+    });
+
+  it("switch issues a session for the account's user in the other brand", async () => {
+    const first = await signIn();
+    expect(first.user.tenantId).toBe(tenant.tenantId);
+
+    const res = await postSwitch(first.accessToken, {
+      tenantId: brandB.tenantId,
+      refreshToken: first.refreshToken,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<TokenResponse>();
+    expect(decodeJwt(body.accessToken).tid).toBe(brandB.tenantId);
+    expect(body.user.id).toBe(ownerInB);
+    expect(body.user.tenantId).toBe(brandB.tenantId);
+    expect(body.user.tenants).toHaveLength(2);
+    expect(body.refreshToken).toBeTruthy();
+    expect(body.refreshToken).not.toBe(first.refreshToken);
+
+    // The old session is gone: its refresh token is revoked.
+    const old = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/refresh',
+      payload: { refreshToken: first.refreshToken },
+    });
+    expect(old.statusCode).toBe(401);
+    expect(['TOKEN_REUSED', 'UNAUTHENTICATED']).toContain(old.json<ApiErrorBody>().code);
+
+    // The new token works, in the new brand; the new refresh token starts a fresh family.
+    const me = await app.inject({
+      method: 'GET',
+      url: '/api/v1/auth/me',
+      headers: bearer(body.accessToken),
+    });
+    expect(me.json<TokenResponse['user']>().id).toBe(ownerInB);
+    const families = await prisma.refreshToken.findMany({
+      where: { userId: { in: [first.user.id, ownerInB] } },
+    });
+    expect(new Set(families.map((t) => t.familyId)).size).toBe(2);
+
+    // One audit entry in each brand, and the account remembers the brand.
+    const inA = await prisma.auditLog.findFirst({
+      where: { action: 'auth.switch', tenantId: tenant.tenantId },
+    });
+    const inB = await prisma.auditLog.findFirst({
+      where: { action: 'auth.switch', tenantId: brandB.tenantId },
+    });
+    expect(inA?.actorId).toBe(first.user.id);
+    expect(inA?.metadata).toMatchObject({ toTenantId: brandB.tenantId });
+    expect(inB?.actorId).toBe(ownerInB);
+    expect(inB?.metadata).toMatchObject({ fromTenantId: tenant.tenantId });
+    const account = await prisma.account.findUniqueOrThrow({
+      where: { email: tenant.owner.email },
+    });
+    expect(account.lastTenantId).toBe(brandB.tenantId);
+
+    // And back again.
+    const back = await postSwitch(body.accessToken, {
+      tenantId: tenant.tenantId,
+      refreshToken: body.refreshToken,
+    });
+    expect(back.statusCode).toBe(200);
+    expect(back.json<TokenResponse>().user.id).toBe(first.user.id);
+  });
+
+  it('a web client sends and receives the refresh cookie (with the Origin check)', async () => {
+    const login1 = await postLogin({ email: tenant.owner.email, password: PASSWORD });
+    const cookie = refreshCookie(login1.headers['set-cookie']);
+    const { accessToken } = login1.json<TokenResponse>();
+
+    const forged = await postSwitch(
+      accessToken,
+      { tenantId: brandB.tenantId },
+      { cookies: { pos_rt: cookie }, headers: { origin: 'https://evil.example' } },
+    );
+    expect(forged.statusCode).toBe(403);
+    expect(forged.json<ApiErrorBody>().code).toBe('CSRF_REJECTED');
+
+    const res = await postSwitch(
+      accessToken,
+      { tenantId: brandB.tenantId },
+      { cookies: { pos_rt: cookie }, headers: { origin: ORIGIN } },
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.json<TokenResponse>().refreshToken).toBeUndefined();
+    const next = refreshCookie(res.headers['set-cookie']);
+    expect(next).not.toBe(cookie);
+    expect(res.json<TokenResponse>().user.tenantId).toBe(brandB.tenantId);
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/api/v1/auth/refresh',
+          cookies: { pos_rt: next },
+          headers: { origin: ORIGIN },
+        })
+      ).statusCode,
+    ).toBe(200);
+  });
+
+  it("another person's refresh token is not revoked", async () => {
+    const mine = await signIn();
+    const other = await postLogin({
+      email: tenant.cashier.email,
+      password: PASSWORD,
+      client: 'native',
+    });
+    const res = await postSwitch(mine.accessToken, {
+      tenantId: brandB.tenantId,
+      refreshToken: other.json<TokenResponse>().refreshToken,
+    });
+    expect(res.statusCode).toBe(200);
+    const stillGood = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/refresh',
+      payload: { refreshToken: other.json<TokenResponse>().refreshToken },
+    });
+    expect(stillGood.statusCode).toBe(200);
+  });
+
+  it('switching to the current brand issues a fresh session', async () => {
+    const first = await signIn();
+    const res = await postSwitch(first.accessToken, {
+      tenantId: tenant.tenantId,
+      refreshToken: first.refreshToken,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<TokenResponse>().user.id).toBe(first.user.id);
+    expect(res.json<TokenResponse>().refreshToken).not.toBe(first.refreshToken);
+  });
+
+  it('switch to a brand of another account is 404', async () => {
+    const stranger = await createTenant(prisma);
+    const first = await signIn();
+    const res = await postSwitch(first.accessToken, {
+      tenantId: stranger.tenantId,
+      refreshToken: first.refreshToken,
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json<ApiErrorBody>().code).toBe('TENANT_NOT_FOUND');
+    // A refused switch keeps the session.
+    const kept = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/refresh',
+      payload: { refreshToken: first.refreshToken },
+    });
+    expect(kept.statusCode).toBe(200);
+    const unknown = await postSwitch(first.accessToken, { tenantId: newId() });
+    expect(unknown.json<ApiErrorBody>().code).toBe('TENANT_NOT_FOUND');
+  });
+
+  it("switch to a deactivated user's brand is 404", async () => {
+    const first = await signIn();
+    await prisma.user.update({ where: { id: ownerInB }, data: { isActive: false } });
+    const res = await postSwitch(first.accessToken, { tenantId: brandB.tenantId });
+    expect(res.statusCode).toBe(404);
+    expect(res.json<ApiErrorBody>().code).toBe('TENANT_NOT_FOUND');
+    await prisma.user.update({ where: { id: ownerInB }, data: { isActive: true } });
+    await prisma.tenant.update({ where: { id: brandB.tenantId }, data: { status: 'SUSPENDED' } });
+    const suspended = await postSwitch(first.accessToken, { tenantId: brandB.tenantId });
+    expect(suspended.statusCode).toBe(404);
+  });
+
+  it('switch without a token is 401, and the body is validated', async () => {
+    const anon = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/switch',
+      payload: { tenantId: brandB.tenantId },
+    });
+    expect(anon.statusCode).toBe(401);
+    expect(anon.json<ApiErrorBody>().code).toBe('UNAUTHENTICATED');
+
+    const first = await signIn();
+    const bad = await postSwitch(first.accessToken, { tenantId: 'not-an-id' });
+    expect(bad.statusCode).toBe(400);
   });
 });
 

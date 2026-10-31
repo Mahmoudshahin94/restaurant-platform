@@ -3,6 +3,7 @@ import { hashSecret, verifySecret } from '@pos/database';
 import { DomainError, assertTenantAccess, newId } from '@pos/domain';
 import type { TokenResponse } from '@pos/validation';
 import { SERVER_MODE, type ServerMode } from '../../common/auth/managed-in-cloud';
+import type { Principal } from '../../common/auth/principal';
 import { TenantContext } from '../../common/tenancy/tenant-context';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -139,6 +140,81 @@ export class AuthService {
         select: { id: true, tenantId: true },
       }),
     );
+  }
+
+  /**
+   * Moves a signed-in person to another brand of their account (cloud only; the hub holds one
+   * brand). The caller's refresh-token family is revoked and a new session starts for the
+   * account's user in `tenantId`, which must be usable (`usableUserFor`); otherwise the brand is
+   * "not found", as for any foreign tenant. Switching to the current brand issues a new session
+   * too. Each brand's audit trail records the switch.
+   */
+  async switchTenant(
+    principal: Principal,
+    tenantId: string,
+    currentRefresh: string | undefined,
+  ): Promise<IssuedSession> {
+    const notFound = () => new DomainError('TENANT_NOT_FOUND', 'Tenant not found');
+    if (this.mode !== 'cloud') throw notFound();
+    const source = await this.prisma.user.findUniqueOrThrow({
+      where: { id: principal.userId },
+      select: { id: true, accountId: true, tenantId: true },
+    });
+    const target = await this.usableUserFor(source.accountId, tenantId);
+    if (!target) throw notFound();
+
+    await this.audit.record({
+      action: 'auth.switch',
+      entityType: 'User',
+      entityId: source.id,
+      actorType: 'USER',
+      actorId: source.id,
+      tenantId: source.tenantId,
+      metadata: { toTenantId: target.tenantId },
+    });
+    // A request never works in two tenants: the target brand's side runs outside any tenant scope,
+    // naming its tenant explicitly.
+    const session = await TenantContext.runUnscoped(
+      'switching brands: start the session of the account’s user in the target brand',
+      async () => {
+        const issued = await this.issueSession(target.id, target.tenantId, newId());
+        await this.prisma.user.update({
+          where: { id: target.id },
+          data: { lastLoginAt: new Date() },
+        });
+        await this.audit.record({
+          action: 'auth.switch',
+          entityType: 'User',
+          entityId: target.id,
+          actorType: 'USER',
+          actorId: target.id,
+          tenantId: target.tenantId,
+          metadata: { fromTenantId: source.tenantId },
+        });
+        return issued;
+      },
+    );
+    // The old session ends only once the new one exists. Only the caller's own token ends their session: someone else's is left alone.
+    if (currentRefresh) {
+      const stored = await this.prisma.refreshToken.findUnique({
+        where: { tokenHash: this.tokens.hashRefreshToken(currentRefresh) },
+        select: { familyId: true, userId: true },
+      });
+      if (stored?.userId === source.id) await this.revokeFamily(stored.familyId);
+    }
+
+    // The cloud remembers the brand for the next sign-in, as `login` does.
+    const account = await this.prisma.account.findUniqueOrThrow({
+      where: { id: source.accountId },
+      select: { lastTenantId: true },
+    });
+    if (account.lastTenantId !== target.tenantId) {
+      await this.prisma.account.update({
+        where: { id: source.accountId },
+        data: { lastTenantId: target.tenantId },
+      });
+    }
+    return session;
   }
 
   private async completeLogin(user: { id: string; tenantId: string }): Promise<IssuedSession> {

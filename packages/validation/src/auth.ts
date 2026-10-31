@@ -37,6 +37,16 @@ export const refreshRequestSchema = z.object({
 });
 export type RefreshRequest = z.infer<typeof refreshRequestSchema>;
 
+/**
+ * Switching to another brand of the signed-in person's account. A native client names its refresh
+ * token here; a browser's comes with the cookie.
+ */
+export const switchSchema = z.object({
+  tenantId: idSchema,
+  refreshToken: z.string().min(1).max(512).optional(),
+});
+export type SwitchRequest = z.infer<typeof switchSchema>;
+
 export const roleAssignmentDtoSchema = z.object({
   roleId: idSchema,
   roleName: z.string(),

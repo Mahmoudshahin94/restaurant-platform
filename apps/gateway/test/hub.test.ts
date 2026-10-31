@@ -137,6 +137,18 @@ describe('signing in at the hub', () => {
     expect(body.refreshToken).toBeTruthy();
   });
 
+  it('the hub holds one brand: switching brands is not found', async () => {
+    const headers = await signIn('owner@hub.test');
+    const res = await hub.app.inject({
+      method: 'POST',
+      url: `${api}/auth/switch`,
+      headers,
+      payload: { tenantId: fixture.ids.tenantId },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json<ApiErrorBody>().code).toBe('TENANT_NOT_FOUND');
+  });
+
   it('e-mail sign-in uses the synced account', async () => {
     const ownerAccount = fixture.tables.accounts.find((a) => a.email === 'owner@hub.test');
     const accountId = ownerAccount?.id as string;
