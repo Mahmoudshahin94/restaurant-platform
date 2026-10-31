@@ -1158,6 +1158,12 @@ them, the first being the cover. Hubs get the covers' rows in the snapshot (form
 the bytes once, checked by SHA-256, so menu edits do not resend pictures; the hub serves them on
 the location network. Variant pictures are shown everywhere but are set through the API only.
 
+### Design system (enterprise phase E0)
+
+See [ADR 0028](adr/0028-enterprise-design-system.md) and
+[madar/design-system.md](madar/design-system.md): the UI audit of every app and the approved design
+system that later phases implement (storefront, counter and console profiles on one token set).
+
 ## Architectural decisions and open questions
 
 Recorded as ADRs in [adr/](adr/):
@@ -1246,6 +1252,9 @@ Recorded as ADRs in [adr/](adr/):
 25. [0027](adr/0027-product-pictures.md): product pictures on the POS, kiosk and website: a cover
     per product and variant in the published menu, uploads by whoever edits products (resized in
     the browser), covers' rows in the hub snapshot and their bytes downloaded once by the hub.
+26. [0028](adr/0028-enterprise-design-system.md): the enterprise design system (phase E0): three
+    surface profiles on one token set, the button spec, the shared components to build and the
+    accessibility bar; documented in [madar/design-system.md](madar/design-system.md).
 
 Open items to revisit:
 
