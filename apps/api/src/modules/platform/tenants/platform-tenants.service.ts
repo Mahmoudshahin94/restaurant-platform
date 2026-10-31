@@ -102,12 +102,6 @@ export class PlatformTenantsService {
       webDomain: this.config.PLATFORM_WEB_DOMAIN,
     });
     const { tenantId, ownerId } = provisioned;
-    const platformActor = { kind: 'platform', platformUserId: actor.id } as const;
-    // The brand exists and belongs to the organization; its members' users follow. Should this
-    // fail, attaching the brand again (or a sync) repairs it.
-    const linked = input.organizationId
-      ? await this.organizations.attachTenant(input.organizationId, tenantId, platformActor)
-      : null;
     const summary = {
       slug: input.tenant.slug,
       businessType: input.tenant.businessType,
@@ -119,6 +113,7 @@ export class PlatformTenantsService {
         .filter(([, spec]) => spec.entitled)
         .map(([feature]) => feature),
     };
+    // The tenant exists from here on: record it before anything else can fail.
     await this.platformAudit.record({
       action: 'tenant.provisioned',
       entityType: 'Tenant',
@@ -126,31 +121,46 @@ export class PlatformTenantsService {
       tenantId,
       metadata: summary,
     });
-    if (input.organizationId) {
-      await this.platformAudit.record({
-        action: 'organization.attach',
-        entityType: 'Organization',
-        entityId: input.organizationId,
-        tenantId,
-        metadata: { tenantId, provisioned: true, skippedMemberIds: linked?.skippedMemberIds ?? [] },
-      });
-    }
-    return TenantContext.runInTenant(tenantId, async () => {
-      await this.audit.record({
+    await TenantContext.runInTenant(tenantId, () =>
+      this.audit.record({
         action: 'tenant.provisioned',
         entityType: 'Tenant',
         entityId: tenantId,
         tenantId,
         metadata: summary,
+      }),
+    );
+    if (input.organizationId) {
+      // The brand already belongs to the organization; its members' users follow. If that fails
+      // the operator learns the tenant id and repairs it by attaching the brand again (idempotent).
+      let linked: { skippedMemberIds: string[] };
+      try {
+        linked = await this.organizations.attachTenant(input.organizationId, tenantId, {
+          kind: 'platform',
+          platformUserId: actor.id,
+        });
+      } catch {
+        throw new DomainError(
+          'CONFLICT',
+          'The brand was created but its organization members could not be linked',
+          { tenantId, reason: 'ORGANIZATION_LINK_FAILED' },
+        );
+      }
+      await this.platformAudit.record({
+        action: 'organization.attach',
+        entityType: 'Organization',
+        entityId: input.organizationId,
+        tenantId,
+        metadata: { tenantId, provisioned: true, skippedMemberIds: linked.skippedMemberIds },
       });
-      return {
-        tenant: await this.detail(tenantId),
-        owner:
-          input.owner && password
-            ? { id: ownerId ?? '', email: input.owner.email, temporaryPassword: password }
-            : null,
-      };
-    });
+    }
+    return TenantContext.runInTenant(tenantId, async () => ({
+      tenant: await this.detail(tenantId),
+      owner:
+        input.owner && password
+          ? { id: ownerId ?? '', email: input.owner.email, temporaryPassword: password }
+          : null,
+    }));
   }
 
   async detail(tenantId: string): Promise<PlatformTenantDetail> {

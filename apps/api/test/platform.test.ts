@@ -21,7 +21,8 @@ import type {
   SupportPreview,
   TenantHealth,
 } from '@pos/validation';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { OrganizationService } from '../src/modules/organizations/organization.service';
 import { PlatformErrorEventsService } from '../src/modules/platform/health/platform-error-events.service';
 import {
   ORIGIN,
@@ -1310,6 +1311,39 @@ describe('organizations (E1)', () => {
     ).toBe(true);
   });
 
+  it('reports the tenant id when linking the members fails, with the provisioning audited', async () => {
+    const org = await makeOrganization();
+    const s = slug();
+    const spy = vi
+      .spyOn(app.get(OrganizationService), 'attachTenant')
+      .mockRejectedValueOnce(new Error('boom'));
+    const res = await app.inject({
+      method: 'POST',
+      url: `${P}/tenants`,
+      headers: owner,
+      payload: provisionRequest(s, { organizationId: org.id }),
+    });
+    spy.mockRestore();
+    const tenant = await prisma.tenant.findUniqueOrThrow({ where: { slug: s } });
+    expect(res.statusCode, res.body).toBe(409);
+    expect(res.json<ApiErrorBody>()).toMatchObject({
+      code: 'CONFLICT',
+      details: { tenantId: tenant.id, reason: 'ORGANIZATION_LINK_FAILED' },
+    });
+    const audit = (await platformAudit('tenant.provisioned')).filter(
+      (e) => e.subjectTenantId === tenant.id,
+    );
+    expect(audit).toHaveLength(1);
+    expect(
+      await prisma.auditLog.count({ where: { tenantId: tenant.id, action: 'tenant.provisioned' } }),
+    ).toBe(1);
+    expect(await prisma.user.count({ where: { tenantId: tenant.id } })).toBe(0);
+    // Attaching again repairs it.
+    const repaired = await attach(org.id, tenant.id);
+    expect(repaired.statusCode, repaired.body).toBe(200);
+    expect(await prisma.user.count({ where: { tenantId: tenant.id } })).toBe(1);
+  });
+
   it('refuses an owner with an organization, an organization without an owner otherwise, a currency mismatch', async () => {
     const org = await makeOrganization();
     const both = await app.inject({
@@ -1427,7 +1461,13 @@ describe('organizations (E1)', () => {
       (e) => e.subjectTenantId === tenantId,
     );
     expect(entry).toMatchObject({ actorId: ownerId, entityId: org.id });
-    // The member's linked user is gone from the brand; the brand owner stays active.
+    // The member's linked user is deactivated and unlinked from the organization.
+    const memberUser = await prisma.user.findFirstOrThrow({
+      where: { tenantId, account: { email: org.members[0]?.email } },
+    });
+    expect(memberUser.isActive).toBe(false);
+    expect(memberUser.organizationMemberId).toBeNull();
+    // The brand owner stays active.
     expect((await prisma.user.findUniqueOrThrow({ where: { id: brandOwner.id } })).isActive).toBe(
       true,
     );

@@ -1068,6 +1068,7 @@
     "ACCOUNT_SHARED": "This person also signs into other brands, so their password cannot be changed here.",
     "ALREADY_MEMBER": "This person is already a member of the organization.",
     "TENANT_IN_ORGANIZATION": "This brand already belongs to another organization.",
+    "ORGANIZATION_LINK_FAILED": "This brand was created, but its organization members could not be linked. Attach the brand to the organization again.",
     "SELF": "You cannot do this to your own account.",
     "LAST_OWNER": "The business needs at least one active owner.",
     "ESCALATION": "You cannot grant or remove permissions you do not hold.",
