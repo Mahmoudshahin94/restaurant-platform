@@ -103,6 +103,8 @@ describe('design tokens', () => {
     // Every radius derives from the tenant radius.
     expect(css).toContain('--radius-sm: calc(var(--radius) * 0.6);');
     expect(css).toContain('--radius-xl: calc(var(--radius) * 2);');
+    // The unbranded default is the tenant branding default (8px), so loading branding changes nothing.
+    expect(css).toContain('--radius: 0.5rem;');
   });
 
   it.each([
