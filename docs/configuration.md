@@ -51,6 +51,7 @@ Device configuration       one terminal, screen or kiosk differing from its loca
 | Website sections and domains                   | platform → business type (template) → tenant; installation (`PLATFORM_WEB_DOMAIN`, `DOMAIN_VERIFIER`)      | M7 ✅  |
 | Payment providers                              | platform (built-in, development) → tenant → location                                                       | M8 ✅  |
 | Release channel and minimum versions           | platform (releases, minimums) → tenant (channel or pinned version, set by the platform)                    | M10 ✅ |
+| Organization, its members and brands           | platform (creates it, sets its currency and status) → organization (members, by its owners)                | E1 ✅  |
 
 Each phase's ADR records the exact settings it adds and the layers they accept.
 
@@ -276,15 +277,15 @@ and scope, and the 12-digit fingerprint.
 See [ADR 0025](adr/0025-platform-admin.md). The platform layer is now written by MADAR's operators
 in the platform admin (`apps/platform-admin`), a separate identity from every tenant's staff.
 
-| What                                         | Decided by                                                                                  | Where it is written                                        |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| A tenant's status                            | ACTIVE, SUSPENDED (staff, hubs and website refused), ARCHIVED (read-only), with a reason    | platform admin → tenant → Overview (`tenants.status`)      |
-| Which modules a tenant may use (entitlement) | at provisioning the business type's defaults are entitled, the rest not; then the operator  | platform admin → tenant → Modules (`tenants.configure`)    |
-| Whether the tenant may switch a module       | the entitlement's "configurable by the tenant"                                              | the same tab                                               |
-| A new tenant's profile, location and owner   | the provisioning form (currency ILS by default, `<slug>.<PLATFORM_WEB_DOMAIN>` subdomain)   | platform admin → Tenants → Provision (`tenants.provision`) |
-| Who may operate the platform                 | a platform user's role (OWNER, OPERATOR, SUPPORT, VIEWER), fixed permissions per role       | `pnpm platform:create-owner` (no sign-up, no screen yet)   |
-| Platform token key                           | `PLATFORM_JWT_SECRET` (derived from `JWT_ACCESS_SECRET` when unset, always a different key) | the API's environment                                      |
-| Error events kept for the health board       | `PLATFORM_ERROR_SAMPLE_PER_MINUTE` per route and code (default 10; 0 = none)                | the API's environment                                      |
+| What                                         | Decided by                                                                                                                                   | Where it is written                                        |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| A tenant's status                            | ACTIVE, SUSPENDED (staff, hubs and website refused), ARCHIVED (read-only), with a reason                                                     | platform admin → tenant → Overview (`tenants.status`)      |
+| Which modules a tenant may use (entitlement) | at provisioning the business type's defaults are entitled, the rest not; then the operator                                                   | platform admin → tenant → Modules (`tenants.configure`)    |
+| Whether the tenant may switch a module       | the entitlement's "configurable by the tenant"                                                                                               | the same tab                                               |
+| A new tenant's profile, location and owner   | the provisioning form (currency ILS by default, `<slug>.<PLATFORM_WEB_DOMAIN>` subdomain; into an organization instead of an owner since E1) | platform admin → Tenants → Provision (`tenants.provision`) |
+| Who may operate the platform                 | a platform user's role (OWNER, OPERATOR, SUPPORT, VIEWER), fixed permissions per role                                                        | `pnpm platform:create-owner` (no sign-up, no screen yet)   |
+| Platform token key                           | `PLATFORM_JWT_SECRET` (derived from `JWT_ACCESS_SECRET` when unset, always a different key)                                                  | the API's environment                                      |
+| Error events kept for the health board       | `PLATFORM_ERROR_SAMPLE_PER_MINUTE` per route and code (default 10; 0 = none)                                                                 | the API's environment                                      |
 
 Code, not settings: the platform permission catalog and role mapping, the support repairs and
 their roles, the five-minute confirmation, the five-failure lock of a platform account and the
@@ -310,3 +311,33 @@ tenant because the cloud is one deployment. The platform admin is never refused 
 Code, not settings: the semantic-version rule, the 15-second cache of the release policy per API
 instance, the `426` refusals and which callers they exempt (the platform's routes, and apps that
 report no version).
+
+## Organizations (E1)
+
+See [ADR 0029](adr/0029-organizations-and-accounts.md). An organization groups brands (tenants) under
+one owner. It adds no layer to the precedence rule above: a brand's settings stay its own, and an
+organization sets none of them.
+
+| What                                  | Decided by                                                                                        | Where it is written                                                      |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| An organization, its names and status | the platform operator: ACTIVE or SUSPENDED (members' org pages and org-only brand access refused) | platform admin → Organizations (`organizations.manage`)                  |
+| Its currency                          | fixed when it is created; every brand uses it, a brand in another cannot join                     | the create form                                                          |
+| Which brands belong to it             | the platform operator: attach, detach, or provision a brand into it                               | platform admin → Organizations → Brands (`organizations.manage`)         |
+| Its members and their roles           | the operator, and the organization's owners (OWNER, MANAGER, FINANCE; the last owner is kept)     | platform admin → Members, or admin → Organization → Members              |
+| What a member can do in a brand       | the brand role of the same name (Owner, Manager, Finance), tenant-wide, on a linked user          | derived; the brand's staff screens show it as "Organization" and lock it |
+
+### Demo data variables
+
+The development seed ([dev-setup.md](dev-setup.md)) creates the organization **Demo Foods Group**
+(`demo-foods`, ILS) with the brands Burger House (three branches) and Pizza Point (two). The four
+other demo businesses stay standalone. These variables are read by `pnpm db:seed` and the E2E
+database setup (`tools/e2e/prepare-db.mjs`); the defaults are in `infrastructure/.env.example`.
+
+| Variable                                              | Effect                                                                                                                                                               |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SEED_ORG_OWNER_EMAIL`, `SEED_ORG_OWNER_PASSWORD`     | The organization's OWNER member, with a linked Owner user in both brands. Unset: no owner is created.                                                                |
+| `SEED_ORG_FINANCE_EMAIL`, `SEED_ORG_FINANCE_PASSWORD` | A FINANCE member (reports and the organization dashboard only). Unset: skipped.                                                                                      |
+| `SEED_DEMO_ORDERS`                                    | `1` adds 30 days of deterministic paid orders across the five branches, so the dashboard and reports show data. Off by default; running the seed again adds nothing. |
+
+Code, not settings: the role mapping, the currency rule, the last-owner rule, the read-only
+organization scope and the 30-day window of the organization dashboard's splits.

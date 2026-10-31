@@ -70,7 +70,7 @@ order, join tables and role grants are replaced, staff missing from the snapshot
 and nothing referenced by local orders is ever deleted. A `menu.updated` event tells screens to
 refresh. Without the cloud the hub keeps serving its last snapshot.
 
-The snapshot is `format: 7` since payment configuration
+Payment configuration made the snapshot `format: 7`
 ([ADR 0024](adr/0024-payment-configuration.md)): it carries `paymentProviderAccounts`, the
 tenant's accounts and this location's (upserted by id before the tenders that link them; never
 deleted, because payments name them), selected column by column. **Their secrets never travel:**
@@ -79,7 +79,7 @@ run providers that need no secret (the kiosk's reader, cash and external card). 
 carry `providerAccountId`; the cloud refuses an account of another tenant (`SYNC_SCOPE_MISMATCH`).
 Orders the hub fetches carry the account id of their online payments, never a secret.
 
-Since product pictures ([ADR 0027](adr/0027-product-pictures.md)) the snapshot is `format: 8`. It
+Product pictures ([ADR 0027](adr/0027-product-pictures.md)) made the snapshot `format: 8`. It
 carries `productImages`, the cover picture of each product and variant, and their `tenantFiles`
 rows **without bytes**; `files` still carries only the branding files. After applying a snapshot
 the hub downloads each cover it lacks from `GET /sync/files/:fileId` (device credential, only
@@ -87,12 +87,16 @@ pictures its tenant's products show), checks the SHA-256, size and image type, k
 `menu.updated`. A failed download is tried again after the next snapshot. A trigger on
 `product_images` makes a picture-only change a `CONFIG` change.
 
-Format 9 (E1, organizations) added `accounts`: the logins of the snapshot's users, with their
+Since organizations and accounts ([ADR 0029](adr/0029-organizations-and-accounts.md)) the snapshot is
+`format: 9`. It adds `accounts`: the logins of the snapshot's users, with their
 password hash, applied before the users that name them (`lastTenantId` never leaves the cloud, it is
 sent as `null`). A hub paired earlier holds accounts its migration backfilled under random ids; the
 first format 9 snapshot replaces them by e-mail, moving their users over. A trigger on `accounts`
 records a `CONFIG` change for every tenant where the account has a user, so a password reset in
-the cloud reaches the hubs of all those brands (sign-ins, which only move `last_tenant_id`, do not).
+the cloud reaches the hubs of all those brands (sign-ins, which only move `last_tenant_id`, do not). Organizations and their members are
+cloud-only and never reach a hub (the hub holds one brand); `tenants.organization_id` and
+`users.organization_member_id` are plain columns there. A hub signs in by e-mail against its synced
+account and answers `404` to `/auth/switch`; the PIN sign-in is unchanged.
 
 Format 6 came with self-service kiosks
 ([ADR 0022](adr/0022-self-service-kiosk.md)): a device row also carries `pairingCodeHash` and

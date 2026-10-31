@@ -19,6 +19,43 @@ release is cut and rolled out.
   replaces `default`, `xl` replaces `touch`, new `md`/`2xl`/icon sizes, a `loading` state, a neutral
   disabled style); and the shared `DropdownMenu`, `AlertDialog` (replaces the admin's confirm dialog)
   and `Toast`/`Toaster`. A tenant's primary now also sets its hover and selected-row tints.
+- **Organizations and accounts (E1, ADR 0029).** One owner runs several brands, each a full tenant,
+  and signs in once.
+  - A shared login `Account` with one linked user per brand; `POST /auth/switch` moves between an
+    account's brands (with the caller's own refresh token); the sign-in response lists the person's
+    brands and organizations.
+  - Cloud-only organizations (one currency each) with members OWNER, MANAGER and FINANCE, who get
+    linked users with the brand roles Owner, Manager and the new built-in Finance role in every
+    brand. Brand staff cannot edit them.
+  - A read-only organization scope behind `OrganizationGuard` and the route class `organization`;
+    an organization dashboard (today, 7 and 30 days, by brand and branch) and seven cross-brand
+    reports; a member who belongs to one brand only never sees another.
+  - Admin: a brand switcher, organization pages (dashboard, reports, members), language and theme in
+    a user menu, and the brand dashboard without its stale "Full reports come later" copy. Platform admin: an Organizations page (create, attach
+    and detach brands, members, suspend) and provisioning a brand into an organization.
+  - Snapshot format 9 carries accounts to the hubs, which sign in by e-mail through them.
+  - The demo seed gains Demo Foods Group (Burger House, Pizza Point) and `SEED_DEMO_ORDERS=1`.
+  - New error codes `ORGANIZATION_NOT_FOUND`, `ORGANIZATION_CURRENCY_MISMATCH`,
+    `ORGANIZATION_LAST_OWNER`, `USER_MANAGED_BY_ORGANIZATION` and `ORGANIZATION_SLUG_TAKEN`.
+  - The design-system parts built for it: page shell with a grouped sidebar, stat card, sortable
+    data table with a sticky header, charts (Recharts, admin only).
+
+### Changed
+
+- Passwords and e-mail sign-in moved from `User` to `Account`; a user's e-mail is unique per brand,
+  not globally. Every corner radius derives from one radius, 8 px unbranded (the tenant default), so
+  the defaults are 5, 8, 11 and 16 px (were 6, 8 and 12 px) and `rounded-xl` follows the tenant too.
+- The admin's language and theme selectors moved into a user menu in the header; the brand
+  dashboard lost its stale "Full reports come later" copy; the platform admin's logo is drawn inline
+  (it was unreadable in the dark theme).
+- The shared spinner stops animating under `prefers-reduced-motion`.
+- Snapshot format 8 → 9.
+
+### Known limits
+
+- The brand switcher shows brand initials, not logos. Organizations have no branding of their own,
+  no e-mail invites and no password reset yet (E2). A suspended organization is not blocked from
+  platform attach and member changes. See "Known gaps" in [docs/architecture.md](docs/architecture.md).
 
 ## [1.0.0] - 2026-10-29
 

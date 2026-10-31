@@ -5,17 +5,17 @@ behind the Phase 10 additions are in [ADR 0016](adr/0016-hardening.md).
 
 ## Layers
 
-| Layer                                    | Runner                        | Where                                                           | Needs                         |
-| ---------------------------------------- | ----------------------------- | --------------------------------------------------------------- | ----------------------------- |
-| Domain rules (pure functions)            | Vitest                        | `packages/domain/src/**/*.test.ts`                              | nothing                       |
-| Contracts, i18n, client, UI kit          | Vitest                        | `packages/{validation,i18n,api-client,app-kit,ui}`              | nothing                       |
-| Cloud API integration                    | Vitest + real PostgreSQL      | `apps/api/test/*.test.ts`                                       | `TEST_DATABASE_URL` (`_test`) |
-| Location hub integration                 | Vitest + real SQLite          | `apps/gateway/test/*.test.ts` (with a fake cloud)               | nothing                       |
-| Shared server units                      | Vitest                        | `packages/server/src/**/*.test.ts`                              | nothing                       |
-| Components (POS, KDS, kiosk, web, admin) | Vitest + Testing Library      | `apps/*/src/**/*.test.tsx`                                      | nothing                       |
-| End to end                               | Playwright (installed Chrome) | `apps/{admin,pos,kds,kiosk,customer-web}/e2e/*.spec.ts`         | `*_e2e` databases, a build    |
-| Repository tools                         | `node --test`                 | `tools/**/*.test.mjs` (lint rule, printer decoder, this matrix) | nothing                       |
-| Tauri shell                              | `cargo test`, clippy, fmt     | `apps/pos/src-tauri`                                            | Rust                          |
+| Layer                                    | Runner                        | Where                                                                  | Needs                         |
+| ---------------------------------------- | ----------------------------- | ---------------------------------------------------------------------- | ----------------------------- |
+| Domain rules (pure functions)            | Vitest                        | `packages/domain/src/**/*.test.ts`                                     | nothing                       |
+| Contracts, i18n, client, UI kit          | Vitest                        | `packages/{validation,i18n,api-client,app-kit,ui}`                     | nothing                       |
+| Cloud API integration                    | Vitest + real PostgreSQL      | `apps/api/test/*.test.ts`                                              | `TEST_DATABASE_URL` (`_test`) |
+| Location hub integration                 | Vitest + real SQLite          | `apps/gateway/test/*.test.ts` (with a fake cloud)                      | nothing                       |
+| Shared server units                      | Vitest                        | `packages/server/src/**/*.test.ts`                                     | nothing                       |
+| Components (POS, KDS, kiosk, web, admin) | Vitest + Testing Library      | `apps/*/src/**/*.test.tsx`                                             | nothing                       |
+| End to end                               | Playwright (installed Chrome) | `apps/{admin,pos,kds,kiosk,customer-web,platform-admin}/e2e/*.spec.ts` | `*_e2e` databases, a build    |
+| Repository tools                         | `node --test`                 | `tools/**/*.test.mjs` (lint rule, printer decoder, this matrix)        | nothing                       |
+| Tauri shell                              | `cargo test`, clippy, fmt     | `apps/pos/src-tauri`                                                   | Rust                          |
 
 ## Running
 
@@ -26,7 +26,7 @@ pnpm test:tools                                          # tool tests, incl. the
 pnpm --filter @pos/pos rust:check                        # the desktop shell
 ```
 
-`pnpm e2e` runs the five suites one at a time (`turbo run test:e2e --concurrency=1`; each starts
+`pnpm e2e` runs the suites one at a time (`turbo run test:e2e --concurrency=1`; each starts
 its own cloud, hub and web servers on its own ports and databases — see
 [dev-setup.md](dev-setup.md#end-to-end-tests-playwright)). One suite:
 `pnpm --filter @pos/pos test:e2e`; one file: `pnpm --filter @pos/pos exec playwright test e2e/sync.spec.ts`.
@@ -255,6 +255,30 @@ English and Arabic.
 | The client sends its version and hands an upgrade refusal to the app; the update screen in English and Arabic; the footer's version                                                                                                                                                                                  | `packages/api-client/src/http.test.ts`, `packages/app-kit/src/upgrade.test.tsx` |
 | Release and release-channel tables stay out of the hub schema                                                                                                                                                                                                                                                        | `packages/database/src/hub-schema.contract.test.ts`                             |
 | An operator publishes a release, moves a business to beta and finds its outdated hub; an outdated app shows the update message in English and Arabic                                                                                                                                                                 | E2E scenarios 33 and 34                                                         |
+
+## Organizations and accounts (MADAR E1, ADR 0029)
+
+| What                                                                                                                                                                                                                                                       | Where                                                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Role mapping (OWNER/MANAGER/FINANCE → brand roles), the currency rule, the last-owner rule, the roles each organization route allows                                                                                                                       | `packages/domain/src/organizations/organizations.test.ts`                                                                               |
+| The organization scope: reads limited to the brands, every write refused (also for models without a tenant key)                                                                                                                                            | `packages/server/src/common/tenancy/scoped-prisma.test.ts`                                                                              |
+| Sign-in through accounts: the account's brands in the answer, `tenantId` then the last brand, a stale last brand falls back, no usable brand is `ACCOUNT_DISABLED`, e-mail case and spaces, a suspended organization's linked users                        | `apps/api/test/auth.test.ts`                                                                                                            |
+| `POST /auth/switch`: a session for the account's user in the other brand and audit in both, a brand of another account or a deactivated user is `404`, no token is `401`, two switches with one token start one session                                    | `apps/api/test/auth.test.ts`                                                                                                            |
+| Members: linked users in every brand, an existing brand user keeps their own role after leaving, never reactivating a brand-deactivated user, attach and detach, a removed member cannot switch or refresh, the last owner is protected, currency mismatch | `apps/api/test/organizations.test.ts`                                                                                                   |
+| The guard: `404` for a non-member or a person with one brand, `403` for FINANCE on members, suspended organization hidden; every organization route walked from the inventory                                                                              | `apps/api/test/organizations.test.ts`, `apps/api/test/security.test.ts`                                                                 |
+| Brand staff APIs refuse to edit a linked user (`USER_MANAGED_BY_ORGANIZATION`); a new user with a known e-mail links to its account                                                                                                                        | `apps/api/test/admin-staff.test.ts`                                                                                                     |
+| Organization totals equal the sum of the brands' reports; reports by brand and branch; filters and foreign ids (`404`); the dashboard's periods, brands, hubs and business days                                                                            | `apps/api/test/org-reports.test.ts`                                                                                                     |
+| Platform organizations: create, attach, detach (`LAST_OWNER`), members, audit, permissions by role                                                                                                                                                         | `apps/api/test/platform.test.ts`                                                                                                        |
+| Accounts in the snapshot (format 9) and their change-feed trigger; the hub signs in by e-mail through a synced account and replaces backfilled ones; the hub schema has no organization relations                                                          | `apps/api/test/sync.test.ts`, `apps/gateway/test/hub.test.ts`, `packages/database/src/hub-schema.contract.test.ts`                      |
+| The demo organization seed and its orders                                                                                                                                                                                                                  | `packages/database/src/seed.test.ts`                                                                                                    |
+| The brand switcher, the user menu, the organization dashboard, reports and members pages, tenant scoping of query caches after a switch                                                                                                                    | `apps/admin/src/components/*.test.tsx`, `apps/admin/src/routes/organization/*.test.tsx`                                                 |
+| The platform admin's Organizations list and detail                                                                                                                                                                                                         | `apps/platform-admin/src/routes/organizations-page.test.tsx`, `organization/*.test.tsx`                                                 |
+| The design-system pieces: DropdownMenu, AlertDialog, Toast, StatCard, DataTable (sort, sticky header, focus padding), Chart, PageShell, Button states, tokens                                                                                              | `packages/ui/src/components/*.test.tsx`, `packages/app-kit/src/components/page-shell.test.tsx`, `packages/app-kit/src/theme/*.test.ts*` |
+| An organization owner signs in once, sees both brands and switches (scenario 35); an operator creates an organization and attaches a brand (scenario 36)                                                                                                   | `apps/admin/e2e/organizations.spec.ts`, `apps/platform-admin/e2e/platform-admin.spec.ts`                                                |
+
+The E1 gate also includes a manual browser check on a freshly seeded database (`SEED_DEMO_ORDERS=1`),
+light and dark, English and Arabic; its screenshots are in
+[madar/e1-screenshots/](madar/e1-screenshots/).
 
 ## Testing requirements (specification section 32)
 

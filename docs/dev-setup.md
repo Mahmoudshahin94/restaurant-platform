@@ -32,6 +32,12 @@ database seeded before M4 keeps `demo-kitchen` in riyals until it is reset (`pnp
 until `SEED_ALIGN_TENANTS=1 pnpm db:seed` realigns it, which changes the currency only while the
 tenant has no orders. The E2E databases realign on every run.
 
+It also creates the organization **Demo Foods Group** with the brands Burger House and Pizza Point
+([ADR 0029](adr/0029-organizations-and-accounts.md)); its owner and finance member come from
+`SEED_ORG_OWNER_*` and `SEED_ORG_FINANCE_*` and sign in once to both brands. `SEED_DEMO_ORDERS=1 pnpm db:seed`
+adds 30 days of orders to its five branches, so the organization dashboard and reports show data
+([configuration.md](configuration.md#organizations-e1)).
+
 An existing development database from before MADAR is upgraded by `pnpm db:deploy` (the tenant
 rename keeps every row). A paired development hub upgrades its SQLite, including its pairing
 record, at start-up.

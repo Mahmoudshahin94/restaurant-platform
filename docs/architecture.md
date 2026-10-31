@@ -654,7 +654,7 @@ running a location):
 - KDS screens and POS terminals sign in as staff; only the hub itself is a registered device so
   far. Registering terminals and screens as devices is future work.
 - No bump-bar/keyboard control on the KDS.
-- Tenants are provisioned by seed only; there is no platform-operator UI yet.
+- Tenants are provisioned by the seed or, since M9, in the platform admin; there is no self-service signup.
 - **Online ordering (Phase 7):** no customer accounts, saved addresses, delivery zones or radius,
   scheduled orders, promo codes or tips; customers (and support staff in the cloud) cannot cancel
   a website order, only the location (reject) or the acceptance timeout can; the delivery fee is
@@ -686,6 +686,20 @@ running a location):
   net of refunds (refunds name no lines). The location hub has only its shift-close daily summary,
   so reports need the cloud and show what hubs have uploaded. Comparisons between periods and
   locations side by side are not built.
+
+- **Organizations (E1):**
+  - Access that spans branches of several brands without an organization role is not possible: a
+    member is tenant-wide in every brand, and nothing else crosses a brand boundary. A role per brand
+    cannot be edited for a member either.
+  - Organizations have no branding of their own (their pages use MADAR's look), no e-mail invites
+    (the owner or operator sets a starting password) and no password reset or second factor (E2).
+  - The brand switcher shows each brand's initials, not its logo.
+  - A suspended organization is not blocked from the platform's attach, provision-into and member
+    changes; it only refuses its organization pages and its members' brand sessions.
+  - The organization scope filters tenant-keyed models only, so organization code reading child
+    tables or raw SQL must bind `tenantIds` itself.
+  - Organization reports are live over the brand reports' views (as Phase 9) and cover the last 30
+    days on the dashboard; there are no organization-wide comparisons between periods.
 
 ## 11. MADAR expansion
 
@@ -722,6 +736,8 @@ See [ADR 0017](adr/0017-tenant-root-and-isolation.md).
   without a tenant is refused. Cross-tenant work is explicit (`runUnscoped`) and limited to
   reviewed files by a lint rule. Public storefront routes find their tenant first. Raw SQL binds
   the caller's own location or record ids.
+  Since E1 the scope has four kinds: `tenant` (a request's own), `organization` (read-only across an
+  organization's brands), `unscoped` (explicit, with a reason) and `none`.
 - **The hub holds one tenant:** it refuses snapshots carrying other tenants' rows. PIN codes
   matching staff of two tenants sign nobody in.
 - **Provisioning** (`provisionTenant`) is shared by the seed and the future platform API. The seed
@@ -1154,7 +1170,7 @@ stores, for many businesses at once:
 
 See [ADR 0027](adr/0027-product-pictures.md). Products show their pictures on the POS (a per-till
 switch), the kiosk and the website; the admin uploads them (resized in the browser) and orders
-them, the first being the cover. Hubs get the covers' rows in the snapshot (format 8) and download
+them, the first being the cover. Hubs get the covers' rows in the snapshot (format 8, now 9) and download
 the bytes once, checked by SHA-256, so menu edits do not resend pictures; the hub serves them on
 the location network. Variant pictures are shown everywhere but are set through the API only.
 
@@ -1163,6 +1179,36 @@ the location network. Variant pictures are shown everywhere but are set through 
 See [ADR 0028](adr/0028-enterprise-design-system.md) and
 [madar/design-system.md](madar/design-system.md): the UI audit of every app and the approved design
 system that later phases implement (storefront, counter and console profiles on one token set).
+
+### Enterprise organizations (phase E1)
+
+See [ADR 0029](adr/0029-organizations-and-accounts.md) and the
+[design](superpowers/specs/2026-10-31-e1-organizations-design.md). One owner runs several brands,
+each still a full tenant:
+
+- **One login, many brands:** `Account` holds the e-mail and password, and each brand keeps one
+  `User` linked to it, so tokens, guards, audit and hubs are unchanged. `POST /auth/switch` moves
+  between an account's brands without a password, but with the caller's own refresh token.
+- **Organization and members** (cloud-only): one currency per organization; roles OWNER, MANAGER
+  and FINANCE become the brand roles Owner, Manager and Finance on a linked user in every brand,
+  written only by `OrganizationService`. Brand staff APIs refuse to change them. A brand that left
+  keeps its users, now owned by it again.
+- **Organization scope, guard and access class:** `/organizations/:id/*` is protected by
+  `OrganizationGuard` and listed as the route class `organization`. It runs in a read-only scope
+  over the organization's brands. A non-member, or a person with access to one brand only, gets
+  `404 ORGANIZATION_NOT_FOUND`.
+- **Dashboard and reports:** today, 7 and 30 days, per brand and branch, and seven reports over the
+  brands, in the organization's currency (each branch on its own business day).
+- **Platform admin:** an Organizations page: create (with the first owner), attach and detach brands,
+  members, suspend; provision a brand into an organization.
+- **Hubs:** `Account` reaches the hub (snapshot format 9, a trigger on `accounts`); organizations do
+  not. The hub signs in by e-mail against the synced account and holds one brand.
+- **Admin:** a brand switcher, organization pages in MADAR's neutral look, and a user menu for
+  language and theme. The design-system pieces ADR 0028 assigned to E1 (tokens, page shell, stat
+  card, data table, chart, menu, confirm dialog, toast) were built and fix findings A1, A2, L1, X2
+  and X4.
+- **Demo:** "Demo Foods Group" with Burger House and Pizza Point; `SEED_DEMO_ORDERS=1` adds 30 days of
+  orders.
 
 ## Architectural decisions and open questions
 
@@ -1255,6 +1301,11 @@ Recorded as ADRs in [adr/](adr/):
 26. [0028](adr/0028-enterprise-design-system.md): the enterprise design system (phase E0): three
     surface profiles on one token set, the button spec, the shared components to build and the
     accessibility bar; documented in [madar/design-system.md](madar/design-system.md).
+27. [0029](adr/0029-organizations-and-accounts.md): organizations and accounts (phase E1): a shared
+    login `Account` with one linked `User` per brand, cloud-only organizations whose members get
+    linked users in every brand, brand switching with the caller's refresh token, a read-only
+    organization scope behind a guard and a new route class, cross-brand dashboard and reports in one
+    currency, platform admin management, and accounts in snapshot format 9.
 
 Open items to revisit:
 
