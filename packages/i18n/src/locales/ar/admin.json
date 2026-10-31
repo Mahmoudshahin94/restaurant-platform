@@ -1341,9 +1341,9 @@
       "roleChanged": "أصبح {{name}} الآن {{role}}.",
       "removed": "تمت إزالة {{name}}.",
       "skipped": "كانت بعض العلامات التجارية قد عطّلت هذا الشخص، لذا لم يُربط بها بعد.",
-      "addFailed": "تعذّرت إضافة العضو",
       "roleFailed": "تعذّر تغيير الدور",
-      "removeFailed": "تعذّرت إزالة العضو"
+      "removeFailed": "تعذّرت إزالة العضو",
+      "removeMember": "إزالة {{name}}"
     },
     "roles": {
       "OWNER": "مالك",

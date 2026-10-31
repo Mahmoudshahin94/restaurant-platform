@@ -103,7 +103,7 @@ describe('organization members page', () => {
       .on('DELETE', /\/organizations\/[^/]+\/members\/[^/]+$/, { status: 204 });
     await open();
     const row = await screen.findByRole('row', { name: /Sara Finance/ });
-    await userEvent.click(within(row).getByRole('button', { name: 'Remove' }));
+    await userEvent.click(within(row).getByRole('button', { name: /^Remove / }));
     const dialog = await screen.findByRole('alertdialog');
     expect(within(dialog).getByText('Remove Sara Finance?')).toBeInTheDocument();
     expect(api.calls.some((c) => c.method === 'DELETE')).toBe(false);
@@ -124,7 +124,7 @@ describe('organization members page', () => {
       }));
     await open();
     const row = await screen.findByRole('row', { name: /Test Owner/ });
-    await userEvent.click(within(row).getByRole('button', { name: 'Remove' }));
+    await userEvent.click(within(row).getByRole('button', { name: /^Remove / }));
     const dialog = await screen.findByRole('alertdialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Remove' }));
     expect(await screen.findByText('Could not remove the member')).toBeInTheDocument();

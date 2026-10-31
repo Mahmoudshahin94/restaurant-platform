@@ -1341,9 +1341,9 @@
       "roleChanged": "{{name}} is now {{role}}.",
       "removed": "{{name}} was removed.",
       "skipped": "Some brands had deactivated this person, so they are not linked there yet.",
-      "addFailed": "Could not add the member",
       "roleFailed": "Could not change the role",
-      "removeFailed": "Could not remove the member"
+      "removeFailed": "Could not remove the member",
+      "removeMember": "Remove {{name}}"
     },
     "roles": {
       "OWNER": "Owner",

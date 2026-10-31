@@ -6,6 +6,7 @@ import { Toaster } from '@pos/ui';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ORG, PIZZA, RID, signIn, stubApi } from '../test/api-stub';
 import { renderWithProviders } from '../test/render';
+import { usePreferences } from '../stores/preferences';
 import { useSession } from '../stores/session';
 import { BrandSwitcher } from './brand-switcher';
 
@@ -54,6 +55,7 @@ describe('brand switcher', () => {
     });
     const client = new QueryClient();
     client.setQueryData(['users', RID], ['cached']);
+    usePreferences.getState().setLocationId('location-of-the-old-brand');
     await renderWithProviders(
       <>
         <BrandSwitcher />
@@ -73,6 +75,7 @@ describe('brand switcher', () => {
     });
     expect(useSession.getState().accessToken).toBe('second-token');
     expect(client.getQueryData(['users', RID])).toBeUndefined();
+    expect(usePreferences.getState().locationId).toBeNull();
     expect(screen.getByTestId('where')).toHaveTextContent(/^\/$/);
   });
 

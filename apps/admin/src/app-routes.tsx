@@ -1,13 +1,13 @@
-import { RequireAuth, TenantProvider } from '@pos/app-kit';
+import { RequireAuth } from '@pos/app-kit';
 import { Feature, type Permission } from '@pos/shared-types';
 import type { ReactNode } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router';
-import { api, session, useSession } from './lib/api';
+import { session } from './lib/api';
 import { AppShell } from './components/app-shell';
 import { AdminToaster } from './components/admin-toaster';
+import { TenantScope } from './components/tenant-scope';
 import { RequireModule } from './components/require-module';
 import { RequirePermission } from './components/require-permission';
-import { usePreferences } from './stores/preferences';
 import { DashboardPage } from './routes/dashboard-page';
 import { LoginPage } from './routes/login-page';
 import { AvailabilityPage } from './routes/menu/availability-page';
@@ -65,30 +65,6 @@ function moduleGuarded(features: readonly Feature[], route: ReactNode) {
     <Route key={`module:${features.join(',')}`} element={<RequireModule features={features} />}>
       {route}
     </Route>
-  );
-}
-
-/**
- * The tenant's modules at the location chosen in the header (ADR 0018), in the language this
- * browser chose, else the user's, else the tenant's default (ADR 0020).
- */
-function TenantScope({ children }: { children: ReactNode }) {
-  const tenantId = useSession((s) => s.user?.tenantId);
-  const preferred = useSession((s) => s.user?.preferredLocale ?? null);
-  const locationId = usePreferences((s) => s.locationId);
-  const stored = usePreferences((s) => s.locale);
-  if (!tenantId) return null;
-  return (
-    // Keyed by brand: switching brands starts afresh, so the new brand's branding replaces the old.
-    <TenantProvider
-      key={tenantId}
-      api={api}
-      tenantId={tenantId}
-      locationId={locationId}
-      locale={{ stored, preferred }}
-    >
-      {children}
-    </TenantProvider>
   );
 }
 

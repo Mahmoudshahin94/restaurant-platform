@@ -260,6 +260,7 @@ function MembersTable({
         <Button
           variant="ghost"
           size="sm"
+          aria-label={t('admin:org.members.removeMember', { name: m.displayName })}
           onClick={() => {
             setRemoving(m);
           }}

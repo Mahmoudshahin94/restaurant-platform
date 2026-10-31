@@ -18,6 +18,7 @@ import { Fragment, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMatch, useNavigate } from 'react-router';
 import { api, session } from '../lib/api';
+import { usePreferences } from '../stores/preferences';
 import { useSession } from '../stores/session';
 
 /** A brand's first letter in a square: other brands' logos cannot be fetched with this token. */
@@ -89,6 +90,8 @@ export function BrandSwitcher() {
       const response = await api.auth.switch(tenantId);
       // Cleared before the new session lands, so nothing of the old brand is ever shown or reused.
       queryClient.clear();
+      // The chosen location belonged to the old brand.
+      usePreferences.getState().setLocationId(null);
       session.replaceSession(response);
       void navigate('/');
     } catch (error) {
