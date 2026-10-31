@@ -16,6 +16,7 @@ import type {
   createUserSchema,
 } from '@pos/validation';
 import type { z } from 'zod';
+import { OrganizationService } from '../../organizations/organization.service';
 
 const userInclude = {
   roles: { include: { role: { select: { name: true } } }, orderBy: { createdAt: 'asc' } },
@@ -48,6 +49,9 @@ const toDto = (row: NonNullable<UserRow>): StaffUser => ({
 
 const key = (a: RoleAssignmentInput) => `${a.roleId}:${a.locationId ?? '*'}`;
 
+const emailTaken = () =>
+  new DomainError('CONFLICT', 'This email is already in use', { reason: 'EMAIL_TAKEN' });
+
 /**
  * Back-office users (`users.manage`, tenant-wide). Every change of what someone may do is a
  * permission change and is audited (`user.roles_changed` with the assignments before and after).
@@ -57,9 +61,12 @@ const key = (a: RoleAssignmentInput) => `${a.roleId}:${a.locationId ?? '*'}`;
  * user's sessions at once. Passwords are hashed with argon2id and never logged or returned.
  *
  * Accounts (E1): a user's login is an `Account`, possibly shared with the person's users in other
- * brands. Creating a user with an e-mail that already has an account links the user to it (the
- * given password is ignored: the person keeps theirs; the answer is the same, so it does not tell
- * whether the e-mail had an account). A user its organization manages (`organizationMemberId`) is
+ * brands. A new e-mail gets a new account with the given password. An e-mail that already has an
+ * account is linked only when the brand belongs to an organization in one of whose brands the
+ * account already has a user (ADR 0029, R15; the given password is ignored: the person keeps
+ * theirs, and the answer is the one a new e-mail gets). Any other existing account answers exactly
+ * as an e-mail already taken in this brand (`CONFLICT`, `EMAIL_TAKEN`), so a brand can neither take
+ * over nor detect an account that works elsewhere. A user its organization manages (`organizationMemberId`) is
  * changed only through the organization (`USER_MANAGED_BY_ORGANIZATION`), and a brand cannot reset
  * the password of an account that also signs into other brands (`CONFLICT`, `ACCOUNT_SHARED`).
  */
@@ -68,6 +75,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly organizations: OrganizationService,
   ) {}
 
   async list(tenantId: string): Promise<StaffUser[]> {
@@ -84,10 +92,17 @@ export class UsersService {
     try {
       return await this.prisma.$transaction(async (tx) => {
         await this.checkAssignments(tx, principal, input.roles);
-        // The login: the person's existing account, else a new one. A second user of the same
-        // account in this tenant is refused (EMAIL_TAKEN below).
+        // The login: a new account, or an existing one this brand may link (see the class). A
+        // second user of the same account in this tenant is refused (EMAIL_TAKEN below).
+        const existing = await tx.account.findUnique({
+          where: { email: input.email },
+          select: { id: true },
+        });
+        if (existing && !(await this.mayLink(tx, principal.tenantId, existing.id))) {
+          throw emailTaken();
+        }
         const account =
-          (await tx.account.findUnique({ where: { email: input.email }, select: { id: true } })) ??
+          existing ??
           (await tx.account.create({
             data: { email: input.email, passwordHash, lastTenantId: principal.tenantId },
             select: { id: true },
@@ -119,13 +134,22 @@ export class UsersService {
         return toDto(row);
       });
     } catch (error) {
-      if (isUniqueViolation(error)) {
-        throw new DomainError('CONFLICT', 'This email is already in use', {
-          reason: 'EMAIL_TAKEN',
-        });
-      }
+      if (isUniqueViolation(error)) throw emailTaken();
       throw error;
     }
+  }
+
+  /**
+   * Whether the brand may link an existing account (R15): only when the brand belongs to an
+   * organization and the account already has a user in one of its brands.
+   */
+  private async mayLink(tx: PrismaTx, tenantId: string, accountId: string): Promise<boolean> {
+    const tenant = await tx.tenant.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: { organizationId: true },
+    });
+    if (tenant.organizationId === null) return false;
+    return this.organizations.worksInOrganization(accountId, tenant.organizationId);
   }
 
   async update(principal: Principal, userId: string, input: UpdateUserRequest): Promise<StaffUser> {

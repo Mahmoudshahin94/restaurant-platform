@@ -1,5 +1,6 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { type PrismaClient, verifySecret } from '@pos/database';
+import type { ApiErrorBody } from '@pos/shared-types';
 import type { AuthUser, Employee, Role, StaffUser } from '@pos/validation';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -560,28 +561,94 @@ describe('accounts and organizations (E1)', () => {
     expect(await verifySecret(account.passwordHash, PASSWORD)).toBe(true);
   });
 
-  it("creating staff with an existing account's e-mail links it", async () => {
+  it('a brand cannot link an account that works elsewhere: the same answer as a taken e-mail', async () => {
     const other = await createTenant(prisma);
     const cashier = await roleId('Cashier');
-    const linked = await call<StaffUser>('POST', `${base}/users`, owner, {
-      email: `  ${other.owner.email.toUpperCase()} `,
+    const cashierAt = [{ roleId: cashier, locationId: tenant.locationA }];
+    const create = (email: string, headers = owner, url = `${base}/users`, roles = cashierAt) =>
+      call<ApiErrorBody>('POST', url, headers, {
+        email,
+        displayName: 'Their name here',
+        password: 'a-password-of-mine',
+        roles,
+      });
+    const shape = (b: ApiErrorBody) => ({ code: b.code, message: b.message, details: b.details });
+
+    // Someone with a user in another brand only, and someone already in this brand.
+    const elsewhere = await create(`  ${other.owner.email.toUpperCase()} `);
+    const taken = await create(tenant.cashier.email);
+    expect(taken).toMatchObject({
+      status: 409,
+      body: { code: 'CONFLICT', details: { reason: 'EMAIL_TAKEN' } },
+    });
+    expect(elsewhere.status).toBe(409);
+    expect(shape(elsewhere.body)).toEqual(shape(taken.body));
+    // Nothing changed: no user here, and the person keeps their own password.
+    expect(
+      await prisma.user.count({
+        where: { tenantId: tenant.tenantId, account: { email: other.owner.email } },
+      }),
+    ).toBe(0);
+    const account = await prisma.account.findUniqueOrThrow({ where: { email: other.owner.email } });
+    expect(await verifySecret(account.passwordHash, PASSWORD)).toBe(true);
+
+    // A brand of an organization: an account whose users are in another organization's brands,
+    // or in a brand outside any organization, is refused the same way.
+    const org = await createOrganization(app, prisma, { brands: 2 });
+    const stranger = await createOrganization(app, prisma, { brands: 1 });
+    const brandB = org.brands[1]!;
+    const ownerB = bearer(await login(app, brandB.owner.email));
+    const cashierB = await prisma.role.findFirstOrThrow({
+      where: { tenantId: brandB.tenantId, name: 'Cashier' },
+    });
+    const urlB = `/api/v1/tenants/${brandB.tenantId}/users`;
+    const rolesB = [{ roleId: cashierB.id, locationId: brandB.locationA }];
+    for (const email of [stranger.brands[0]!.cashier.email, other.owner.email]) {
+      const refused = await create(email, ownerB, urlB, rolesB);
+      expect(refused.status).toBe(409);
+      expect(shape(refused.body)).toEqual(shape(taken.body));
+    }
+    expect(
+      await prisma.user.count({
+        where: {
+          tenantId: brandB.tenantId,
+          account: { email: { in: [stranger.brands[0]!.cashier.email, other.owner.email] } },
+        },
+      }),
+    ).toBe(0);
+  });
+
+  it('a brand of an organization links an account that already works in a sibling brand', async () => {
+    const org = await createOrganization(app, prisma, { brands: 2 });
+    const [brandA, brandB] = org.brands as [TenantFixture, TenantFixture];
+    const ownerB = bearer(await login(app, brandB.owner.email));
+    const cashierB = await prisma.role.findFirstOrThrow({
+      where: { tenantId: brandB.tenantId, name: 'Cashier' },
+    });
+    const url = `/api/v1/tenants/${brandB.tenantId}/users`;
+    const roles = [{ roleId: cashierB.id, locationId: brandB.locationA }];
+    const linked = await call<StaffUser>('POST', url, ownerB, {
+      email: `  ${brandA.cashier.email.toUpperCase()} `,
       displayName: 'Their name here',
       password: 'a-password-ignored',
-      roles: [{ roleId: cashier, locationId: tenant.locationA }],
+      roles,
     });
-    const fresh = await call<StaffUser>('POST', `${base}/users`, owner, {
+    const fresh = await call<StaffUser>('POST', url, ownerB, {
       email: 'brand-new@test.local',
       displayName: 'Brand New',
       password: 'a-long-password',
-      roles: [{ roleId: cashier, locationId: tenant.locationA }],
+      roles,
     });
-    // The same answer either way: nothing says whether the e-mail already had an account.
+    // The same answer either way.
     expect(linked.status).toBe(201);
     expect(fresh.status).toBe(201);
     expect(Object.keys(linked.body).sort()).toEqual(Object.keys(fresh.body).sort());
-    expect(linked.body).toMatchObject({ email: other.owner.email, managedByOrganization: false });
+    expect(linked.body).toMatchObject({
+      email: brandA.cashier.email,
+      managedByOrganization: false,
+    });
 
-    const accounts = await prisma.account.findMany({ where: { email: other.owner.email } });
+    const accounts = await prisma.account.findMany({ where: { email: brandA.cashier.email } });
     expect(accounts).toHaveLength(1);
     const user = await prisma.user.findUniqueOrThrow({ where: { id: linked.body.id } });
     expect(user.accountId).toBe(accounts[0]!.id);
@@ -591,7 +658,7 @@ describe('accounts and organizations (E1)', () => {
     const session = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
-      payload: { email: other.owner.email, password: PASSWORD, tenantId: tenant.tenantId },
+      payload: { email: brandA.cashier.email, password: PASSWORD, tenantId: brandB.tenantId },
     });
     expect(session.statusCode).toBe(200);
     expect(
@@ -599,6 +666,6 @@ describe('accounts and organizations (E1)', () => {
         .json<{ user: AuthUser }>()
         .user.tenants.map((t) => t.id)
         .sort(),
-    ).toEqual([tenant.tenantId, other.tenantId].sort());
+    ).toEqual([brandA.tenantId, brandB.tenantId].sort());
   });
 });

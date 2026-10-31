@@ -693,6 +693,9 @@ running a location):
     cannot be edited for a member either.
   - Organizations have no branding of their own (their pages use MADAR's look), no e-mail invites
     (the owner or operator sets a starting password) and no password reset or second factor (E2).
+  - Adding a person who already works elsewhere (an account with no user in any of the
+    organization's brands) needs a platform operator until E2 invites: an owner, or a brand
+    admin, gets the answer of an e-mail already taken (ADR 0029, R15).
   - The brand switcher shows each brand's initials, not its logo.
   - A suspended organization is not blocked from the platform's attach, provision-into and member
     changes; it only refuses its organization pages and its members' brand sessions.

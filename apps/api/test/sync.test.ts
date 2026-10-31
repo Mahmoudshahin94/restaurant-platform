@@ -601,6 +601,37 @@ describe('accounts at the hub (E1)', () => {
     expect(users.every((u) => !('passwordHash' in u))).toBe(true);
   });
 
+  it("a brand cannot bring another brand's account to its hub", async () => {
+    const elsewhere = await createTenant(prisma);
+    const cashier = await prisma.role.findFirstOrThrow({
+      where: { tenantId: tenant.tenantId, name: 'Cashier' },
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/tenants/${tenant.tenantId}/users`,
+      headers: owner,
+      payload: {
+        email: elsewhere.owner.email,
+        displayName: 'Not theirs',
+        password: 'a-password-of-mine',
+        roles: [{ roleId: cashier.id, locationId: tenant.locationA }],
+      },
+    });
+    expect(res.statusCode).toBe(409);
+    const body = await snapshot();
+    const foreign = await prisma.account.findUniqueOrThrow({
+      where: { email: elsewhere.owner.email },
+    });
+    expect(body.tables.accounts.map((a) => a.id)).not.toContain(foreign.id);
+    // Every account the hub gets has a user in its brand.
+    const ours = new Set(
+      (await prisma.user.findMany({ where: { tenantId: tenant.tenantId } })).map(
+        (u) => u.accountId,
+      ),
+    );
+    expect(body.tables.accounts.every((a) => ours.has(String(a.id)))).toBe(true);
+  });
+
   it('a password reset in the cloud reaches the hub through the change feed', async () => {
     const before = await snapshot();
     const { cursor } = await pull('');

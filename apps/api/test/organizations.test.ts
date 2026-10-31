@@ -183,6 +183,59 @@ describe('members', () => {
     expect((await signIn(` ${cashier.email.toUpperCase()}`)).status).toBe(200);
   });
 
+  it('an owner adds only people who already work in its brands; others answer as taken', async () => {
+    const outsider = await createTenant(prisma, undefined, { currencyCode: 'ILS' });
+    const shape = (b: ApiErrorBody) => ({ code: b.code, message: b.message, details: b.details });
+    // Without a password, someone who works elsewhere answers like a new e-mail: no signal that
+    // the e-mail has an account.
+    const asNew = await addMember({
+      email: 'nobody@test.local',
+      displayName: 'X',
+      role: 'MANAGER',
+    });
+    const asOutsider = await addMember({
+      email: ` ${outsider.owner.email.toUpperCase()}`,
+      displayName: 'X',
+      role: 'MANAGER',
+    });
+    expect(asNew.status).toBe(400);
+    expect(asOutsider.status).toBe(asNew.status);
+    expect(shape(asOutsider.body)).toEqual(shape(asNew.body));
+    // With one, like an e-mail already taken.
+    const withPassword = await addMember({
+      email: outsider.owner.email,
+      displayName: 'X',
+      role: 'MANAGER',
+      password: 'An-owner-chosen-password',
+    });
+    expect(withPassword).toMatchObject({
+      status: 409,
+      body: { code: 'CONFLICT', details: { reason: 'EMAIL_TAKEN' } },
+    });
+    // Nothing changed.
+    expect(
+      await prisma.organizationMember.count({
+        where: { account: { email: outsider.owner.email } },
+      }),
+    ).toBe(0);
+    expect((await usersOf(outsider.owner.email)).size).toBe(0);
+    const account = await prisma.account.findUniqueOrThrow({
+      where: { email: outsider.owner.email },
+    });
+    expect(await verifySecret(account.passwordHash, PASSWORD)).toBe(true);
+    expect(await prisma.account.count({ where: { email: 'nobody@test.local' } })).toBe(0);
+
+    // A platform operator can add them; they keep their own password.
+    const added = await service.addMember(
+      org.organizationId,
+      { email: outsider.owner.email, displayName: 'Outsider', role: 'MANAGER' },
+      operator,
+    );
+    expect(added.accountId).toBe(account.id);
+    expect((await usersOf(outsider.owner.email)).size).toBe(2);
+    expect((await signIn(outsider.owner.email, org.brands[0]!.tenantId)).status).toBe(200);
+  });
+
   it('the last owner cannot be removed or demoted', async () => {
     const demote = await app.inject({
       method: 'PATCH',

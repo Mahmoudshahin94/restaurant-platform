@@ -91,6 +91,11 @@ const TRANSACTION = { timeout: 30_000 } as const;
 
 const memberNotFound = () => new DomainError('NOT_FOUND', 'Member not found');
 
+const passwordRequired = () =>
+  new DomainError('VALIDATION_FAILED', 'A new account needs a starting password', {
+    fields: { password: 'required' },
+  });
+
 /**
  * Organizations' members and their linked users (E1, spec §3.3): the only writer of users the
  * organization manages. A member has a user in every brand of the organization holding the brand
@@ -131,8 +136,26 @@ export class OrganizationService {
   }
 
   /**
-   * Adds a person by e-mail. An e-mail that already has an account is that person, who keeps their
-   * own password; a new one needs a starting password.
+   * Whether the account already has a user in one of the organization's brands. Only then may the
+   * organization's owner, or a brand of the organization, link the account without a platform
+   * operator (ADR 0029, R15): without proof that the e-mail is theirs, linking any other account
+   * would let them take over a person who works elsewhere.
+   */
+  async worksInOrganization(accountId: string, organizationId: string): Promise<boolean> {
+    const users = await TenantContext.runUnscoped(
+      "linking an account: its users in the organization's brands",
+      () => this.prisma.user.count({ where: { accountId, tenant: { organizationId } } }),
+    );
+    return users > 0;
+  }
+
+  /**
+   * Adds a person by e-mail. A new e-mail gets a new account, which needs a starting password. An
+   * e-mail that already has an account is that person, who keeps their own password, when a
+   * platform operator adds them or they already have a user in one of the organization's brands
+   * (R15). For an owner, any other existing account answers as a new e-mail without a password
+   * does (`VALIDATION_FAILED`), and with a password as an e-mail already taken (`CONFLICT`,
+   * `EMAIL_TAKEN`): the answer never tells that the e-mail has an account elsewhere.
    */
   async addMember(
     organizationId: string,
@@ -147,18 +170,32 @@ export class OrganizationService {
         () =>
           this.prisma.$transaction(async (tx) => {
             const organization = await this.lock(tx, organizationId);
-            const account =
-              (await tx.account.findUnique({ where: { email }, select: { id: true } })) ??
-              (await this.newAccount(tx, email, passwordHash));
-            const existing = await tx.organizationMember.findUnique({
-              where: { organizationId_accountId: { organizationId, accountId: account.id } },
-              select: { id: true },
-            });
-            if (existing) {
-              throw new DomainError('CONFLICT', 'This person is already a member', {
-                reason: 'ALREADY_MEMBER',
+            const found = await tx.account.findUnique({ where: { email }, select: { id: true } });
+            if (found) {
+              const existing = await tx.organizationMember.findUnique({
+                where: { organizationId_accountId: { organizationId, accountId: found.id } },
+                select: { id: true },
               });
+              if (existing) {
+                throw new DomainError('CONFLICT', 'This person is already a member', {
+                  reason: 'ALREADY_MEMBER',
+                });
+              }
+              const linkable =
+                actor.kind === 'platform' ||
+                (await tx.user.count({
+                  where: { accountId: found.id, tenantId: { in: organization.tenantIds } },
+                })) > 0;
+              if (!linkable) {
+                // As for an e-mail with no account: a password is needed first; with one, the
+                // e-mail is taken.
+                if (!passwordHash) throw passwordRequired();
+                throw new DomainError('CONFLICT', 'This email is already in use', {
+                  reason: 'EMAIL_TAKEN',
+                });
+              }
             }
+            const account = found ?? (await this.newAccount(tx, email, passwordHash));
             const member = await tx.organizationMember.create({
               data: {
                 organizationId,
@@ -403,11 +440,7 @@ export class OrganizationService {
     email: string,
     passwordHash: string | null,
   ): Promise<{ id: string }> {
-    if (!passwordHash) {
-      throw new DomainError('VALIDATION_FAILED', 'A new account needs a starting password', {
-        fields: { password: 'required' },
-      });
-    }
+    if (!passwordHash) throw passwordRequired();
     return tx.account.create({ data: { email, passwordHash }, select: { id: true } });
   }
 

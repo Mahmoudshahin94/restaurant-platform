@@ -46,7 +46,8 @@ const addForm = z.object({
     .min(1, 'common:validation.required')
     .max(120, 'common:validation.tooLong'),
   role: z.enum(ROLES),
-  // Only for a person with no account yet; the server tells when it is missing.
+  // Needed unless the person already works in one of the organization's brands; the server
+  // tells when it is missing.
   password: z
     .string()
     .refine(

@@ -51,10 +51,20 @@ Decisions taken with the product owner, recorded in the
 - **The response** gains `tenants` (the brands the account can use: id, names, `logoFileId`,
   `organizationId`) and `organizations` (id, names, the caller's role). `GET /auth/me` and
   `/auth/refresh` carry the same lists. A one-brand person gets one entry and no organizations.
-- **Staff users:** creating a user with an e-mail that already has an account links the new user to
-  it. The password sent is ignored and the answer is the same either way, so it does not reveal
-  whether the e-mail had an account. A brand cannot reset the password of an account that also
-  signs into other brands (`409 CONFLICT`, `ACCOUNT_SHARED`).
+- **Linking an existing account** (ruling R15, which replaces the spec's silent linking): nobody
+  has proved that an e-mail is theirs until E2 invites, so a brand admin who could link any known
+  e-mail could take over a person who later joins an organization, or ship that person's password
+  hash to their own hub. An existing account is therefore linked only when a platform operator
+  adds it (creating an organization, adding a member) or when it already has a user in a brand of
+  the same organization (a brand admin creating staff in a brand of that organization, an owner
+  adding a member). Every other case answers exactly as an e-mail already taken (`409 CONFLICT`,
+  `EMAIL_TAKEN`); for an owner adding a member without a password, as a new e-mail without one
+  (`400 VALIDATION_FAILED`), so the answer never tells whether the e-mail has an account elsewhere.
+  A new e-mail still creates a fresh account with the password given.
+- **Staff users:** creating a user with an e-mail that has a linkable account (above) links the new
+  user to it. The password sent is ignored and the answer is the one a new e-mail gets. A brand
+  cannot reset the password of an account that also signs into other brands (`409 CONFLICT`,
+  `ACCOUNT_SHARED`).
 
 ### Organization and members
 
@@ -222,6 +232,8 @@ Arabic. Conflicts that need a reason (`ALREADY_MEMBER`, `TENANT_IN_ORGANIZATION`
 
 - The switcher shows each brand's initials, not its logo, although the list carries `logoFileId`.
 - No organization branding, no e-mail invites and no password reset (E2 covers account security).
+- Adding a person who already works elsewhere (an account with no user in the organization's
+  brands) needs a platform operator until E2 invites let the person prove the e-mail is theirs.
 - A suspended organization is not blocked from platform attach, provisioning or member changes.
 - Reports across currencies are not supported by design.
 

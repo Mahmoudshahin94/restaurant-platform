@@ -782,8 +782,11 @@ total }`.
 - **Users:** create `{ email, displayName, preferredLocale, password (≥ 10), roles: [{ roleId,
 locationId | null }] }`; update `{ displayName?, preferredLocale?, isActive? }`; roles are
   replaced with `PUT …/roles { roles }`. Passwords are argon2id hashes of the person's account, never
-  returned. Creating a user with an e-mail that already has an account links the user to it: the
-  password sent is ignored and the answer is the same either way.
+  returned. Creating a user with an e-mail that already has an account links the user to it only
+  when the brand belongs to an organization and the account already has a user in one of its
+  brands (ADR 0029, R15): the password sent is ignored and the answer is the one a new e-mail
+  gets. Any other existing account answers `409 CONFLICT` `EMAIL_TAKEN`, exactly as an e-mail
+  already used in this brand.
   Deactivating a user or resetting their password revokes their refresh tokens.
 - **Roles:** `{ name, description, permissions[] }` from the catalog (`PERMISSIONS`); responses
   carry `isSystem` and `userCount`. Employees: `{ employeeCode, displayName, homeLocationId,
@@ -992,9 +995,12 @@ organization; roles are `OWNER`, `MANAGER` and `FINANCE`.
   brand reports' row shapes with a brand dimension. Every amount is in the organization's currency
   (one per organization), so the totals add up and equal the sum of the brands' own reports.
 - **Members:** adding a member gives them a linked user in every brand, with the brand role of the
-  same name. An e-mail that already has an account is that person: the password is ignored and
-  they keep their own; a new e-mail needs `password` (`400 VALIDATION_FAILED`
-  otherwise). A brand where the person's own user was deactivated is skipped and listed in
+  same name. An e-mail that already has an account is that person (the password is ignored and
+  they keep their own) when a platform operator adds them or they already have a user in one of
+  the organization's brands (ADR 0029, R15); a new e-mail needs `password` (`400
+VALIDATION_FAILED` otherwise). For an owner, any other existing account answers as a new e-mail:
+  `400 VALIDATION_FAILED` without `password`, `409 CONFLICT` `EMAIL_TAKEN` with one (adding a
+  person who works elsewhere needs a platform operator until E2 invites). A brand where the person's own user was deactivated is skipped and listed in
   `skippedTenantIds` (audited as `user.organization_link_skipped`). Refusals: `409 CONFLICT`
   `ALREADY_MEMBER`; `409 ORGANIZATION_LAST_OWNER` (removing or demoting the last owner);
   `404 NOT_FOUND` for another organization's member. Removing a member takes the organization's
