@@ -17,16 +17,19 @@ const PIN_LOCK_MS = 5 * 60_000;
 
 /**
  * Which of an account's users (oldest first) to sign in: the one in the requested brand, else the
- * one in the last brand, else the oldest.
+ * one in the last brand, else the oldest. An archived brand (reading only) is chosen only when it
+ * is requested or the account has nothing else, so nobody lands in one by default.
  */
-function pickUser<T extends { tenantId: string }>(
+function pickUser<T extends { tenantId: string; tenant: { status: string } }>(
   users: readonly T[],
   requested: string | undefined,
   last: string | null,
 ): T | undefined {
+  const open = users.filter((u) => u.tenant.status !== 'ARCHIVED');
   return (
     users.find((u) => u.tenantId === requested) ??
-    users.find((u) => u.tenantId === last) ??
+    open.find((u) => u.tenantId === last) ??
+    open[0] ??
     users[0]
   );
 }
@@ -55,7 +58,8 @@ export class AuthService {
   /**
    * Signs a person in by e-mail and password. Their account may have a user in several brands:
    * sign-in picks the requested brand, else the last one, else the oldest, among the usable ones
-   * (`AccountDirectory.brandsFor`). A brand the account cannot use is ignored, never reported.
+   * (`AccountDirectory.brandsFor`), passing over archived brands unless requested or the only
+   * ones (`pickUser`). A brand the account cannot use is ignored, never reported.
    */
   async login(email: string, password: string, tenantId?: string): Promise<IssuedSession> {
     const account = await TenantContext.runUnscoped('sign-in: find the account by e-mail', () =>

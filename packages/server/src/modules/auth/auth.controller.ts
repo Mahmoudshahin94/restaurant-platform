@@ -15,6 +15,7 @@ import {
   type Principal,
   Public,
   RequirePermissions,
+  SessionRoute,
 } from '../../common/auth/decorators';
 import { ZodValidationPipe } from '../../common/validation/zod-validation.pipe';
 import { SERVER_MODE, type ServerMode } from '../../common/auth/managed-in-cloud';
@@ -97,9 +98,11 @@ export class AuthController {
   /**
    * Moves the signed-in person to another brand of their account: a new session for their user
    * there, the current one revoked. The refresh token comes as for `/auth/refresh` (cookie for a
-   * browser, body for a native client) and goes back the same way.
+   * browser, body for a native client) and goes back the same way. Allowed from an archived
+   * brand (`@SessionRoute`): moving out of it is not a write there.
    */
   @RequirePermissions([])
+  @SessionRoute()
   @Post('switch')
   @HttpCode(200)
   async switchTenant(

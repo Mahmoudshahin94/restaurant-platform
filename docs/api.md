@@ -62,7 +62,8 @@ Validation failures (`400 VALIDATION_FAILED`) list
 - **Accounts and brands** (E1, [ADR 0029](adr/0029-organizations-and-accounts.md)): the e-mail and
   password belong to an account, which has one user per brand. `tenantId` on login names the brand to
   sign into; without it, or when that brand is not usable for the account, sign-in uses the brand
-  signed into last, else the oldest. The e-mail is trimmed and lower-cased (` Owner@Demo.Local` is
+  signed into last, else the oldest, passing over archived brands (an archived brand is chosen only
+  when `tenantId` names it or the account has no other). The e-mail is trimmed and lower-cased (` Owner@Demo.Local` is
   `owner@demo.local`). `TokenResponse.user` (also `GET /auth/me`) carries `accountId`, `tenantId` (the
   brand of this session), `tenants` (`[{ id, nameEn, nameAr, logoFileId, organizationId }]`, one per
   usable brand of the account) and `organizations` (`[{ id, nameEn, nameAr, role }]`, empty for a
@@ -92,7 +93,8 @@ Validation failures (`400 VALIDATION_FAILED`) list
 - Login and refresh have their own per-IP rate-limit budget (`AUTH_RATE_LIMIT_PER_MINUTE`).
 - **Tenant status** (MADAR M9, ADR 0025): a suspended tenant's staff get `403 TENANT_SUSPENDED` on
   sign-in, refresh and every request (and the realtime socket); an archived tenant's may sign in
-  and read, and get `403 TENANT_ARCHIVED` on anything else. Platform tokens are refused here
+  and read, and get `403 TENANT_ARCHIVED` on anything else except `POST /auth/switch` (a session
+  operation, like refresh), so nobody is stuck in an archived brand. Platform tokens are refused here
   (`401`): they are for `/platform/*` only.
 
 ## Authorization

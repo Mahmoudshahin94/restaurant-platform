@@ -7,7 +7,7 @@ import { AccessService } from '../../modules/auth/access.service';
 import { TerminalAuthService } from '../../modules/auth/terminal-auth.service';
 import { TokenService } from '../../modules/auth/token.service';
 import { reportedVersion } from './client-version';
-import { IS_PUBLIC_KEY } from './decorators';
+import { IS_PUBLIC_KEY, SESSION_ROUTE_KEY } from './decorators';
 import { DEVICE_ROUTE_KEY } from './device-route';
 import { HOST_ROUTE_KEY } from './host-route';
 import { PLATFORM_PERMISSIONS_KEY } from './platform-route';
@@ -22,7 +22,8 @@ import { PLATFORM_PERMISSIONS_KEY } from './platform-route';
  * another key for another audience, so a platform token is refused here.
  *
  * The staff member's tenant must allow the request (ADR 0025): a suspended tenant nothing, an
- * archived one reading only.
+ * archived one reading only. A `@SessionRoute()` (switching brands) counts as reading: it changes
+ * the caller's session, not the tenant's data.
  */
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -60,7 +61,11 @@ export class AuthGuard implements CanActivate {
     }
     const claims = await this.tokens.verifyAccessToken(header.slice('Bearer '.length).trim());
     const principal = await this.access.loadPrincipal(claims.userId, claims.tenantId);
-    assertTenantAccess(principal.tenantStatus, accessKindOf(request.method));
+    const session = this.reflector.getAllAndOverride<boolean | undefined>(
+      SESSION_ROUTE_KEY,
+      targets,
+    );
+    assertTenantAccess(principal.tenantStatus, session ? 'read' : accessKindOf(request.method));
     request.principal = principal;
     return true;
   }

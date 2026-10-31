@@ -573,6 +573,38 @@ describe('POST /auth/switch', () => {
     expect(suspended.statusCode).toBe(404);
   });
 
+  it('nobody gets stuck in an archived brand: switching out works, sign-in prefers an active one', async () => {
+    await prisma.tenant.update({ where: { id: tenant.tenantId }, data: { status: 'ARCHIVED' } });
+    // Asked for explicitly, the archived brand is chosen (reading only there).
+    const inArchived = (
+      await postLogin({
+        email: tenant.owner.email,
+        password: PASSWORD,
+        client: 'native',
+        tenantId: tenant.tenantId,
+      })
+    ).json<TokenResponse>();
+    expect(inArchived.user.tenantId).toBe(tenant.tenantId);
+    // Switching is a session operation, not a write in the archived brand.
+    const out = await postSwitch(inArchived.accessToken, {
+      tenantId: brandB.tenantId,
+      refreshToken: inArchived.refreshToken,
+    });
+    expect(out.statusCode, out.body).toBe(200);
+    expect(out.json<TokenResponse>().user.id).toBe(ownerInB);
+
+    // The last brand (and the oldest) is the archived one: sign-in lands in the active sibling.
+    await prisma.account.update({
+      where: { email: tenant.owner.email },
+      data: { lastTenantId: tenant.tenantId },
+    });
+    expect((await signIn()).user.tenantId).toBe(brandB.tenantId);
+    // An archived brand that is someone's only brand is still theirs to read.
+    const cashier = await postLogin({ email: tenant.cashier.email, password: PASSWORD });
+    expect(cashier.statusCode).toBe(200);
+    expect(cashier.json<TokenResponse>().user.tenantId).toBe(tenant.tenantId);
+  });
+
   it('switch without a token is 401, and the body is validated', async () => {
     const anon = await app.inject({
       method: 'POST',
