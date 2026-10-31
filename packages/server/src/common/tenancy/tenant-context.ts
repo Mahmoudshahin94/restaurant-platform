@@ -9,11 +9,17 @@ import { RequestContext } from '../context/request-context';
  */
 export type TenantScope =
   | { kind: 'tenant'; tenantId: string }
+  /**
+   * An organization's pages (E1): reads cover its brands, writes are refused (the organization
+   * changes a brand's data by switching into it).
+   */
+  | { kind: 'organization'; organizationId: string; tenantIds: string[] }
   /** Deliberately cross-tenant work (sign-in lookups, start-up, sweeps), with its reason. */
   | { kind: 'unscoped'; reason: string }
   | { kind: 'none' };
 
-type Override = { tenantId: string } | { unscoped: string };
+type Override =
+  { tenantId: string } | { unscoped: string } | { organizationId: string; tenantIds: string[] };
 
 const storage = new AsyncLocalStorage<Override>();
 
@@ -26,6 +32,10 @@ export const TenantContext = {
   current(): TenantScope {
     const override = storage.getStore();
     if (override && 'unscoped' in override) return { kind: 'unscoped', reason: override.unscoped };
+    if (override && 'organizationId' in override) {
+      const { organizationId, tenantIds } = override;
+      return { kind: 'organization', organizationId, tenantIds: [...tenantIds] };
+    }
     const tenantId = override?.tenantId ?? RequestContext.get()?.tenantId;
     return tenantId ? { kind: 'tenant', tenantId } : { kind: 'none' };
   },
@@ -38,15 +48,32 @@ export const TenantContext = {
   },
 
   /**
-   * Runs `fn` for `tenantId`. Refused inside a request that already belongs to another tenant: a
-   * handler never switches tenants.
+   * Runs `fn` for `tenantId`. Refused inside a request that already belongs to another tenant (a
+   * handler never switches tenants), and inside an organization's scope for a tenant that is not
+   * one of its brands.
    */
   async runInTenant<T>(tenantId: string, fn: () => T | PromiseLike<T>): Promise<T> {
     const requestTenant = RequestContext.get()?.tenantId;
     if (requestTenant !== undefined && requestTenant !== tenantId) {
       throw new TenantScopeError('A request cannot switch to another tenant');
     }
+    const override = storage.getStore();
+    if (override && 'organizationId' in override && !override.tenantIds.includes(tenantId)) {
+      throw new TenantScopeError('An organization cannot switch to a tenant outside it');
+    }
     return within({ tenantId }, fn);
+  },
+
+  /**
+   * Runs `fn` over an organization's brands (`tenantIds`): the scoped client limits every read of
+   * a tenant's data to them and refuses every write (ADR 0029).
+   */
+  async runInOrganization<T>(
+    organizationId: string,
+    tenantIds: readonly string[],
+    fn: () => T | PromiseLike<T>,
+  ): Promise<T> {
+    return within({ organizationId, tenantIds: [...tenantIds] }, fn);
   },
 
   /**

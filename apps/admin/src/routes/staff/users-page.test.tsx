@@ -26,6 +26,7 @@ const sara: StaffUser = {
   lastLoginAt: null,
   roles: [{ roleId: cashierRole.id, roleName: 'Cashier', locationId: LOC }],
   employee: { id: '01a146e8-0000-7000-8000-0000000000a3', employeeCode: '1001' },
+  managedByOrganization: false,
   createdAt: at,
   updatedAt: at,
 };

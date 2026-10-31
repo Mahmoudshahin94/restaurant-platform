@@ -17,12 +17,14 @@ import {
   PASSWORD,
   type TenantFixture,
   bearer,
+  createOrganization,
   createTenant,
   login,
   resetDatabase,
   startApp,
 } from './helpers';
 import { testConfig } from './env';
+import { OrganizationService } from '../src/modules/organizations/organization.service';
 
 /**
  * Security hardening checks (ADR 0016): every route is protected server-side, refusals hold for
@@ -114,10 +116,14 @@ const FEATURE_ROUTES: Record<string, Feature> = {
 };
 
 /** A concrete URL for a route: the given tenant's ids, a fresh id for any other parameter. */
-function urlOf(route: RouteEntry, ids: { tenantId: string; locationId: string }): string {
+function urlOf(
+  route: RouteEntry,
+  ids: { tenantId: string; locationId: string; organizationId?: string },
+): string {
   const path = route.path.replace(/:(\w+)/g, (_match, name: string) => {
     if (name === 'tenantId') return ids.tenantId;
     if (name === 'locationId') return ids.locationId;
+    if (name === 'organizationId' && ids.organizationId) return ids.organizationId;
     return newId();
   });
   return ['/health', '/ready', '/internal/domains/check'].includes(path) ? path : `/api/v1${path}`;
@@ -155,6 +161,23 @@ describe('route inventory', () => {
     expect(switchRoute?.access).toBe('permissions');
     expect(switchRoute?.permissions).toEqual(me?.permissions);
     expect(switchRoute?.guards).toEqual(me?.guards);
+  });
+
+  it('authorizes organization routes with OrganizationGuard, by organization role only', () => {
+    const organization = routes.filter((r) => r.access === 'organization');
+    expect(organization.map(key)).toContain('GET /organizations/:organizationId/members');
+    for (const route of organization) {
+      expect(route.path.startsWith('/organizations/:organizationId'), key(route)).toBe(true);
+      expect(route.guards, key(route)).toEqual(['OrganizationGuard']);
+      expect(route.permissions, key(route)).toEqual([]);
+      expect(route.organizationRoles.length, key(route)).toBeGreaterThan(0);
+    }
+    // Every route under /organizations/:organizationId is an organization route.
+    expect(
+      routes
+        .filter((r) => r.path.startsWith('/organizations/:organizationId'))
+        .every((r) => r.access === 'organization'),
+    ).toBe(true);
   });
 
   it('serves the website on host routes only, each resolved by HostTenantGuard', () => {
@@ -321,6 +344,81 @@ describe('refusals on every protected route', () => {
       });
       const { code } = res.json<ApiErrorBody>();
       if (res.statusCode !== 404 || !['TENANT_NOT_FOUND', 'LOCATION_NOT_FOUND'].includes(code)) {
+        failures.push(`${key(route)} → ${String(res.statusCode)} ${code}`);
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+});
+
+describe('refusals on every organization route (E1)', () => {
+  let organizationId: string;
+  let ids: { tenantId: string; locationId: string; organizationId: string };
+  let outsiderToken: string;
+  let financeToken: string;
+  const organizationRoutes = () => routes.filter((r) => r.access === 'organization');
+
+  beforeAll(async () => {
+    await resetDatabase(prisma);
+    const org = await createOrganization(app, prisma, { brands: 1 });
+    organizationId = org.organizationId;
+    const brand = org.brands[0]!;
+    ids = { tenantId: brand.tenantId, locationId: brand.locationA, organizationId };
+    // The owner of another business: signed in, but no member.
+    const outsider = await createTenant(prisma, undefined, { currencyCode: 'ILS' });
+    outsiderToken = await login(app, outsider.owner.email);
+    await app.get(OrganizationService).addMember(
+      organizationId,
+      {
+        email: 'finance@test.local',
+        displayName: 'Finance',
+        role: 'FINANCE',
+        password: PASSWORD,
+      },
+      { kind: 'system' },
+    );
+    financeToken = await login(app, 'finance@test.local');
+  });
+
+  it('answers 401 without an access token', async () => {
+    const failures: string[] = [];
+    for (const route of organizationRoutes()) {
+      const res = await app.inject({ method: methodOf(route), url: urlOf(route, ids) });
+      if (res.statusCode !== 401 || res.json<ApiErrorBody>().code !== 'UNAUTHENTICATED') {
+        failures.push(`${key(route)} → ${String(res.statusCode)}`);
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
+  it('hides the organization from a signed-in non-member on every route', async () => {
+    const failures: string[] = [];
+    for (const route of organizationRoutes()) {
+      const res = await app.inject({
+        method: methodOf(route),
+        url: urlOf(route, ids),
+        headers: bearer(outsiderToken),
+      });
+      const { code } = res.json<ApiErrorBody>();
+      if (res.statusCode !== 404 || code !== 'ORGANIZATION_NOT_FOUND') {
+        failures.push(`${key(route)} → ${String(res.statusCode)} ${code}`);
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+
+  it('refuses a member whose role the route does not allow', async () => {
+    const failures: string[] = [];
+    const denied = organizationRoutes().filter((r) => !r.organizationRoles.includes('FINANCE'));
+    expect(denied.length).toBeGreaterThan(0);
+    for (const route of denied) {
+      const res = await app.inject({
+        method: methodOf(route),
+        url: urlOf(route, ids),
+        headers: bearer(financeToken),
+      });
+      const { code } = res.json<ApiErrorBody>();
+      if (res.statusCode !== 403 || code !== 'INSUFFICIENT_PERMISSION') {
         failures.push(`${key(route)} → ${String(res.statusCode)} ${code}`);
       }
     }

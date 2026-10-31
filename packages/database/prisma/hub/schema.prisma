@@ -411,11 +411,14 @@ model RolePermission {
 /// Uniqueness of (user, role, location) is enforced by the application service because
 /// PostgreSQL treats NULL location ids as distinct.
 model UserRole {
-  id         String   @id @default(uuid(7))
-  userId     String   @map("user_id")
-  roleId     String   @map("role_id")
-  locationId String?  @map("location_id")
-  createdAt  DateTime @default(now()) @map("created_at")
+  id                    String   @id @default(uuid(7))
+  userId                String   @map("user_id")
+  roleId                String   @map("role_id")
+  locationId            String?  @map("location_id")
+  /// Added by the user's organization (E1): removed when the membership ends, while the user's
+  /// own assignments stay. Only the organization service sets it.
+  grantedByOrganization Boolean  @default(false) @map("granted_by_organization")
+  createdAt             DateTime @default(now()) @map("created_at")
 
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   role     Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)

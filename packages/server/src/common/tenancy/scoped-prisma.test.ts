@@ -102,6 +102,61 @@ describe('scopeArgs', () => {
   });
 });
 
+describe('organization scope', () => {
+  const inOrg = (model: string, operation: string, args?: Record<string, unknown>) =>
+    TenantContext.runInOrganization('org-1', [A, B], () =>
+      scopeArgs(model, operation, args, 'refuse'),
+    );
+
+  it('limits every read to the organization’s brands', async () => {
+    expect(await inOrg('Order', 'findMany')).toEqual({ where: { tenantId: { in: [A, B] } } });
+    expect(await inOrg('Order', 'count', { where: { status: 'PAID' } })).toEqual({
+      where: { status: 'PAID', AND: [{ tenantId: { in: [A, B] } }] },
+    });
+    expect((await inOrg('Payment', 'aggregate', { where: { id: 'p' } }))?.where).toEqual({
+      id: 'p',
+      AND: [{ tenantId: { in: [A, B] } }],
+    });
+    expect(await inOrg('Tenant', 'findMany')).toEqual({ where: { id: { in: [A, B] } } });
+  });
+
+  it('is read-only: every write is refused, even for one of its brands', async () => {
+    for (const [operation, args] of [
+      ['create', { data: { tenantId: A } }],
+      ['createMany', { data: [{ tenantId: A }] }],
+      ['createManyAndReturn', { data: [{ tenantId: A }] }],
+      ['update', { where: { id: 'o' }, data: {} }],
+      ['updateMany', { where: {}, data: {} }],
+      ['updateManyAndReturn', { where: {}, data: {} }],
+      ['upsert', { where: { id: 'o' }, create: { tenantId: A }, update: {} }],
+      ['delete', { where: { id: 'o' } }],
+      ['deleteMany', { where: {} }],
+    ] as const) {
+      await expect(inOrg('Order', operation, args), operation).rejects.toThrow(
+        new TenantScopeError('Organization scope is read-only'),
+      );
+    }
+  });
+
+  it('reports its scope, and lets no request switch to a brand outside it', async () => {
+    await TenantContext.runInOrganization('org-1', [A], async () => {
+      expect(TenantContext.current()).toEqual({
+        kind: 'organization',
+        organizationId: 'org-1',
+        tenantIds: [A],
+      });
+      expect(() => TenantContext.require()).toThrow(TenantScopeError);
+      await expect(TenantContext.runInTenant(B, () => 'never')).rejects.toThrow(TenantScopeError);
+      expect(await TenantContext.runInTenant(A, () => TenantContext.require())).toBe(A);
+    });
+  });
+
+  it('leaves models without a tenant alone', async () => {
+    const args = { where: { organizationId: 'org-1' } };
+    expect(await inOrg('OrganizationMember', 'findMany', args)).toBe(args);
+  });
+});
+
 describe('TenantContext', () => {
   const request = (tenantId: string | undefined, fn: () => Promise<unknown>) =>
     RequestContext.run({ requestId: 'r', source: 'ADMIN', ...(tenantId ? { tenantId } : {}) }, fn);

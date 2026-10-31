@@ -94,6 +94,8 @@ export default tseslint.config(
       'apps/api/src/modules/platform/platform-directory.service.ts',
       // An account's users in every brand, for sign-in and the brand switcher.
       'apps/api/src/modules/organizations/cloud-account-directory.ts',
+      // An organization's linked users in every brand it holds (E1).
+      'apps/api/src/modules/organizations/organization.service.ts',
       // Key rotation finds secrets sealed with an old key across tenants (ADR 0024).
       'packages/server/src/modules/payments/secrets/payment-secrets.service.ts',
       // The definition itself.

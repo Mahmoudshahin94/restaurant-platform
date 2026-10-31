@@ -4,9 +4,13 @@ import { idSchema, localeSchema } from './common';
 
 export const permissionSchema = z.enum(PERMISSIONS);
 
+/** Accounts store e-mails trimmed and lowercase, so ` Owner@Demo.Local` is the same person. */
+export const accountEmailSchema = z.string().trim().toLowerCase().pipe(z.email().max(254));
+
+export const organizationRoleSchema = z.enum(enumValues(OrganizationRole));
+
 export const loginRequestSchema = z.object({
-  /** Accounts store e-mails trimmed and lowercase, so ` Owner@Demo.Local` is the same person. */
-  email: z.string().trim().toLowerCase().pipe(z.email().max(254)),
+  email: accountEmailSchema,
   password: z.string().min(1).max(256),
   /**
    * The brand to sign into, for a person with users in several. Ignored when the account has no
@@ -70,7 +74,7 @@ export const authOrganizationSchema = z.object({
   id: idSchema,
   nameEn: z.string(),
   nameAr: z.string(),
-  role: z.enum(enumValues(OrganizationRole)),
+  role: organizationRoleSchema,
 });
 export type AuthOrganization = z.infer<typeof authOrganizationSchema>;
 

@@ -17,7 +17,7 @@ import {
 } from '@pos/server';
 import { AdminModule } from './modules/admin/admin.module';
 import { DevicesModule } from './modules/devices/devices.module';
-import { CloudAccountDirectoryModule } from './modules/organizations/cloud-account-directory';
+import { OrganizationsModule } from './modules/organizations/organizations.module';
 import { PlatformModule } from './modules/platform/platform.module';
 import { ReleasesModule } from './modules/releases/releases.module';
 import { CloudReportsModule } from './modules/reports/reports.module';
@@ -41,8 +41,8 @@ export class AppModule {
             changeRecorder: WebOrderChangeRecorder,
           },
         }),
-        // An account's brands across every tenant, and its organizations, for sign-in.
-        CloudAccountDirectoryModule,
+        // Cloud-only: organizations (E1), and an account's brands across every tenant for sign-in.
+        OrganizationsModule,
         // Cloud-only: which hubs and apps this cloud still serves (ADR 0026).
         ReleasesModule,
         TenantsModule,

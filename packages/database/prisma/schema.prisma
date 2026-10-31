@@ -415,11 +415,14 @@ model RolePermission {
 /// Uniqueness of (user, role, location) is enforced by the application service because
 /// PostgreSQL treats NULL location ids as distinct.
 model UserRole {
-  id         String   @id @default(uuid(7)) @db.Uuid
-  userId     String   @map("user_id") @db.Uuid
-  roleId     String   @map("role_id") @db.Uuid
-  locationId String?  @map("location_id") @db.Uuid
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  id                    String   @id @default(uuid(7)) @db.Uuid
+  userId                String   @map("user_id") @db.Uuid
+  roleId                String   @map("role_id") @db.Uuid
+  locationId            String?  @map("location_id") @db.Uuid
+  /// Added by the user's organization (E1): removed when the membership ends, while the user's
+  /// own assignments stay. Only the organization service sets it.
+  grantedByOrganization Boolean  @default(false) @map("granted_by_organization")
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   role     Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
@@ -1740,6 +1743,8 @@ model OrganizationMember {
   organizationId String           @map("organization_id") @db.Uuid
   accountId      String           @map("account_id") @db.Uuid
   role           OrganizationRole
+  /// The name the member's users get in brands that join later (an account has no name).
+  displayName    String           @map("display_name")
   createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

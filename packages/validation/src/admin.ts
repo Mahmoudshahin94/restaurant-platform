@@ -14,7 +14,7 @@ import {
   enumValues,
 } from '@pos/shared-types';
 import { z } from 'zod';
-import { permissionSchema } from './auth';
+import { accountEmailSchema, permissionSchema } from './auth';
 import {
   idSchema,
   isoDateTimeSchema,
@@ -82,16 +82,16 @@ export const staffUserSchema = z.object({
     z.object({ roleId: idSchema, roleName: z.string(), locationId: idSchema.nullable() }),
   ),
   employee: z.object({ id: idSchema, employeeCode: z.string() }).nullable(),
+  /** Managed by the brand's organization (E1): the staff API cannot change it. */
+  managedByOrganization: z.boolean(),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
 });
 export type StaffUser = z.infer<typeof staffUserSchema>;
 
 export const createUserSchema = z.object({
-  email: z
-    .email()
-    .max(254)
-    .transform((e) => e.toLowerCase()),
+  /** An e-mail that already has an account links the new user to it (its password is kept). */
+  email: accountEmailSchema,
   displayName: z.string().trim().min(1).max(120),
   preferredLocale: localeSchema.default('en'),
   password: newPasswordSchema,

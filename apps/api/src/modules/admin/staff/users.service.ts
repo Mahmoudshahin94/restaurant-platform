@@ -41,6 +41,7 @@ const toDto = (row: NonNullable<UserRow>): StaffUser => ({
     locationId: r.locationId,
   })),
   employee: row.employee,
+  managedByOrganization: row.organizationMemberId !== null,
   createdAt: row.createdAt.toISOString(),
   updatedAt: row.updatedAt.toISOString(),
 });
@@ -54,6 +55,13 @@ const key = (a: RoleAssignmentInput) => `${a.roleId}:${a.locationId ?? '*'}`;
  * changes their own roles or deactivates themselves; the tenant always keeps an active
  * tenant-wide holder of a system role (Owner). Deactivation and password resets end the
  * user's sessions at once. Passwords are hashed with argon2id and never logged or returned.
+ *
+ * Accounts (E1): a user's login is an `Account`, possibly shared with the person's users in other
+ * brands. Creating a user with an e-mail that already has an account links the user to it (the
+ * given password is ignored: the person keeps theirs; the answer is the same, so it does not tell
+ * whether the e-mail had an account). A user its organization manages (`organizationMemberId`) is
+ * changed only through the organization (`USER_MANAGED_BY_ORGANIZATION`), and a brand cannot reset
+ * the password of an account that also signs into other brands (`CONFLICT`, `ACCOUNT_SHARED`).
  */
 @Injectable()
 export class UsersService {
@@ -76,10 +84,14 @@ export class UsersService {
     try {
       return await this.prisma.$transaction(async (tx) => {
         await this.checkAssignments(tx, principal, input.roles);
-        // The login: an e-mail that already has one is refused (EMAIL_TAKEN below).
-        const account = await tx.account.create({
-          data: { email: input.email, passwordHash, lastTenantId: principal.tenantId },
-        });
+        // The login: the person's existing account, else a new one. A second user of the same
+        // account in this tenant is refused (EMAIL_TAKEN below).
+        const account =
+          (await tx.account.findUnique({ where: { email: input.email }, select: { id: true } })) ??
+          (await tx.account.create({
+            data: { email: input.email, passwordHash, lastTenantId: principal.tenantId },
+            select: { id: true },
+          }));
         const row = await tx.user.create({
           data: {
             tenantId: principal.tenantId,
@@ -118,7 +130,7 @@ export class UsersService {
 
   async update(principal: Principal, userId: string, input: UpdateUserRequest): Promise<StaffUser> {
     return this.prisma.$transaction(async (tx) => {
-      const before = await this.load(tx, principal.tenantId, userId);
+      const before = await this.loadEditable(tx, principal.tenantId, userId);
       if (input.isActive === false && before.isActive) {
         if (userId === principal.userId) {
           throw new DomainError('CONFLICT', 'You cannot deactivate yourself', { reason: 'SELF' });
@@ -162,7 +174,7 @@ export class UsersService {
     roles: RoleAssignmentInput[],
   ): Promise<StaffUser> {
     return this.prisma.$transaction(async (tx) => {
-      const before = await this.load(tx, principal.tenantId, userId);
+      const before = await this.loadEditable(tx, principal.tenantId, userId);
       if (userId === principal.userId) {
         throw new DomainError('CONFLICT', 'You cannot change your own roles', { reason: 'SELF' });
       }
@@ -191,7 +203,17 @@ export class UsersService {
   async resetPassword(principal: Principal, userId: string, password: string): Promise<void> {
     const passwordHash = await hashSecret(password);
     await this.prisma.$transaction(async (tx) => {
-      const user = await this.load(tx, principal.tenantId, userId);
+      const user = await this.loadEditable(tx, principal.tenantId, userId);
+      // The password is the account's: one brand cannot change how someone signs into others.
+      const account = await tx.account.findUniqueOrThrow({
+        where: { id: user.accountId },
+        select: { _count: { select: { users: true } } },
+      });
+      if (account._count.users > 1) {
+        throw new DomainError('CONFLICT', 'This person also signs into other brands', {
+          reason: 'ACCOUNT_SHARED',
+        });
+      }
       // Taking over someone's account is as strong as holding their roles.
       if (userId !== principal.userId) await this.checkAssignments(tx, principal, user.roles);
       await tx.user.update({
@@ -215,6 +237,19 @@ export class UsersService {
   private async load(tx: PrismaTx, tenantId: string, userId: string) {
     const row = await loadUser(tx, tenantId, userId);
     if (!row) throw new DomainError('USER_NOT_FOUND', 'User not found', { userId });
+    return row;
+  }
+
+  /** A user the brand may change: not one its organization manages (E1). */
+  private async loadEditable(tx: PrismaTx, tenantId: string, userId: string) {
+    const row = await this.load(tx, tenantId, userId);
+    if (row.organizationMemberId !== null) {
+      throw new DomainError(
+        'USER_MANAGED_BY_ORGANIZATION',
+        'This user is managed by the organization',
+        { userId },
+      );
+    }
     return row;
   }
 

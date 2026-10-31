@@ -3,6 +3,7 @@ import { GUARDS_METADATA, METHOD_METADATA, PATH_METADATA } from '@nestjs/common/
 import { ModulesContainer, Reflector } from '@nestjs/core';
 import type {
   Feature,
+  OrganizationRole,
   Permission,
   PlatformPermission,
   TerminalDeviceType,
@@ -10,6 +11,7 @@ import type {
 import { IS_PUBLIC_KEY, PERMISSIONS_KEY, type PermissionRequirement } from './decorators';
 import { DEVICE_ROUTE_KEY } from './device-route';
 import { HOST_ROUTE_KEY } from './host-route';
+import { ORGANIZATION_GUARD_NAME, ORGANIZATION_ROUTE_KEY } from './organization-route';
 import { PLATFORM_GUARD_NAME, PLATFORM_PERMISSIONS_KEY } from './platform-route';
 import { requiredFeaturesOf } from './require-feature';
 
@@ -23,11 +25,20 @@ import { requiredFeaturesOf } from './require-feature';
  *   domain the request's host names (`HostTenantGuard`, ADR 0023);
  * - `platform`: MADAR's operators, `@RequirePlatformPermissions`: a platform token only, checked
  *   by `PlatformGuard` (ADR 0025); staff tokens and device credentials are refused;
+ * - `organization`: an organization's pages, `@OrganizationRoute`: a staff token whose account is
+ *   a member of the organization in one of the route's roles, checked by `OrganizationGuard` (E1);
  * - `unprotected`: none of these — refused at runtime by the permissions guard, and at start-up by
  *   `assertEveryRouteProtected`.
  */
 export type RouteAccess =
-  'public' | 'guarded' | 'permissions' | 'device' | 'host' | 'platform' | 'unprotected';
+  | 'public'
+  | 'guarded'
+  | 'permissions'
+  | 'device'
+  | 'host'
+  | 'platform'
+  | 'organization'
+  | 'unprotected';
 
 export interface RouteEntry {
   method: string;
@@ -37,6 +48,8 @@ export interface RouteEntry {
   permissions: readonly Permission[];
   /** Platform routes: the platform permissions the operator needs (an empty list: any). */
   platformPermissions: readonly PlatformPermission[];
+  /** Organization routes: the organization roles allowed. */
+  organizationRoles: readonly OrganizationRole[];
   /** Modules the route needs (`@RequireFeature`); refused with FEATURE_DISABLED while off. */
   features: readonly Feature[];
   /** Device routes: the terminal types it serves. */
@@ -93,26 +106,32 @@ export function listRoutes(app: INestApplication): RouteEntry[] {
         const platform = (Reflect.getMetadata(PLATFORM_PERMISSIONS_KEY, handler) ??
           Reflect.getMetadata(PLATFORM_PERMISSIONS_KEY, controller)) as
           PlatformPermission[] | undefined;
+        const organization = (Reflect.getMetadata(ORGANIZATION_ROUTE_KEY, handler) ??
+          Reflect.getMetadata(ORGANIZATION_ROUTE_KEY, controller)) as
+          OrganizationRole[] | undefined;
         const guards = guardNames(controller, handler);
         const access: RouteAccess = isHost
           ? 'host'
           : platform && !isPublic
             ? 'platform'
-            : isPublic
-              ? guards.length > 0
-                ? 'guarded'
-                : 'public'
-              : devices
-                ? 'device'
-                : requirement
-                  ? 'permissions'
-                  : 'unprotected';
+            : organization && !isPublic
+              ? 'organization'
+              : isPublic
+                ? guards.length > 0
+                  ? 'guarded'
+                  : 'public'
+                : devices
+                  ? 'device'
+                  : requirement
+                    ? 'permissions'
+                    : 'unprotected';
         routes.push({
           method: RequestMethod[method],
           path: joinPath(base, firstPath(Reflect.getMetadata(PATH_METADATA, handler))),
           access,
           permissions: requirement?.permissions ?? [],
           platformPermissions: platform ?? [],
+          organizationRoles: organization ?? [],
           features: requiredFeaturesOf(reflector, [handler, controller]),
           devices: devices ?? [],
           guards,
@@ -150,6 +169,26 @@ export function assertEveryRouteProtected(app: INestApplication): void {
     const list = unguardedPlatform.map((r) => `${r.method} ${r.path} (${r.handler})`).join(', ');
     throw new Error(`Platform routes must authenticate with ${PLATFORM_GUARD_NAME}: ${list}`);
   }
+  const organizationMixed = routes.filter((r) =>
+    r.access === 'organization'
+      ? r.permissions.length > 0 || r.devices.length > 0 || r.organizationRoles.length === 0
+      : r.organizationRoles.length > 0,
+  );
+  if (organizationMixed.length > 0) {
+    const list = organizationMixed.map((r) => `${r.method} ${r.path} (${r.handler})`).join(', ');
+    throw new Error(
+      `Organization routes need their roles and cannot be public, platform routes or also require staff permissions or devices: ${list}`,
+    );
+  }
+  const unguardedOrganization = routes.filter(
+    (r) => r.access === 'organization' && !r.guards.includes(ORGANIZATION_GUARD_NAME),
+  );
+  if (unguardedOrganization.length > 0) {
+    const list = unguardedOrganization
+      .map((r) => `${r.method} ${r.path} (${r.handler})`)
+      .join(', ');
+    throw new Error(`Organization routes must authorize with ${ORGANIZATION_GUARD_NAME}: ${list}`);
+  }
   const hostMixed = routes.filter(
     (r) => r.access === 'host' && (r.permissions.length > 0 || r.devices.length > 0),
   );
@@ -173,7 +212,7 @@ export function assertEveryRouteProtected(app: INestApplication): void {
   if (unprotected.length > 0) {
     const list = unprotected.map((r) => `${r.method} ${r.path} (${r.handler})`).join(', ');
     throw new Error(
-      `Routes without @Public(), @RequirePermissions, @DeviceRoute, @HostRoute or @RequirePlatformPermissions: ${list}`,
+      `Routes without @Public(), @RequirePermissions, @DeviceRoute, @HostRoute, @RequirePlatformPermissions or @OrganizationRoute: ${list}`,
     );
   }
 }

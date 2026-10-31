@@ -66,6 +66,7 @@ export function scopeArgs(
     if (withoutTenant === 'allow') return args;
     throw new TenantScopeError(`${model}.${operation} ran without a tenant in scope`);
   }
+  if (scope.kind === 'organization') return organizationArgs(key, operation, args, scope.tenantIds);
   const { tenantId } = scope;
   const next: Record<string, unknown> = { ...args };
   const check = (data: unknown, kind: 'create' | 'update') => {
@@ -93,14 +94,41 @@ export function scopeArgs(
   return next;
 }
 
+/** Operations that write: refused under an organization's scope. */
+const WRITES = new Set([
+  'create',
+  'createMany',
+  'createManyAndReturn',
+  'update',
+  'updateMany',
+  'updateManyAndReturn',
+  'upsert',
+  'delete',
+  'deleteMany',
+]);
+
+/** An organization's pages read their brands' data and never write it. */
+function organizationArgs(
+  key: string,
+  operation: string,
+  args: Args,
+  tenantIds: readonly string[],
+): Args {
+  if (WRITES.has(operation)) throw new TenantScopeError('Organization scope is read-only');
+  return {
+    ...args,
+    where: within(args?.where as Record<string, unknown> | undefined, key, { in: [...tenantIds] }),
+  };
+}
+
 function within(
   where: Record<string, unknown> | undefined,
   key: string,
-  tenantId: string,
+  tenant: string | { in: string[] },
 ): Record<string, unknown> {
-  if (!where) return { [key]: tenantId };
+  if (!where) return { [key]: tenant };
   const and = where.AND === undefined ? [] : Array.isArray(where.AND) ? where.AND : [where.AND];
-  return { ...where, AND: [...(and as unknown[]), { [key]: tenantId }] };
+  return { ...where, AND: [...(and as unknown[]), { [key]: tenant }] };
 }
 
 function assertWrite(

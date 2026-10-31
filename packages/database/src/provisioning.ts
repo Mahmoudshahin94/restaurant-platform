@@ -99,6 +99,80 @@ export const FINANCE_ROLE: RoleSpec = {
   permissions: ['reports.view', 'locations.view'],
 };
 
+/**
+ * The brand role of an organization's managers when the brand has none of its own (E1): the demo
+ * Manager's permissions. Not a system role, so the brand can adapt it.
+ */
+export const MANAGER_ROLE: RoleSpec = {
+  name: 'Manager',
+  description: 'Runs a branch',
+  isSystem: false,
+  permissions: [
+    'orders.view',
+    'orders.create',
+    'orders.update',
+    'orders.cancel',
+    'orders.refund',
+    'orders.discount',
+    'products.view',
+    'products.create',
+    'products.update',
+    'payments.view',
+    'payments.refund',
+    'shifts.manage',
+    'cash.manage',
+    'tables.manage',
+    'kitchen.view',
+    'kitchen.update',
+    'customers.view',
+    'reports.view',
+    'locations.view',
+    'online_ordering.manage',
+    'devices.manage',
+    'kiosk.attend',
+    'sync.view',
+    'audit.view',
+    'payments.create',
+  ],
+};
+
+/** The brand roles an organization grants, by name (`brandRoleFor`). */
+export const BRAND_ROLE_SPECS: Readonly<Record<'Owner' | 'Manager' | 'Finance', RoleSpec>> = {
+  Owner: OWNER_ROLE,
+  Manager: MANAGER_ROLE,
+  Finance: FINANCE_ROLE,
+};
+
+/**
+ * The id of the tenant's role named like `spec`, created from `spec` when the tenant has none.
+ * An existing role is used as it is: the tenant's own definition wins.
+ */
+export async function ensureRole(
+  prisma: PrismaClient | Prisma.TransactionClient,
+  tenantId: string,
+  spec: RoleSpec,
+): Promise<string> {
+  const found = await prisma.role.findUnique({
+    where: { tenantId_name: { tenantId, name: spec.name } },
+    select: { id: true },
+  });
+  if (found) return found.id;
+  const role = await prisma.role.create({
+    data: {
+      tenantId,
+      name: spec.name,
+      description: spec.description,
+      isSystem: spec.isSystem,
+      permissions: {
+        create: resolveRolePermissions(spec.permissions).map((permissionKey) => ({
+          permissionKey,
+        })),
+      },
+    },
+  });
+  return role.id;
+}
+
 /** A domain's verification token: 128 random bits, URL- and DNS-safe. */
 export function newDomainVerificationToken(): string {
   return randomBytes(16).toString('hex');

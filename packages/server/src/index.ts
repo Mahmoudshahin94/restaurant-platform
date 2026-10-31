@@ -15,6 +15,7 @@ export * from './common/auth/principal';
 export * from './common/auth/require-feature';
 export * from './common/auth/route-inventory';
 export * from './common/auth/platform-route';
+export * from './common/auth/organization-route';
 export * from './common/auth/cookies';
 export * from './common/auth/client-version';
 export * from './common/errors/error-events';

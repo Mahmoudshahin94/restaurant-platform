@@ -38,6 +38,11 @@ export class HubAccountDirectory implements AccountDirectory {
   organizationsFor(): Promise<AuthOrganization[]> {
     return Promise.resolve([]);
   }
+
+  /** No organizations here: a membership that ends deactivates the user, and that syncs down. */
+  organizationLinkActive(): Promise<boolean> {
+    return Promise.resolve(true);
+  }
 }
 
 /** Provides the account directory to the shared auth module (Global: it is consumed there). */

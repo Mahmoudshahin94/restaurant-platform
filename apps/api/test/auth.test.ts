@@ -264,15 +264,25 @@ describe('sign-in through accounts', () => {
       where: { email: tenant.owner.email },
     });
     const member = await prisma.organizationMember.create({
-      data: { organizationId: organization.id, accountId: account.id, role: 'FINANCE' },
+      data: {
+        organizationId: organization.id,
+        accountId: account.id,
+        role: 'FINANCE',
+        displayName: 'Owner',
+      },
     });
     await prisma.tenant.update({
       where: { id: brandB.tenantId },
       data: { organizationId: organization.id },
     });
+    // The user in B holds only what the organization gave it.
     await prisma.user.update({
       where: { id: ownerInB },
       data: { organizationMemberId: member.id },
+    });
+    await prisma.userRole.updateMany({
+      where: { userId: ownerInB },
+      data: { grantedByOrganization: true },
     });
 
     const active = await postLogin({

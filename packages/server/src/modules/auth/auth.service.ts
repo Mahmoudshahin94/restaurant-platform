@@ -387,8 +387,15 @@ export class AuthService {
     revokedAt: Date | null;
     replacedById: string | null;
     expiresAt: Date;
-    user: { tenantId: string; isActive: boolean };
+    user: { tenantId: string };
   }): Promise<IssuedSession> {
+    // A disabled user hears so first, even with a token their deactivation already revoked (an
+    // organization revokes its removed members' sessions, E1). That covers a user holding only
+    // the roles of an organization that is no longer active (`AccessService.isUsable`).
+    if (!(await this.access.isUsable(stored.userId))) {
+      await this.revokeFamily(stored.familyId);
+      throw new DomainError('ACCOUNT_DISABLED', 'Account is disabled');
+    }
     if (stored.revokedAt !== null) {
       // Just rotated by a concurrent request from the same client: fail this one, keep the session.
       if (stored.replacedById !== null && this.tokens.withinReuseGrace(stored.revokedAt)) {
@@ -410,10 +417,6 @@ export class AuthService {
     }
     if (stored.expiresAt.getTime() <= Date.now()) {
       throw new DomainError('TOKEN_EXPIRED', 'Refresh token expired');
-    }
-    if (!stored.user.isActive) {
-      await this.revokeFamily(stored.familyId);
-      throw new DomainError('ACCOUNT_DISABLED', 'Account is disabled');
     }
     // The session survives a suspension: it continues once the platform reactivates the tenant.
     await this.assertTenantOpen(stored.user.tenantId);

@@ -1,10 +1,5 @@
-import { Global, Injectable, Module } from '@nestjs/common';
-import {
-  ACCOUNT_DIRECTORY,
-  type AccountDirectory,
-  PrismaService,
-  TenantContext,
-} from '@pos/server';
+import { Injectable } from '@nestjs/common';
+import { type AccountDirectory, type LinkedUser, PrismaService, TenantContext } from '@pos/server';
 import type { AuthBrand, AuthOrganization } from '@pos/validation';
 
 /**
@@ -25,6 +20,7 @@ export class CloudAccountDirectory implements AccountDirectory {
           orderBy: { createdAt: 'asc' },
           select: {
             organizationMemberId: true,
+            roles: { select: { grantedByOrganization: true } },
             tenant: {
               select: {
                 id: true,
@@ -39,7 +35,7 @@ export class CloudAccountDirectory implements AccountDirectory {
         }),
     );
     // A user the organization manages counts while its membership stands in the brand's
-    // organization and that organization is active.
+    // organization and that organization is active, or while it holds a role of its own.
     const memberIds = users.flatMap((u) =>
       u.organizationMemberId ? [u.organizationMemberId] : [],
     );
@@ -53,8 +49,9 @@ export class CloudAccountDirectory implements AccountDirectory {
     const memberOrganization = new Map(members.map((m) => [m.id, m.organizationId]));
     return users
       .filter(
-        ({ organizationMemberId, tenant }) =>
+        ({ organizationMemberId, roles, tenant }) =>
           organizationMemberId === null ||
+          roles.some((r) => !r.grantedByOrganization) ||
           (tenant.organization?.status === 'ACTIVE' &&
             memberOrganization.get(organizationMemberId) === tenant.organizationId),
       )
@@ -75,12 +72,16 @@ export class CloudAccountDirectory implements AccountDirectory {
     });
     return memberships.map(({ role, organization }) => ({ ...organization, role }));
   }
-}
 
-/** Provides the account directory to the shared auth module (Global: it is consumed there). */
-@Global()
-@Module({
-  providers: [{ provide: ACCOUNT_DIRECTORY, useClass: CloudAccountDirectory }],
-  exports: [ACCOUNT_DIRECTORY],
-})
-export class CloudAccountDirectoryModule {}
+  async organizationLinkActive(user: LinkedUser): Promise<boolean> {
+    const member = await this.prisma.organizationMember.findFirst({
+      where: {
+        id: user.organizationMemberId,
+        accountId: user.accountId,
+        organization: { status: 'ACTIVE', tenants: { some: { id: user.tenantId } } },
+      },
+      select: { id: true },
+    });
+    return member !== null;
+  }
+}
