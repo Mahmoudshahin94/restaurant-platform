@@ -58,15 +58,19 @@ export function scopeArgs(
   args: Args,
   withoutTenant: WithoutTenant,
 ): Args {
+  const scope = TenantContext.current();
+  // An organization's pages write nothing, whatever the model (child rows, accounts, members).
+  if (scope.kind === 'organization' && WRITES.has(operation)) {
+    throw new TenantScopeError('Organization scope is read-only');
+  }
   const key = TENANT_KEYS.get(model);
   if (key === undefined) return args;
-  const scope = TenantContext.current();
   if (scope.kind === 'unscoped') return args;
   if (scope.kind === 'none') {
     if (withoutTenant === 'allow') return args;
     throw new TenantScopeError(`${model}.${operation} ran without a tenant in scope`);
   }
-  if (scope.kind === 'organization') return organizationArgs(key, operation, args, scope.tenantIds);
+  if (scope.kind === 'organization') return organizationArgs(key, args, scope.tenantIds);
   const { tenantId } = scope;
   const next: Record<string, unknown> = { ...args };
   const check = (data: unknown, kind: 'create' | 'update') => {
@@ -107,14 +111,8 @@ const WRITES = new Set([
   'deleteMany',
 ]);
 
-/** An organization's pages read their brands' data and never write it. */
-function organizationArgs(
-  key: string,
-  operation: string,
-  args: Args,
-  tenantIds: readonly string[],
-): Args {
-  if (WRITES.has(operation)) throw new TenantScopeError('Organization scope is read-only');
+/** An organization's pages read their brands' data (writes are refused above). */
+function organizationArgs(key: string, args: Args, tenantIds: readonly string[]): Args {
   return {
     ...args,
     where: within(args?.where as Record<string, unknown> | undefined, key, { in: [...tenantIds] }),

@@ -1065,6 +1065,9 @@
   },
   "reasons": {
     "EMAIL_TAKEN": "This email is already in use.",
+    "ACCOUNT_SHARED": "This person also signs into other brands, so their password cannot be changed here.",
+    "ALREADY_MEMBER": "This person is already a member of the organization.",
+    "TENANT_IN_ORGANIZATION": "This brand already belongs to another organization.",
     "SELF": "You cannot do this to your own account.",
     "LAST_OWNER": "The business needs at least one active owner.",
     "ESCALATION": "You cannot grant or remove permissions you do not hold.",

@@ -29,3 +29,10 @@ export const memberSchema = z.object({
   createdAt: isoDateTimeSchema,
 });
 export type MemberDto = z.infer<typeof memberSchema>;
+
+/**
+ * A member after adding or a role change, with the brands where they got no linked user: the brand
+ * had deactivated the person's own user (it links them once the brand reactivates it).
+ */
+export const linkedMemberSchema = memberSchema.extend({ skippedTenantIds: z.array(idSchema) });
+export type LinkedMemberDto = z.infer<typeof linkedMemberSchema>;

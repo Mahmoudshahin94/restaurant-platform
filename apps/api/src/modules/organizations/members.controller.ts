@@ -1,7 +1,13 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
 import { ORGANIZATION_ROUTE_ROLES } from '@pos/domain';
 import { CurrentPrincipal, type Principal, ZodValidationPipe } from '@pos/server';
-import { type MemberDto, addMemberSchema, changeMemberRoleSchema, idSchema } from '@pos/validation';
+import {
+  type LinkedMemberDto,
+  type MemberDto,
+  addMemberSchema,
+  changeMemberRoleSchema,
+  idSchema,
+} from '@pos/validation';
 import type { z } from 'zod';
 import { CurrentOrganization, type RequestOrganization } from './organization.guard';
 import { OrganizationRoute } from './organization-route';
@@ -30,7 +36,7 @@ export class MembersController {
     @CurrentOrganization() organization: RequestOrganization,
     @CurrentPrincipal() principal: Principal,
     @Body(new ZodValidationPipe(addMemberSchema)) body: z.output<typeof addMemberSchema>,
-  ): Promise<MemberDto> {
+  ): Promise<LinkedMemberDto> {
     return this.organizations.addMember(organization.id, body, actorOf(principal));
   }
 
@@ -41,7 +47,7 @@ export class MembersController {
     @CurrentPrincipal() principal: Principal,
     @Body(new ZodValidationPipe(changeMemberRoleSchema))
     body: z.output<typeof changeMemberRoleSchema>,
-  ): Promise<MemberDto> {
+  ): Promise<LinkedMemberDto> {
     return this.organizations.changeRole(organization.id, memberId, body.role, actorOf(principal));
   }
 

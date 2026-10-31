@@ -151,9 +151,25 @@ describe('organization scope', () => {
     });
   });
 
-  it('leaves models without a tenant alone', async () => {
+  it('leaves reads of models without a tenant alone', async () => {
     const args = { where: { organizationId: 'org-1' } };
     expect(await inOrg('OrganizationMember', 'findMany', args)).toBe(args);
+    expect(await inOrg('OrderItem', 'count', args)).toBe(args);
+  });
+
+  it('refuses writes to models without a tenant too', async () => {
+    for (const [model, operation] of [
+      ['OrderItem', 'create'],
+      ['ProductVariant', 'updateMany'],
+      ['Account', 'update'],
+      ['Organization', 'upsert'],
+      ['OrganizationMember', 'delete'],
+      ['RefreshToken', 'deleteMany'],
+    ] as const) {
+      await expect(inOrg(model, operation, { where: {}, data: {} }), model).rejects.toThrow(
+        new TenantScopeError('Organization scope is read-only'),
+      );
+    }
   });
 });
 

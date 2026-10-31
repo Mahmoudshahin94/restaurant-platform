@@ -3,7 +3,7 @@ import { type PrismaClient, verifySecret } from '@pos/database';
 import { newId } from '@pos/domain';
 import { PrismaService, TenantContext, type TenantScope } from '@pos/server';
 import type { ApiErrorBody } from '@pos/shared-types';
-import type { AuthUser, MemberDto, TokenResponse } from '@pos/validation';
+import type { AuthUser, LinkedMemberDto, MemberDto, TokenResponse } from '@pos/validation';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type OrganizationActor,
@@ -363,7 +363,8 @@ describe('leaving the organization', () => {
     });
     for (const user of after) {
       expect(user.isActive).toBe(false);
-      expect(user.organizationMemberId).toBeNull();
+      // Kept as the mark that the organization, not the brand, deactivated it.
+      expect(user.organizationMemberId).not.toBeNull();
       expect(user.roles).toEqual([]);
     }
     expect(
@@ -382,6 +383,101 @@ describe('leaving the organization', () => {
     await expect(
       service.detachTenant(org.organizationId, brandC.tenantId, operator),
     ).rejects.toMatchObject({ code: 'TENANT_NOT_FOUND' });
+  });
+
+  it('linking never reactivates a user the brand deactivated', async () => {
+    const [brandA, brandB] = org.brands as [(typeof org.brands)[0], (typeof org.brands)[0]];
+    const ownerA = bearer(await login(app, brandA.owner.email));
+    // Brand A's admin deactivates its cashier, who is then added to the organization as FINANCE.
+    const off = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/tenants/${brandA.tenantId}/users/${brandA.cashier.id}`,
+      headers: ownerA,
+      payload: { isActive: false },
+    });
+    expect(off.statusCode).toBe(200);
+    const added = await addMember({
+      email: brandA.cashier.email,
+      displayName: 'Cashier',
+      role: 'FINANCE',
+    });
+    expect(added.status).toBe(201);
+    expect((added.body as unknown as LinkedMemberDto).skippedTenantIds).toEqual([brandA.tenantId]);
+
+    let users = await usersOf(brandA.cashier.email);
+    const inA = users.get(brandA.tenantId)!;
+    expect(inA.isActive).toBe(false);
+    expect(inA.organizationMemberId).toBeNull();
+    expect(inA.roles.map((r) => r.role.name)).toEqual(['Cashier']);
+    expect(users.get(brandB.tenantId)).toMatchObject({
+      isActive: true,
+      organizationMemberId: added.body.id,
+    });
+    const skipped = await prisma.auditLog.findFirstOrThrow({
+      where: { action: 'user.organization_link_skipped', tenantId: brandA.tenantId },
+    });
+    expect(skipped.entityId).toBe(inA.id);
+    expect(skipped.metadata).toMatchObject({
+      organizationId: org.organizationId,
+      reason: 'USER_DEACTIVATED',
+    });
+
+    // They sign into B only; A is not theirs to use.
+    const session = await signIn(brandA.cashier.email, brandA.tenantId);
+    expect(session.status).toBe(200);
+    expect(session.body.user.tenantId).toBe(brandB.tenantId);
+    expect(session.body.user.tenants.map((t) => t.id)).toEqual([brandB.tenantId]);
+    expect((await service.syncLinkedUsers(org.organizationId)).skipped).toEqual([
+      { memberId: added.body.id, tenantId: brandA.tenantId },
+    ]);
+
+    // Once brand A reactivates the user, a sync links them.
+    const on = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/tenants/${brandA.tenantId}/users/${brandA.cashier.id}`,
+      headers: ownerA,
+      payload: { isActive: true },
+    });
+    expect(on.statusCode).toBe(200);
+    expect((await service.syncLinkedUsers(org.organizationId)).skipped).toEqual([]);
+    users = await usersOf(brandA.cashier.email);
+    expect(users.get(brandA.tenantId)).toMatchObject({
+      isActive: true,
+      organizationMemberId: added.body.id,
+    });
+    expect(
+      users
+        .get(brandA.tenantId)!
+        .roles.map((r) => r.role.name)
+        .sort(),
+    ).toEqual(['Cashier', 'Finance']);
+  });
+
+  it('a member removed and added again gets the users the organization deactivated back', async () => {
+    const first = await addMember({
+      email: 'finance@test.local',
+      displayName: 'Finance',
+      role: 'FINANCE',
+      password: PASSWORD,
+    });
+    await app.inject({
+      method: 'DELETE',
+      url: `${members()}/${first.body.id}`,
+      headers: ownerHeaders,
+    });
+    expect([...(await usersOf('finance@test.local')).values()].every((u) => !u.isActive)).toBe(
+      true,
+    );
+    const again = await addMember({
+      email: 'finance@test.local',
+      displayName: 'Finance',
+      role: 'MANAGER',
+    });
+    expect((again.body as unknown as LinkedMemberDto).skippedTenantIds).toEqual([]);
+    for (const user of (await usersOf('finance@test.local')).values()) {
+      expect(user).toMatchObject({ isActive: true, organizationMemberId: again.body.id });
+      expect(user.roles.map((r) => r.role.name)).toEqual(['Manager']);
+    }
   });
 
   it('syncing the linked users is idempotent and repairs them', async () => {

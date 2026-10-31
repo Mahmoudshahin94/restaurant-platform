@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { BRAND_ROLE_SPECS, ensureRole, hashSecret } from '@pos/database';
+import { BRAND_ROLE_SPECS, type Prisma, ensureRole, hashSecret } from '@pos/database';
 import {
   DomainError,
   assertOrganizationCurrency,
@@ -15,7 +15,7 @@ import {
   isUniqueViolation,
 } from '@pos/server';
 import type { OrganizationRole } from '@pos/shared-types';
-import type { MemberDto, addMemberSchema } from '@pos/validation';
+import type { LinkedMemberDto, MemberDto, addMemberSchema } from '@pos/validation';
 import type { z } from 'zod';
 
 /** Who changes an organization: one of its members (a staff user), MADAR's operator, or a repair. */
@@ -25,6 +25,12 @@ export type OrganizationActor =
   | { kind: 'system' };
 
 type AddMemberInput = z.output<typeof addMemberSchema>;
+
+/** A member's brand where linking was skipped: the brand had deactivated the person's own user. */
+export interface SkippedLink {
+  memberId: string;
+  tenantId: string;
+}
 
 interface MemberRow {
   id: string;
@@ -63,6 +69,14 @@ const userSelect = {
   roles: { select: { id: true, roleId: true, locationId: true, grantedByOrganization: true } },
 } as const;
 
+/**
+ * Users an unlink still has something to do for: active, or holding a role the organization gave
+ * (a user the organization deactivated keeps its `organizationMemberId` and has neither).
+ */
+const STILL_LINKED: Prisma.UserWhereInput = {
+  OR: [{ isActive: true }, { roles: { some: { grantedByOrganization: true } } }],
+};
+
 const toMemberDto = (row: MemberRow): MemberDto => ({
   id: row.id,
   accountId: row.accountId,
@@ -86,7 +100,13 @@ const memberNotFound = () => new DomainError('NOT_FOUND', 'Member not found');
  * to it as an assignment marked `grantedByOrganization` (none is added when they already hold that
  * role tenant-wide). When the membership ends, or the brand leaves the organization, only the
  * marked assignments are removed and `organizationMemberId` is cleared; a user left with no role
- * of their own — one the organization created — is deactivated and its sessions revoked.
+ * of their own — one the organization created — is deactivated and its sessions revoked; it keeps
+ * its `organizationMemberId`, which marks it as deactivated by the organization (so a later link may
+ * reactivate it).
+ *
+ * Linking never reactivates a user the brand deactivated (an inactive user with no
+ * `organizationMemberId`): that brand is skipped, audited as `user.organization_link_skipped`, and
+ * reported to the caller; once the brand reactivates the user, a sync links them.
  *
  * One request changes users of many brands, so the writes run unscoped (this file is on the
  * `pos-local/no-unscoped-prisma` allowlist), always limited to the organization's brands. Member
@@ -117,7 +137,7 @@ export class OrganizationService {
     organizationId: string,
     input: AddMemberInput,
     actor: OrganizationActor,
-  ): Promise<MemberDto> {
+  ): Promise<LinkedMemberDto> {
     const email = input.email.trim().toLowerCase();
     const passwordHash = input.password ? await hashSecret(input.password) : null;
     try {
@@ -147,10 +167,13 @@ export class OrganizationService {
               },
               select: memberSelect,
             });
+            const skippedTenantIds: string[] = [];
             for (const tenantId of organization.tenantIds) {
-              await this.link(tx, tenantId, organizationId, member, actor);
+              if (await this.link(tx, tenantId, organizationId, member, actor)) {
+                skippedTenantIds.push(tenantId);
+              }
             }
-            return toMemberDto(member);
+            return { ...toMemberDto(member), skippedTenantIds };
           }, TRANSACTION),
       );
     } catch (error) {
@@ -170,7 +193,7 @@ export class OrganizationService {
     memberId: string,
     role: OrganizationRole,
     actor: OrganizationActor,
-  ): Promise<MemberDto> {
+  ): Promise<LinkedMemberDto> {
     return TenantContext.runUnscoped("an organization changes a member's role in every brand", () =>
       this.prisma.$transaction(async (tx) => {
         const organization = await this.lock(tx, organizationId);
@@ -182,10 +205,13 @@ export class OrganizationService {
           data: { role },
           select: memberSelect,
         });
+        const skippedTenantIds: string[] = [];
         for (const tenantId of organization.tenantIds) {
-          await this.link(tx, tenantId, organizationId, member, actor);
+          if (await this.link(tx, tenantId, organizationId, member, actor)) {
+            skippedTenantIds.push(tenantId);
+          }
         }
-        return toMemberDto(member);
+        return { ...toMemberDto(member), skippedTenantIds };
       }, TRANSACTION),
     );
   }
@@ -206,7 +232,11 @@ export class OrganizationService {
           assertOwnersRemain(members, { memberId, role: null });
           await tx.organizationMember.delete({ where: { id: memberId } });
           const users = await tx.user.findMany({
-            where: { tenantId: { in: organization.tenantIds }, organizationMemberId: memberId },
+            where: {
+              tenantId: { in: organization.tenantIds },
+              organizationMemberId: memberId,
+              ...STILL_LINKED,
+            },
             select: userSelect,
           });
           for (const user of users) await this.unlink(tx, user, organizationId, memberId, actor);
@@ -222,8 +252,8 @@ export class OrganizationService {
     organizationId: string,
     tenantId: string,
     actor: OrganizationActor,
-  ): Promise<void> {
-    await TenantContext.runUnscoped(
+  ): Promise<{ skippedMemberIds: string[] }> {
+    return TenantContext.runUnscoped(
       "an organization takes in a brand: its members' users there",
       () =>
         this.prisma.$transaction(async (tx) => {
@@ -248,9 +278,13 @@ export class OrganizationService {
               metadata: { organizationId },
             });
           }
+          const skippedMemberIds: string[] = [];
           for (const member of await this.members(tx, organizationId)) {
-            await this.link(tx, tenantId, organizationId, member, actor);
+            if (await this.link(tx, tenantId, organizationId, member, actor)) {
+              skippedMemberIds.push(member.id);
+            }
           }
+          return { skippedMemberIds };
         }, TRANSACTION),
     );
   }
@@ -271,7 +305,7 @@ export class OrganizationService {
           }
           await tx.tenant.update({ where: { id: tenantId }, data: { organizationId: null } });
           const users = await tx.user.findMany({
-            where: { tenantId, organizationMemberId: { not: null } },
+            where: { tenantId, organizationMemberId: { not: null }, ...STILL_LINKED },
             select: userSelect,
           });
           for (const user of users) {
@@ -288,31 +322,37 @@ export class OrganizationService {
   }
 
   /**
-   * Brings every member × brand to the table above (idempotent): missing or deactivated linked
-   * users are created or restored with their role, and users linked to a membership that no
-   * longer exists are unlinked.
+   * Brings every member × brand to the table above (idempotent): missing linked users are created,
+   * ones the organization deactivated restored with their role, users linked to a membership that
+   * no longer exists unlinked. Brands that deactivated the person's own user are skipped and
+   * returned.
    */
-  async syncLinkedUsers(organizationId: string): Promise<void> {
+  async syncLinkedUsers(organizationId: string): Promise<{ skipped: SkippedLink[] }> {
     const actor: OrganizationActor = { kind: 'system' };
-    await TenantContext.runUnscoped("an organization repairs its members' users", () =>
+    return TenantContext.runUnscoped("an organization repairs its members' users", () =>
       this.prisma.$transaction(async (tx) => {
         const organization = await this.lock(tx, organizationId);
         const members = await this.members(tx, organizationId);
+        const skipped: SkippedLink[] = [];
         for (const tenantId of organization.tenantIds) {
           for (const member of members) {
-            await this.link(tx, tenantId, organizationId, member, actor);
+            if (await this.link(tx, tenantId, organizationId, member, actor)) {
+              skipped.push({ memberId: member.id, tenantId });
+            }
           }
         }
         const stale = await tx.user.findMany({
           where: {
             tenantId: { in: organization.tenantIds },
             organizationMemberId: { not: null, notIn: members.map((m) => m.id) },
+            ...STILL_LINKED,
           },
           select: userSelect,
         });
         for (const user of stale) {
           await this.unlink(tx, user, organizationId, user.organizationMemberId, actor);
         }
+        return { skipped };
       }, TRANSACTION),
     );
   }
@@ -363,8 +403,9 @@ export class OrganizationService {
 
   /**
    * Gives the member their linked user in one brand: created when the account has no user there,
-   * otherwise linked, reactivated, and holding exactly the organization's assignment (none when the
-   * user's own roles already include that brand role tenant-wide). Unchanged users are left alone.
+   * otherwise linked, (re)activated, and holding exactly the organization's assignment (none when
+   * the user's own roles already include that brand role tenant-wide). Unchanged users are left
+   * alone. A user the brand deactivated is not touched: returns true (skipped).
    */
   private async link(
     tx: PrismaTx,
@@ -372,7 +413,7 @@ export class OrganizationService {
     organizationId: string,
     member: MemberRow,
     actor: OrganizationActor,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const brandRole = brandRoleFor(member.role);
     const roleId = await ensureRole(tx, tenantId, BRAND_ROLE_SPECS[brandRole]);
     const metadata = { organizationId, memberId: member.id, role: member.role, brandRole };
@@ -398,7 +439,16 @@ export class OrganizationService {
         entityId: created.id,
         metadata: { ...metadata, created: true },
       });
-      return;
+      return false;
+    }
+    if (!user.isActive && user.organizationMemberId === null) {
+      await this.record(tx, actor, tenantId, {
+        action: 'user.organization_link_skipped',
+        entityType: 'User',
+        entityId: user.id,
+        metadata: { organizationId, memberId: member.id, reason: 'USER_DEACTIVATED' },
+      });
+      return true;
     }
     const granted = user.roles.filter((r) => r.grantedByOrganization);
     const holdsItself = user.roles.some(
@@ -407,7 +457,7 @@ export class OrganizationService {
     const grantsRight = holdsItself
       ? granted.length === 0
       : granted.length === 1 && granted[0]?.roleId === roleId && granted[0].locationId === null;
-    if (user.organizationMemberId === member.id && user.isActive && grantsRight) return;
+    if (user.organizationMemberId === member.id && user.isActive && grantsRight) return false;
     if (!grantsRight) {
       await tx.userRole.deleteMany({ where: { userId: user.id, grantedByOrganization: true } });
       if (!holdsItself) {
@@ -426,11 +476,14 @@ export class OrganizationService {
       entityId: user.id,
       metadata: { ...metadata, created: false, roleAdded: !holdsItself },
     });
+    return false;
   }
 
   /**
-   * Ends a linked user's link: the organization's assignments go, `organizationMemberId` is
-   * cleared, and a user left without a role of their own is deactivated with its sessions revoked.
+   * Ends a linked user's link: the organization's assignments go; a user with roles of its own
+   * keeps them and is no longer linked (`organizationMemberId` cleared); a user left without a role
+   * is deactivated with its sessions revoked, keeping `organizationMemberId` as the mark that the
+   * organization, not the brand, deactivated it.
    */
   private async unlink(
     tx: PrismaTx,
@@ -443,7 +496,7 @@ export class OrganizationService {
     await tx.userRole.deleteMany({ where: { userId: user.id, grantedByOrganization: true } });
     await tx.user.update({
       where: { id: user.id },
-      data: { organizationMemberId: null, ...(deactivate ? { isActive: false } : {}) },
+      data: deactivate ? { isActive: false } : { organizationMemberId: null },
     });
     if (deactivate) {
       await tx.refreshToken.updateMany({
